@@ -1,4 +1,4 @@
-# Copyright (c) 2021  IBM Corporation
+# Copyright (c) 2022  IBM Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,8 +18,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-detect_queue_people_py:
-  ros__parameters:
-    queue_distance_threshold: 0.7           # people in queue should be closer to queue expected than queue_distance_threshold
-    queue_adjust_tolerance: 0.5             # adjust queue navigation path if queue will be adjusted larger than queue_adjust_tolerance
-    dist_interval_queue_navigate_path: 0.1  # interval of distance to calculate queue navigation path
+int8 num_sv
+int8 num_active_sv
+
+int8 STATUS_INACTIVE = 0
+int8 STATUS_INTERMEDIATE = 1
+int8 STATUS_ACTIVE = 2
+
+int8 sv_status
