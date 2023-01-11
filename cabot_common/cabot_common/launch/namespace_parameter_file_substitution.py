@@ -18,12 +18,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import collections.abc
+from typing import List
 from typing import Union
 from typing import Text
 import yaml
 
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+
+from launch.some_substitutions_type import SomeSubstitutionsType
+from launch.substitution import Substitution
+from launch.utilities import (ensure_argument_type,
+                              normalize_to_list_of_substitutions,
+                              perform_substitutions)
 
 from launch import SomeSubstitutionsType, LaunchContext
 from launch.utilities import ensure_argument_type
@@ -32,7 +40,7 @@ from launch.utilities.typing_file_path import FilePath
 from launch_ros.descriptions import ParameterFile
 
 
-class NamespaceParameterFile(ParameterFile):
+class NamespaceParameterFileSubstitution(Substitution, ParameterFile):
     """
     Describes a ROS parameter file where parameters are written in the top level
     and generate a new parameter file that has the top parameters are under the specified namespace
@@ -40,7 +48,7 @@ class NamespaceParameterFile(ParameterFile):
 
     def __init__(
         self,
-        namespace: Text,
+        namespace: SomeSubstitutionsType,
         param_file: Union[FilePath, SomeSubstitutionsType],
         *,
         allow_substs: Union[bool, SomeSubstitutionsType] = False
@@ -49,15 +57,15 @@ class NamespaceParameterFile(ParameterFile):
 
         ensure_argument_type(
             namespace,
-            Text,
+            (str, Substitution, collections.abc.Iterable),
             'namespace',
             'NamespaceParameterFile()'
         )
 
-        self.__namespace: Text = namespace
+        self.__namespace = normalize_to_list_of_substitutions(namespace)
 
     @property
-    def namespace(self) -> Text:
+    def namespace(self) -> List[Substitution]:
         return self.__namespace
 
     def __str__(self) -> Text:
@@ -66,7 +74,10 @@ class NamespaceParameterFile(ParameterFile):
             f'(namespace={self.namespace}, param_file={self.param_file}, allow_substs={self.allow_substs})'
         )
 
-    def evaluate(self, context: LaunchContext) -> Path:
+    def describe(self) -> Text:
+        return "NamespaceParameterFileSubstitution"
+
+    def perform(self, context: LaunchContext) -> Path:
         """Evaluate and return a parameter file path."""
         if self._ParameterFile__evaluated_param_file is not None:
             return self._ParameterFile__evaluated_param_file
@@ -78,12 +89,14 @@ class NamespaceParameterFile(ParameterFile):
 
         param_file_path: Path = Path(param_file)
 
+        namespace = perform_substitutions(context, self.namespace)
+        
         with open(param_file_path, 'r') as f, NamedTemporaryFile(
             mode='w', prefix='launch_params_', delete=False
         ) as h:
             data = yaml.safe_load(f)
             namespaced_data = {
-                self.__namespace: {
+                namespace: {
                     'ros__parameters': data
                 }
             }
@@ -91,4 +104,4 @@ class NamespaceParameterFile(ParameterFile):
             param_file_path = Path(h.name)
 
         self._ParameterFile__evaluated_param_file = param_file_path
-        return param_file_path
+        return str(param_file_path)
