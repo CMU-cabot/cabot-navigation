@@ -23,6 +23,23 @@
 |[queue_utils_py](../queue_utils_py)|utilities for queue|
 
 
+## Test
+
+### Preparation
+
+- run the script to download dependencies
+
+```
+./setup-dependency.sh
+```
+
+- run the script to build image and workspaces
+
+```
+./build-docker.sh
+```
+
+
 # License
 
 [MIT License](LICENSE)

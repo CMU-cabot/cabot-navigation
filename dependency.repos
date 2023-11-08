@@ -1,0 +1,38 @@
+repositories:
+  docker/localization/cartographer:
+    type: git
+    url: https://github.com/CMU-cabot/cartographer.git
+    version: cabot-humble
+  docker/localization/cartographer_ros:
+    type: git
+    url: https://github.com/CMU-cabot/cartographer_ros.git
+    version: cabot-humble    
+  docker/localization/RTKLIB:
+    type: git
+    url: https://github.com/tomojitakasu/RTKLIB.git
+    version: rtklib_2.4.3
+
+  docker/home/loc_ws/src/bluespace_ai_xsens_ros_mti_driver:
+     type: git
+     url: https://github.com/pshved/bluespace_ai_xsens_ros_mti_driver.git
+     version: ros2_0_galactic
+  docker/home/loc_ws/src/ublox:
+    # added topic name fix
+    type: git
+    url: https://github.com/CMU-cabot/ublox.git
+    version: ros2-fix-topic-name
+
+  docker/home/ros2_ws/src/tf2_web_republisher:
+    type: git
+    url: https://github.com/CMU-cabot/tf2_web_republisher
+    version: ros2
+
+  cabot-common:
+    type: git
+    url: https://github.com/CMU-cabot/cabot-common
+    version: main
+
+  cabot_sites/cabot_sites_cmu:
+    type: git
+    url: https://github.com/CMU-cabot/cabot_sites_cmu
+    version: dev-ros2
