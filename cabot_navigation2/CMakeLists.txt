@@ -164,7 +164,7 @@ ament_target_dependencies(cabot_lifecycle_manager
   ${dependencies}
   )
 
-  install(TARGETS
+install(TARGETS
   cabot_critics
   cabot_goals
   cabot_layers
@@ -188,6 +188,11 @@ install(DIRECTORY params/ DESTINATION share/${PROJECT_NAME}/params/)
 install(DIRECTORY rviz/ DESTINATION share/${PROJECT_NAME}/rviz/)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch/)
 install(DIRECTORY test/ DESTINATION share/${PROJECT_NAME}/test/)
+
+install(PROGRAMS
+  test/run_test.py
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_export_include_directories(include)
 ament_export_libraries(

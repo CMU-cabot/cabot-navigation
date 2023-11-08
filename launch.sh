@@ -307,16 +307,13 @@ if [ ! -e $dcfile ]; then
     exit
 fi
 
+# check env option for test
 env_option=
 if [[ $run_test -eq 1 ]]; then
-    blue "Running test"
     test_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE | head -n 1)
     if [[ -e $test_dir/test/test.env ]]; then
 	env_option="--env-file .env --env-file $test_dir/test/test.env"
     fi
-    $scriptdir/cabot_debug/run_test.sh -d $host_ros_log_dir &
-    pids+=($!)
-    runtest_pid=$!
 fi
 
 dccom="docker compose $project_option -f $dcfile $env_option"
@@ -375,6 +372,15 @@ while [[ $launched -lt 5 ]]; do
 done
 
 blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
+
+if [[ $run_test -eq 1 ]]; then
+    blue "Running test"
+    docker compose exec ros2 /home/developer/ros2_ws/script/run_test.sh
+    pids+=($!)
+    runtest_pid=$!
+    snore 3
+fi
+
 while [ 1 -eq 1 ];
 do
     # check if any of container got Exit status
