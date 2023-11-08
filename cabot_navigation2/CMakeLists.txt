@@ -191,7 +191,7 @@ install(DIRECTORY test/ DESTINATION share/${PROJECT_NAME}/test/)
 
 install(PROGRAMS
   test/run_test.py
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_export_include_directories(include)
