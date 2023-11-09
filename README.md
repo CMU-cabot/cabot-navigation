@@ -25,6 +25,9 @@
 
 ## Test
 
+- Tests in thie repo is solely for navigation and localization not user interfaces such as buttons, vibration pattern, speech etc.
+- Such UI test should be done in the [cabot](https://github.com/cmu-cabot/cabot) repository
+
 ### Preparation
 
 - run the script to download dependencies
