@@ -601,7 +601,7 @@ def receiveSignal(signal_num, frame):
     print("Received:", signal_num)
     sys.exit()
 
-    signal.signal(signal.SIGINT, receiveSignal)
+signal.signal(signal.SIGINT, receiveSignal)
 
 
 if __name__ == "__main__":

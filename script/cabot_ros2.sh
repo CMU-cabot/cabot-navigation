@@ -325,7 +325,7 @@ termpids+=($!)
 
 if [ $use_ble -ne 0 ]; then
     echo "launch rosbridge for cabot BLE"
-    com="$command ros2 launch cabot_ui cabot_ext_ble.launch.xml \
+    com="$command_prefix ros2 launch cabot_ui cabot_ext_ble.launch.xml \
             $command_postfix"
     #com="$command ros2 run rosbridge_server rosbridge_websocket.py --ros-args -p port:=9091 > /dev/null 2>&1 $command_postfix"
     echo $com
@@ -347,7 +347,7 @@ if [ $queue_detector -eq 1 ]; then
         echo "launch $launch_file"
         eval "$command ros2 launch $launch_file \
                        queue_annotation_list_file:=$queue_det_config_file \
-                       $commandpost"
+                       $command_postfix"
         pids+=($!)
     else
         echo "Invalid site is specified. There is no queue config file."
