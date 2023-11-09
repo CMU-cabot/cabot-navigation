@@ -33,7 +33,7 @@ import cabot_msgs.srv
 from cabot_ui import visualizer, i18n
 from cabot_ui.turn_detector import Turn
 from cabot_ui.stop_reasoner import StopReason
-from cabot.handle_v2 import Handle
+from cabot_common import vibration
 
 
 class UserInterface(object):
@@ -134,29 +134,29 @@ class UserInterface(object):
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")
 
-    def vibrate(self, pattern=Handle.UNKNOWN):
-        self._activity_log("cabot/interface", "vibration", Handle.get_name(pattern), visualize=True)
+    def vibrate(self, pattern=vibration.UNKNOWN):
+        self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
         msg = std_msgs.msg.Int8()
         msg.data = pattern
         self.note_pub.publish(msg)
 
-    def read_aloud_vibration(self, pattern=Handle.UNKNOWN):
+    def read_aloud_vibration(self, pattern=vibration.UNKNOWN):
         if not self.read_aloud:
             return
 
-        if pattern == Handle.FRONT:
+        if pattern == vibration.FRONT:
             self.speak(i18n.localized_string("HANDLE_START"))
-        elif pattern == Handle.RIGHT_ABOUT_TURN:
+        elif pattern == vibration.RIGHT_ABOUT_TURN:
             self.speak(i18n.localized_string("HANDLE_RIGHT_ABOUT_TURN"))
-        elif pattern == Handle.RIGHT_TURN:
+        elif pattern == vibration.RIGHT_TURN:
             self.speak(i18n.localized_string("HANDLE_RIGHT_TURN"))
-        elif pattern == Handle.RIGHT_DEV:
+        elif pattern == vibration.RIGHT_DEV:
             self.speak(i18n.localized_string("HANDLE_RIGHT_DEV"))
-        elif pattern == Handle.LEFT_ABOUT_TURN:
+        elif pattern == vibration.LEFT_ABOUT_TURN:
             self.speak(i18n.localized_string("HANDLE_LEFT_ABOUT_TURN"))
-        elif pattern == Handle.LEFT_TURN:
+        elif pattern == vibration.LEFT_TURN:
             self.speak(i18n.localized_string("HANDLE_LEFT_TURN"))
-        elif pattern == Handle.LEFT_DEV:
+        elif pattern == vibration.LEFT_DEV:
             self.speak(i18n.localized_string("HANDLE_LEFT_DEV"))
 
     # menu interface
@@ -202,8 +202,8 @@ class UserInterface(object):
 
     def start_navigation(self):
         self._activity_log("cabot/interface", "navigation", "start")
-        self.vibrate(Handle.FRONT)
-        self.read_aloud_vibration(Handle.FRONT)
+        self.vibrate(vibration.FRONT)
+        self.read_aloud_vibration(vibration.FRONT)
 
     def update_pose(self, **kwargs):
         self.last_pose = kwargs
@@ -213,27 +213,27 @@ class UserInterface(object):
         if self.last_notify_turn and \
            self._node.get_clock().now() - self.last_notify_turn < UserInterface.NOTIFY_TURN_INTERVAL:
             return
-        pattern = Handle.UNKNOWN
+        pattern = vibration.UNKNOWN
         text = ""
         if turn.turn_type == Turn.Type.Normal:
             if turn.angle <= -180/4*3:
-                pattern = Handle.RIGHT_ABOUT_TURN
+                pattern = vibration.RIGHT_ABOUT_TURN
                 text = "right about turn"
             elif turn.angle <= -180/3:
-                pattern = Handle.RIGHT_TURN
+                pattern = vibration.RIGHT_TURN
                 text = "right turn"
             elif turn.angle >= 180/4*3:
-                pattern = Handle.LEFT_ABOUT_TURN
+                pattern = vibration.LEFT_ABOUT_TURN
                 text = "left about turn"
             elif turn.angle >= 180/3:
-                pattern = Handle.LEFT_TURN
+                pattern = vibration.LEFT_TURN
                 text = "left turn"
         elif turn.turn_type == Turn.Type.Avoiding:
             if turn.angle <= 0:
-                pattern = Handle.RIGHT_DEV
+                pattern = vibration.RIGHT_DEV
                 text = "slight right"
             if turn.angle >= 0:
-                pattern = Handle.LEFT_DEV
+                pattern = vibration.LEFT_DEV
                 text = "slight left"
 
         self.last_notify_turn = self._node.get_clock().now()
@@ -243,9 +243,9 @@ class UserInterface(object):
         self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
-        vibration = Handle.RIGHT_DEV
+        vibration = vibration.RIGHT_DEV
         if angle > 0:
-            vibration = Handle.LEFT_DEV
+            vibration = vibration.LEFT_DEV
 
         self._activity_log("cabot/interface", "human")
         self.vibrate(pattern=vibration)
@@ -313,7 +313,7 @@ class UserInterface(object):
 
     def elevator_opening(self):
         self._activity_log("cabot/interface", "navigation", "elevator opening")
-        self.vibrate(Handle.FRONT)
+        self.vibrate(vibration.FRONT)
         self.speak(i18n.localized_string("ELEVATOR_IS_OPENING"))
 
     def floor_changed(self, floor):
@@ -326,7 +326,7 @@ class UserInterface(object):
 
     def queue_proceed(self):
         self._activity_log("cabot/interface", "queue", "proceed")
-        self.vibrate(Handle.FRONT)
+        self.vibrate(vibration.FRONT)
 
     def please_pass_door(self):
         self._activity_log("cabot/interface", "navigation", "manual door")
