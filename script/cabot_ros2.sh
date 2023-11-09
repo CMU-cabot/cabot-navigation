@@ -250,6 +250,14 @@ else
     venv_path=/opt/venv/$cabot_major/bin/activate
     cabot_launch_py=$cabot_major.launch.py
 
+    blue "bringup $CABOT_MODEL base"
+    com="$command_prefix source $venv_path && \
+            ros2 launch cabot_base $cabot_launch_py $command_postfix"
+    echo $com
+    eval $com
+    checks+=($!)
+    pids+=($!)
+
     blue "bringup $CABOT_MODEL"
     com="$command_prefix source $venv_path && \
             ros2 launch cabot $cabot_launch_py $command_postfix"

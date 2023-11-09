@@ -39,6 +39,7 @@ from launch.event_handlers import OnProcessExit
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
 from launch.conditions import LaunchConfigurationNotEquals
+from launch.substitutions import Command
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import OrSubstitution
 from launch.substitutions import PythonExpression
@@ -46,6 +47,7 @@ from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 
 from launch.logging import launch_config
@@ -87,6 +89,7 @@ class AddStatePlugin(Substitution):
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_gazebo')
+    output = 'both'
 
     show_gazebo = LaunchConfiguration('show_gazebo')
     show_rviz = LaunchConfiguration('show_rviz')
@@ -108,6 +111,19 @@ def generate_launch_description():
         executable='check_gazebo_ready.py',
         name='check_gazebo_ready_node',
     )
+
+    xacro_for_cabot_model = PathJoinSubstitution([
+        get_package_share_directory('cabot_description'),
+        'robots',
+        PythonExpression(['"', model_name, '.urdf.xacro.xml', '"'])
+    ])
+
+    robot_description = ParameterValue(
+        Command(['xacro ', xacro_for_cabot_model, ' offset:=0.25', ' sim:=', use_sim_time]),
+        value_type=str
+    )
+
+
 
     spawn_entity = Node(
         package='gazebo_ros',
@@ -175,6 +191,32 @@ def generate_launch_description():
         ),
 
         GroupAction([
+            # publish robot state
+            Node(
+                package='robot_state_publisher',
+                executable='robot_state_publisher',
+                name='robot_state_publisher',
+                output=output,
+                parameters=[{
+                    'use_sim_time': use_sim_time,
+                    'publish_frequency': 100.0,
+                    'robot_description': robot_description
+                }]
+            ),
+            # publish **local** robot state for local map navigation (getting off elevators)
+            Node(
+                package='robot_state_publisher',
+                executable='robot_state_publisher',
+                name='local_robot_state_publisher',
+                output=output,
+                parameters=[{
+                    'use_sim_time': use_sim_time,
+                    'publish_frequency': 100.0,
+                    'frame_prefix': 'local/',
+                    'robot_description': robot_description
+                }]
+            ),
+
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([get_package_share_directory('gazebo_ros'),
                                               '/launch/gzserver.launch.py']),
@@ -183,7 +225,7 @@ def generate_launch_description():
                     'world': modified_world,
                     'params_file': str(gazebo_params)
                 }.items()
-            ),
+            ),            
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([pkg_dir,
                                               '/launch/gazebo_wireless_helper.launch.py']),

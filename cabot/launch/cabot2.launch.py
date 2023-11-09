@@ -154,90 +154,6 @@ def generate_launch_description():
         ),
 
         GroupAction([
-            # publish robot state
-            Node(
-                package='robot_state_publisher',
-                executable='robot_state_publisher',
-                name='robot_state_publisher',
-                output=output,
-                parameters=[{
-                    'use_sim_time': use_sim_time,
-                    'publish_frequency': 100.0,
-                    'robot_description': robot_description
-                }]
-            ),
-            # publish **local** robot state for local map navigation (getting off elevators)
-            Node(
-                package='robot_state_publisher',
-                executable='robot_state_publisher',
-                name='local_robot_state_publisher',
-                output=output,
-                parameters=[{
-                    'use_sim_time': use_sim_time,
-                    'publish_frequency': 100.0,
-                    'frame_prefix': 'local/',
-                    'robot_description': robot_description
-                }]
-            ),
-
-            # launch velodyne lider related nodes
-            ComposableNodeContainer(
-                name='laser_container',
-                namespace='',
-                package='rclcpp_components',
-                executable='component_container',
-                composable_node_descriptions=[],
-            ),
-
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([
-                    PathJoinSubstitution([
-                        pkg_dir, 'launch', 'include', 'vlp16.launch.py'
-                    ])
-                ]),
-                launch_arguments={
-                    'target_container': 'laser_container'
-                }.items(),
-                condition=UnlessCondition(use_sim_time)
-            ),
-
-            LoadComposableNodes(
-                target_container='/laser_container',
-                composable_node_descriptions=[
-                    ComposableNode(
-                        package='pointcloud_to_laserscan',
-                        plugin='pointcloud_to_laserscan::PointCloudToLaserScanNode',
-                        namespace='',
-                        name='pointcloud_to_laserscan_node',
-                        parameters=[*param_files, {'use_sim_time': use_sim_time}],
-                        remappings=[
-                            ('/cloud_in', '/velodyne_points')
-                        ]
-                    ),
-                    ComposableNode(
-                        package='pcl_ros',
-                        plugin='pcl_ros::CropBox',
-                        namespace='',
-                        name='filter_crop_box_node',
-                        parameters=[*param_files, {'use_sim_time': use_sim_time}],
-                        remappings=[
-                            ('/input',  '/velodyne_points'),
-                            ('/output', '/velodyne_points_cropped')
-                        ]
-                    ),
-                ]
-            ),
-
-            # CaBot related
-            Node(
-                package='cabot',
-                executable='cabot_handle_v2_node.py',
-                namespace='/cabot',
-                name='cabot_handle_v2_node',
-                output=output,
-                parameters=[*param_files, {'use_sim_time': use_sim_time}],
-            ),
-
             # Visualize the current speed on Rviz-
             Node(
                 package='cabot',
@@ -246,52 +162,6 @@ def generate_launch_description():
                 name='speed_visualize_node',
                 output=output,
                 parameters=[*param_files, {'use_sim_time': use_sim_time}],
-            ),
-
-            # Microcontroller (Arduino - gt1/gtm or ESP32 - ace)
-            Node(
-                package='cabot',
-                executable='cabot_serial_node',
-                namespace='/cabot',
-                name='cabot_serial',
-                output=output,
-                parameters=[
-                    *param_files,
-                    {'use_sim_time': False, 'touch_params': touch_params}
-                ],
-                remappings=[
-                    # ('/cabot/imu', '/cabot/imu/data'),
-                    ('/cabot/touch_speed', '/cabot/touch_speed_raw')
-                ],
-                condition=IfCondition(use_sim_time)
-            ),
-            Node(
-                package='cabot',
-                executable='cabot_serial_node',
-                namespace='/cabot',
-                name='cabot_serial',
-                output=output,
-                parameters=[
-                    *param_files,
-                    {'use_sim_time': False, 'touch_params': touch_params}
-                ],
-                remappings=[
-                    ('/cabot/imu', '/cabot/imu/data'),
-                    ('/cabot/touch_speed', '/cabot/touch_speed_raw')
-                ],
-                condition=UnlessCondition(use_sim_time)
-            ),
-
-            # optional wifi scanner with ESP32
-            Node(
-                package='cabot',
-                executable='cabot_serial.py',
-                namespace='/cabot',
-                name='serial_esp32_wifi_scanner',
-                output=output,
-                parameters=[*param_files, {'use_sim_time': use_sim_time}],
-                remappings=[('wifi_scan_str', '/esp32/wifi_scan_str')],
-                condition=IfCondition(use_standalone_wifi_scanner),
             ),
 
             # Costmap clearing issue hacking
@@ -412,36 +282,6 @@ def generate_launch_description():
                 name=PythonExpression(['"speed_control_node_touch_', touch_enabled, '"']),
                 output=output,
                 parameters=[*param_files, {'use_sim_time': use_sim_time}],
-            ),
-
-            # Motor Controller Adapter
-            # Convert cmd_vel (linear, rotate) speed to motor target (left, right) speed.
-            Node(
-                package='motor_adapter',
-                executable='odriver_adapter_node',
-                namespace='/cabot',
-                name='odriver_adapter_node',
-                output=output,
-                parameters=[*param_files, {'use_sim_time': use_sim_time}],
-                remappings=[
-                    ('/imu', '/cabot/imu/data')
-                ],
-                condition=UnlessCondition(use_sim_time),
-            ),
-
-            # Motor Controller (ODrive)
-            Node(
-                package='odriver',
-                executable='odriver_node.py',
-                namespace='/cabot',
-                name='odriver_node',
-                output=output,
-                parameters=[*param_files, {'use_sim_time': use_sim_time}],
-                remappings=[
-                    ('/motorTarget', '/cabot/motorTarget'),
-                    ('/motorStatus', '/cabot/motorStatus'),
-                ],
-                condition=UnlessCondition(use_sim_time),
             ),
 
             # Sensor fusion for stabilizing odometry

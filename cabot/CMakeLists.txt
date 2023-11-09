@@ -51,14 +51,6 @@ include_directories(
   include
 )
 
-add_executable(cabot_serial_node
-  src/cabot/cabot_serial.cpp
-  src/cabot/arduino_serial.cpp
-)
-ament_target_dependencies(cabot_serial_node
-  ${dependencies}
-)
-
 add_library(speed_visualize SHARED
   src/cabot/speed_visualize_node.cpp
 )
@@ -140,22 +132,6 @@ if(BUILD_TESTING)
   #set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
-
-# Install Python modules
-ament_python_install_package(${PROJECT_NAME})
-
-# Install Python executables
-install(PROGRAMS
-  scripts/cabot_serial.py
-  scripts/cabot_handle_v2_node.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-# Install executables
-install(TARGETS
-  cabot_serial_node
-  DESTINATION lib/${PROJECT_NAME}
-)
 
 # Install shared libraries
 install(TARGETS

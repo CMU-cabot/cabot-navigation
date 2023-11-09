@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(cabot_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -22,6 +23,7 @@ find_package(cabot REQUIRED)
 
 set(dependencies
   rclcpp
+  rclcpp_components
   cabot
   cabot_msgs
   geometry_msgs
