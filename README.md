@@ -127,6 +127,4 @@ CABOT_SITE=cabot_site_cmu_3d
 ---
 The following files/folder are under Apache-2.0 License
 
-- cabot_description/urdf/sensors/_d435.gazebo.xacro
-- cabot_description/urdf/sensors/_d435.urdf.xacro
 - cabot_navigation/launch/cartographer_mapping.launch
