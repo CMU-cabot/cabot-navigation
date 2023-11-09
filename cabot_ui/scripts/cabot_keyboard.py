@@ -30,9 +30,9 @@ from rclpy.node import Node
 
 import std_msgs.msg
 
-import cabot.event
-import cabot.button
-from cabot.util import setInterval
+import cabot_common.event
+import cabot_common.button
+from cabot_common.util import setInterval
 
 interval = 0.25
 NKeys = 12
@@ -70,17 +70,17 @@ def process():
         temp[i] = (button == i)
 
         if temp[i] and not btnDwn[i]:
-            event = cabot.event.ButtonEvent(button=i, up=False)
+            event = cabot_common.event.ButtonEvent(button=i, up=False)
             btnDwn[i] = True
 
         if not temp[i] and btnDwn[i]:
-            event = cabot.event.ButtonEvent(button=i, up=True)
+            event = cabot_common.event.ButtonEvent(button=i, up=True)
             upCount[i] += 1
             lastUp[i] = now
             btnDwn[i] = False
 
         if lastUp[i] is not None and now - lastUp[i] > Duration(seconds=interval):
-            event = cabot.event.ClickEvent(buttons=i, count=upCount[i])
+            event = cabot_common.event.ClickEvent(buttons=i, count=upCount[i])
             lastUp[i] = None
             upCount[i] = 0
 
@@ -108,24 +108,24 @@ if __name__ == '__main__':
         key = ord(getchar())
         button = -1
         if key == 106: #j
-            button = cabot.button.BUTTON_NEXT
+            button = cabot_common.button.BUTTON_NEXT
         elif key == 107: #k
-            button = cabot.button.BUTTON_SELECT
+            button = cabot_common.button.BUTTON_SELECT
         elif key == 108: #l
-            button = cabot.button.BUTTON_PREV
+            button = cabot_common.button.BUTTON_PREV
     '''
     node.get_logger().info("type 'cursor keys' for 'up', 'down', 'left', and 'right' buttons")
     while rclpy.ok:
         key = ord(getchar())
         button = -1
         if key == 65:    # arrow up
-            button = cabot.button.BUTTON_UP
+            button = cabot_common.button.BUTTON_UP
         elif key == 66:  # arrow down
-            button = cabot.button.BUTTON_DOWN
+            button = cabot_common.button.BUTTON_DOWN
         elif key == 67:  # arrow right
-            button = cabot.button.BUTTON_RIGHT
+            button = cabot_common.button.BUTTON_RIGHT
         elif key == 68:  # arrow left
-            button = cabot.button.BUTTON_LEFT
+            button = cabot_common.button.BUTTON_LEFT
 
         if button > 0:
             node.get_logger().info(F"button {button}")

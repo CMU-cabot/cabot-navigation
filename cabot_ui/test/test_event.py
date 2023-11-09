@@ -24,7 +24,7 @@
 import unittest
 
 import cabot_ui.event
-import cabot.event
+import cabot_common.event
 
 
 class TestEvent(unittest.TestCase):
@@ -36,8 +36,8 @@ class TestEvent(unittest.TestCase):
     def test_basic(self):
         """test events"""
         e1 = cabot_ui.event.MenuEvent("next")
-        e2 = cabot.event.ButtonEvent(1, False)
-        e3 = cabot.event.ButtonEvent(1, False)
+        e2 = cabot_common.event.ButtonEvent(1, False)
+        e3 = cabot_common.event.ButtonEvent(1, False)
         print(e1)
         print(e2)
         print(e1 == e2)
@@ -47,15 +47,15 @@ class TestEvent(unittest.TestCase):
         self.assertTrue(e2 != e3)
 
     def test_parse(self):
-        e1 = cabot.event.BaseEvent.parse("menu_next")
+        e1 = cabot_common.event.BaseEvent.parse("menu_next")
         self.assertEqual(type(e1), cabot_ui.event.MenuEvent)
         self.assertEqual(e1.subtype, "next")
 
-        e2 = cabot.event.BaseEvent.parse("navigation_pause")
+        e2 = cabot_common.event.BaseEvent.parse("navigation_pause")
         self.assertEqual(type(e2), cabot_ui.event.NavigationEvent)
         self.assertEqual(e2.subtype, "pause")
 
-        e3 = cabot.event.BaseEvent.parse("navigation_destination;hogehoge")
+        e3 = cabot_common.event.BaseEvent.parse("navigation_destination;hogehoge")
         self.assertEqual(type(e3), cabot_ui.event.NavigationEvent)
         self.assertEqual(e3.subtype, "destination")
         self.assertEqual(e3.param, "hogehoge")

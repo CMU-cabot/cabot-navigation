@@ -36,7 +36,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import QoSProfile, DurabilityPolicy
 import rclpy.parameter
 
-import cabot.util
+import cabot_common.util
 from cabot_ui import i18n
 
 class Action(object):
@@ -482,7 +482,7 @@ class MenuAdjust(Menu):
         CaBotRclpyUtil.info("retry do_action with %s", str(self))
         self._check_action_once()
 
-    @cabot.util.setInterval(3, 1)
+    @cabot_common.util.setInterval(3, 1)
     def _check_action_once(self):
         self._check_action()
 

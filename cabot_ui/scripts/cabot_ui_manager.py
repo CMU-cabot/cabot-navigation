@@ -28,7 +28,7 @@ It serves low level event and maps to high level event which may change state of
 Ideally, this class has plugin architecture to add new UI component but it is not the current goal.
 So, all controls which needs to see the current state of the robot are managed by this code.
 
-Low-level (cabot.event) should be mapped into ui-level (cabot_ui.event)
+Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
@@ -49,8 +49,8 @@ import std_msgs.msg
 import std_srvs.srv
 
 import cabot
-import cabot.button
-from cabot.event import BaseEvent, ButtonEvent, ClickEvent, HoldDownEvent
+import cabot_common.button
+from cabot_common.event import BaseEvent, ButtonEvent, ClickEvent, HoldDownEvent
 from cabot_ui.event import MenuEvent, NavigationEvent, ExplorationEvent
 from cabot_ui.menu import Menu
 from cabot_ui.status import State, StatusManager
@@ -559,39 +559,39 @@ class EventMapper(object):
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:
-            if event.buttons == cabot.button.BUTTON_NEXT:
+            if event.buttons == cabot_common.button.BUTTON_NEXT:
                 return MenuEvent(subtype="next")
-            if event.buttons == cabot.button.BUTTON_PREV:
+            if event.buttons == cabot_common.button.BUTTON_PREV:
                 return MenuEvent(subtype="prev")
-            if event.buttons == cabot.button.BUTTON_SELECT:
+            if event.buttons == cabot_common.button.BUTTON_SELECT:
                 return MenuEvent(subtype="select")
         elif event.type == "click" and event.count == 2:
-            if event.buttons == cabot.button.BUTTON_SELECT:
+            if event.buttons == cabot_common.button.BUTTON_SELECT:
                 return MenuEvent(subtype="back")
         return None
 
     def map_button_to_navigation(self, event):
         if event.type == "button" and event.down:
-            if event.button == cabot.button.BUTTON_UP:
+            if event.button == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
-            if event.button == cabot.button.BUTTON_DOWN:
+            if event.button == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="speeddown")
-            if event.button == cabot.button.BUTTON_LEFT:
+            if event.button == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="pause")
-            if event.button == cabot.button.BUTTON_RIGHT:
+            if event.button == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
-            if event.button == cabot.button.BUTTON_CENTER:
+            if event.button == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
-            if event.holddown == cabot.button.BUTTON_LEFT:
+            if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="idle")
         '''
-        if event.button == cabot.button.BUTTON_SELECT:
+        if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
         if event.type == "click":
-            if event.buttons == cabot.button.BUTTON_SELECT and event.count == 2:
+            if event.buttons == cabot_common.button.BUTTON_SELECT and event.count == 2:
                 return NavigationEvent(subtype="cancel")
-            if event.buttons == cabot.button.BUTTON_NEXT and event.count == 2:
+            if event.buttons == cabot_common.button.BUTTON_NEXT and event.count == 2:
                 return NavigationEvent(subtype="resume")
         '''
         return None

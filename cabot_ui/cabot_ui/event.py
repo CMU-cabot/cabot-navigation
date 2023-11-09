@@ -18,10 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import cabot.event
+import cabot_common.event
 
 
-class SubtypeEvent(cabot.event.BaseEvent):
+class SubtypeEvent(cabot_common.event.BaseEvent):
     TYPE = "subtype"
 
     def __init__(self, type=None, subtype=None, param=None):
