@@ -32,7 +32,7 @@ import geometry_msgs.msg
 
 from action_msgs.msg import GoalStatus
 
-from cabot import util
+from cabot_common import util
 
 
 class GoalInterface(object):

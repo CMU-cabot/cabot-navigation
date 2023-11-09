@@ -48,7 +48,6 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import std_msgs.msg
 import std_srvs.srv
 
-import cabot
 import cabot_common.button
 from cabot_common.event import BaseEvent, ButtonEvent, ClickEvent, HoldDownEvent
 from cabot_ui.event import MenuEvent, NavigationEvent, ExplorationEvent

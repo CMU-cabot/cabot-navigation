@@ -44,7 +44,7 @@ from actionlib_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
 
 # Other
-from cabot import util
+from cabot_common import util
 from cabot_ui import visualizer, geoutil, geojson, datautil
 from cabot_ui.turn_detector import TurnDetector, Turn
 from cabot_ui import navgoal
