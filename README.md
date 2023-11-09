@@ -36,9 +36,88 @@
 - run the script to build image and workspaces
 
 ```
-./build-docker.sh
+./build-docker.sh -p              # run prebuild, image build, and workspace build
 ```
 
+### Run test cases
+
+- set .env file
+
+```
+CABOT_MODEL=cabot2-gt1
+CABOT_SITE=cabot_site_cmu_3d
+```
+
+- run the test
+
+```
+./launch.sh -s -y -t              # simulation, yes to launch a map server, run test
+```
+### .env file
+
+- **Required settings**
+  ```
+  CABOT_MODEL          # robot model (default=) to determine which launch/urdf to use
+  CABOT_SITE           # package name for cabot site (default=)
+  CABOT_TOUCH_PARAMS   # touch sensor parameter for cabot-arduino handle (default=[128,48,24])
+  RMW_IMPLEMENTATION=rmw_cyclonedds_cpp   # need to use cyclone dds due to performance issue
+  ```
+- Optional settings
+  ```
+  CABOT_LANG           # cabot language (default=en)
+  CABOT_OFFSET         # offset size (default=0.25)
+  CABOT_FOOTPRINT_RADIUS # robot radius size (default=0.45)
+  CABOT_INIT_SPEED     # specify maximum robot speed at startup, leave empty to restore the last speed
+  CABOT_MAX_SPEED      # you can change max_speed only when CABOT_MODEL is cabot2-gtm (defalt=1.0)
+  CABOT_USE_GNSS       # to use GNSS fix for localization (default=0)
+  CABOT_ANNOUNCE_NO_TOUCH # announce when the reason robot is stopped is NO_TOUCH(default=false)
+  CABOT_SIDE           # left: user stands on the right, right: user stands on the left
+  CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
+  ```
+- Options for debug/test
+  ```
+  CABOT_GAMEPAD              # (default=gamepad) gamepad type for remote controll (ex. PS4 controller)
+                                               pro (Nintendo Switch Pro controller)
+  CABOT_USE_HANDLE_SIMULATOR # to use handle simulator (default=0)
+  CABOT_REMOTE_USE_KEYBOARD  # to use teleop twist keayboard in the remote control mode (default=false)
+  CABOT_REMOTE_USE_IMU       # to use imu in the remote control mode (default=false)
+  CABOT_SHOW_GAZEBO_CLIENT   # show gazebo client (default=0)
+  CABOT_SHOW_ROS1_RVIZ       # show ROS1 rviz (default=0)
+  CABOT_SHOW_ROS2_RVIZ       # show ROS2 rviz (default=1)
+  CABOT_SHOW_ROS2_LOCAL_RVIZ # show ROS2 local navigation rviz (default=0)
+  CABOT_SHOW_LOC_RVIZ        # show ROS1 localization rviz (default=1)
+  CABOT_SHOW_PEOPLE_RVIZ     # show ROS1 people rviz (default=0)
+  CABOT_SHOW_ROBOT_MONITOR   # show robot monitor (default=1)
+  CABOT_RECORD_ROSBAG2       # record BT log, controller critics evalation into rosbag2 (default=1)
+  CABOT_USE_ROBOT_TTS        # use TTS service '/speak_robot' to let PC speaker speak (default=0)
+                             # this function is not used now, but maybe used in some scenario
+  TEXT_TO_SPEECH_APIKEY      # IBM Cloud Text to Speech Service's API key and URL
+  TEXT_TO_SPEECH_URL         # these two variables are required if CABOT_USE_ROBOT_TTS is 1
+  ```
+- Options for simulation
+  ```
+  CABOT_INITX          # initial robot position x for gazebo (default=0)
+  CABOT_INITY          # initial robot position y for gazebo (default=0)
+  CABOT_INITZ          # initial robot position z for gazebo (default=0)
+  CABOT_INITA          # initial robot angle (degree) for gazebo (default=0)
+  ```
+- Others
+  ```
+  ## The following will be managed by docker-compose files
+  ## be careful to set these variables in your .env file
+  ##
+  CABOT_GAZEBO             # 1: gazebo 0: real robot
+  CABOT_TOUCH_ENABLED      # true: enabled - false: disabled
+                             disabled for gazebo and enabled for real robot in docker-compose file
+  CABOT_USE_REALSENSE      # to use realsense camera (default=0)
+                             disabled for gazebo and enabled for real robot in docker-compose file
+  CABOT_PRESSURE_AVAILABLE # to use pressure sensor (default=0)
+                             disabled for gazebo and enabled for real robot in docker-compose file
+  ```
+- DDS related
+  ```
+  NET_CORE_BUFFER_SIZE_IN_MB   # default 64, small buffer size can cause data congestion and degrade performance especially velodyne_points and localization
+  ```
 
 # License
 
