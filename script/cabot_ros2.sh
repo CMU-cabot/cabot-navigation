@@ -147,6 +147,7 @@ if [ $CABOT_GAZEBO -eq 1 ]; then use_sim_time=true; fi
 gazebo=$CABOT_GAZEBO   # read by config script
 
 wait_sec=0
+queue_detector=1
 
 
 
@@ -333,6 +334,25 @@ if [ $use_ble -ne 0 ]; then
     termpids+=($!)
 fi
 
+### launch queue detect
+if [ $queue_detector -eq 1 ]; then
+    if [ $gazebo -eq 1 ]; then
+        queue_det_config_file=$sitedir/queue/gazebo/detector/config.yaml
+    else
+        queue_det_config_file=$sitedir/queue/detector/config.yaml
+    fi
+
+    if [ $queue_det_config_file != "" ]; then
+        launch_file="queue_people_py detect_queue_people.launch"
+        echo "launch $launch_file"
+        eval "$command ros2 launch $launch_file \
+                       queue_annotation_list_file:=$queue_det_config_file \
+                       $commandpost"
+        pids+=($!)
+    else
+        echo "Invalid site is specified. There is no queue config file."
+    fi
+fi
 
 ## wait until it is terminated by the user
 while [ 1 -eq 1 ];

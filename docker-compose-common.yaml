@@ -89,6 +89,9 @@ services:
       - ./cabot-common/cabot_common:/home/developer/ros2_ws/src/cabot_common
       - ./cabot-common/cabot_msgs:/home/developer/ros2_ws/src/cabot_msgs
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
+      - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
+      - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
+      - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
     privileged: true
     devices:
       - /dev/dri
