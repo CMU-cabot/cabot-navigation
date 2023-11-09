@@ -258,9 +258,9 @@ else
     checks+=($!)
     pids+=($!)
 
-    blue "bringup $CABOT_MODEL"
+    blue "bringup cabot control"
     com="$command_prefix source $venv_path && \
-            ros2 launch cabot $cabot_launch_py $command_postfix"
+            ros2 launch cabot cabot_control.launch.py $command_postfix"
     echo $com
     eval $com
     checks+=($!)

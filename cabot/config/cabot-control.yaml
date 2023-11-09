@@ -1,64 +1,9 @@
 # include/vlp16.launch.py
-pointcloud_to_laserscan_node:
-  ros__parameters:
-    target_frame: velodyne
-    transform_tolerance: 0.01
-    min_height: -0.30  # origin is the sensor
-    max_height: 1.4  # origin is the sensor
-    angle_min: -2.57  # -M_PI/2 - 1.0 (angle clipping)
-    angle_max: 1.57  # M_PI/2
-    angle_increment: 0.00436  # M_PI/360/2
-    scan_time: 0.1
-    range_min: 0.2
-    range_max: 50.0
-    use_inf: True
-    inf_epsilon: 1.0
-    # Concurrency level affects number of pointclouds queued for
-    # processing and number of threads used
-    # 0 : Detect number of cores
-    # 1 : Single threaded
-    # 2->inf : Parallelism level
-    concurrency_level: 0       
-
-
-filter_crop_box_node:
-  ros__parameters:
-    min_x: -0.7
-    min_y: -0.6
-    min_z: 0.0
-    max_x: 0.2
-    max_y: 0.1
-    max_z: 2.0
-    keep_organized: False
-    negative: True
-    input_frame: base_link
-    output_frame: velodyne
-#------ vlp.16.launch.xml
-
 cabot:
-  cabot_handle_v2_node:
-    ros__parameters:
-      no_vibration: false
-      buttons: ['NEED_TO_BE_CONFIGURED']
-          
   speed_visualize_node:
     ros__parameters:
       cmd_vel_topic: /cabot/cmd_vel
       visualize_topic: /cabot/poi
-
-  cabot_serial:
-    ros__parameters:
-      port: NEED_TO_BE_CONFIGURED
-      baud: 115200
-      calibration_params: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-      touch_params: [128,48,24] # NEED_TO_BE_CONFIGURED
-      touch_speed_max_inactive: 0.5
-
-  serial_esp32_wifi_scanner:
-    ros__parameters:
-      port: /dev/ttyESP32
-      baud: 115200
-      verbose: False
 
   clearing_tf_node:
     ros__parameters:
@@ -143,33 +88,6 @@ cabot:
       speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
       complete_stop: [false,false,false,false,true,false,true]
       configurable: [true,false,false,false,false,false,false]
-
-  odriver_adapter_node:
-    ros__parameters:
-      encoder_topic: /cabot/motorStatus
-      odom_topic: /cabot/odom_raw
-      motor_topic: /cabot/motorTarget
-      cmd_vel_topic: /cabot/cmd_vel
-      pause_control_topic: /cabot/pause_control 
-      max_acc: 1.2
-      target_rate: 20
-      bias: 1.0          # NEED_TO_BE_CONFIGURED
-      gain_omega: 1.0    # NEED_TO_BE_CONFIGURED
-      gain_omega_i: 0.0  # NEED_TO_BE_CONFIGURED
-
-  odriver_node:
-    ros__parameters:
-      wheel_diameter: 0.073      # NEED_TO_BE_CONFIGURED
-      count_per_round: 16384     # NEED_TO_BE_CONFIGURED
-      left_is_1: false           # NEED_TO_BE_CONFIGURED
-      is_clockwise: true         # NEED_TO_BE_CONFIGURED
-      gain_left: 1.0             # NEED_TO_BE_CONFIGURED
-      gain_right: 1.0            # NEED_TO_BE_CONFIGURED
-      port: /dev/ttyODRIVE
-      vel_gain: 1.0              # NEED_TO_BE_CONFIGURED
-      vel_integrator_gain: 10.0  # NEED_TO_BE_CONFIGURED
-      motor_bandwidth: 200       # NEED_TO_BE_CONFIGURED
-      encoder_bandwidth: 200     # NEED_TO_BE_CONFIGURED
 
   ekf_node:
     ros__parameters:
