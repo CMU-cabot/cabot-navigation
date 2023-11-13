@@ -238,7 +238,7 @@ def generate_launch_description():
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([get_package_share_directory('cabot'),
-                                              '/launch/cabot2.launch.py']),
+                                              '/launch/cabot_control.launch.py']),
                 launch_arguments={
                     'model': model_name,
                     'use_sim_time': 'true'
