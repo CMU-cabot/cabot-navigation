@@ -78,8 +78,10 @@ def main():
     rclpy.init()
     node = Node('wireless_sample_simulator')
     _ = SimpleSampleSimulatorNode(node, "wifi")
-
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except:
+        pass
 
 
 if __name__ == "__main__":

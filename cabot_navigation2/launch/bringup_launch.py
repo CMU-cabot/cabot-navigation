@@ -27,10 +27,8 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import SetEnvironmentVariable
-from launch.actions import ExecuteProcess
 from launch.actions import RegisterEventHandler
 from launch.event_handlers import OnShutdown
-from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression
 
@@ -51,10 +49,6 @@ def generate_launch_description():
     default_bt_xml_file = LaunchConfiguration('default_bt_xml_file')
     default_bt_xml_file2 = LaunchConfiguration('default_bt_xml_file2')
     autostart = LaunchConfiguration('autostart')
-    rviz_config_file = LaunchConfiguration('rviz_config_file')
-    rviz_config_file2 = LaunchConfiguration('rviz_config_file2')
-    show_rviz = LaunchConfiguration('show_rviz')
-    show_local_rviz = LaunchConfiguration('show_local_rviz')
     footprint_radius = LaunchConfiguration('footprint_radius')
     offset = LaunchConfiguration('offset')
     cabot_side = LaunchConfiguration('cabot_side')
@@ -109,16 +103,6 @@ def generate_launch_description():
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot_navigation2")])),
 
         DeclareLaunchArgument(
-            'rviz_config_file',
-            default_value=os.path.join(pkg_dir, 'rviz', 'nav2_default_view.rviz'),
-            description='Full path to the RVIZ config file to use'),
-
-        DeclareLaunchArgument(
-            'rviz_config_file2',
-            default_value=os.path.join(pkg_dir, 'rviz', 'nav2_default_view_local.rviz'),
-            description='Full path to the RVIZ config file to use'),
-
-        DeclareLaunchArgument(
             'namespace',
             default_value='',
             description='Top-level namespace'),
@@ -159,14 +143,6 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_remappings', default_value='true',
             description='Arguments to pass to all nodes launched by the file'),
-
-        DeclareLaunchArgument(
-            'show_rviz', default_value='true',
-            description='Whether showing Rviz'),
-
-        DeclareLaunchArgument(
-            'show_local_rviz', default_value='true',
-            description='Whether showing local Rviz'),
 
         DeclareLaunchArgument(
             'footprint_radius', default_value='0.45',
@@ -338,25 +314,6 @@ def generate_launch_description():
             executable='cabot_scan',
             name='cabot_scan',
             parameters=[configured_params],
-            output='log'),
-
-        Node(
-            condition=IfCondition(show_rviz),
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            arguments=['-d', rviz_config_file],
-            parameters=[{'use_sim_time': use_sim_time}],
-            output='log'),
-
-        Node(
-            condition=IfCondition(show_local_rviz),
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2_local',
-            namespace='local',
-            arguments=['-d', rviz_config_file2],
-            parameters=[{'use_sim_time': use_sim_time}],
             output='log'),
 
     ])

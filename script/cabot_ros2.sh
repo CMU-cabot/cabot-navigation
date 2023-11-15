@@ -93,17 +93,6 @@ export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
 : ${CABOT_ANNOUNCE_NO_TOUCH:=false}
 : ${CABOT_GAMEPAD:=}
 : ${CABOT_USE_HANDLE_SIMULATOR:=0}
-: ${CABOT_SHOW_GAZEBO_CLIENT:=0}
-: ${CABOT_SHOW_ROS2_RVIZ:=0}
-: ${CABOT_SHOW_ROS2_LOCAL_RVIZ:=0}
-: ${CABOT_SHOW_ROBOT_MONITOR:=1}
-: ${CABOT_HEADLESS:=0}
-if [[ $CABOT_HEADLESS -eq 1 ]]; then
-    CABOT_SHOW_GAZEBO_CLIENT=0
-    CABOT_SHOW_ROS2_RVIZ=0
-    CABOT_SHOW_ROS2_LOCAL_RVIZ=0
-    CABOT_SHOW_ROBOT_MONITOR=0
-fi
 
 # optional variables
 # TODO
@@ -139,7 +128,6 @@ fi
 
 # initialize local variables
 pid=
-use_cache=0
 use_sim_time=false
 if [ $CABOT_GAZEBO -eq 1 ]; then use_sim_time=true; fi
 
@@ -148,7 +136,6 @@ gazebo=$CABOT_GAZEBO   # read by config script
 
 wait_sec=0
 queue_detector=1
-
 
 
 function usage {
@@ -161,15 +148,11 @@ function usage {
     exit
 }
 
-
-while getopts "hcdw:" arg; do
+while getopts "hdw:" arg; do
     case $arg in
 	h)
 	    usage
 	    exit
-	    ;;
-	c)
-	    use_cache=1
 	    ;;
 	d)
 	    debug=1
@@ -190,14 +173,6 @@ while [ ${PWD##*/} != "ros2_ws" ]; do
 done
 ros2_ws=`pwd`
 cd $ros2_ws
-if [ $use_cache -eq 0 ]; then
-    colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo 
-    if [ $? -ne 0 ]; then
-	exit
-    fi
-else
-    echo "Skip building workspace"
-fi
 source $ros2_ws/install/setup.bash
 
 # TODO: Remove cabot_site_configuration from shell script
@@ -220,31 +195,11 @@ fi
 
 echo "CABOT_GAZEBO              : $CABOT_GAZEBO"
 echo "CABOT_SITE                : $CABOT_SITE"
-echo "CABOT_SHOW_ROS2_RVIZ      : $CABOT_SHOW_ROS2_RVIZ"
-echo "CABOT_SHOW_ROS2_LOCAL_RVIZ: $CABOT_SHOW_ROS2_LOCAL_RVIZ"
 echo "Map                       : $map"
 echo "Use Sim Time              : $use_sim_time"
 echo "Use BLE                 : $use_ble"
 
-if [[ $CABOT_GAZEBO -eq 1 ]]; then
-    blue "launch gazebo"
-    com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
-        model:=$CABOT_MODEL \
-        world_file:=$world \
-        wireless_config_file:=$wireless_config \
-        $command_postfix"
-    echo $com
-    eval $com
-    checks+=($!)
-    pids+=($!)
-    if [[ $CABOT_HEADLESS -eq 0 ]]; then
-	blue "launch cabot_keyboard teleop"
-	com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
-    fi
-    echo $com
-    eval $com
-    pids+=($!)
-else
+if [[ $CABOT_GAZEBO -eq 0 ]]; then
     # check cabot major version to switch venv and launch file
     cabot_major=${CABOT_MODEL:0:6} # cabotN
     venv_path=/opt/venv/$cabot_major/bin/activate
@@ -257,33 +212,16 @@ else
     eval $com
     checks+=($!)
     pids+=($!)
-
-    blue "bringup cabot control"
-    com="$command_prefix source $venv_path && \
-            ros2 launch cabot cabot_control.launch.py $command_postfix"
-    echo $com
-    eval $com
-    checks+=($!)
-    pids+=($!)
-
-    if [[ $CABOT_HEADLESS -eq 0 ]]; then
-	if [[ $CABOT_USE_HANDLE_SIMULATOR -eq 1 ]]; then
-	    blue "launch cabot_keyboard teleop"
-	    com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
-	    echo $com
-	    eval $com
-	    pids+=($!)
-	fi
-    fi
 fi
 
-# launch teleop keyboard for both gazebo and physical robot
-if [[ $CABOT_HEADLESS -eq 0 ]]; then
-    com="setsid xterm -e ros2 run teleop_twist_keyboard teleop_twist_keyboard &"
-    echo $com
-    eval $com
-    pids+=($!)
-fi
+blue "bringup cabot control"
+com="$command_prefix ros2 launch cabot cabot_control.launch.py \
+     use_sim_time:=$use_sim_time \
+     $command_postfix"
+echo $com
+eval $com
+checks+=($!)
+pids+=($!)
 
 if [[ ! -z $CABOT_GAMEPAD ]]; then
     # launch gamepad teleop
@@ -309,8 +247,6 @@ com="$command_prefix ros2 launch cabot_navigation2 bringup_launch.py \
     map:=$map \
     autostart:=true \
     use_sim_time:=$use_sim_time \
-    show_rviz:=$CABOT_SHOW_ROS2_RVIZ \
-    show_local_rviz:=$CABOT_SHOW_ROS2_LOCAL_RVIZ \
     record_bt_log:=false \
     cabot_side:=$CABOT_SIDE \
     $command_postfix"
@@ -324,8 +260,7 @@ pids+=($!)
 #  record_bt_log:=$CABOT_RECORD_ROSBAG2 \
     
 echo "launch cabot diagnostic"
-com="$command_prefix ros2 launch cabot_ui cabot_diagnostic.launch.xml \
-        show_robot_monitor:=$CABOT_SHOW_ROBOT_MONITOR \
+com="$command_prefix ros2 launch cabot_ui cabot_diagnostic.launch.py \
         $command_postfix"
 echo $com
 eval $com

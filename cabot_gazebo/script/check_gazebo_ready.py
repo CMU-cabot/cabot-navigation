@@ -40,10 +40,8 @@ if __name__ == "__main__":
     rclpy.init()
     node = Node('check_gazebo_ready')
     _ = node.create_subscription(ModelStates, "/gazebo/model_states", model_callback, 10)
-    # thread = threading.Thread(target=check_model_callback, daemon=False)
-    # thread.start()
     try:
-        while model_callback_called:
+        while not model_callback_called:
             rclpy.spin_once(node)
             time.sleep(0.1)
     except:  # noqa: E722

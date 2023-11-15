@@ -106,8 +106,6 @@ RUN useradd -m $USERNAME && \
 # install entrypoint
 COPY docker-entrypoint.sh \
 	launch.sh \
-        launch-core.sh \
-        launch-bag.sh \
 	/
 
 USER $USERNAME

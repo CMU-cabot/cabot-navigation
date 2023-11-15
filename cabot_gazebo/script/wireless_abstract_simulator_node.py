@@ -38,7 +38,7 @@ class AbstractSimulatorNode(abc.ABC):
         self._logger = node.get_logger()
 
         node.declare_parameter('verbose', False)
-        self._verbose = node.get_parameter('verbose')
+        self._verbose = node.get_parameter('verbose').value
 
         node.declare_parameter('wireless_config_file', '')
         wireless_config_file = node.get_parameter('wireless_config_file')

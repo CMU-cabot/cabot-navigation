@@ -32,9 +32,7 @@ from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
 from launch.actions import RegisterEventHandler
 from launch.actions import SetEnvironmentVariable
-from launch.actions import TimerAction
 from launch.event_handlers import OnShutdown
-from launch.event_handlers import OnExecutionComplete
 from launch.event_handlers import OnProcessExit
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
@@ -91,16 +89,10 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_gazebo')
     output = 'both'
 
-    show_gazebo = LaunchConfiguration('show_gazebo')
-    show_rviz = LaunchConfiguration('show_rviz')
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
-
-    rviz_conf = os.path.join(
-        pkg_dir,
-        "launch/test.rviz")
 
     gazebo_params = os.path.join(
         pkg_dir,
@@ -122,8 +114,6 @@ def generate_launch_description():
         Command(['xacro ', xacro_for_cabot_model, ' offset:=0.25', ' sim:=', use_sim_time]),
         value_type=str
     )
-
-
 
     spawn_entity = Node(
         package='gazebo_ros',
@@ -152,16 +142,6 @@ def generate_launch_description():
         # append prefix name to the log directory for convenience
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot_gazebo")])),
 
-        DeclareLaunchArgument(
-            'show_gazebo',
-            default_value=EnvironmentVariable('CABOT_SHOW_GAZEBO_CLIENT', default_value='false'),
-            description='Show Gazebo client if true'
-        ),
-        DeclareLaunchArgument(
-            'show_rviz',
-            default_value='false',
-            description='Show rviz2 if true'
-        ),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='true',
@@ -230,38 +210,12 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource([pkg_dir,
                                               '/launch/gazebo_wireless_helper.launch.py']),
                 launch_arguments={
-                    'verbose': 'true',
+                    'verbose': 'false',
                     'namespace': 'wireless',
                     'wireless_config_file': wireless_config_file
                 }.items(),
                 condition=LaunchConfigurationNotEquals('wireless_config_file', '')
             ),
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([get_package_share_directory('cabot'),
-                                              '/launch/cabot_control.launch.py']),
-                launch_arguments={
-                    'model': model_name,
-                    'use_sim_time': 'true'
-                }.items()
-            ),
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([get_package_share_directory('gazebo_ros'),
-                                              '/launch/gzclient.launch.py']),
-                condition=IfCondition(show_gazebo),
-                launch_arguments={
-                    'verbose': 'true'
-                }.items()
-            ),
-            #        Node(
-            #            package='joint_state_publisher_gui',
-            #            executable='joint_state_publisher_gui',
-            #            name='joint_state_publisher',
-            #            output='log',
-            #            parameters=[{
-            #                'use_sim_time': use_sim_time,
-            #                'rate': 20.0,
-            #            }]
-            #        ),
             check_gazebo_ready,
             RegisterEventHandler(
                 OnProcessExit(
@@ -276,17 +230,7 @@ def generate_launch_description():
                 OnProcessExit(
                     target_action=spawn_entity,
                     on_exit=[
-                        LogInfo(msg='Spawn finished'),
-                        Node(
-                            condition=IfCondition(show_rviz),
-                            package='rviz2',
-                            executable='rviz2',
-                            output='screen',
-                            parameters=[{
-                                'use_sim_time': use_sim_time,
-                            }],
-                            arguments=['-d', str(rviz_conf)]
-                        )
+                        LogInfo(msg='Spawn finished')
                     ]
                 )
             ),

@@ -22,4 +22,36 @@
 
 ulimit -S -c 0
 
-exec ./script/cabot_ros2.sh $@
+while getopts "c" arg; do
+    case $arg in
+        c)
+	    ulimit -c unlimited
+	    echo 1 | sudo tee /proc/sys/kernel/core_uses_pid
+	    echo "/home/developer/core" | sudo tee /proc/sys/kernel/core_pattern
+	    ulimit -s 65536
+	    ;;
+    esac
+done
+shift $((OPTIND-1))
+
+if [[ $1 == "navigation" ]]; then
+    shift 1
+    exec ./script/cabot_ros2.sh $@
+elif [[ $1 == "build" ]]; then
+    shift 1
+    exec ./script/cabot_build.sh $@
+elif [[ $1 == "gazebo" ]]; then
+    shift 1
+    exec ./script/cabot_gazebo.sh $@
+elif [[ $1 == "gui" ]]; then
+    shift 1
+    exec ./script/cabot_gui.sh $@
+elif [[ $1 == "play" ]]; then
+    shift 1
+    exec ./script/play_bag.sh $@
+elif [[ $1 == "record" ]]; then
+    shift 1
+    exec ./script/record_bag.sh $@
+fi
+
+exec bash

@@ -29,19 +29,11 @@ from ament_index_python import get_package_share_directory
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_ui')
-    show_robot_monitor = LaunchConfiguration('show_robot_monitor')
     config_file = LaunchConfiguration('config_file')
 
     return LaunchDescription([
-        DeclareLaunchArgument('show_robot_monitor', default_value='true'),
         DeclareLaunchArgument('config_file', default_value=PathJoinSubstitution([pkg_dir, 'config', 'cabot_diagnostic.yaml'])),
 
-        Node(
-            package="rqt_robot_monitor",
-            executable="rqt_robot_monitor",
-            name="rqt_robot_monitor",
-            condition=IfCondition(show_robot_monitor)
-        ),
         Node(
             package="diagnostic_aggregator",
             executable="aggregator_node",

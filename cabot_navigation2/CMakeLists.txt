@@ -185,7 +185,6 @@ install(FILES
   )
 
 install(DIRECTORY params/ DESTINATION share/${PROJECT_NAME}/params/)
-install(DIRECTORY rviz/ DESTINATION share/${PROJECT_NAME}/rviz/)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch/)
 install(DIRECTORY test/ DESTINATION share/${PROJECT_NAME}/test/)
 

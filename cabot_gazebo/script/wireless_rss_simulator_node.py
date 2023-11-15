@@ -91,7 +91,10 @@ def main():
     node = rclpy.node.Node('wireless_rss_simulator')
     _ = SimpleBLESimulatorNode(node, "beacons")
 
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except:
+        pass
 
 
 if __name__ == "__main__":

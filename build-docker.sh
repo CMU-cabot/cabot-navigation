@@ -227,7 +227,7 @@ function build_ros2_ws {
     if [ $debug -eq 1 ]; then
 	debug_option='-d'
     fi
-    docker compose run --rm ros2 /home/developer/ros2_ws/script/cabot_ros2_build.sh $debug_option
+    docker compose run --rm navigation /launch.sh build $debug_option
 }
 
 function build_localization_ws {
@@ -245,7 +245,7 @@ function build_ros2_image {
 		   --build-arg UID=$UID \
 		   --build-arg TZ=$time_zone \
 		   $option \
-		   ros2
+		   navigation gazebo gui
 }
 
 function build_localization_image {
