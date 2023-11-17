@@ -1,4 +1,4 @@
-# Copyright (c) 2020  Carnegie Mellon University
+# Copyright (c) 2020, 2023  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,9 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ARG FROM_IMAGE
+ARG PREFIX=cabot
+ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
 
-FROM $FROM_IMAGE
+FROM ${FROM_IMAGE}
 ENV ROS_DISTRO=humble
 
 # TODO replace with rosdep install

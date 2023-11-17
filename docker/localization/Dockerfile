@@ -1,6 +1,7 @@
-ARG FROM_IMAGE
+ARG PREFIX=cabot
+ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
 
-FROM $FROM_IMAGE as cache
+FROM ${FROM_IMAGE} as cache
 
 ENV CARTO_WS=/opt/cartographer_ws
 

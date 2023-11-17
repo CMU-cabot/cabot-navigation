@@ -199,21 +199,6 @@ echo "Map                       : $map"
 echo "Use Sim Time              : $use_sim_time"
 echo "Use BLE                 : $use_ble"
 
-if [[ $CABOT_GAZEBO -eq 0 ]]; then
-    # check cabot major version to switch venv and launch file
-    cabot_major=${CABOT_MODEL:0:6} # cabotN
-    venv_path=/opt/venv/$cabot_major/bin/activate
-    cabot_launch_py=$cabot_major.launch.py
-
-    blue "bringup $CABOT_MODEL base"
-    com="$command_prefix source $venv_path && \
-            ros2 launch cabot_base $cabot_launch_py $command_postfix"
-    echo $com
-    eval $com
-    checks+=($!)
-    pids+=($!)
-fi
-
 blue "bringup cabot control"
 com="$command_prefix ros2 launch cabot cabot_control.launch.py \
      use_sim_time:=$use_sim_time \
