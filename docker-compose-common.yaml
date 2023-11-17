@@ -30,7 +30,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
       - NVIDIA_VISIBLE_DEVICES=all
 # CaBot
-      - CABOT_GAZEBO=${CABOT_GAZEBO:-1}
+      - CABOT_GAZEBO
+      - CABOT_USE_SIM_TIME
       - CABOT_MODEL
       - CABOT_SIDE
       - CABOT_SITE
@@ -121,6 +122,7 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+    environment:
 # CaBot
       - CABOT_SHOW_GAZEBO_CLIENT
       - CABOT_SHOW_ROBOT_MONITOR

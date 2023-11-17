@@ -73,19 +73,14 @@ function signal() {
 
 # TODO
 : ${CABOT_GAZEBO:=0}
+: ${CABOT_USE_SIM_TIME:=0}
 : ${CABOT_USE_HANDLE_SIMULATOR:=0}
 : ${CABOT_SHOW_GAZEBO_CLIENT:=0}
 : ${CABOT_SHOW_ROS2_RVIZ:=0}
 : ${CABOT_SHOW_ROS2_LOCAL_RVIZ:=0}
 : ${CABOT_SHOW_ROBOT_MONITOR:=1}
 
-# optional variables
-pid=
-use_sim_time=false
-if [ $CABOT_GAZEBO -eq 1 ]; then use_sim_time=true; fi
 
-# configuration for cabot site scripts
-gazebo=$CABOT_GAZEBO   # read by config script
 
 wait_sec=0
 
@@ -120,12 +115,12 @@ cd $ros2_ws
 source $ros2_ws/install/setup.bash
 
 echo "CABOT_GAZEBO              : $CABOT_GAZEBO"
+echo "CABOT_USE_SIM_TIME        : $CABOT_USE_SIM_TIME"
 echo "CABOT_USE_HANDLE_SIMULATOR: $CABOT_USE_HANDLE_SIMULATOR"
 echo "CABOT_SHOW_ROS2_RVIZ      : $CABOT_SHOW_ROS2_RVIZ"
 echo "CABOT_SHOW_ROS2_LOCAL_RVIZ: $CABOT_SHOW_ROS2_LOCAL_RVIZ"
 echo "CABOT_SHOW_GAZEBO_CLIENT  : $CABOT_SHOW_GAZEBO_CLIENT"
 echo "CABOT_SHOW_ROBOT_MONITOR  : $CABOT_SHOW_ROBOT_MONITOR"
-echo "Use Sim Time              : $use_sim_time"
 
 
 blue "launch gui"
@@ -141,12 +136,12 @@ if [[ $CABOT_GAZEBO -eq 1 ]]; then
     eval $com
     pids+=($!)
 else
-	if [[ $CABOT_USE_HANDLE_SIMULATOR -eq 1 ]]; then
-	    blue "launch cabot_keyboard teleop"
-	    com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
-	    echo $com
-	    eval $com
-	    pids+=($!)
+    if [[ $CABOT_USE_HANDLE_SIMULATOR -eq 1 ]]; then
+	blue "launch cabot_keyboard teleop"
+	com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
+	echo $com
+	eval $com
+	pids+=($!)
     fi
 fi
 

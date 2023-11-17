@@ -33,11 +33,35 @@ from launch.conditions import IfCondition
 from launch.substitutions import AndSubstitution
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
+from launch.substitution import Substitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
+from launch.some_substitutions_type import SomeSubstitutionsType
+from launch.utilities import normalize_to_list_of_substitutions
+from launch.utilities import perform_substitutions
+from launch import LaunchContext
+from typing import List
+
+
 from launch.logging import launch_config
 from cabot_common.launch import AppendLogDirPrefix
+
+class BooleanSubstitution(Substitution):
+    """
+    Custom substitution class to convert '0/1' or 'false/true' strings to boolean.
+    """
+    def __init__(self, value: SomeSubstitutionsType):
+        self.__value = normalize_to_list_of_substitutions(value)
+
+    def perform(self, context: LaunchContext) -> str:
+        value = perform_substitutions(context, self.__value)
+        if value in ['1', 'true']:
+            return 'true'
+        elif value in ['0', 'false']:
+            return 'false'
+        else:
+            raise ValueError(f"Invalid boolean string: {self.__value}")
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_ui')
@@ -51,12 +75,18 @@ def generate_launch_description():
     show_robot_monitor = LaunchConfiguration('show_robot_monitor')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
+    show_gazebo_ = BooleanSubstitution(show_gazebo)
+    show_rviz_ = BooleanSubstitution(show_rviz)
+    show_local_rviz_ = BooleanSubstitution(show_local_rviz)
+    show_robot_monitor_ = BooleanSubstitution(show_robot_monitor)
+    use_sim_time_ = BooleanSubstitution(use_sim_time)
+
     check_gazebo_ready = Node(
         package='cabot_gazebo',
         executable='check_gazebo_ready.py',
         name='check_gazebo_ready_node',
         parameters=[{'check_mobile_base': True}],
-        condition=IfCondition(use_sim_time),
+        condition=IfCondition(use_sim_time_),
     )
 
     return LaunchDescription([
@@ -97,41 +127,41 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'use_sim_time',
-            default_value='true',
+            default_value=EnvironmentVariable('CABOT_USE_SIM_TIME', default_value='true'),
             description='Use simulation (Gazebo) clock if true'),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([get_package_share_directory('gazebo_ros'),
                                             '/launch/gzclient.launch.py']),
-            condition=IfCondition(AndSubstitution(left=use_sim_time, right=show_gazebo)),
+            condition=IfCondition(AndSubstitution(left=use_sim_time_, right=show_gazebo_)),
             launch_arguments={
                 'verbose': 'true'
             }.items()
         ),
         LogInfo(msg='non gazebo env'),    
         Node(
-            condition=IfCondition(show_rviz),
+            condition=IfCondition(show_rviz_),
             package='rviz2',
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_file],
-            parameters=[{'use_sim_time': use_sim_time}],
+            parameters=[{'use_sim_time': use_sim_time_}],
             output='log',
         ),
         Node(
-            condition=IfCondition(show_local_rviz),
+            condition=IfCondition(show_local_rviz_),
             package='rviz2',
             executable='rviz2',
             name='rviz2_local',
             namespace='local',
             arguments=['-d', rviz_config_file2],
-            parameters=[{'use_sim_time': use_sim_time}],
+            parameters=[{'use_sim_time': use_sim_time_}],
             output='log',
         ),
         Node(
             package="rqt_robot_monitor",
             executable="rqt_robot_monitor",
             name="rqt_robot_monitor",
-            condition=IfCondition(show_robot_monitor)
+            condition=IfCondition(show_robot_monitor_)
         ),
     ])
