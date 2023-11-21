@@ -28,6 +28,10 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
 
 FROM $FROM_IMAGE as build
 
+ARG TZ=UTC
+ENV TZ=$TZ
+RUN sudo ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | sudo tee /etc/timezone
+
 ENV CARTO_WS=/opt/cartographer_ws
 
 RUN mkdir -p $CARTO_WS/install

@@ -63,7 +63,7 @@ build_workspace=0
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
-while getopts "hnt:u:pP:iw" arg; do
+while getopts "hno:t:u:pP:iw" arg; do
     case $arg in
 	h)
 	    help
@@ -72,6 +72,9 @@ while getopts "hnt:u:pP:iw" arg; do
 	n)
 	    option="$option --no-cache"
 	    ;;
+    o)
+        option=$OPTARG
+        ;;
 	t)
 	    time_zone=$OPTARG
 	    ;;
@@ -97,7 +100,7 @@ shift $((OPTIND-1))
 targets=$@
 
 if [[ $prebuild -eq 1 ]]; then
-    ./cabot-common/prebuild_docker.sh -P $prefix
+    ./cabot-common/prebuild_docker.sh -P $prefix -o "$option"
     if [ $? != 0 ]; then exit 1; fi
 fi
 

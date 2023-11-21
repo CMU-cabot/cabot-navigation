@@ -23,6 +23,9 @@ ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
 
 FROM ${FROM_IMAGE}
 ENV ROS_DISTRO=humble
+ARG TZ=UTC
+ENV TZ=$TZ
+RUN sudo ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | sudo tee /etc/timezone
 
 # TODO replace with rosdep install
 RUN apt update && \

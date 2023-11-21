@@ -32,9 +32,7 @@ else
     source /opt/custom_ws/install/setup.bash
 fi
 
-while [[ ${PWD##*/} != "ros2_ws" ]] && [[ ${PWD##*/} != "bag_ws" ]]; do
-    cd ..
-done
+cd ..
 ros2_ws=`pwd`
 
 debug=0
@@ -56,7 +54,7 @@ fi
 
 if [[ $? -ne 0 ]]; then exit $?; fi
 
-if [ -e $scriptdir/../src/queue_utils_py ]; then
+if [[ -e $scriptdir/../src/queue_utils_py ]]; then
     cd $scriptdir/../src/queue_utils_py
     pip3 install .
 fi

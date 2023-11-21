@@ -25,6 +25,8 @@ ARG TZ="Etc/UTC"
 ENV TZ=$TZ \
 	DEBIAN_FRONTEND="noninteractive"
 
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | tee /etc/timezone
+
 RUN apt update && \
 	apt install -y \
 	wget \
