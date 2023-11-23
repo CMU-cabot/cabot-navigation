@@ -12,11 +12,9 @@
 
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
-  <depend>cabot_description</depend>
   <depend>diagnostic_updater</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
-  <depend>odriver_msgs</depend>
   <depend>people_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
