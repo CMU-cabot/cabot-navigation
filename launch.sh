@@ -375,7 +375,7 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test"
-    docker compose exec ros2 /home/developer/ros2_ws/script/run_test.sh
+    docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh
     pids+=($!)
     runtest_pid=$!
     snore 3

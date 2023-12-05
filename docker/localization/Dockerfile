@@ -8,11 +8,22 @@ ENV CARTO_WS=/opt/cartographer_ws
 RUN mkdir -p $CARTO_WS/src
 COPY ./cartographer /opt/cartographer_ws/src/cartographer
 COPY ./cartographer_ros /opt/cartographer_ws/src/cartographer_ros
+COPY ./bluespace_ai_xsens_ros_mti_driver /opt/cartographer_ws/src/bluespace_ai_xsens_ros_mti_driver
+COPY ./ublox /opt/cartographer_ws/src/ublox
 
 WORKDIR /opt/cartographer_ws/
 
+# copy package.xml files with parent directories for cache
+RUN find . -name "src" -type d \
+      -mindepth 1 -maxdepth 2 -printf '%P\n' \
+      | xargs -I % mkdir -p /tmp/opt/% && \
+    find . -name "package.xml" \
+      | xargs cp --parents -t /tmp/opt && \
+    find . -name "COLCON_IGNORE" \
+      | xargs cp --parents -t /tmp/opt || true
+
 RUN apt update && rosdep update && rosdep install -q -y \
-	--from-paths src \
+--from-paths src \
 	--ignore-src
 
 ## TODO: this is a quick fix
@@ -23,7 +34,7 @@ RUN sed -i 's:d902eb869bcfacc1bad14933ed9af4bed006d481:8c0b94e793a66495e0b1f34a5
 RUN src/cartographer/scripts/install_debs_cmake.sh && rm -rf /var/lib/apt/lists/*
 RUN src/cartographer/scripts/install_abseil.sh && rm -rf /var/lib/apt/lists/*
 
-RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+RUN . /opt/custom_ws/install/setup.sh && \
 	colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 FROM $FROM_IMAGE as build
@@ -38,17 +49,15 @@ RUN mkdir -p $CARTO_WS/install
 WORKDIR /opt/cartographer_ws/
 
 COPY --from=cache $CARTO_WS/install $CARTO_WS/install
-COPY --from=cache $CARTO_WS/src/cartographer/package.xml $CARTO_WS/src/cartographer/package.xml
-COPY --from=cache $CARTO_WS/src/cartographer_ros/cartographer_ros/package.xml $CARTO_WS/src/cartographer_ros/package.xml
-COPY --from=cache $CARTO_WS/src/cartographer_ros/cartographer_ros_msgs/package.xml $CARTO_WS/src/cartographer_ros_msgs/package.xml
-COPY --from=cache $CARTO_WS/src/cartographer_ros/cartographer_rviz/package.xml $CARTO_WS/src/cartographer_rviz/package.xml
+# copy package.xml files from cache
+COPY --from=cache /tmp/opt/src $CARTO_WS/src
 
 RUN apt update && rosdep update && rosdep install -q -y \
 	--from-paths src \
 	--ignore-src
 
 ARG ROS_DISTRO
-RUN sed -i 's:ros/$ROS_DISTRO:cartographer_ws/install:' /ros_entrypoint.sh
+RUN sed -i 's:custom_ws:cartographer_ws:' /ros_entrypoint.sh
 
 
 # TODO replace with rosdep install

@@ -29,7 +29,7 @@ scriptdir=`pwd`
 if [[ -e install/setup.bash ]]; then
     source install/setup.bash
 else
-    source /opt/custom_ws/install/setup.bash
+    source /opt/underlay_ws/install/setup.bash
 fi
 
 cd ..

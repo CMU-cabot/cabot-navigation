@@ -21,11 +21,51 @@
 ARG PREFIX=cabot
 ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
 
-FROM ${FROM_IMAGE}
+# build underlay
+FROM ${FROM_IMAGE} as cache
+
+ENV UNDERLAY_WS=/opt/underlay_ws
+
+RUN mkdir -p $UNDERLAY_WS/src
+COPY ./tf2_web_republisher $UNDERLAY_WS/src/tf2_web_republisher
+
+WORKDIR $UNDERLAY_WS
+
+# copy package.xml files with parent directories for cache
+RUN find . -name "src" -type d \
+      -mindepth 1 -maxdepth 2 -printf '%P\n' \
+      | xargs -I % mkdir -p /tmp/opt/% && \
+    find . -name "package.xml" \
+      | xargs cp --parents -t /tmp/opt && \
+    find . -name "COLCON_IGNORE" \
+      | xargs cp --parents -t /tmp/opt || true
+
+RUN apt update && rosdep update && rosdep install -q -y \
+	--from-paths src \
+	--ignore-src
+
+RUN . /opt/custom_ws/install/setup.sh && \
+	colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+
+FROM ${FROM_IMAGE} as build
 ENV ROS_DISTRO=humble
 ARG TZ=UTC
 ENV TZ=$TZ
 RUN sudo ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | sudo tee /etc/timezone
+ENV UNDERLAY_WS=/opt/underlay_ws
+
+WORKDIR $UNDERLAY_WS
+
+COPY --from=cache $UNDERLAY_WS/install $UNDERLAY_WS/install
+# copy package.xml files from cache
+COPY --from=cache /tmp/opt/src $UNDERLAY_WS/src
+
+RUN apt update && rosdep update && rosdep install -q -y \
+	--from-paths src \
+	--ignore-src
+
+ARG ROS_DISTRO
 
 # TODO replace with rosdep install
 RUN apt update && \
@@ -108,9 +148,10 @@ RUN useradd -m $USERNAME && \
         groupmod --gid $UID $USERNAME
 
 # install entrypoint
-COPY docker-entrypoint.sh \
-	launch.sh \
-	/
+COPY launch.sh /
+
+# change location of ros base
+RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
 
 USER $USERNAME
 
@@ -118,5 +159,4 @@ ENV HOME /home/$USERNAME
 
 WORKDIR $HOME/ros2_ws
 
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "/launch.sh" ]

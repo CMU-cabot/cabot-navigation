@@ -45,6 +45,8 @@ from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.actions import LoadComposableNodes
+from launch_ros.descriptions import ComposableNode
 from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 
@@ -195,6 +197,33 @@ def generate_launch_description():
                     'frame_prefix': 'local/',
                     'robot_description': robot_description
                 }]
+            ),
+
+            LoadComposableNodes(
+                target_container='/laser_container',
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package='pointcloud_to_laserscan',
+                        plugin='pointcloud_to_laserscan::PointCloudToLaserScanNode',
+                        namespace='',
+                        name='pointcloud_to_laserscan_node',
+                        parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
+                        remappings=[
+                            ('/cloud_in', '/velodyne_points')
+                        ]
+                    ),
+                    ComposableNode(
+                        package='pcl_ros',
+                        plugin='pcl_ros::CropBox',
+                        namespace='',
+                        name='filter_crop_box_node',
+                        parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
+                        remappings=[
+                            ('/input',  '/velodyne_points'),
+                            ('/output', '/velodyne_points_cropped')
+                        ]
+                    ),
+                ]
             ),
 
             IncludeLaunchDescription(
