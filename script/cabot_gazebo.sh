@@ -164,7 +164,7 @@ com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
 echo $com
 eval $com
 checks+=($!)
-pids+=($!)
+termpids+=($!)
 
 ## wait until it is terminated by the user
 while [ 1 -eq 1 ];
