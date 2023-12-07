@@ -31,11 +31,13 @@ function help {
     echo ""
     echo "-h                    show this help"
     echo "-c                    clean (rm -rf) dependency repositories"
+    echo "-n <count>            max count for recursive check (default=2)"
 }
 
 clean=0
+count=3
 
-while getopts "hc" arg; do
+while getopts "hcn:" arg; do
     case $arg in
 	h)
 	    help
@@ -44,21 +46,32 @@ while getopts "hc" arg; do
 	c)
 	    clean=1
 	    ;;
+	n)
+	    count=$OPTARG
+	    ;;
     esac
 done
 
 
 if [[ $clean -eq 1 ]]; then
+	pwd=$(pwd)
     find * -name ".git" | while read -r line; do
-	echo "rm -rf $(dirname $line)"
-	rm -rf $(dirname $line)
+		pushd $line/../
+		if git diff --quiet && ! git ls-files --others --exclude-standard | grep -q .; then
+			echo "rm -rf $pwd/$(dirname $line)"
+			#rm -rf $pwd/$(dirname $line)
+		else
+			blue "There are unstaged/untracked changes in $line"
+		fi
+		popd
     done
     exit
 fi
 
 declare -A visited
 
-while true; do
+for (( i=1; i<=count; i++ ))
+do
     files=$(find . -name "dependency.repos")
 
     flag=0
@@ -68,7 +81,7 @@ while true; do
 	    visited[$line]=1
 	    
 	    pushd $(dirname $line)
-	    blue "vcs import < $(basename $line)"
+	    blue "$(dirname $line)/ vcs import < $(basename $line)"
 	    vcs import < $(basename $line)
 	    popd
 	fi
