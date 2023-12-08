@@ -297,7 +297,7 @@ def generate_launch_description():
 
         Node(
             package='cabot_common',
-            executable='footprint_publisher.py',
+            executable='footprint_publisher',
             name='footprint_publisher',
             parameters=[configured_params],
             output='log'),
