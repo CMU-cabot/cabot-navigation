@@ -34,12 +34,13 @@
 
 ```
 ./setup-dependency.sh
+./setup-sample-site.sh
 ```
 
 - run the script to build image and workspaces
 
 ```
-./build-docker.sh -p              # run prebuild, image build, and workspace build
+./build-docker.sh -p -i -w              # run prebuild, image build, and workspace build
 ```
 
 ### Run test cases
@@ -54,6 +55,7 @@ CABOT_SITE=cabot_site_cmu_3d
 - run the test
 
 ```
+./launch.sh -s -y                 # simulation, yes to launch a map server
 ./launch.sh -s -y -t              # simulation, yes to launch a map server, run test
 ```
 ### .env file
