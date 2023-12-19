@@ -182,7 +182,7 @@ class FloorManager:
         self.localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
-        self.min_hist_count = 5
+        self.min_hist_count = 1
 
         # publisher
         self.initialpose_pub = None
@@ -200,8 +200,12 @@ class FloorManager:
         # variables
         self.previous_fix_local_published = None
 
+        # variables - optimization
+        self.constraints_count = 0
+
     def reset_states(self):
         self.previous_fix_local_published = None
+        self.constraints_count = 0
 
 
 class TFAdjuster:
@@ -1643,10 +1647,10 @@ class MultiFloorManager:
         self.initialpose_callback(pose_with_covariance_stamped)
         self.is_active = True
 
-    # check mapping_constraints_constraint_builder_2d_scores (histgram) if it is optimized
+    # check if pose graph is optimized
     def is_optimized(self):
         if self.mode != LocalizationMode.INIT:
-            self.logger.info("localization mode is not init")
+            self.logger.info(f"localization mode is not init. mode={self.mode}")
             return False
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
@@ -1662,42 +1666,26 @@ class MultiFloorManager:
             self.logger.info(f"read_metrics fails {res.status}")
             return False
 
-        # TODO: there may be better way to detect the optimization
-        #
         # comment out the following two lines to debug
         # from rosidl_runtime_py import message_to_yaml
         # self.logger.info(message_to_yaml(res))
+
+        # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
+        # because this value is updated after running optimization
         optimized = False
-        queue_completed = False
-
         for metric_family in res.metric_families:
-            if metric_family.name == "mapping_constraints_constraint_builder_2d_queue_length":
-                self.logger.info(f"{metric_family.name}: {metric_family.metrics[0]}")
-                if self.optimization_queue_length is None:
-                    if metric_family.metrics[0].value > 0:
-                        self.optimization_queue_length = metric_family.metrics[0].value
-                else:
-                    if self.optimization_queue_length < metric_family.metrics[0].value:
-                        self.optimization_queue_length = metric_family.metrics[0].value
-                    self.logger.info(f"max queue length={self.optimization_queue_length}, current queue length={metric_family.metrics[0].value}")
-                    if metric_family.metrics[0].value == 0:
-                        self.optimization_queue_length = None
-                        queue_completed = True
-
-        for metric_family in res.metric_families:
-            if metric_family.name != "mapping_constraints_constraint_builder_2d_scores":
-                continue
-            count = 0
-            for metric in metric_family.metrics:
-                if metric.type == metric.TYPE_HISTOGRAM:
-                    for bucket in metric.counts_by_bucket:
-                        if bucket.count > 0:
-                            self.logger.info(f"{metric_family.name}: {bucket}")
-                            count += bucket.count
-            if queue_completed and count >= floor_manager.min_hist_count:  # default 5, can be changed in map list
-                self.logger.info(f"count({count}) >= floor_manager.min_hist_count({floor_manager.min_hist_count})")
-                optimized = True
-
+            if metric_family.name == "mapping_2d_pose_graph_constraints":
+                for metric in metric_family.metrics:
+                    # inter_submap -> different trajectory
+                    if metric.labels[0].key == "tag" and metric.labels[0].value == "inter_submap" \
+                            and metric.labels[1].key == "trajectory" and metric.labels[1].value == "different":
+                        self.logger.info(f"inter_submap different trajectory constraints. count={metric.value}")
+                        # check if the number of constraints changed
+                        if floor_manager.constraints_count != metric.value:
+                            floor_manager.constraints_count = metric.value
+                            if metric.value >= floor_manager.min_hist_count:
+                                optimized = True
+                                self.logger.info("pose graph optimization detected.")
         return optimized
 
 
@@ -1926,7 +1914,7 @@ class BufferProxy():
 
     def get_latest_common_time(self, target, source):
         transform = self.lookup_transform(target, source)
-        self._logger.info(f"{transform}")
+        self._logger.info(f"get_latest_common_time: transform={transform}")
 
         return rclpy.time.Time(seconds=transform.header.stamp.sec,
                                nanoseconds=transform.header.stamp.nanosec,
@@ -2114,7 +2102,7 @@ if __name__ == "__main__":
         map_filename = map_dict["map_filename"] if "map_filename" in map_dict else ""
         environment = map_dict["environment"] if "environment" in map_dict else "indoor"
         use_gnss_adjust = map_dict["use_gnss_adjust"] if "use_gnss_adjust" in map_dict else False
-        min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 5
+        min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 1
 
         # check value
         if environment not in ["indoor", "outdoor"]:
@@ -2389,6 +2377,7 @@ if __name__ == "__main__":
     def main_loop():
         # detect optimization
         if multi_floor_manager.is_optimized():
+            tfBuffer.clear() # clear outdated tf before optimization
             multi_floor_manager.optimization_detected = True
 
         # detect area and mode switching
