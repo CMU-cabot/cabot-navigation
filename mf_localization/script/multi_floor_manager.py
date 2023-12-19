@@ -479,19 +479,29 @@ class MultiFloorManager:
             self.localize_status_pub.publish(msg)
 
     def initialpose_callback(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped):
+        if self.verbose:
+            self.logger.info("multi_floor_manager.initialpose_callback")
+
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
 
-        if self.mode is None:
-            self.mode = LocalizationMode.INIT
+        self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode = LocalizationMode.TRACK)
+
+    def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode = None):
+
+        # set target mode
+        if mode is not None: # update the target mode
+            target_mode = mode
+        else:
+            if self.mode is None:
+                target_mode = LocalizationMode.INIT
+            else:
+                target_mode = self.mode # keep the current mode
 
         if self.floor is None:
             self.logger.info("floor is unknown. Set floor by calling /set_current_floor service before publishing the 2D pose estimate.")
 
-        if self.floor is not None and self.mode is not None:
-            if self.mode == LocalizationMode.INIT:
-                self.localize_status = MFLocalizeStatus.LOCATING
-
+        if self.floor is not None:
             # transform pose in the message from map frame to a local frame
             pose_stamped_msg = PoseStamped()
             pose_stamped_msg.header = pose_with_covariance_stamped_msg.header
@@ -499,13 +509,13 @@ class MultiFloorManager:
 
             # detect area
             x_area = [[pose_stamped_msg.pose.position.x, pose_stamped_msg.pose.position.y, float(self.floor)*self.area_floor_const]]  # [x,y,floor]
-            area = self.area_localizer.predict(x_area)[0]  # [area] area may change.
+            target_area = self.area_localizer.predict(x_area)[0]  # [area] area may change.
 
             if self.verbose:
-                self.logger.info("multi_floor_manager.initialpose_callback: area="+str(area))
+                self.logger.info(f"multi_floor_manager.initialize_with_global_pose: mode={target_mode}, floor={self.floor}, area={target_area}")
 
             # get information from floor_manager
-            floor_manager = self.ble_localizer_dict[self.floor][area][self.mode]
+            floor_manager = self.ble_localizer_dict[self.floor][target_area][target_mode]
             frame_id = floor_manager.frame_id
             map_filename = floor_manager.map_filename
             node_id = floor_manager.node_id
@@ -517,7 +527,7 @@ class MultiFloorManager:
             except RuntimeError as e:
                 # when the frame_id of pose_stamped_msg is not correctly set (e.g. frame_id = map), assume the initial pose is published on the target frame.
                 # this workaround behaves intuitively in typical cases.
-                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialpose_callback. Assuming initial pose is published on the target frame ({frame_id}).")
+                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. Assuming initial pose is published on the target frame ({frame_id}).")
                 local_pose_stamped = PoseStamped()
                 local_pose_stamped.header = pose_stamped_msg.header
                 local_pose_stamped.header.frame_id = frame_id
@@ -529,7 +539,9 @@ class MultiFloorManager:
             # restart trajectory with local_pose
             if self.area is not None:
                 self.finish_trajectory()  # finish trajectory before updating area value
-            self.area = area
+
+            self.mode = target_mode
+            self.area = target_area
             
             self.start_trajectory_with_pose(local_pose)
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
@@ -542,6 +554,11 @@ class MultiFloorManager:
 
             # publish current map_filename
             self.current_map_filename_pub.publish(String(data=map_filename))
+
+            if self.mode == LocalizationMode.INIT:
+                self.localize_status = MFLocalizeStatus.LOCATING
+            elif self.mode == LocalizationMode.TRACK:
+                self.localize_status = MFLocalizeStatus.TRACKING
 
     def restart_floor(self, local_pose: Pose):
         # set z = 0 to ensure 2D position on the local map
@@ -1512,7 +1529,7 @@ class MultiFloorManager:
         reset_zero_adjust_uncertainty = False  # set zero adjust uncertainty to 1 (unknown) when gnss adjust is completely unknown (e.g. initialization, large error with estimated gnss adjust)
 
         if self.floor is None:  # run one time
-            # set floor before initialpose_callback
+            # set floor before initialize_with_global_pose
             self.floor = floor
             reset_trajectory = True
             reset_zero_adjust_uncertainty = True
@@ -1572,7 +1589,7 @@ class MultiFloorManager:
 
         # self.publish_map_frame_adjust_tf()
         # here, map_adjust -> ... -> published_frame TF must be disabled.
-        self.initialpose_callback(pose_with_covariance_stamped)  # reset pose on the global frame
+        self.initialize_with_global_pose(pose_with_covariance_stamped)  # reset pose on the global frame
         self.gnss_localization_time = now
 
     def publish_map_frame_adjust_tf(self):
@@ -1640,11 +1657,11 @@ class MultiFloorManager:
         q = tf_transformations.quaternion_from_euler(0, 0, yaw, 'sxyz')
         pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
-        # set floor before initialpose_callback
+        # set floor before initialize_with_global_pose
         self.floor = floor
 
         # start localization
-        self.initialpose_callback(pose_with_covariance_stamped)
+        self.initialize_with_global_pose(pose_with_covariance_stamped)
         self.is_active = True
 
     # check if pose graph is optimized
