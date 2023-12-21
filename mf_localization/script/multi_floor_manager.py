@@ -182,7 +182,7 @@ class FloorManager:
         self.localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
-        self.min_hist_count = 5
+        self.min_hist_count = 1
 
         # publisher
         self.initialpose_pub = None
@@ -200,8 +200,12 @@ class FloorManager:
         # variables
         self.previous_fix_local_published = None
 
+        # variables - optimization
+        self.constraints_count = 0
+
     def reset_states(self):
         self.previous_fix_local_published = None
+        self.constraints_count = 0
 
 
 class TFAdjuster:
@@ -475,19 +479,29 @@ class MultiFloorManager:
             self.localize_status_pub.publish(msg)
 
     def initialpose_callback(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped):
+        if self.verbose:
+            self.logger.info("multi_floor_manager.initialpose_callback")
+
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
 
-        if self.mode is None:
-            self.mode = LocalizationMode.INIT
+        self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode = LocalizationMode.TRACK)
+
+    def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode = None):
+
+        # set target mode
+        if mode is not None: # update the target mode
+            target_mode = mode
+        else:
+            if self.mode is None:
+                target_mode = LocalizationMode.INIT
+            else:
+                target_mode = self.mode # keep the current mode
 
         if self.floor is None:
             self.logger.info("floor is unknown. Set floor by calling /set_current_floor service before publishing the 2D pose estimate.")
 
-        if self.floor is not None and self.mode is not None:
-            if self.mode == LocalizationMode.INIT:
-                self.localize_status = MFLocalizeStatus.LOCATING
-
+        if self.floor is not None:
             # transform pose in the message from map frame to a local frame
             pose_stamped_msg = PoseStamped()
             pose_stamped_msg.header = pose_with_covariance_stamped_msg.header
@@ -495,13 +509,13 @@ class MultiFloorManager:
 
             # detect area
             x_area = [[pose_stamped_msg.pose.position.x, pose_stamped_msg.pose.position.y, float(self.floor)*self.area_floor_const]]  # [x,y,floor]
-            area = self.area_localizer.predict(x_area)[0]  # [area] area may change.
+            target_area = self.area_localizer.predict(x_area)[0]  # [area] area may change.
 
             if self.verbose:
-                self.logger.info("multi_floor_manager.initialpose_callback: area="+str(area))
+                self.logger.info(f"multi_floor_manager.initialize_with_global_pose: mode={target_mode}, floor={self.floor}, area={target_area}")
 
             # get information from floor_manager
-            floor_manager = self.ble_localizer_dict[self.floor][area][self.mode]
+            floor_manager = self.ble_localizer_dict[self.floor][target_area][target_mode]
             frame_id = floor_manager.frame_id
             map_filename = floor_manager.map_filename
             node_id = floor_manager.node_id
@@ -513,7 +527,7 @@ class MultiFloorManager:
             except RuntimeError as e:
                 # when the frame_id of pose_stamped_msg is not correctly set (e.g. frame_id = map), assume the initial pose is published on the target frame.
                 # this workaround behaves intuitively in typical cases.
-                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialpose_callback. Assuming initial pose is published on the target frame ({frame_id}).")
+                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. Assuming initial pose is published on the target frame ({frame_id}).")
                 local_pose_stamped = PoseStamped()
                 local_pose_stamped.header = pose_stamped_msg.header
                 local_pose_stamped.header.frame_id = frame_id
@@ -525,7 +539,9 @@ class MultiFloorManager:
             # restart trajectory with local_pose
             if self.area is not None:
                 self.finish_trajectory()  # finish trajectory before updating area value
-            self.area = area
+
+            self.mode = target_mode
+            self.area = target_area
             
             self.start_trajectory_with_pose(local_pose)
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
@@ -538,6 +554,11 @@ class MultiFloorManager:
 
             # publish current map_filename
             self.current_map_filename_pub.publish(String(data=map_filename))
+
+            if self.mode == LocalizationMode.INIT:
+                self.localize_status = MFLocalizeStatus.LOCATING
+            elif self.mode == LocalizationMode.TRACK:
+                self.localize_status = MFLocalizeStatus.TRACKING
 
     def restart_floor(self, local_pose: Pose):
         # set z = 0 to ensure 2D position on the local map
@@ -1508,7 +1529,7 @@ class MultiFloorManager:
         reset_zero_adjust_uncertainty = False  # set zero adjust uncertainty to 1 (unknown) when gnss adjust is completely unknown (e.g. initialization, large error with estimated gnss adjust)
 
         if self.floor is None:  # run one time
-            # set floor before initialpose_callback
+            # set floor before initialize_with_global_pose
             self.floor = floor
             reset_trajectory = True
             reset_zero_adjust_uncertainty = True
@@ -1568,7 +1589,7 @@ class MultiFloorManager:
 
         # self.publish_map_frame_adjust_tf()
         # here, map_adjust -> ... -> published_frame TF must be disabled.
-        self.initialpose_callback(pose_with_covariance_stamped)  # reset pose on the global frame
+        self.initialize_with_global_pose(pose_with_covariance_stamped)  # reset pose on the global frame
         self.gnss_localization_time = now
 
     def publish_map_frame_adjust_tf(self):
@@ -1636,17 +1657,17 @@ class MultiFloorManager:
         q = tf_transformations.quaternion_from_euler(0, 0, yaw, 'sxyz')
         pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
-        # set floor before initialpose_callback
+        # set floor before initialize_with_global_pose
         self.floor = floor
 
         # start localization
-        self.initialpose_callback(pose_with_covariance_stamped)
+        self.initialize_with_global_pose(pose_with_covariance_stamped)
         self.is_active = True
 
-    # check mapping_constraints_constraint_builder_2d_scores (histgram) if it is optimized
+    # check if pose graph is optimized
     def is_optimized(self):
         if self.mode != LocalizationMode.INIT:
-            self.logger.info("localization mode is not init")
+            self.logger.info(f"localization mode is not init. mode={self.mode}")
             return False
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
@@ -1662,42 +1683,26 @@ class MultiFloorManager:
             self.logger.info(f"read_metrics fails {res.status}")
             return False
 
-        # TODO: there may be better way to detect the optimization
-        #
         # comment out the following two lines to debug
         # from rosidl_runtime_py import message_to_yaml
         # self.logger.info(message_to_yaml(res))
+
+        # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
+        # because this value is updated after running optimization
         optimized = False
-        queue_completed = False
-
         for metric_family in res.metric_families:
-            if metric_family.name == "mapping_constraints_constraint_builder_2d_queue_length":
-                self.logger.info(f"{metric_family.name}: {metric_family.metrics[0]}")
-                if self.optimization_queue_length is None:
-                    if metric_family.metrics[0].value > 0:
-                        self.optimization_queue_length = metric_family.metrics[0].value
-                else:
-                    if self.optimization_queue_length < metric_family.metrics[0].value:
-                        self.optimization_queue_length = metric_family.metrics[0].value
-                    self.logger.info(f"max queue length={self.optimization_queue_length}, current queue length={metric_family.metrics[0].value}")
-                    if metric_family.metrics[0].value == 0:
-                        self.optimization_queue_length = None
-                        queue_completed = True
-
-        for metric_family in res.metric_families:
-            if metric_family.name != "mapping_constraints_constraint_builder_2d_scores":
-                continue
-            count = 0
-            for metric in metric_family.metrics:
-                if metric.type == metric.TYPE_HISTOGRAM:
-                    for bucket in metric.counts_by_bucket:
-                        if bucket.count > 0:
-                            self.logger.info(f"{metric_family.name}: {bucket}")
-                            count += bucket.count
-            if queue_completed and count >= floor_manager.min_hist_count:  # default 5, can be changed in map list
-                self.logger.info(f"count({count}) >= floor_manager.min_hist_count({floor_manager.min_hist_count})")
-                optimized = True
-
+            if metric_family.name == "mapping_2d_pose_graph_constraints":
+                for metric in metric_family.metrics:
+                    # inter_submap -> different trajectory
+                    if metric.labels[0].key == "tag" and metric.labels[0].value == "inter_submap" \
+                            and metric.labels[1].key == "trajectory" and metric.labels[1].value == "different":
+                        self.logger.info(f"inter_submap different trajectory constraints. count={metric.value}")
+                        # check if the number of constraints changed
+                        if floor_manager.constraints_count != metric.value:
+                            floor_manager.constraints_count = metric.value
+                            if metric.value >= floor_manager.min_hist_count:
+                                optimized = True
+                                self.logger.info("pose graph optimization detected.")
         return optimized
 
 
@@ -1926,7 +1931,7 @@ class BufferProxy():
 
     def get_latest_common_time(self, target, source):
         transform = self.lookup_transform(target, source)
-        self._logger.info(f"{transform}")
+        self._logger.info(f"get_latest_common_time: transform={transform}")
 
         return rclpy.time.Time(seconds=transform.header.stamp.sec,
                                nanoseconds=transform.header.stamp.nanosec,
@@ -2114,7 +2119,7 @@ if __name__ == "__main__":
         map_filename = map_dict["map_filename"] if "map_filename" in map_dict else ""
         environment = map_dict["environment"] if "environment" in map_dict else "indoor"
         use_gnss_adjust = map_dict["use_gnss_adjust"] if "use_gnss_adjust" in map_dict else False
-        min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 5
+        min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 1
 
         # check value
         if environment not in ["indoor", "outdoor"]:
@@ -2389,6 +2394,7 @@ if __name__ == "__main__":
     def main_loop():
         # detect optimization
         if multi_floor_manager.is_optimized():
+            tfBuffer.clear() # clear outdated tf before optimization
             multi_floor_manager.optimization_detected = True
 
         # detect area and mode switching
