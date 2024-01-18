@@ -307,16 +307,7 @@ if [ ! -e $dcfile ]; then
     exit
 fi
 
-# check env option for test
-env_option=
-if [[ $run_test -eq 1 ]]; then
-    test_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE | head -n 1)
-    if [[ -e $test_dir/test/test.env ]]; then
-	env_option="--env-file .env --env-file $test_dir/test/test.env"
-    fi
-fi
-
-dccom="docker compose $project_option -f $dcfile $env_option"
+dccom="docker compose $project_option -f $dcfile"
 
 if [ $local_map_server -eq 1 ]; then
     blue "Checking the map server is available $( echo "$(date +%s.%N) - $start" | bc -l )"

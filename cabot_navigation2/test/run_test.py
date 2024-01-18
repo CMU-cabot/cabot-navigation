@@ -25,6 +25,7 @@
 import os
 import sys
 import re
+import math
 import numpy
 import time
 import traceback
@@ -39,6 +40,10 @@ from matplotlib import pyplot as plt
 import rclpy
 import rclpy.node
 from rosidl_runtime_py import set_message_fields
+from tf_transformations import quaternion_from_euler
+
+from mf_localization_msgs.srv import RestartLocalization
+from gazebo_msgs.srv import SetEntityState
 
 from cabot_common.rosbag2 import BagReader
 
@@ -64,14 +69,26 @@ class Tester:
         self.done = False
         self.alive = True
         self.subscriptions = {}
+        self.futures = {}
         self.timers = {}
+        self.restart_localization_client = self.node.create_client(RestartLocalization, '/restart_localization')
+        self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
 
     def test(self, test_cases):
+        if 'config' in test_cases:
+            self.test_config(test_cases['config'])
         if 'checks' in test_cases:
             self.test_checks(test_cases['checks'])
-
         if 'tests' in test_cases:
             self.test_tests(test_cases['tests'])
+
+    def test_config(self, config):
+        self.config = {}
+        self.config['init_x'] = float(config['init_x']) if 'init_x' in config else 0.0
+        self.config['init_y'] = float(config['init_y']) if 'init_y' in config else 0.0
+        self.config['init_z'] = float(config['init_z']) if 'init_z' in config else 0.0
+        init_a = float(config['init_a']) if 'init_a' in config else 0.0
+        self.config['init_yaw'] = init_a / 180 * math.pi
 
     def test_checks(self, cases):
         for case in cases:
@@ -144,6 +161,74 @@ class Tester:
             self.test_tests(tests)
         case['done'] = True
         return 0
+
+    def wait_ready(self, case, test_action):
+        logging.info(test_action)
+        timeout = test_action['timeout']
+        uuid = test_action['uuid']
+        topic = '/cabot/activity_log'
+        topic_type = import_class('cabot_msgs/msg/Log')
+        condition = "msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'"
+
+        def topic_callback(msg):
+            try:
+                context = {'msg': msg}
+                exec(f"result=({condition})", context)
+                if context['result']:
+                    case['done'] = True
+                    sub = self.subscriptions[uuid]
+                    self.node.destroy_subscription(sub)
+            except:
+                logging.error(traceback.format_exc())
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        self.subscriptions[uuid] = sub
+        return timeout
+
+    def reset_position(self, case, test_action):
+        logging.info(test_action)
+        timeout = test_action['timeout']
+        uuid = test_action['uuid']
+        topic = '/localize_status'
+        topic_type = import_class('mf_localization_msgs/msg/MFLocalizeStatus')
+        condition = "msg.status==msg.TRACKING"
+
+        request = SetEntityState.Request()
+        request.state.name = 'mobile_base'
+        request.state.pose.position.x = self.config['init_x']
+        request.state.pose.position.y = self.config['init_y']
+        request.state.pose.position.z = self.config['init_z']
+        q = quaternion_from_euler(0, 0, self.config['init_yaw'])
+        request.state.pose.orientation.x = q[0]
+        request.state.pose.orientation.y = q[1]
+        request.state.pose.orientation.z = q[2]
+        request.state.pose.orientation.w = q[3]
+
+        future = self.set_entity_state_client.call_async(request)
+        self.futures[uuid] = future
+
+        def done_callback(future):
+            request = RestartLocalization.Request()
+            self.restart_localization_client.call_async(request)
+            self.futures[uuid] = future
+
+            def done_callback2(future):
+                def topic_callback(msg):
+                    try:
+                        context = {'msg': msg}
+                        exec(f"result=({condition})", context)
+                        if context['result']:
+                            case['done'] = True
+                            sub = self.subscriptions[uuid]
+                            self.node.destroy_subscription(sub)
+                            time.sleep(2)
+                    except:
+                        logging.error(traceback.format_exc())
+                sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+                self.subscriptions[uuid] = sub
+
+            future.add_done_callback(done_callback2)
+        future.add_done_callback(done_callback)
+        return timeout
 
     def wait_topic(self, case, test_action):
         logging.info(test_action)
