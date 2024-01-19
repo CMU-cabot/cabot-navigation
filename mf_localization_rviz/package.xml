@@ -29,6 +29,7 @@
   <maintainer email="muratams@jp.ibm.com">Masayuki Murata</maintainer>
   <license>MIT</license>
 
+  <depend>cabot_msgs</depend>
   <depend>mf_localization_msgs</depend>
   <depend>rviz_common</depend>
   <depend>std_msgs</depend>

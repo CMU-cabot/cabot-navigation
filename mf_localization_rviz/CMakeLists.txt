@@ -28,6 +28,8 @@ find_package(rviz_common REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets Test)
 
 find_package(rclcpp REQUIRED)
+find_package(cabot_msgs REQUIRED)
+find_package(gazebo_msgs REQUIRED)
 find_package(mf_localization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -35,7 +37,10 @@ find_package(pluginlib REQUIRED)
 set(dependencies
   rclcpp
   rviz_common
+  cabot_msgs
+  gazebo_msgs
   mf_localization_msgs
+  std_msgs
 )
 
 qt5_wrap_cpp(rviz_default_plugins_moc_files
