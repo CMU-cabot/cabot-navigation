@@ -64,6 +64,7 @@ services:
       - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
       - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
       - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
+      - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
       - ./script:/home/developer/ros2_ws/script
       - ./cabot-common/cabot_common:/home/developer/ros2_ws/src/cabot_common
       - ./cabot-common/cabot_msgs:/home/developer/ros2_ws/src/cabot_msgs

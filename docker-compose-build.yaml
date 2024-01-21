@@ -1,0 +1,9 @@
+version: "2.3"
+
+
+services:
+  navigation-production:
+    build:
+      context: ./docker/ros2
+      additional_contexts:
+        cabot_src: ./

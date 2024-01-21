@@ -52,7 +52,7 @@ else
     colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --executor sequential $@
 fi
 
-if [[ $? -ne 0 ]]; then exit $?; fi
+if [[ $? -ne 0 ]]; then exit 1; fi
 
 if [[ -e $scriptdir/../src/queue_utils_py ]]; then
     cd $scriptdir/../src/queue_utils_py

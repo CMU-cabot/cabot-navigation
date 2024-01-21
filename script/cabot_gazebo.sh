@@ -133,6 +133,7 @@ while [ ${PWD##*/} != "ros2_ws" ]; do
 done
 ros2_ws=`pwd`
 cd $ros2_ws
+source /usr/share/gazebo/setup.bash
 source $ros2_ws/install/setup.bash
 
 # TODO: Remove cabot_site_configuration from shell script

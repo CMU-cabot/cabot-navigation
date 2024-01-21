@@ -42,8 +42,11 @@ import rclpy.node
 from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
 
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization_msgs.srv import RestartLocalization
 from gazebo_msgs.srv import SetEntityState
+from gazebo_msgs.srv import DeleteEntity
+from gazebo_msgs.srv import SpawnEntity
 
 from cabot_common.rosbag2 import BagReader
 
@@ -72,7 +75,10 @@ class Tester:
         self.futures = {}
         self.timers = {}
         self.restart_localization_client = self.node.create_client(RestartLocalization, '/restart_localization')
+        self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
+        self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
+        self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
 
     def test(self, test_cases):
         if 'config' in test_cases:
@@ -121,7 +127,7 @@ class Tester:
         logging.info(f"Test: {test_case['name']}")
 
         test_action = test_case['action']
-        test_action['uuid'] = uuid.uuid4()
+        test_action['uuid'] = str(uuid.uuid4())
         action_type = test_action['type']
 
         test_action_method = getattr(self, action_type, None)
@@ -192,6 +198,7 @@ class Tester:
         topic_type = import_class('mf_localization_msgs/msg/MFLocalizeStatus')
         condition = "msg.status==msg.TRACKING"
 
+        # change gazebo model position
         request = SetEntityState.Request()
         request.state.name = 'mobile_base'
         request.state.pose.position.x = self.config['init_x']
@@ -202,16 +209,17 @@ class Tester:
         request.state.pose.orientation.y = q[1]
         request.state.pose.orientation.z = q[2]
         request.state.pose.orientation.w = q[3]
-
         future = self.set_entity_state_client.call_async(request)
         self.futures[uuid] = future
 
         def done_callback(future):
+            # request to restart localization
             request = RestartLocalization.Request()
             self.restart_localization_client.call_async(request)
             self.futures[uuid] = future
 
             def done_callback2(future):
+                # check localize status to be tracking
                 def topic_callback(msg):
                     try:
                         context = {'msg': msg}
@@ -226,7 +234,71 @@ class Tester:
                 sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
                 self.subscriptions[uuid] = sub
 
+                time.sleep(1)
+                # publish initialpose for localization hint
+                pose = PoseWithCovarianceStamped()
+                pose.header.frame_id = "global_map"
+                pose.pose.pose.position.x = self.config['init_x']
+                pose.pose.pose.position.y = self.config['init_y']
+                pose.pose.pose.position.z = self.config['init_z']
+                pose.pose.pose.orientation.x = q[0]
+                pose.pose.pose.orientation.y = q[1]
+                pose.pose.pose.orientation.z = q[2]
+                pose.pose.pose.orientation.w = q[3]
+                self.initialpose_pub.publish(pose)
+
             future.add_done_callback(done_callback2)
+        future.add_done_callback(done_callback)
+        return timeout
+
+    def spawn_actor(self, case, test_action):
+        logging.info(test_action)
+        uuid = test_action['uuid']
+        timeout = test_action['timeout']
+        name = test_action['name'] if 'name' in test_action else uuid
+        ax = test_action['x'] if 'x' in test_action else 0.0
+        ay = test_action['y'] if 'y' in test_action else 0.0
+        az = test_action['z'] if 'z' in test_action else 0.0
+        aa = test_action['a'] if 'a' in test_action else 0.0
+        aq = quaternion_from_euler(0, 0, 0)
+        actor_xml = """
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <actor name="actorXYZ">
+    <skin>
+      <filename>file://media/models/walk.dae</filename>
+      <scale>1.0</scale>
+    </skin>
+    <animation name="walking">
+      <filename>file://media/models/walk.dae</filename>
+      <scale>1.000000</scale>
+      <interpolate_x>true</interpolate_x>
+    </animation>
+    <plugin name="pedestrian_plugin" filename="libpedestrian_plugin.so">
+      <module>pedestrian</module>
+    </plugin>
+  </actor>
+</sdf>
+"""
+        logging.info([test_action, [ax, ay, az]])
+        request = SpawnEntity.Request()
+        request.name = name
+        request.xml = actor_xml
+        request.initial_pose.position.x = ax
+        request.initial_pose.position.y = ay
+        request.initial_pose.position.z = az
+        request.initial_pose.orientation.x = aq[0]
+        request.initial_pose.orientation.y = aq[1]
+        request.initial_pose.orientation.z = aq[2]
+        request.initial_pose.orientation.w = aq[3]
+        request.reference_frame = "world"
+        future = self.spawn_entity_client.call_async(request)
+        self.futures[uuid] = future
+
+        def done_callback(future):
+            logging.info(future.result())
+            case['done'] = True
+
         future.add_done_callback(done_callback)
         return timeout
 
