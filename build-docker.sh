@@ -41,6 +41,7 @@ function help {
     echo "-P <prefix>           prebuild with prefix"
     echo "-i                    build images"
     echo "-w                    build workspace"
+    echo "-d                    debug build"
 
 	echo "Available services:"
     show_available_services dcfiles
@@ -59,11 +60,12 @@ uid=$UID
 prebuild=0
 build_image=0
 build_workspace=0
+debug_build=0
 
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
-while getopts "hno:t:u:pP:iw" arg; do
+while getopts "hno:t:u:pP:iwd" arg; do
     case $arg in
 	h)
 	    help
@@ -94,6 +96,9 @@ while getopts "hno:t:u:pP:iw" arg; do
 	w)
 	    build_workspace=1
 	    ;;
+	d)
+	    debug_build=1
+	    ;;
     esac
 done
 shift $((OPTIND-1))
@@ -112,7 +117,7 @@ if [[ $build_image -eq 1 ]]; then
 fi
 
 if [[ $build_workspace -eq 1 ]]; then
-    build_workspace dcfiles targets
+    build_workspace dcfiles targets debug_build
     if [ $? != 0 ]; then exit 1; fi
 fi
 

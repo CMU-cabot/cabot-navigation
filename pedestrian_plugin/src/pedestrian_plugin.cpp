@@ -36,8 +36,35 @@ GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 
 #define WALKING_ANIMATION "walking"
 
+// exporting python module
+static gazebo_ros::Node::SharedPtr global_node;
 
-PedestrianPlugin::PedestrianPlugin(): animationFactor(4.5)
+static PyObject* ros_info(PyObject *self, PyObject *args)
+{
+  const char* message;
+  if (PyArg_ParseTuple(args, "s", &message)) {
+    if (global_node) {
+      RCLCPP_INFO(global_node->get_logger(), message);
+    }
+  }
+  Py_RETURN_NONE;
+}
+static PyMethodDef RosMethods[] = {
+  {"info", ros_info, METH_VARARGS,
+   "call RCLCPP_INFO"},
+  {NULL, NULL, 0, NULL}
+};
+static PyModuleDef RosModule = {
+  PyModuleDef_HEAD_INIT, "ros", NULL, -1, RosMethods,
+  NULL, NULL, NULL, NULL
+};
+static PyObject* PyInit_ros(void)
+{
+  return PyModule_Create(&RosModule);
+}
+
+
+PedestrianPlugin::PedestrianPlugin()
 {
 }
 
@@ -48,57 +75,26 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   this->world = this->actor->GetWorld();
 
   this->connections.push_back(event::Events::ConnectWorldUpdateBegin(
-          std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
+    std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
 
-  this->node = gazebo_ros::Node::Get(_sdf);
+  global_node = this->node = gazebo_ros::Node::Get(_sdf);
   RCLCPP_INFO(this->node->get_logger(), "Loading Pedestrign plugin...");
   if (_sdf->HasElement("module")) {
-    std::string module_name = _sdf->Get<std::string>("module");
-    RCLCPP_INFO(this->node->get_logger(), "module name is %s", module_name.c_str());
-
-    Py_Initialize();
-    auto pName = PyUnicode_DecodeFSDefault(module_name.c_str());
-    this->pModule = PyImport_Import(pName);
-    Py_DECREF(pName);
-    
-    if (this->pModule != NULL) {
-      this->pOnUpdateFunc = PyObject_GetAttrString(this->pModule, "onUpdate");
-      
-      if (this->pOnUpdateFunc && PyCallable_Check(this->pOnUpdateFunc)) {
-        RCLCPP_INFO(this->node->get_logger(), "found onUpdate func");
-        auto pArgs = PyTuple_New(10);
-        for (int i = 0; i < 10; ++i) {
-          auto pValue = PyLong_FromLong(i);
-          PyTuple_SetItem(pArgs, i, pValue);
-        }
-        RCLCPP_INFO(this->node->get_logger(), "calling onUpdate func");
-        auto pRet = PyObject_CallObject(this->pOnUpdateFunc, pArgs);
-        RCLCPP_INFO(this->node->get_logger(), "called onUpdate func");
-        if (pRet != NULL) {
-          RCLCPP_INFO(this->node->get_logger(), "print pRet");
-          print_pyobject(pRet);
-          Py_DECREF(pRet);
-        }
-        RCLCPP_INFO(this->node->get_logger(), "decref");
-        Py_DECREF(pArgs);
-        RCLCPP_INFO(this->node->get_logger(), "done");
-      } else {
-        RCLCPP_INFO(this->node->get_logger(), "cannot found onUpdate func");
-      }
-    } else {
-      RCLCPP_INFO(this->node->get_logger(), "cannot found module %s", module_name.c_str());
-    }
+    this->module_name = _sdf->Get<std::string>("module");
+    RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
+    PyImport_AppendInittab("ros", &PyInit_ros);
   }
-
   this->Reset();
 }
 
 
 void PedestrianPlugin::Reset()
 {
+  RCLCPP_INFO(this->node->get_logger(), "Reset");
   this->lastUpdate = 0;
 
+  /*
   auto skelAnims = this->actor->SkeletonAnimations();
   if (skelAnims.find(WALKING_ANIMATION) == skelAnims.end()) {
     gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
@@ -107,6 +103,33 @@ void PedestrianPlugin::Reset()
     this->trajectoryInfo->type = WALKING_ANIMATION;
     this->trajectoryInfo->duration = 1.0;
     this->actor->SetCustomTrajectory(this->trajectoryInfo);
+  }
+  */
+
+  // load module
+  if (this->pModule) {
+    RCLCPP_INFO(this->node->get_logger(), "module %s loaded", this->module_name.c_str());
+    Py_DECREF(this->pModule);
+    Py_XDECREF(this->pOnUpdateFunc);
+    if (Py_FinalizeEx() < 0) {
+      RCLCPP_ERROR(this->node->get_logger(), "failed to finalize Python");
+      return;
+    }
+  }
+  Py_Initialize();
+  auto pName = PyUnicode_DecodeFSDefault(this->module_name.c_str());
+  this->pModule = PyImport_Import(pName);
+  Py_DECREF(pName);
+    
+  if (this->pModule != NULL) {
+    this->pOnUpdateFunc = PyObject_GetAttrString(this->pModule, "onUpdate");
+    if (this->pOnUpdateFunc == NULL || !PyCallable_Check(this->pOnUpdateFunc)) {
+      RCLCPP_ERROR(this->node->get_logger(), "cannot find onUpdate func");
+      Py_XDECREF(pOnUpdateFunc);
+      this->pOnUpdateFunc = NULL;
+    }
+  } else {
+    RCLCPP_ERROR(this->node->get_logger(), "cannot find module %s", module_name.c_str());
   }
 }
 
@@ -117,6 +140,24 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
 
   ignition::math::Pose3d pose = this->actor->WorldPose();
   ignition::math::Vector3d rpy = pose.Rot().Euler();
+
+  if (this->pOnUpdateFunc) {
+    auto pArgs = PyTuple_New(6);
+    PyTuple_SetItem(pArgs, 0, PyFloat_FromDouble(pose.X()));
+    PyTuple_SetItem(pArgs, 1, PyFloat_FromDouble(pose.Y()));
+    PyTuple_SetItem(pArgs, 2, PyFloat_FromDouble(pose.Z()));
+    PyTuple_SetItem(pArgs, 3, PyFloat_FromDouble(rpy.X()));
+    PyTuple_SetItem(pArgs, 4, PyFloat_FromDouble(rpy.Y()));
+    PyTuple_SetItem(pArgs, 5, PyFloat_FromDouble(rpy.Z()));
+
+    auto pRet = PyObject_CallObject(this->pOnUpdateFunc, pArgs);
+    if (pRet != NULL) {
+      Py_DECREF(pRet);
+    }
+    Py_DECREF(pArgs);
+  }
+  
+  /*
   pose.Pos().Z(1.0);
   pose.Rot() = ignition::math::Quaterniond(1.5707, 0, rpy.Z());
   double dt = (_info.simTime - this->lastUpdate).Double();
@@ -127,6 +168,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   this->actor->SetWorldPose(pose, false, false);
   this->actor->SetScriptTime(this->actor->ScriptTime() + dt);
   this->lastUpdate = _info.simTime;
+  */
   IGN_PROFILE_END();
 }
 
@@ -134,18 +176,18 @@ void PedestrianPlugin::print_pyobject(PyObject* obj) {
   if (PyLong_Check(obj)) {
     // It's a long integer
     long value = PyLong_AsLong(obj);
-    RCLCPP_INFO(this->node->get_logger(), "Integer: %ld\n", value);
+    RCLCPP_INFO(this->node->get_logger(), "Integer: %ld", value);
   } else if (PyFloat_Check(obj)) {
     // It's a float
     double value = PyFloat_AsDouble(obj);
-    RCLCPP_INFO(this->node->get_logger(), "Float: %f\n", value);
+    RCLCPP_INFO(this->node->get_logger(), "Float: %f", value);
   } else if (PyUnicode_Check(obj)) {
     // It's a Unicode string
     PyObject *tempBytes = PyUnicode_AsEncodedString(obj, "utf-8", "strict");
     if (tempBytes != NULL) {
       char *str = PyBytes_AsString(tempBytes);
       if (str != NULL) {
-        RCLCPP_INFO(this->node->get_logger(), "String: %s\n", str);
+        RCLCPP_INFO(this->node->get_logger(), "String: %s", str);
       }
       Py_DECREF(tempBytes);
     }
@@ -160,10 +202,10 @@ void PedestrianPlugin::print_pyobject(PyObject* obj) {
         RCLCPP_INFO(this->node->get_logger(), ", ");
       }
     }
-    RCLCPP_INFO(this->node->get_logger(), "]\n");
+    RCLCPP_INFO(this->node->get_logger(), "]");
   } else if (PyDict_Check(obj)) {
     // It's a dictionary
-    RCLCPP_INFO(this->node->get_logger(), "Dictionary: {\n");
+    RCLCPP_INFO(this->node->get_logger(), "Dictionary: {");
     PyObject *key, *value;
     Py_ssize_t pos = 0;
 
@@ -171,9 +213,8 @@ void PedestrianPlugin::print_pyobject(PyObject* obj) {
       print_pyobject(key);
       RCLCPP_INFO(this->node->get_logger(), ": ");
       print_pyobject(value);
-      RCLCPP_INFO(this->node->get_logger(), "\n");
     }
-    RCLCPP_INFO(this->node->get_logger(), "}\n");
+    RCLCPP_INFO(this->node->get_logger(), "}");
   } else if (PyTuple_Check(obj)) {
     // It's a tuple
     Py_ssize_t size = PyTuple_Size(obj);
@@ -185,9 +226,9 @@ void PedestrianPlugin::print_pyobject(PyObject* obj) {
         RCLCPP_INFO(this->node->get_logger(), ", ");
       }
     }
-    RCLCPP_INFO(this->node->get_logger(), ")\n");
+    RCLCPP_INFO(this->node->get_logger(), ")");
   } else {
     // Object type is not handled in this example
-    RCLCPP_INFO(this->node->get_logger(), "Object type not handled in this example.\n");
+    RCLCPP_INFO(this->node->get_logger(), "Object type not handled in this example.");
   }
 }

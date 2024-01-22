@@ -36,6 +36,7 @@ include_directories(
 
 add_library(${PROJECT_NAME} SHARED
   src/pedestrian_plugin.cpp
+  src/walking_pose.cpp
 )
 
 #target_include_directories(pedestrian_plugin PUBLIC include)

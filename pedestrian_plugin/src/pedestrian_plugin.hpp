@@ -50,7 +50,7 @@ private:
   sdf::ElementPtr sdf;
   physics::ActorPtr actor;
   physics::WorldPtr world;
-  double animationFactor;
+  std::string module_name;
 
   PyObject *pModule;
   PyObject *pOnUpdateFunc;
@@ -58,6 +58,11 @@ private:
   std::vector<event::ConnectionPtr> connections;
   common::Time lastUpdate;
   physics::TrajectoryInfoPtr trajectoryInfo;
+
+  double* get_walking_pose(double distance);
+  static double walking_time_factor;
+  static double walking_dist_factor;
+  static double walking_pose[145][6];
 };
 }
 

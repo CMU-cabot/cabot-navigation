@@ -263,21 +263,22 @@ class Tester:
         aq = quaternion_from_euler(0, 0, 0)
         actor_xml = """
 <?xml version="1.0" ?>
-<sdf version="1.7">
-  <actor name="actorXYZ">
-    <skin>
-      <filename>file://media/models/walk.dae</filename>
-      <scale>1.0</scale>
-    </skin>
-    <animation name="walking">
-      <filename>file://media/models/walk.dae</filename>
-      <scale>1.000000</scale>
-      <interpolate_x>true</interpolate_x>
-    </animation>
-    <plugin name="pedestrian_plugin" filename="libpedestrian_plugin.so">
-      <module>pedestrian</module>
-    </plugin>
-  </actor>
+<sdf version="1.6">
+    <actor name="walking_actor">
+        <pose>0 0 1.0 0 0 0</pose> <!-- Initial position and orientation -->
+        <skin>
+            <filename>walk.dae</filename> <!-- COLLADA animation file -->
+            <scale>1.0</scale>
+        </skin>
+        <animation name="walking">
+            <filename>walk.dae</filename> <!-- COLLADA animation file -->
+            <scale>1.0</scale>
+            <interpolate_x>true</interpolate_x>
+        </animation>
+        <plugin name="pedestrian_plugin" filename="libpedestrian_plugin.so">
+          <module>pedestrian</module>
+        </plugin>
+    </actor>
 </sdf>
 """
         logging.info([test_action, [ax, ay, az]])
