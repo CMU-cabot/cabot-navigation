@@ -93,18 +93,19 @@ void PedestrianPlugin::Reset()
 {
   RCLCPP_INFO(this->node->get_logger(), "Reset");
   this->lastUpdate = 0;
+  this->lastDist = 0;
 
-  /*
   auto skelAnims = this->actor->SkeletonAnimations();
-  if (skelAnims.find(WALKING_ANIMATION) == skelAnims.end()) {
+  auto it = skelAnims.find(WALKING_ANIMATION);
+  if (it == skelAnims.end()) {
     gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
   } else {
+    // Create custom trajectory
     this->trajectoryInfo.reset(new physics::TrajectoryInfo());
     this->trajectoryInfo->type = WALKING_ANIMATION;
     this->trajectoryInfo->duration = 1.0;
     this->actor->SetCustomTrajectory(this->trajectoryInfo);
   }
-  */
 
   // load module
   if (this->pModule) {
@@ -151,24 +152,34 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     PyTuple_SetItem(pArgs, 5, PyFloat_FromDouble(rpy.Z()));
 
     auto pRet = PyObject_CallObject(this->pOnUpdateFunc, pArgs);
-    if (pRet != NULL) {
+    if (pRet != NULL && PyTuple_Check(pRet) && PyTuple_Size(pRet) == 7) {
+      RCLCPP_INFO(this->node->get_logger(), "got update");
+      double x = PyFloat_AsDouble(PyTuple_GetItem(pRet, 0));
+      double y = PyFloat_AsDouble(PyTuple_GetItem(pRet, 1));
+      double z = PyFloat_AsDouble(PyTuple_GetItem(pRet, 2));
+      double roll = PyFloat_AsDouble(PyTuple_GetItem(pRet, 3));
+      double pitch = PyFloat_AsDouble(PyTuple_GetItem(pRet, 4));
+      double yaw = PyFloat_AsDouble(PyTuple_GetItem(pRet, 5));
+      double dist = PyFloat_AsDouble(PyTuple_GetItem(pRet, 6));
+
+      double *wPose = get_walking_pose(dist);
+      pose.Pos().X(x);
+      pose.Pos().Y(y);
+      pose.Pos().Z(z+wPose[2]);
+      pose.Rot() = ignition::math::Quaterniond(roll+wPose[3], pitch+wPose[4], yaw+wPose[5]);
+
+      this->actor->SetWorldPose(pose, false, false);
+
+      double dt = (dist - this->lastDist) / walking_dist_factor * walking_time_factor;
+      this->actor->SetScriptTime(this->actor->ScriptTime() + dt);
+      this->lastDist = dist;
       Py_DECREF(pRet);
     }
     Py_DECREF(pArgs);
   }
-  
-  /*
-  pose.Pos().Z(1.0);
-  pose.Rot() = ignition::math::Quaterniond(1.5707, 0, rpy.Z());
-  double dt = (_info.simTime - this->lastUpdate).Double();
-  
-  double distanceTraveled = (pose.Pos() -
-      this->actor->WorldPose().Pos()).Length();
 
-  this->actor->SetWorldPose(pose, false, false);
-  this->actor->SetScriptTime(this->actor->ScriptTime() + dt);
   this->lastUpdate = _info.simTime;
-  */
+
   IGN_PROFILE_END();
 }
 

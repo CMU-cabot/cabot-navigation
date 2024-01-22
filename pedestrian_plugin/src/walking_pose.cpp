@@ -5,12 +5,12 @@ namespace gazebo {
 // extracted from default walking.dae animation
 
 double* PedestrianPlugin::get_walking_pose(double distance) {
-  double remainder = fmod(time, walking_dist_factor);
+  double remainder = std::fmod(distance, walking_dist_factor);
   int index = std::min(static_cast<int>((remainder / walking_dist_factor) * 145), 144);
   return walking_pose[index];
 }
 
-double PedestrianPlugin::walking_time_factor = 5.8;
+double PedestrianPlugin::walking_time_factor = 5.79;
 double PedestrianPlugin::walking_dist_factor = 1.37;
 double PedestrianPlugin::walking_pose[145][6] = {
   {-0.01188027,0.003772318,1.015285,1.5785367192927917,0.0546899686665238,1.498053778121212},

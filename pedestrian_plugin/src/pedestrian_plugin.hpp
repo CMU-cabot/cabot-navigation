@@ -57,6 +57,7 @@ private:
 
   std::vector<event::ConnectionPtr> connections;
   common::Time lastUpdate;
+  double lastDist;
   physics::TrajectoryInfoPtr trajectoryInfo;
 
   double* get_walking_pose(double distance);
