@@ -26,9 +26,17 @@ QUIT_WHEN_ROSBAG_FINISH=${QUIT_WHEN_ROSBAG_FINISH:-true}
 PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
 
+gazebo=${PROCESS_GAZEBO_MAPPING:-0}
+
 # topic
 points2_topic='/velodyne_points'
-imu_topic='/imu/data'
+imu_topic=/imu/data
+convert_points=true
+
+if [[ $gazebo -eq 1 ]]; then
+    imu_topic=/cabot/imu/data
+    convert_points=false
+fi
 
 function blue {
     echo -en "\033[36m"  ## blue
@@ -48,7 +56,7 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted ]]; then
 	      points2:=${points2_topic} \
 	      imu:=${imu_topic} \
 	      rate:=${PLAYBAG_RATE_PC2_CONVERT} \
-	      convert_points:=true \
+	      convert_points:=$convert_points \
 	      bag_filename:=$WORKDIR/${BAG_FILENAME}
 else
     blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted"

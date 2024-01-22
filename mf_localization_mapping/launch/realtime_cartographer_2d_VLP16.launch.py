@@ -59,6 +59,7 @@ def generate_launch_description():
     load_state_filename = LaunchConfiguration('load_state_filename')
     save_state_filename = LaunchConfiguration('save_state_filename')
     record_required = LaunchConfiguration('record_required')
+    record_points = LaunchConfiguration('record_points')
     configuration_basename = LaunchConfiguration('configuration_basename')
     # save_state_filename # todo
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
@@ -80,9 +81,12 @@ def generate_launch_description():
     def configure_ros2_bag_arguments(context, node):
         cmd = node.cmd.copy()
         if record_required.perform(context) == 'true':
-            cmd.append('-a')
+            if record_points.perform(context) == 'true':
+                cmd.extend(['-a', '-x', "'/map|(.*)/image_raw|(.*)/image_raw/(.*)'"])
+            else:
+                cmd.extend(['-a', '-x', "'/map|/velodyne_points|(.*)/image_raw|(.*)/image_raw/(.*)'"])
         else:
-            cmd.extend(['-a', '-x', "'/map|/velodyne_points|(.*)/image_raw|(.*)/image_raw/(.*)'"])
+            cmd.append('-a')
         saved_location_temp = []
         if bag_filename.perform(context) == '':
             saved_location_temp = [EnvironmentVariable('HOME'), '/recordings/', prefix, datetime.datetime.now().strftime("_%Y_%m_%d-%H_%M_%S")]
@@ -112,6 +116,7 @@ def generate_launch_description():
         DeclareLaunchArgument("bag_filename", default_value=""),
         DeclareLaunchArgument("load_state_filename", default_value=""),
         DeclareLaunchArgument("record_required", default_value="false"),
+        DeclareLaunchArgument("record_points", default_value="false"),
 
         DeclareLaunchArgument("configuration_basename", default_value="cartographer_2d_mapping.lua"),
         DeclareLaunchArgument("save_state_filename", default_value=""),
