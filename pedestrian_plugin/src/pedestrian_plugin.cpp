@@ -38,9 +38,9 @@ GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 
 #define WALKING_ANIMATION "walking"
 
-// exporting python module
 gazebo_ros::Node::SharedPtr global_node;
 
+// exporting ros python module
 static PyObject* ros_info(PyObject *self, PyObject *args)
 {
   const char* message;
@@ -64,6 +64,8 @@ static PyObject* PyInit_ros(void)
 {
   return PyModule_Create(&RosModule);
 }
+
+// PedestrianPlugin implementation
 
 PedestrianPlugin::PedestrianPlugin()
 {
@@ -128,6 +130,15 @@ void PedestrianPlugin::Reset()
       this->module_name = child->Get<std::string>();
       RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
       global_python_loader->loadModule(this->module_name);
+      child = child->GetNextElement();
+      continue;
+    }
+    if (key == "robot") {
+      auto robot_name = child->Get<std::string>();
+      if (robot_name != "") {
+        RCLCPP_INFO(this->node->get_logger(), "robot name is %s", robot_name.c_str());
+        robotModel = this->world->ModelByName(robot_name);
+      }
       child = child->GetNextElement();
       continue;
     }
@@ -201,6 +212,19 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   if (func != NULL) {
     PyObject* pArgs = PyTuple_New(0);
     PyObject* pDict = PyDict_New();
+    PyObject* pRobotPose = PyDict_New();
+
+    if (robotModel) {
+      ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
+      ignition::math::Vector3d rRpy = robotModel->WorldPose().Rot().Euler();
+      PyDict_SetItemString(pRobotPose, "x", PyFloat_FromDouble(rPos.X()));
+      PyDict_SetItemString(pRobotPose, "y", PyFloat_FromDouble(rPos.Y()));
+      PyDict_SetItemString(pRobotPose, "z", PyFloat_FromDouble(rPos.Z()));
+      PyDict_SetItemString(pRobotPose, "roll", PyFloat_FromDouble(rRpy.X()));
+      PyDict_SetItemString(pRobotPose, "pitch", PyFloat_FromDouble(rRpy.Y()));
+      PyDict_SetItemString(pRobotPose, "yaw", PyFloat_FromDouble(rRpy.Z()));
+      PyDict_SetItemString(pDict, "robot", pRobotPose);
+    }
 
     double *wPose = get_walking_pose(this->dist);
     PyDict_SetItemString(pDict, "dt", PyFloat_FromDouble(dt));

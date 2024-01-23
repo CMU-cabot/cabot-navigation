@@ -35,6 +35,7 @@
 #include "gazebo/util/system.hh"
 
 namespace gazebo {
+
 class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
  public:
   PedestrianPlugin();
@@ -50,6 +51,7 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   physics::ActorPtr actor;
   physics::WorldPtr world;
   std::string module_name;
+  gazebo::physics::ModelPtr robotModel;
 
   std::vector<event::ConnectionPtr> connections;
   common::Time lastUpdate;

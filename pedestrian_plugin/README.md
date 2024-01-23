@@ -30,6 +30,7 @@
   </animation>
   <plugin name="pedestrian_plugin1" filename="libpedestrian_plugin.so">
     <module>pedestrian</module>
+    <robot>robot</module>
     <velocity type="float">1.0</velocity>
     <behavior type="str">straight</behavior>
     <max_dist type="int">10</max_dist>
@@ -39,6 +40,7 @@
 ```
 ### plugin parameters
 - **module** : python module name to control the actor position (see next section)
+- **robot** : name of the robot model
 - Other parameters will be parsed as `<string, PyObject*>` map and will be passed to the specified module.
 - Supported type is `int`, `float`, `str`, or `bool`.
 - Do not use the keys `x`, `y`, `z`, `roll`, `pitch`, `yaw`, `dt`, and `name`
@@ -68,6 +70,7 @@ __all__ = ['onUpdate']
 - `x`, `y`, `z`, `roll`, `pitch`, `yaw`: actor pose
 - `dt`: the time difference from the previous update
 - `name`: the actor name specified in the plugin description
+- `robot`: the pose of the robot if `robot` is specified as plugin params
 - You need to return the updated dict or newly allocated dict including the pose keys.
 - The `args` dict also includes the parameters you specified in the `<plugin>` description.
   - `velocity=1.0`, `behavior=straight`, `max_dist=10`, and `loop=True` will be included in the `args` dict with the above example plugin description.
