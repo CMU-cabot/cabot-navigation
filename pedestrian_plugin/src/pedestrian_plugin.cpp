@@ -29,15 +29,17 @@
 #include <ignition/math/Vector3.hh>
 #include <ignition/common/Profiler.hh>
 #include "gazebo/physics/physics.hh"
-#include "pedestrian_plugin.hpp"
+#include "pedestrian_plugin/pedestrian_plugin.hpp"
 
 using namespace gazebo;
+
 GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 
 #define WALKING_ANIMATION "walking"
 
 // exporting python module
 static gazebo_ros::Node::SharedPtr global_node;
+static std::shared_ptr<PythonModuleLoader> loader = std::make_shared<PythonModuleLoader>();
 
 static PyObject* ros_info(PyObject *self, PyObject *args)
 {
@@ -63,9 +65,13 @@ static PyObject* PyInit_ros(void)
   return PyModule_Create(&RosModule);
 }
 
-
 PedestrianPlugin::PedestrianPlugin()
 {
+}
+
+PedestrianPlugin::~PedestrianPlugin()
+{
+  loader = nullptr;
 }
 
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
@@ -83,7 +89,6 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   if (_sdf->HasElement("module")) {
     this->module_name = _sdf->Get<std::string>("module");
     RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
-    PyImport_AppendInittab("ros", &PyInit_ros);
   }
   this->Reset();
 }
@@ -107,31 +112,12 @@ void PedestrianPlugin::Reset()
     this->actor->SetCustomTrajectory(this->trajectoryInfo);
   }
 
-  // load module
-  if (this->pModule) {
-    RCLCPP_INFO(this->node->get_logger(), "module %s loaded", this->module_name.c_str());
-    Py_DECREF(this->pModule);
-    Py_XDECREF(this->pOnUpdateFunc);
-    if (Py_FinalizeEx() < 0) {
-      RCLCPP_ERROR(this->node->get_logger(), "failed to finalize Python");
-      return;
-    }
+  if (loader->canReset()) {
+    RCLCPP_INFO(this->node->get_logger(), "loader reset");
+    loader->reset();
   }
-  Py_Initialize();
-  auto pName = PyUnicode_DecodeFSDefault(this->module_name.c_str());
-  this->pModule = PyImport_Import(pName);
-  Py_DECREF(pName);
-    
-  if (this->pModule != NULL) {
-    this->pOnUpdateFunc = PyObject_GetAttrString(this->pModule, "onUpdate");
-    if (this->pOnUpdateFunc == NULL || !PyCallable_Check(this->pOnUpdateFunc)) {
-      RCLCPP_ERROR(this->node->get_logger(), "cannot find onUpdate func");
-      Py_XDECREF(pOnUpdateFunc);
-      this->pOnUpdateFunc = NULL;
-    }
-  } else {
-    RCLCPP_ERROR(this->node->get_logger(), "cannot find module %s", module_name.c_str());
-  }
+  PyImport_AppendInittab("ros", &PyInit_ros);
+  loader->loadModule(this->module_name);
 }
 
 void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
@@ -142,7 +128,9 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   ignition::math::Pose3d pose = this->actor->WorldPose();
   ignition::math::Vector3d rpy = pose.Rot().Euler();
 
-  if (this->pOnUpdateFunc) {
+  PyObject* func = loader->getFunc(this->module_name, "onUpdate");
+
+  if (func != NULL) {
     auto pArgs = PyTuple_New(6);
     PyTuple_SetItem(pArgs, 0, PyFloat_FromDouble(pose.X()));
     PyTuple_SetItem(pArgs, 1, PyFloat_FromDouble(pose.Y()));
@@ -151,9 +139,8 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     PyTuple_SetItem(pArgs, 4, PyFloat_FromDouble(rpy.Y()));
     PyTuple_SetItem(pArgs, 5, PyFloat_FromDouble(rpy.Z()));
 
-    auto pRet = PyObject_CallObject(this->pOnUpdateFunc, pArgs);
+    auto pRet = PyObject_CallObject(func, pArgs);
     if (pRet != NULL && PyTuple_Check(pRet) && PyTuple_Size(pRet) == 7) {
-      RCLCPP_INFO(this->node->get_logger(), "got update");
       double x = PyFloat_AsDouble(PyTuple_GetItem(pRet, 0));
       double y = PyFloat_AsDouble(PyTuple_GetItem(pRet, 1));
       double z = PyFloat_AsDouble(PyTuple_GetItem(pRet, 2));

@@ -25,6 +25,7 @@ if(BUILD_TESTING)
 endif()
 
 include_directories(
+  include
   ${GAZEBO_INCLUDE_DIRS}
   ${PYTHON_INCLUDE_DIRS}
 )

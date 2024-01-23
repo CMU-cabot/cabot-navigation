@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  *******************************************************************************/
 
-#ifndef CABOT_GAZEBO_PEDESTRIAN_PLUGIN_HPP_
-#define CABOT_GAZEBO_PEDESTRIAN_PLUGIN_HPP_
+#ifndef PEDESTRIAN_PLUGIN_PEDESTRIAN_PLUGIN_HPP_
+#define PEDESTRIAN_PLUGIN_PEDESTRIAN_PLUGIN_HPP_
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -33,6 +33,7 @@
 #include "gazebo/physics/physics.hh"
 #include "gazebo/util/system.hh"
 #include <gazebo_ros/node.hpp>
+#include "pedestrian_plugin/python_module_loader.hpp"
 
 namespace gazebo
 {
@@ -40,6 +41,7 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin
 {
 public:
   PedestrianPlugin();
+  ~PedestrianPlugin();
   virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
   virtual void Reset();
 
@@ -51,9 +53,6 @@ private:
   physics::ActorPtr actor;
   physics::WorldPtr world;
   std::string module_name;
-
-  PyObject *pModule;
-  PyObject *pOnUpdateFunc;
 
   std::vector<event::ConnectionPtr> connections;
   common::Time lastUpdate;
@@ -67,4 +66,4 @@ private:
 };
 }
 
-#endif  // CABOT_GAZEBO_PEDESTRIAN_PLUGIN_HPP_
+#endif  // PEDESTRIAN_PLUGIN_PEDESTRIAN_PLUGIN_HPP_
