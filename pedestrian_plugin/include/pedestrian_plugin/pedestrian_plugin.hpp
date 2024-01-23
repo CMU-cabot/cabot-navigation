@@ -56,10 +56,23 @@ private:
 
   std::vector<event::ConnectionPtr> connections;
   common::Time lastUpdate;
-  double lastDist;
   physics::TrajectoryInfoPtr trajectoryInfo;
 
   double* get_walking_pose(double distance);
+
+  // manage the actor location by the plugin
+  // because animation can change its position
+  double x;
+  double y;
+  double z;
+  double roll;
+  double pitch;
+  double yaw;
+  double dist;
+
+  std::map<std::string, PyObject*> plugin_params;
+
+  // Need to be separated
   static double walking_time_factor;
   static double walking_dist_factor;
   static double walking_pose[145][6];

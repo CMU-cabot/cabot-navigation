@@ -83,13 +83,9 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   this->connections.push_back(event::Events::ConnectWorldUpdateBegin(
     std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
-
   global_node = this->node = gazebo_ros::Node::Get(_sdf);
   RCLCPP_INFO(this->node->get_logger(), "Loading Pedestrign plugin...");
-  if (_sdf->HasElement("module")) {
-    this->module_name = _sdf->Get<std::string>("module");
-    RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
-  }
+
   this->Reset();
 }
 
@@ -97,8 +93,6 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 void PedestrianPlugin::Reset()
 {
   RCLCPP_INFO(this->node->get_logger(), "Reset");
-  this->lastUpdate = 0;
-  this->lastDist = 0;
 
   auto skelAnims = this->actor->SkeletonAnimations();
   auto it = skelAnims.find(WALKING_ANIMATION);
@@ -117,7 +111,68 @@ void PedestrianPlugin::Reset()
     loader->reset();
   }
   PyImport_AppendInittab("ros", &PyInit_ros);
-  loader->loadModule(this->module_name);
+  Py_Initialize();
+
+  this->plugin_params.empty();
+
+  sdf::ElementPtr child = this->sdf->GetFirstElement();
+  while (child) {
+    std::string key = child->GetName();
+    if (key == "module") {
+      this->module_name = child->Get<std::string>();
+      RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
+      loader->loadModule(this->module_name);
+      child = child->GetNextElement();
+      continue;
+    }
+
+    sdf::ParamPtr typeAttr = child->GetAttribute("type");
+    if (!typeAttr) {
+      RCLCPP_ERROR(this->node->get_logger(), "%s' type is not specified", key.c_str());
+      child = child->GetNextElement();
+      continue;
+    }
+    std::string type = typeAttr->GetAsString();
+    RCLCPP_INFO(this->node->get_logger(), "plugin param %s type=%s", key.c_str(), type.c_str());
+    if (type == "str") {
+      std::string value = child->Get<std::string>();
+      RCLCPP_INFO(this->node->get_logger(), "value is %s", value.c_str());
+      this->plugin_params[key] = PyUnicode_FromString(value.c_str());
+    } else if (type == "int") {
+      int value = child->Get<int>();
+      RCLCPP_INFO(this->node->get_logger(), "value is %d", value);
+      this->plugin_params[key] = PyLong_FromLong(value);
+    } else if (type == "float") {
+      double value = child->Get<double>();
+      RCLCPP_INFO(this->node->get_logger(), "value is %.2f", value);
+      this->plugin_params[key] = PyFloat_FromDouble(value);
+    } else if (type == "bool") {
+      bool value = child->Get<bool>();
+      RCLCPP_INFO(this->node->get_logger(), "value is %d, %s", value, value  ? "true" : "false");
+      this->plugin_params[key] = value ? Py_True : Py_False;
+    } else {
+      RCLCPP_ERROR(this->node->get_logger(), "Unsupported type: %s", type.c_str());
+    }
+    child = child->GetNextElement();
+  }
+
+  auto pose = this->actor->WorldPose();
+  auto rpy = pose.Rot().Euler();
+  this->x = pose.Pos().X();
+  this->y = pose.Pos().Y();
+  this->z = pose.Pos().Z();
+  this->roll = rpy.X();
+  this->pitch = rpy.Y();
+  this->yaw = rpy.Z();
+  this->dist = 0;
+}
+
+double getDictItemAsDouble(PyObject *dict, char *key, double default_value = 0.0) {
+  auto obj = PyDict_GetItem(dict, PyUnicode_FromString(key));
+  if (obj == NULL) {
+    return default_value;
+  }
+  return PyFloat_AsDouble(obj);
 }
 
 void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
@@ -125,51 +180,78 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   IGN_PROFILE("PedestrianPlugin::Update");
   IGN_PROFILE_BEGIN("Update");
 
-  ignition::math::Pose3d pose = this->actor->WorldPose();
-  ignition::math::Vector3d rpy = pose.Rot().Euler();
+  auto dt = (_info.simTime - this->lastUpdate).Double();
+  if (dt > 1 || dt < 0) {  // reset, initialize
+    this->lastUpdate = _info.simTime;
+    return;
+  }
+  if (dt < 0.05) {  // 20hz
+    return;
+  }
+  this->lastUpdate = _info.simTime;
 
   PyObject* func = loader->getFunc(this->module_name, "onUpdate");
 
   if (func != NULL) {
-    auto pArgs = PyTuple_New(6);
-    PyTuple_SetItem(pArgs, 0, PyFloat_FromDouble(pose.X()));
-    PyTuple_SetItem(pArgs, 1, PyFloat_FromDouble(pose.Y()));
-    PyTuple_SetItem(pArgs, 2, PyFloat_FromDouble(pose.Z()));
-    PyTuple_SetItem(pArgs, 3, PyFloat_FromDouble(rpy.X()));
-    PyTuple_SetItem(pArgs, 4, PyFloat_FromDouble(rpy.Y()));
-    PyTuple_SetItem(pArgs, 5, PyFloat_FromDouble(rpy.Z()));
+    PyObject* pArgs = PyTuple_New(0);
+    PyObject* pDict = PyDict_New();
 
-    auto pRet = PyObject_CallObject(func, pArgs);
-    if (pRet != NULL && PyTuple_Check(pRet) && PyTuple_Size(pRet) == 7) {
-      double x = PyFloat_AsDouble(PyTuple_GetItem(pRet, 0));
-      double y = PyFloat_AsDouble(PyTuple_GetItem(pRet, 1));
-      double z = PyFloat_AsDouble(PyTuple_GetItem(pRet, 2));
-      double roll = PyFloat_AsDouble(PyTuple_GetItem(pRet, 3));
-      double pitch = PyFloat_AsDouble(PyTuple_GetItem(pRet, 4));
-      double yaw = PyFloat_AsDouble(PyTuple_GetItem(pRet, 5));
-      double dist = PyFloat_AsDouble(PyTuple_GetItem(pRet, 6));
+    double *wPose = get_walking_pose(this->dist);
+    PyDict_SetItemString(pDict, "dt", PyFloat_FromDouble(dt));
+    PyDict_SetItemString(pDict, "x", PyFloat_FromDouble(x));
+    PyDict_SetItemString(pDict, "y", PyFloat_FromDouble(y));
+    PyDict_SetItemString(pDict, "z", PyFloat_FromDouble(z));
+    PyDict_SetItemString(pDict, "roll", PyFloat_FromDouble(roll));
+    PyDict_SetItemString(pDict, "pitch", PyFloat_FromDouble(pitch));
+    PyDict_SetItemString(pDict, "yaw", PyFloat_FromDouble(yaw));
 
-      double *wPose = get_walking_pose(dist);
-      pose.Pos().X(x);
-      pose.Pos().Y(y);
-      pose.Pos().Z(z+wPose[2]);
-      pose.Rot() = ignition::math::Quaterniond(roll+wPose[3], pitch+wPose[4], yaw+wPose[5]);
+    // add parameter to the arguments
+    for (const auto& pair : this->plugin_params) {
+      PyDict_SetItemString(pDict, pair.first.c_str(), pair.second);
+    }
 
+    auto pRet = PyObject_Call(func, pArgs, pDict);
+    if (pRet != NULL && PyDict_Check(pRet)) {
+      auto newX = getDictItemAsDouble(pRet, "x", 0.0);
+      auto newY = getDictItemAsDouble(pRet, "y", 0.0);
+      auto newZ = getDictItemAsDouble(pRet, "z", 0.0);
+      auto newRoll = getDictItemAsDouble(pRet, "roll", 0.0);
+      auto newPitch = getDictItemAsDouble(pRet, "pitch", 0.0);
+      auto newYaw = getDictItemAsDouble(pRet, "yaw", 0.0);
+      auto dx = newX - this->x;
+      auto dy = newY - this->y;
+      auto dz = newZ - this->z;
+      auto dd = std::sqrt(dx * dx + dy * dy + dz * dz);
+      auto newDist = this->dist + dd;
+      double *wPose = get_walking_pose(newDist);
+
+      ignition::math::Pose3d pose;
+      pose.Pos().X(newX);
+      pose.Pos().Y(newY+wPose[1]);
+      pose.Pos().Z(newZ+wPose[2]);
+      pose.Rot() = ignition::math::Quaterniond(newRoll+wPose[3], newPitch+wPose[4], newYaw+wPose[5]);
       this->actor->SetWorldPose(pose, false, false);
 
-      double dt = (dist - this->lastDist) / walking_dist_factor * walking_time_factor;
-      this->actor->SetScriptTime(this->actor->ScriptTime() + dt);
-      this->lastDist = dist;
-      Py_DECREF(pRet);
-    }
-    Py_DECREF(pArgs);
-  }
+      double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
+      this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
 
-  this->lastUpdate = _info.simTime;
+      this->x = newX;
+      this->y = newY;
+      this->z = newZ;
+      this->roll = newRoll;
+      this->pitch = newPitch;
+      this->yaw = newYaw;
+      this->dist = newDist;
+  
+      Py_XDECREF(pRet);
+    }
+    Py_XDECREF(pArgs);
+  }
 
   IGN_PROFILE_END();
 }
 
+// debug function
 void PedestrianPlugin::print_pyobject(PyObject* obj) {
   if (PyLong_Check(obj)) {
     // It's a long integer
