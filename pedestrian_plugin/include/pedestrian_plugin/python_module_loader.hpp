@@ -24,77 +24,32 @@
 #define PEDESTRIAN_PLUGIN_PYTHON_MODULE_LOADER_HPP_
 
 #include <Python.h>
-#include <string>
 #include <chrono>
+#include <string>
 #include <map>
+#include <memory>
 
-using namespace std::chrono_literals; 
+using namespace std::chrono_literals;
+
+class PythonModuleLoader;
+
+extern std::shared_ptr<PythonModuleLoader> global_python_loader;
 
 class PythonModuleLoader {
-private:
-    std::map<std::string, PyObject*> modules;
+ private:
+  std::map<std::string, PyObject*> modules;
 
-public:
-    PythonModuleLoader() {
-    }
+ public:
+  PythonModuleLoader();
+  ~PythonModuleLoader();
+  bool canReset();
+  void reset();
+  PyObject* getFunc(const std::string & moduleName, const std::string & funcName);
+  PyObject* loadModule(const std::string& moduleName);
+  PyObject* getModule(const std::string& moduleName);
 
-    ~PythonModuleLoader() {
-        // Release all loaded Python objects and finalize the Python Interpreter
-        reset();
-    }
-
-    bool canReset() {
-        return (std::chrono::system_clock::now() - lastResetTime) > 1s;
-    }
-
-    void reset() {
-        for (auto& pair : modules) {
-            Py_DECREF(pair.second);
-        }
-        Py_Finalize();
-        lastResetTime = std::chrono::system_clock::now();
-    }
-
-    PyObject* getFunc(const std::string & moduleName, const std::string & funcName)  {
-        PyObject* module = this->loadModule(moduleName);
-
-        if (module != NULL) {
-            PyObject *func = PyObject_GetAttrString(module, "onUpdate");
-            if (func == NULL || !PyCallable_Check(func)) {
-                Py_XDECREF(func);
-            }
-            return func;
-        }
-        return NULL;
-    }
-
-    PyObject* loadModule(const std::string& moduleName) {
-        if (!Py_IsInitialized()) {
-            Py_Initialize();
-        }
-
-        PyObject* pName = PyUnicode_DecodeFSDefault(moduleName.c_str());
-        PyObject* pModule = PyImport_Import(pName);
-        Py_DECREF(pName);
-
-        if (pModule == nullptr) {
-            PyErr_Print();
-            return NULL;
-        }
-
-        modules[moduleName] = pModule;
-        return pModule;
-    }
-
-    PyObject* getModule(const std::string& moduleName) {
-        auto it = modules.find(moduleName);
-        if (it != modules.end()) {
-            return it->second;
-        }
-        return nullptr;
-    }
-
-    std::chrono::time_point<std::chrono::system_clock> lastResetTime;
+  std::chrono::time_point<std::chrono::system_clock> lastResetTime;
+  std::chrono::time_point<std::chrono::system_clock> lastErrorTime;
 };
 
 #endif  // PEDESTRIAN_PLUGIN_PYTHON_MODULE_LOADER_HPP_

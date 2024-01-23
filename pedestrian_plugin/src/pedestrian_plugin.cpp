@@ -30,6 +30,7 @@
 #include <ignition/common/Profiler.hh>
 #include "gazebo/physics/physics.hh"
 #include "pedestrian_plugin/pedestrian_plugin.hpp"
+#include "pedestrian_plugin/python_module_loader.hpp"
 
 using namespace gazebo;
 
@@ -38,8 +39,7 @@ GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 #define WALKING_ANIMATION "walking"
 
 // exporting python module
-static gazebo_ros::Node::SharedPtr global_node;
-static std::shared_ptr<PythonModuleLoader> loader = std::make_shared<PythonModuleLoader>();
+gazebo_ros::Node::SharedPtr global_node;
 
 static PyObject* ros_info(PyObject *self, PyObject *args)
 {
@@ -71,7 +71,7 @@ PedestrianPlugin::PedestrianPlugin()
 
 PedestrianPlugin::~PedestrianPlugin()
 {
-  loader = nullptr;
+  global_python_loader = nullptr;
 }
 
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
@@ -107,9 +107,9 @@ void PedestrianPlugin::Reset()
   }
 
   // reset python context
-  if (loader->canReset()) {
-    RCLCPP_INFO(this->node->get_logger(), "loader reset");
-    loader->reset();
+  if (global_python_loader->canReset()) {
+    RCLCPP_INFO(this->node->get_logger(), "global_python_loader reset");
+    global_python_loader->reset();
   }
   PyImport_AppendInittab("ros", &PyInit_ros);
   Py_Initialize();
@@ -127,7 +127,7 @@ void PedestrianPlugin::Reset()
     if (key == "module") {
       this->module_name = child->Get<std::string>();
       RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
-      loader->loadModule(this->module_name);
+      global_python_loader->loadModule(this->module_name);
       child = child->GetNextElement();
       continue;
     }
@@ -196,7 +196,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   }
   this->lastUpdate = _info.simTime;
 
-  PyObject* func = loader->getFunc(this->module_name, "onUpdate");
+  PyObject* func = global_python_loader->getFunc(this->module_name, "onUpdate");
 
   if (func != NULL) {
     PyObject* pArgs = PyTuple_New(0);

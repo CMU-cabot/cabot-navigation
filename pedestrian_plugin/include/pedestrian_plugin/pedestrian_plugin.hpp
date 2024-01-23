@@ -29,24 +29,21 @@
 #include <string>
 #include <vector>
 
+#include <gazebo_ros/node.hpp>
 #include "gazebo/common/Plugin.hh"
 #include "gazebo/physics/physics.hh"
 #include "gazebo/util/system.hh"
-#include <gazebo_ros/node.hpp>
-#include "pedestrian_plugin/python_module_loader.hpp"
 
-namespace gazebo
-{
-class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin
-{
-public:
+namespace gazebo {
+class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
+ public:
   PedestrianPlugin();
   ~PedestrianPlugin();
   virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
   virtual void Reset();
 
-private:
-  void OnUpdate(const common::UpdateInfo &_info);
+ private:
+  void OnUpdate(const common::UpdateInfo& _info);
   void print_pyobject(PyObject* obj);
   gazebo_ros::Node::SharedPtr node;
   sdf::ElementPtr sdf;
@@ -77,6 +74,6 @@ private:
   static double walking_dist_factor;
   static double walking_pose[145][6];
 };
-}
+}  // namespace gazebo
 
 #endif  // PEDESTRIAN_PLUGIN_PEDESTRIAN_PLUGIN_HPP_
