@@ -106,6 +106,7 @@ void PedestrianPlugin::Reset()
     this->actor->SetCustomTrajectory(this->trajectoryInfo);
   }
 
+  // reset python context
   if (loader->canReset()) {
     RCLCPP_INFO(this->node->get_logger(), "loader reset");
     loader->reset();
@@ -113,7 +114,12 @@ void PedestrianPlugin::Reset()
   PyImport_AppendInittab("ros", &PyInit_ros);
   Py_Initialize();
 
+  // load python modulde and parse plugin parameters as python object
+  for (auto param : plugin_params) {
+    Py_DECREF(param.second);
+  }
   this->plugin_params.empty();
+  this->plugin_params["name"] = PyUnicode_FromString(this->actor->GetName().c_str());
 
   sdf::ElementPtr child = this->sdf->GetFirstElement();
   while (child) {
