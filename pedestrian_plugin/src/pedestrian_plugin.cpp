@@ -31,6 +31,7 @@
 #include "gazebo/physics/physics.hh"
 #include "pedestrian_plugin/pedestrian_plugin.hpp"
 #include "pedestrian_plugin/python_module_loader.hpp"
+#include "pedestrian_plugin/python_utils.hpp"
 
 using namespace gazebo;
 
@@ -94,6 +95,7 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 
 void PedestrianPlugin::Reset()
 {
+  std::lock_guard<std::mutex> guard(mtx);
   RCLCPP_INFO(this->node->get_logger(), "Reset");
 
   auto skelAnims = this->actor->SkeletonAnimations();
@@ -109,20 +111,15 @@ void PedestrianPlugin::Reset()
   }
 
   // reset python context
+  this->plugin_params.clear();
   if (global_python_loader->canReset()) {
     RCLCPP_INFO(this->node->get_logger(), "global_python_loader reset");
     global_python_loader->reset();
+    PyImport_AppendInittab("ros", &PyInit_ros);
   }
-  PyImport_AppendInittab("ros", &PyInit_ros);
   Py_Initialize();
 
   // load python modulde and parse plugin parameters as python object
-  for (auto param : plugin_params) {
-    Py_DECREF(param.second);
-  }
-  this->plugin_params.empty();
-  this->plugin_params["name"] = PyUnicode_FromString(this->actor->GetName().c_str());
-
   sdf::ElementPtr child = this->sdf->GetFirstElement();
   while (child) {
     std::string key = child->GetName();
@@ -150,26 +147,10 @@ void PedestrianPlugin::Reset()
       continue;
     }
     std::string type = typeAttr->GetAsString();
-    RCLCPP_INFO(this->node->get_logger(), "plugin param %s type=%s", key.c_str(), type.c_str());
-    if (type == "str") {
-      std::string value = child->Get<std::string>();
-      RCLCPP_INFO(this->node->get_logger(), "value is %s", value.c_str());
-      this->plugin_params[key] = PyUnicode_FromString(value.c_str());
-    } else if (type == "int") {
-      int value = child->Get<int>();
-      RCLCPP_INFO(this->node->get_logger(), "value is %d", value);
-      this->plugin_params[key] = PyLong_FromLong(value);
-    } else if (type == "float") {
-      double value = child->Get<double>();
-      RCLCPP_INFO(this->node->get_logger(), "value is %.2f", value);
-      this->plugin_params[key] = PyFloat_FromDouble(value);
-    } else if (type == "bool") {
-      bool value = child->Get<bool>();
-      RCLCPP_INFO(this->node->get_logger(), "value is %d, %s", value, value  ? "true" : "false");
-      this->plugin_params[key] = value ? Py_True : Py_False;
-    } else {
-      RCLCPP_ERROR(this->node->get_logger(), "Unsupported type: %s", type.c_str());
-    }
+    std::string value = child->Get<std::string>();
+    RCLCPP_INFO(this->node->get_logger(), "plugin param %s (type=%s) value=%s",
+      key.c_str(), type.c_str(), value.c_str());
+    this->plugin_params[key] = child;
     child = child->GetNextElement();
   }
 
@@ -184,16 +165,11 @@ void PedestrianPlugin::Reset()
   this->dist = 0;
 }
 
-double getDictItemAsDouble(PyObject *dict, char *key, double default_value = 0.0) {
-  auto obj = PyDict_GetItem(dict, PyUnicode_FromString(key));
-  if (obj == NULL) {
-    return default_value;
-  }
-  return PyFloat_AsDouble(obj);
-}
+
 
 void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
 {
+  std::lock_guard<std::mutex> guard(mtx);
   IGN_PROFILE("PedestrianPlugin::Update");
   IGN_PROFILE_BEGIN("Update");
 
@@ -207,47 +183,66 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   }
   this->lastUpdate = _info.simTime;
 
-  PyObject* func = global_python_loader->getFunc(this->module_name, "onUpdate");
+  PyObject* pFunc = global_python_loader->getFunc(this->module_name, "onUpdate");
 
-  if (func != NULL) {
+  if (pFunc != NULL) {
     PyObject* pArgs = PyTuple_New(0);
     PyObject* pDict = PyDict_New();
-    PyObject* pRobotPose = PyDict_New();
 
     if (robotModel) {
+      PyObject* pRobotPose = PyDict_New();
       ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
       ignition::math::Vector3d rRpy = robotModel->WorldPose().Rot().Euler();
-      PyDict_SetItemString(pRobotPose, "x", PyFloat_FromDouble(rPos.X()));
-      PyDict_SetItemString(pRobotPose, "y", PyFloat_FromDouble(rPos.Y()));
-      PyDict_SetItemString(pRobotPose, "z", PyFloat_FromDouble(rPos.Z()));
-      PyDict_SetItemString(pRobotPose, "roll", PyFloat_FromDouble(rRpy.X()));
-      PyDict_SetItemString(pRobotPose, "pitch", PyFloat_FromDouble(rRpy.Y()));
-      PyDict_SetItemString(pRobotPose, "yaw", PyFloat_FromDouble(rRpy.Z()));
+      PythonUtils::setDictItemAsFloat(pRobotPose, "x", rPos.X());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "y", rPos.Y());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "z", rPos.Z());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "roll", rRpy.X());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.X());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.X());
       PyDict_SetItemString(pDict, "robot", pRobotPose);
+      Py_DECREF(pRobotPose);
     }
-
-    double *wPose = get_walking_pose(this->dist);
-    PyDict_SetItemString(pDict, "dt", PyFloat_FromDouble(dt));
-    PyDict_SetItemString(pDict, "x", PyFloat_FromDouble(x));
-    PyDict_SetItemString(pDict, "y", PyFloat_FromDouble(y));
-    PyDict_SetItemString(pDict, "z", PyFloat_FromDouble(z));
-    PyDict_SetItemString(pDict, "roll", PyFloat_FromDouble(roll));
-    PyDict_SetItemString(pDict, "pitch", PyFloat_FromDouble(pitch));
-    PyDict_SetItemString(pDict, "yaw", PyFloat_FromDouble(yaw));
+    PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
+    PythonUtils::setDictItemAsFloat(pDict, "x", this->x);
+    PythonUtils::setDictItemAsFloat(pDict, "y", this->y);
+    PythonUtils::setDictItemAsFloat(pDict, "z", this->z);
+    PythonUtils::setDictItemAsFloat(pDict, "roll", this->roll);
+    PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
+    PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
 
     // add parameter to the arguments
     for (const auto& pair : this->plugin_params) {
-      PyDict_SetItemString(pDict, pair.first.c_str(), pair.second);
+      auto child = pair.second;
+      sdf::ParamPtr typeAttr = child->GetAttribute("type");
+      std::string type = typeAttr->GetAsString();
+      PyObject* temp;
+      if (type == "str") {
+        temp = PyUnicode_FromString(child->Get<std::string>().c_str());
+      } else if (type == "int") {
+        temp = PyLong_FromLong(child->Get<int>());
+      } else if (type == "float") {
+        temp = PyFloat_FromDouble(child->Get<double>());
+      } else if (type == "bool") {
+        temp = child->Get<bool>() ? Py_True : Py_False;
+      } else {
+        RCLCPP_ERROR(this->node->get_logger(), "Unsupported type: %s", type.c_str());
+      }
+      PyDict_SetItemString(pDict, pair.first.c_str(), temp);
+      Py_DECREF(temp);
     }
+    
+    PyObject *aname = PyUnicode_DecodeFSDefault(this->actor->GetName().c_str());
+    PyDict_SetItemString(pDict, "name", aname);
+    Py_DECREF(aname);
 
-    auto pRet = PyObject_Call(func, pArgs, pDict);
+    auto pRet = PyObject_Call(pFunc, pArgs, pDict);
     if (pRet != NULL && PyDict_Check(pRet)) {
-      auto newX = getDictItemAsDouble(pRet, "x", 0.0);
-      auto newY = getDictItemAsDouble(pRet, "y", 0.0);
-      auto newZ = getDictItemAsDouble(pRet, "z", 0.0);
-      auto newRoll = getDictItemAsDouble(pRet, "roll", 0.0);
-      auto newPitch = getDictItemAsDouble(pRet, "pitch", 0.0);
-      auto newYaw = getDictItemAsDouble(pRet, "yaw", 0.0);
+      auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
+      auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
+      auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
+      auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
+      auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
+      auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
       auto dx = newX - this->x;
       auto dy = newY - this->y;
       auto dz = newZ - this->z;
@@ -272,73 +267,13 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       this->pitch = newPitch;
       this->yaw = newYaw;
       this->dist = newDist;
-  
-      Py_XDECREF(pRet);
+
+      Py_DECREF(pRet);
     }
-    Py_XDECREF(pArgs);
+    Py_DECREF(pFunc);
+    Py_DECREF(pArgs);
+    Py_DECREF(pDict);
   }
 
   IGN_PROFILE_END();
-}
-
-// debug function
-void PedestrianPlugin::print_pyobject(PyObject* obj) {
-  if (PyLong_Check(obj)) {
-    // It's a long integer
-    long value = PyLong_AsLong(obj);
-    RCLCPP_INFO(this->node->get_logger(), "Integer: %ld", value);
-  } else if (PyFloat_Check(obj)) {
-    // It's a float
-    double value = PyFloat_AsDouble(obj);
-    RCLCPP_INFO(this->node->get_logger(), "Float: %f", value);
-  } else if (PyUnicode_Check(obj)) {
-    // It's a Unicode string
-    PyObject *tempBytes = PyUnicode_AsEncodedString(obj, "utf-8", "strict");
-    if (tempBytes != NULL) {
-      char *str = PyBytes_AsString(tempBytes);
-      if (str != NULL) {
-        RCLCPP_INFO(this->node->get_logger(), "String: %s", str);
-      }
-      Py_DECREF(tempBytes);
-    }
-  } else if (PyList_Check(obj)) {
-    // It's a list
-    Py_ssize_t size = PyList_Size(obj);
-    RCLCPP_INFO(this->node->get_logger(), "List of size %zd: [", size);
-    for (Py_ssize_t i = 0; i < size; i++) {
-      PyObject *item = PyList_GetItem(obj, i);
-      print_pyobject(item);  // Recursive call to print each item
-      if (i < size - 1) {
-        RCLCPP_INFO(this->node->get_logger(), ", ");
-      }
-    }
-    RCLCPP_INFO(this->node->get_logger(), "]");
-  } else if (PyDict_Check(obj)) {
-    // It's a dictionary
-    RCLCPP_INFO(this->node->get_logger(), "Dictionary: {");
-    PyObject *key, *value;
-    Py_ssize_t pos = 0;
-
-    while (PyDict_Next(obj, &pos, &key, &value)) {
-      print_pyobject(key);
-      RCLCPP_INFO(this->node->get_logger(), ": ");
-      print_pyobject(value);
-    }
-    RCLCPP_INFO(this->node->get_logger(), "}");
-  } else if (PyTuple_Check(obj)) {
-    // It's a tuple
-    Py_ssize_t size = PyTuple_Size(obj);
-    RCLCPP_INFO(this->node->get_logger(), "Tuple of size %zd: (", size);
-    for (Py_ssize_t i = 0; i < size; i++) {
-      PyObject *item = PyTuple_GetItem(obj, i);  // Get item from tuple
-      print_pyobject(item);  // Recursive call to print each item
-      if (i < size - 1) {
-        RCLCPP_INFO(this->node->get_logger(), ", ");
-      }
-    }
-    RCLCPP_INFO(this->node->get_logger(), ")");
-  } else {
-    // Object type is not handled in this example
-    RCLCPP_INFO(this->node->get_logger(), "Object type not handled in this example.");
-  }
 }

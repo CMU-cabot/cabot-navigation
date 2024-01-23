@@ -39,6 +39,7 @@ void PythonModuleLoader::reset() {
   for (auto& pair : modules) {
     Py_DECREF(pair.second);
   }
+  modules.clear();
   Py_Finalize();
   lastResetTime = std::chrono::system_clock::now();
 }

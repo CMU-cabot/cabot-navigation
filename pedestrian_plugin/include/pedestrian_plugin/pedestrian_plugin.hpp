@@ -26,6 +26,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -69,7 +70,9 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   double yaw;
   double dist;
 
-  std::map<std::string, PyObject*> plugin_params;
+  std::map<std::string, sdf::ElementPtr> plugin_params;
+
+  std::mutex mtx;
 
   // Need to be separated
   static double walking_time_factor;
