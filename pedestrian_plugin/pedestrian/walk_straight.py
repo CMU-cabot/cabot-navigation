@@ -15,8 +15,8 @@ def onUpdate(**args):
     dx = rx - x
     dy = ry - y
 
-    if math.sqrt(dx*dx+dy*dy) < 2:
-        vel = 0
+    dist = math.sqrt(dx*dx+dy*dy)
+    vel = min(max(0, dist-1.5), vel)
 
     args['x'] += vel * dt * math.cos(yaw)
     args['y'] += vel * dt * math.sin(yaw)

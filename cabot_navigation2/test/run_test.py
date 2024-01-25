@@ -93,8 +93,7 @@ class Tester:
         self.config['init_x'] = float(config['init_x']) if 'init_x' in config else 0.0
         self.config['init_y'] = float(config['init_y']) if 'init_y' in config else 0.0
         self.config['init_z'] = float(config['init_z']) if 'init_z' in config else 0.0
-        init_a = float(config['init_a']) if 'init_a' in config else 0.0
-        self.config['init_yaw'] = init_a / 180 * math.pi
+        self.config['init_a'] = float(config['init_a']) if 'init_a' in config else 0.0
 
     def test_checks(self, cases):
         for case in cases:
@@ -201,10 +200,15 @@ class Tester:
         # change gazebo model position
         request = SetEntityState.Request()
         request.state.name = 'mobile_base'
-        request.state.pose.position.x = self.config['init_x']
-        request.state.pose.position.y = self.config['init_y']
-        request.state.pose.position.z = self.config['init_z']
-        q = quaternion_from_euler(0, 0, self.config['init_yaw'])
+        init_x = test_action['x'] if 'x' in test_action else self.config['init_x']
+        init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
+        init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
+        init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
+        init_yaw  = init_a / 180.0 * math.pi
+        request.state.pose.position.x = float(init_x)
+        request.state.pose.position.y = float(init_y)
+        request.state.pose.position.z = float(init_z)
+        q = quaternion_from_euler(0, 0, init_yaw)
         request.state.pose.orientation.x = q[0]
         request.state.pose.orientation.y = q[1]
         request.state.pose.orientation.z = q[2]
@@ -238,9 +242,9 @@ class Tester:
                 # publish initialpose for localization hint
                 pose = PoseWithCovarianceStamped()
                 pose.header.frame_id = "global_map"
-                pose.pose.pose.position.x = self.config['init_x']
-                pose.pose.pose.position.y = self.config['init_y']
-                pose.pose.pose.position.z = self.config['init_z']
+                pose.pose.pose.position.x = float(self.config['init_x'])
+                pose.pose.pose.position.y = float(self.config['init_y'])
+                pose.pose.pose.position.z = float(self.config['init_z'])
                 pose.pose.pose.orientation.x = q[0]
                 pose.pose.pose.orientation.y = q[1]
                 pose.pose.pose.orientation.z = q[2]
