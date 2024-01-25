@@ -260,23 +260,25 @@ class Tester:
         ay = test_action['y'] if 'y' in test_action else 0.0
         az = test_action['z'] if 'z' in test_action else 0.0
         aa = test_action['a'] if 'a' in test_action else 0.0
-        aq = quaternion_from_euler(0, 0, 0)
-        actor_xml = """
+        module = test_action['module'] if 'module' in test_action else "pedestrian"
+        yaw = aa/180.0*math.pi
+        actor_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.6">
     <actor name="walking_actor">
-        <pose>0 0 1.0 0 0 0</pose> <!-- Initial position and orientation -->
+        <pose>{ax} {ay} {az} 0 0 {yaw}</pose>
         <skin>
-            <filename>walk.dae</filename> <!-- COLLADA animation file -->
+            <filename>walk.dae</filename>
             <scale>1.0</scale>
         </skin>
         <animation name="walking">
-            <filename>walk.dae</filename> <!-- COLLADA animation file -->
+            <filename>walk.dae</filename>
             <scale>1.0</scale>
             <interpolate_x>true</interpolate_x>
         </animation>
         <plugin name="pedestrian_plugin" filename="libpedestrian_plugin.so">
-          <module>pedestrian</module>
+          <module>{module}</module>
+          <robot>mobile_base</robot>
         </plugin>
     </actor>
 </sdf>
@@ -285,6 +287,7 @@ class Tester:
         request = SpawnEntity.Request()
         request.name = name
         request.xml = actor_xml
+        """
         request.initial_pose.position.x = ax
         request.initial_pose.position.y = ay
         request.initial_pose.position.z = az
@@ -292,6 +295,7 @@ class Tester:
         request.initial_pose.orientation.y = aq[1]
         request.initial_pose.orientation.z = aq[2]
         request.initial_pose.orientation.w = aq[3]
+        """
         request.reference_frame = "world"
         future = self.spawn_entity_client.call_async(request)
         self.futures[uuid] = future
