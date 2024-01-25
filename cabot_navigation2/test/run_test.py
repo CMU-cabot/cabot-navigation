@@ -252,6 +252,19 @@ class Tester:
         return timeout
 
     def spawn_actor(self, case, test_action):
+        def identify_variable_type(variable):
+            variable_type = type(variable)
+
+            if variable_type == int:
+                return "int"
+            elif variable_type == float:
+                return "float"
+            elif variable_type == bool:
+                return "bool"
+            elif variable_type == str:
+                return "str"
+            else:
+                return "str"
         logging.info(test_action)
         uuid = test_action['uuid']
         timeout = test_action['timeout']
@@ -262,6 +275,12 @@ class Tester:
         aa = test_action['a'] if 'a' in test_action else 0.0
         module = test_action['module'] if 'module' in test_action else "pedestrian"
         yaw = aa/180.0*math.pi
+        params = test_action['params'] if 'params' in test_action else {}
+        params_xml = ""
+        for k, v in params.items():
+            t = identify_variable_type(v)
+            params_xml += f"<{k} type=\"{t}\">{v}</{k}>"
+
         actor_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.6">
@@ -279,6 +298,7 @@ class Tester:
         <plugin name="pedestrian_plugin" filename="libpedestrian_plugin.so">
           <module>{module}</module>
           <robot>mobile_base</robot>
+          {params_xml}
         </plugin>
     </actor>
 </sdf>
