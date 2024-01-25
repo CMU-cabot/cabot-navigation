@@ -37,7 +37,7 @@ tests:
 - name: <name of the action>
   action:
     type: <test_action>
-    timeout: <timeout seconds>
+    timeout: <timeout seconds> (default=60)
     <other parameters>
 ```
 
@@ -55,9 +55,12 @@ tests:
     - `x`, `y`, `z`, and `a` (yaw angle in degree)
     - if not specified, the `config` value is used
 - `spawn_actor` : spawn an actor to the specified position and orientation
+    - `name` : name of the actor
     - `x`, `y`, `z`, and `a` (yaw angle in degree)
     - `module` : python module to be used to control the actor
     - `params` : Dict of parameters
+- `delete_actor` : delete the specified actor
+    - `name` : name of the actor
 - `pub_topic` : publish a topic message
     - `topic` : topic name
     - `topic_type` : topic type

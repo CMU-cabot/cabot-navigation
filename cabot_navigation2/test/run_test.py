@@ -127,6 +127,8 @@ class Tester:
 
         test_action = test_case['action']
         test_action['uuid'] = str(uuid.uuid4())
+        if 'timeout' not in test_action:
+            test_action['timeout'] = 60
         action_type = test_action['type']
 
         test_action_method = getattr(self, action_type, None)
@@ -252,6 +254,21 @@ class Tester:
                 self.initialpose_pub.publish(pose)
 
             future.add_done_callback(done_callback2)
+        future.add_done_callback(done_callback)
+        return timeout
+
+    def delete_actor(self, case, test_action):
+        request = DeleteEntity.Request()
+        name = test_action['name']
+        timeout = test_action['timeout']
+        request.name = name
+        future = self.delete_entity_client.call_async(request)
+        self.futures[uuid] = future
+
+        def done_callback(future):
+            logging.info(future.result())
+            case['done'] = True
+
         future.add_done_callback(done_callback)
         return timeout
 
