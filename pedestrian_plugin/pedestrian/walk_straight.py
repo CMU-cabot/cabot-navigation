@@ -8,6 +8,9 @@ def onUpdate(**args):
     dt = args['dt']
     yaw = args['yaw']
 
+    if 'robot' not in args:
+        return args
+
     rx = args['robot']['x']
     ry = args['robot']['y']
     x = args['x']

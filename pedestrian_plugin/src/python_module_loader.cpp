@@ -38,6 +38,21 @@ bool PythonModuleLoader::canReset() {
 }
 
 void PythonModuleLoader::reset() {
+  std::map<std::string, PyObject*> temp;
+  for (auto& pair : modules) {
+    PyObject *pReloadedModule = PyImport_ReloadModule(pair.second);
+    if (pReloadedModule != nullptr) {
+        Py_DECREF(pair.second);
+        temp.insert({pair.first, pReloadedModule});
+    } else {
+        PyErr_Print();
+    }
+  }
+  modules.clear();
+  for (auto& pair : temp) {
+    modules.insert({pair.first, pair.second});
+  }
+  /*
   for (auto& pair : modules) {
     Py_DECREF(pair.second);
   }
@@ -45,11 +60,15 @@ void PythonModuleLoader::reset() {
   if (Py_IsInitialized()) {
     Py_Finalize();
   }
+  */
   lastResetTime = std::chrono::system_clock::now();
 }
 
 PyObject* PythonModuleLoader::getFunc(const std::string& moduleName, const std::string& funcName) {
-  PyObject* module = this->loadModule(moduleName);
+  PyObject* module = modules[moduleName];
+  if (module == nullptr) {
+    module = loadModule(moduleName);
+  }
 
   if (module != NULL) {
     PyObject* func = PyObject_GetAttrString(module, "onUpdate");

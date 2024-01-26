@@ -31,7 +31,7 @@ function help()
 {
     echo "Usage:"
     echo "-h          show this help"
-    echo "-d          log directory"
+    echo "-w          wait ready"
 }
 
 blue "Start runnint tests"
@@ -41,14 +41,16 @@ scriptdir=`dirname $0`
 cd $scriptdir
 scriptdir=`pwd`
 
-#test_dir=$(find $scriptdir/../src/cabot_sites -name $CABOT_SITE | head -n 1)
-#tests=$test_dir/test/tests.yaml
+wait_ready_option=
 
-while getopts "hd:" arg; do
+while getopts "hw" arg; do
     case $arg in
         h)
             help
             exit
+            ;;
+        w)
+            wait_ready_option="-w"
             ;;
     esac
 done
@@ -64,7 +66,7 @@ blue "testing with $CABOT_SITE"
 
 source $scriptdir/../install/setup.bash
 
-ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option
+ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option
 result=$?
 
 echo "Test has completed"

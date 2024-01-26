@@ -116,6 +116,10 @@ RUN pip3 install --no-cache-dir \
     requests \
     transforms3d
 
+# for pedestrian test
+RUN pip3 install --no-cache-dir \
+    'pysocialforce[test,plot]'
+
 # for debug
 # RUN apt update && \
 #     apt install -y --no-install-recommends \

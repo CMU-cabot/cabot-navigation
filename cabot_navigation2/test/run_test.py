@@ -70,7 +70,8 @@ node = None
 def wait_test(timeout=60):
     def outer_wrap(function):
         def wrap(*args, **kwargs):
-            t = kwargs['timeout'] if 'timeout' in kwargs else timeout
+            t = kwargs['seconds'] if 'seconds' in kwargs else timeout
+            t = kwargs['timeout'] if 'timeout' in kwargs else t
             case = {'done': False}
             test_action = {'uuid': str(uuid.uuid4())}
 
@@ -104,12 +105,14 @@ class Tester:
         self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
 
-    def test(self, module, specific_test):
+    def test(self, module, specific_test, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
 
         # prepare the test
         self.default_config()
         for func in ['config', 'checks', 'wait_ready']:
+            if not wait_ready and func == 'wait_ready':
+                continue
             if func in functions:
                 logging.info(f"Calling {func}")
                 getattr(module, func)(self)
@@ -259,6 +262,7 @@ class Tester:
         self.futures[uuid] = future
 
         def done_callback(future):
+            logging.info(future.result())
             case['done'] = True
 
         future.add_done_callback(done_callback)
@@ -297,7 +301,7 @@ class Tester:
         actor_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.6">
-    <actor name="walking_actor{self.actor_count}">
+    <actor name="{name}">
         <pose>{ax} {ay} {az} 0 0 {yaw}</pose>
         <skin>
             <filename>walk.dae</filename>
@@ -308,7 +312,7 @@ class Tester:
             <scale>1.0</scale>
             <interpolate_x>true</interpolate_x>
         </animation>
-        <plugin name="pedestrian_plugin{self.actor_count}" filename="libpedestrian_plugin.so">
+        <plugin name="pedestrian_plugin_{name}" filename="libpedestrian_plugin.so">
           <module>{module}</module>
           <robot>mobile_base</robot>
           {params_xml}
@@ -325,6 +329,7 @@ class Tester:
         self.futures[uuid] = future
 
         def done_callback(future):
+            logging.info(future.result())
             case['done'] = True
 
         future.add_done_callback(done_callback)
@@ -398,6 +403,7 @@ def main():
 
     parser.add_option('-m', '--module', type=str, help='test module name')
     parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
 
     (options, args) = parser.parse_args()
 
@@ -410,7 +416,7 @@ def main():
     tester = Tester(node)
 
     mod = importlib.import_module(options.module)
-    tester.test(mod, options.func)
+    tester.test(mod, options.func, wait_ready=options.wait_ready)
 
 if __name__ == "__main__":
     main()

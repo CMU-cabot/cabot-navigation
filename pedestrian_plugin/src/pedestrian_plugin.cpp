@@ -192,7 +192,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       for (auto it : peopleMap) {
         msg.people.push_back(it.second);
       }
-      msg.header.frame_id="map";
+      msg.header.frame_id="map_global";
       people_pub->publish(msg);
       peopleMap.clear();
     }
@@ -297,6 +297,8 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       peopleMap.insert({person.name, person});
 
       Py_DECREF(pRet);
+    } else {
+      PyErr_Print();
     }
     Py_DECREF(pFunc);
     Py_DECREF(pArgs);

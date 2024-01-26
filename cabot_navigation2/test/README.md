@@ -4,6 +4,12 @@
 
 - This script runs test cases from the test file in your `CABOT_SITE`
 
+### Important note
+
+- If you have gzclient (Gazebo GUI), actors can stop somehow (especially after deleting actors)
+- Problem seems not happen when gzlient is not used
+  - There might be a race condition to transport data between gaserver and gzclient
+
 ## Run the test cases
 
 ```
