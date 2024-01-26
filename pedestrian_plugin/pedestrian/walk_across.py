@@ -1,6 +1,7 @@
 import sys
 import ros
 import math
+from pedestrian import state
 
 count=0
 px=None
@@ -34,7 +35,8 @@ def onUpdate(**args):
     args['x'] += vel * dt * math.cos(yaw)
     args['y'] += vel * dt * math.sin(yaw)
     args['yaw'] = yaw
+    name = args['name']
+    state.state[name] = args
 
     # ros.info(f"{args} {px} {py} {dx}")
-
     return args

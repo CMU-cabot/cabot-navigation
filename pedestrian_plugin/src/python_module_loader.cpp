@@ -33,14 +33,18 @@ PythonModuleLoader::~PythonModuleLoader() {
   reset();
 }
 
-bool PythonModuleLoader::canReset() { return (std::chrono::system_clock::now() - lastResetTime) > 1s; }
+bool PythonModuleLoader::canReset() {
+  return (std::chrono::system_clock::now() - lastResetTime) > 1s; 
+}
 
 void PythonModuleLoader::reset() {
   for (auto& pair : modules) {
     Py_DECREF(pair.second);
   }
   modules.clear();
-  Py_Finalize();
+  if (Py_IsInitialized()) {
+    Py_Finalize();
+  }
   lastResetTime = std::chrono::system_clock::now();
 }
 

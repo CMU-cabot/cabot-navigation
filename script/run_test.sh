@@ -41,8 +41,8 @@ scriptdir=`dirname $0`
 cd $scriptdir
 scriptdir=`pwd`
 
-test_dir=$(find $scriptdir/../src/cabot_sites -name $CABOT_SITE | head -n 1)
-tests=$test_dir/test/tests.yaml
+#test_dir=$(find $scriptdir/../src/cabot_sites -name $CABOT_SITE | head -n 1)
+#tests=$test_dir/test/tests.yaml
 
 while getopts "hd:" arg; do
     case $arg in
@@ -52,12 +52,19 @@ while getopts "hd:" arg; do
             ;;
     esac
 done
+shift $((OPTIND-1))
+
+module=$1
+test_func_option=""
+if [[ $2 != "" ]]; then
+  test_func_option="-f $2"
+fi  
 
 blue "testing with $CABOT_SITE"
 
 source $scriptdir/../install/setup.bash
 
-ros2 run cabot_navigation2 run_test.py -f $tests
+ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option
 result=$?
 
 echo "Test has completed"

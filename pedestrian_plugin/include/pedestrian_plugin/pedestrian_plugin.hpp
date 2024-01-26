@@ -31,6 +31,7 @@
 #include <vector>
 
 #include <gazebo_ros/node.hpp>
+#include <people_msgs/msg/people.hpp>
 #include "gazebo/common/Plugin.hh"
 #include "gazebo/physics/physics.hh"
 #include "gazebo/util/system.hh"
@@ -69,10 +70,9 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   double pitch;
   double yaw;
   double dist;
+  int actor_id;
 
   std::map<std::string, sdf::ElementPtr> plugin_params;
-
-  std::mutex mtx;
 
   // Need to be separated
   static double walking_time_factor;

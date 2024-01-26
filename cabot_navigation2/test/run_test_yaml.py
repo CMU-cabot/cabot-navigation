@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 ###############################################################################
-# Copyright (c) 2024  Carnegie Mellon University
+# Copyright (c) 2019, 2022  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,23 +22,25 @@
 # THE SOFTWARE.
 ###############################################################################
 
-import importlib
-import inspect
+import os
 import sys
+import re
 import math
+import numpy
 import time
 import traceback
 import uuid
+import multiprocessing
+from pathlib import Path
 import yaml
 import logging
 
 from optparse import OptionParser
+from matplotlib import pyplot as plt
 import rclpy
 import rclpy.node
 from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
-
-from cabot_common.util import callee_name
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization_msgs.srv import RestartLocalization
@@ -46,14 +48,16 @@ from gazebo_msgs.srv import SetEntityState
 from gazebo_msgs.srv import DeleteEntity
 from gazebo_msgs.srv import SpawnEntity
 
+from cabot_common.rosbag2 import BagReader
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s.%(msecs)03d [%(levelname)s]: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
-
 def import_class(input_str):
+    import importlib
     # Split the input string and form module and class strings
     module_str, class_str = input_str.rsplit('/', 1)
     module_str = module_str.replace('/', '.')
@@ -62,85 +66,79 @@ def import_class(input_str):
     return getattr(module, class_str)
 
 
-# global
-node = None
-
-
-# decorator of test actions
-def wait_test(timeout=60):
-    def outer_wrap(function):
-        def wrap(*args, **kwargs):
-            t = kwargs['timeout'] if 'timeout' in kwargs else timeout
-            case = {'done': False}
-            test_action = {'uuid': str(uuid.uuid4())}
-
-            # logging.info(f"calling {function} {case} {test_action} - {args} {kwargs}")
-            args = args + (case,)
-            test_action.update(kwargs)
-            function(*args, test_action)
-            start = time.time()
-            while not case['done'] and time.time() - start < t:
-                rclpy.spin_once(node, timeout_sec=1)
-            if not case['done']:
-                logging.error("Timeout")
-                sys.exit(1)
-        return wrap
-    return outer_wrap
-
-
 class Tester:
     def __init__(self, node):
         self.node = node
         self.done = False
         self.alive = True
-        self.config = {}
         self.subscriptions = {}
         self.futures = {}
         self.timers = {}
-        self.actor_count = 0
         self.restart_localization_client = self.node.create_client(RestartLocalization, '/restart_localization')
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
 
-    def test(self, module, specific_test):
-        functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
+    def test(self, test_cases):
+        if 'config' in test_cases:
+            self.test_config(test_cases['config'])
+        if 'checks' in test_cases:
+            self.test_checks(test_cases['checks'])
+        if 'tests' in test_cases:
+            self.test_tests(test_cases['tests'])
 
-        # prepare the test
-        self.default_config()
-        for func in ['config', 'checks', 'wait_ready']:
-            if func in functions:
-                logging.info(f"Calling {func}")
-                getattr(module, func)(self)
-                functions.remove(func)
+    def test_config(self, config):
+        self.config = {}
+        self.config['init_x'] = float(config['init_x']) if 'init_x' in config else 0.0
+        self.config['init_y'] = float(config['init_y']) if 'init_y' in config else 0.0
+        self.config['init_z'] = float(config['init_z']) if 'init_z' in config else 0.0
+        self.config['init_a'] = float(config['init_a']) if 'init_a' in config else 0.0
 
-        if specific_test and specific_test in functions:
-            logging.info(f"Testing {specific_test}")
-            getattr(module, specific_test)(self)
-            sys.exit(0)
+    def test_checks(self, cases):
+        for case in cases:
+            self.handle_case(case)
 
-        for func in sorted(functions):
-            if func.startswith("_"):
-                continue
-            logging.info(f"Testing {func}")
-            getattr(module, func)(self)
-        sys.exit(0)
+    def test_tests(self, cases):
+        for case in cases:
+            if not self.alive:
+                logging.error("Tester is terminated")
+                break
+            timeout = self.handle_case(case)
+            timeout = timeout if timeout is not None else 60
+            start = time.time()
+            logging.info(f"Timeout = {timeout} seconds, done={case['done']}, alive={self.alive}")
+            while self.alive and not case['done'] and time.time() - start < timeout:
+                rclpy.spin_once(self.node, timeout_sec=1)
+            if not case['done']:
+                logging.error("Timeout")
+                sys.exit(1)
 
-    def default_config(self):
-        self.config = {
-            'init_x': 0.0,
-            'init_y': 0.0,
-            'init_z': 0.0,
-            'init_a': 0.0,
-        }
+    def handle_case(self, test_case):
+        test_case['done'] = False
 
-    def info(self, text):
-        logging.info(text)
+        if 'comment' in test_case:
+            logging.info("")
+            logging.info(f"##### {test_case['comment']} #####")
+            test_case['done'] = True
+            return 0
 
-    @wait_test(1)
+        logging.info(f"Test: {test_case['name']}")
+
+        test_action = test_case['action']
+        test_action['uuid'] = str(uuid.uuid4())
+        if 'timeout' not in test_action:
+            test_action['timeout'] = 60
+        action_type = test_action['type']
+
+        test_action_method = getattr(self, action_type, None)
+        if callable(test_action_method):
+            return test_action_method(test_case, test_action)
+        else:
+            logging.error(f"unknown test type {action_type}")
+
     def check_topic_error(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
@@ -161,11 +159,19 @@ class Tester:
 
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.subscriptions[uuid] = sub
-        case['done'] = True
 
-    @wait_test()
+    def repeat(self, case, test_action):
+        times = test_action['times']
+        tests = test_action['tests']
+        for i in range(0, times):
+            logging.info(f"Repeat #{i+1}")
+            self.test_tests(tests)
+        case['done'] = True
+        return 0
+
     def wait_ready(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
+        timeout = test_action['timeout']
         uuid = test_action['uuid']
         topic = '/cabot/activity_log'
         topic_type = import_class('cabot_msgs/msg/Log')
@@ -183,10 +189,11 @@ class Tester:
                 logging.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.subscriptions[uuid] = sub
+        return timeout
 
-    @wait_test()
     def reset_position(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
+        timeout = test_action['timeout']
         uuid = test_action['uuid']
         topic = '/localize_status'
         topic_type = import_class('mf_localization_msgs/msg/MFLocalizeStatus')
@@ -199,7 +206,7 @@ class Tester:
         init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
         init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
         init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
-        init_yaw = init_a / 180.0 * math.pi
+        init_yaw  = init_a / 180.0 * math.pi
         request.state.pose.position.x = float(init_x)
         request.state.pose.position.y = float(init_y)
         request.state.pose.position.z = float(init_z)
@@ -236,7 +243,7 @@ class Tester:
                 time.sleep(1)
                 # publish initialpose for localization hint
                 pose = PoseWithCovarianceStamped()
-                pose.header.frame_id = "map"
+                pose.header.frame_id = "global_map"
                 pose.pose.pose.position.x = float(self.config['init_x'])
                 pose.pose.pose.position.y = float(self.config['init_y'])
                 pose.pose.pose.position.z = float(self.config['init_z'])
@@ -248,24 +255,24 @@ class Tester:
 
             future.add_done_callback(done_callback2)
         future.add_done_callback(done_callback)
+        return timeout
 
-    @wait_test()
     def delete_actor(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
         request = DeleteEntity.Request()
         name = test_action['name']
+        timeout = test_action['timeout']
         request.name = name
         future = self.delete_entity_client.call_async(request)
         self.futures[uuid] = future
 
         def done_callback(future):
+            logging.info(future.result())
             case['done'] = True
 
         future.add_done_callback(done_callback)
+        return timeout
 
-    @wait_test()
     def spawn_actor(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
         def identify_variable_type(variable):
             variable_type = type(variable)
 
@@ -279,7 +286,9 @@ class Tester:
                 return "str"
             else:
                 return "str"
+        logging.info(test_action)
         uuid = test_action['uuid']
+        timeout = test_action['timeout']
         name = test_action['name'] if 'name' in test_action else uuid
         ax = test_action['x'] if 'x' in test_action else 0.0
         ay = test_action['y'] if 'y' in test_action else 0.0
@@ -293,11 +302,10 @@ class Tester:
             t = identify_variable_type(v)
             params_xml += f"<{k} type=\"{t}\">{v}</{k}>"
 
-        self.actor_count += 1
         actor_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.6">
-    <actor name="walking_actor{self.actor_count}">
+    <actor name="walking_actor">
         <pose>{ax} {ay} {az} 0 0 {yaw}</pose>
         <skin>
             <filename>walk.dae</filename>
@@ -308,7 +316,7 @@ class Tester:
             <scale>1.0</scale>
             <interpolate_x>true</interpolate_x>
         </animation>
-        <plugin name="pedestrian_plugin{self.actor_count}" filename="libpedestrian_plugin.so">
+        <plugin name="pedestrian_plugin" filename="libpedestrian_plugin.so">
           <module>{module}</module>
           <robot>mobile_base</robot>
           {params_xml}
@@ -316,26 +324,37 @@ class Tester:
     </actor>
 </sdf>
 """
-        logging.info(actor_xml)
+        logging.info([test_action, [ax, ay, az]])
         request = SpawnEntity.Request()
         request.name = name
         request.xml = actor_xml
+        """
+        request.initial_pose.position.x = ax
+        request.initial_pose.position.y = ay
+        request.initial_pose.position.z = az
+        request.initial_pose.orientation.x = aq[0]
+        request.initial_pose.orientation.y = aq[1]
+        request.initial_pose.orientation.z = aq[2]
+        request.initial_pose.orientation.w = aq[3]
+        """
         request.reference_frame = "world"
         future = self.spawn_entity_client.call_async(request)
         self.futures[uuid] = future
 
         def done_callback(future):
+            logging.info(future.result())
             case['done'] = True
 
         future.add_done_callback(done_callback)
+        return timeout
 
-    @wait_test()
     def wait_topic(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         condition = test_action['condition']
+        timeout = test_action['timeout']
         uuid = test_action['uuid']
 
         def topic_callback(msg):
@@ -350,10 +369,10 @@ class Tester:
                 logging.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.subscriptions[uuid] = sub
+        return timeout
 
-    @wait_test()
     def pub_topic(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
@@ -367,10 +386,10 @@ class Tester:
         pub.publish(msg)
         self.node.destroy_publisher(pub)
         case['done'] = True
+        return 0
 
-    @wait_test()
     def wait(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
         seconds = test_action['seconds']
         uuid = test_action['uuid']
 
@@ -382,26 +401,24 @@ class Tester:
 
         timer = self.node.create_timer(seconds, timer_callback)
         self.timers[uuid] = timer
+        return seconds*2
 
     def terminate(self, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logging.info(test_action)
         sys.exit(0)
 
 
 def main():
-    global node
     parser = OptionParser(usage="""
     Example
-    {0} -m <module name>    # run test module
-    {0} -f <func name>      # run only func
+    {0} -f <test yaml>                     # run test
     """.format(sys.argv[0]))
 
-    parser.add_option('-m', '--module', type=str, help='test module name')
-    parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-f', '--file', type=str, help='test yaml file')
 
     (options, args) = parser.parse_args()
 
-    if not options.module:
+    if not options.file:
         parser.print_help()
         sys.exit(0)
 
@@ -409,8 +426,9 @@ def main():
     node = rclpy.node.Node("test_node")
     tester = Tester(node)
 
-    mod = importlib.import_module(options.module)
-    tester.test(mod, options.func)
+    with open(options.file) as file:
+        test_cases = yaml.safe_load(file)
+        tester.test(test_cases)
 
 if __name__ == "__main__":
     main()

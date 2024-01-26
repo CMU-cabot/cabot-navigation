@@ -40,6 +40,11 @@ GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 #define WALKING_ANIMATION "walking"
 
 gazebo_ros::Node::SharedPtr global_node;
+std::map<std::string, people_msgs::msg::Person> peopleMap;
+rclcpp::Publisher<people_msgs::msg::People>::SharedPtr people_pub;
+std::mutex mtx;
+int actor_count = 0;
+int actor_ids = 0;
 
 // exporting ros python module
 static PyObject* ros_info(PyObject *self, PyObject *args)
@@ -70,11 +75,13 @@ static PyObject* PyInit_ros(void)
 
 PedestrianPlugin::PedestrianPlugin()
 {
+  actor_count++;
+  actor_id = actor_ids++;
 }
 
 PedestrianPlugin::~PedestrianPlugin()
 {
-  global_python_loader = nullptr;
+  actor_count--;
 }
 
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
@@ -87,6 +94,7 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
   global_node = this->node = gazebo_ros::Node::Get(_sdf);
+  people_pub = this->node->create_publisher<people_msgs::msg::People>("/people", 10);
   RCLCPP_INFO(this->node->get_logger(), "Loading Pedestrign plugin...");
 
   this->Reset();
@@ -179,6 +187,15 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     return;
   }
   if (dt < 0.05) {  // 20hz
+    if (peopleMap.size() == actor_count) {
+      people_msgs::msg::People msg;
+      for (auto it : peopleMap) {
+        msg.people.push_back(it.second);
+      }
+      msg.header.frame_id="map";
+      people_pub->publish(msg);
+      peopleMap.clear();
+    }
     return;
   }
   this->lastUpdate = _info.simTime;
@@ -267,6 +284,17 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       this->pitch = newPitch;
       this->yaw = newYaw;
       this->dist = newDist;
+
+      people_msgs::msg::Person person;
+      person.name = std::to_string(actor_id);
+      person.position.x = newX;
+      person.position.y = newY;
+      person.position.z = newZ;
+      person.velocity.x = std::cos(newYaw) * dd / dt;
+      person.velocity.y = std::sin(newYaw) * dd / dt;
+      person.velocity.z = 0.0;
+      person.reliability = 1.0;
+      peopleMap.insert({person.name, person});
 
       Py_DECREF(pRet);
     }

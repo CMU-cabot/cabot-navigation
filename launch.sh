@@ -113,6 +113,8 @@ function help()
     echo "-S          record screen cast"
     echo "-y          do not confirm"
     echo "-t          run test"
+    echo "-T <module> run test CABOT_SITE.<module>"
+    echo "-f <test>   run test CABOT_SITE.<module>.<test>"
 }
 
 
@@ -130,6 +132,8 @@ log_dmesg=0
 screen_recording=0
 yes=0
 run_test=0
+module=tests
+test_func=
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -150,7 +154,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsdrp:n:vc:3DMSytH" arg; do
+while getopts "hsdrp:n:vc:3DMSytHT:f:" arg; do
     case $arg in
         s)
             simulation=1
@@ -194,6 +198,12 @@ while getopts "hsdrp:n:vc:3DMSytH" arg; do
 	    ;;
 	t)
 	    run_test=1
+	    ;;
+	T)
+        module=$OPTARG
+	    ;;
+	f)
+	    test_func=$OPTARG
 	    ;;
 	H)
 	    export CABOT_HEADLESS=1
@@ -256,7 +266,7 @@ if [ $error -eq 1 ]; then
 fi
 
 cabot_site_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE)
-if [ -e $cabot_site_dir/server_data ]; then
+if [[ -e $cabot_site_dir/server_data ]]; then
     local_map_server=1
 fi
 
@@ -366,7 +376,7 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test"
-    docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh
+    docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh $module $test_func
     pids+=($!)
     runtest_pid=$!
     snore 3

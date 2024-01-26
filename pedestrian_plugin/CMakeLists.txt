@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 #find_package(Boost REQUIRED COMPONENTS thread)
 find_package(gazebo REQUIRED)
 find_package(gazebo_ros REQUIRED)
+find_package(people_msgs REQUIRED)
 find_package(PythonLibs REQUIRED)
 
 if(BUILD_TESTING)
@@ -46,6 +47,7 @@ ament_target_dependencies(${PROJECT_NAME}
   "rclcpp"
   "gazebo"
   "gazebo_ros"
+  "people_msgs"
 )
 ament_export_libraries(${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}
