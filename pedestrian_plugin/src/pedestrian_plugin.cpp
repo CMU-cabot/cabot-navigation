@@ -39,49 +39,16 @@ GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 
 #define WALKING_ANIMATION "walking"
 
-gazebo_ros::Node::SharedPtr global_node;
-std::map<std::string, people_msgs::msg::Person> peopleMap;
-rclcpp::Publisher<people_msgs::msg::People>::SharedPtr people_pub;
-std::mutex mtx;
-int actor_count = 0;
-int actor_ids = 0;
-
-// exporting ros python module
-static PyObject* ros_info(PyObject *self, PyObject *args)
-{
-  const char* message;
-  if (PyArg_ParseTuple(args, "s", &message)) {
-    if (global_node) {
-      RCLCPP_INFO(global_node->get_logger(), message);
-    }
-  }
-  Py_RETURN_NONE;
-}
-static PyMethodDef RosMethods[] = {
-  {"info", ros_info, METH_VARARGS,
-   "call RCLCPP_INFO"},
-  {NULL, NULL, 0, NULL}
-};
-static PyModuleDef RosModule = {
-  PyModuleDef_HEAD_INIT, "ros", NULL, -1, RosMethods,
-  NULL, NULL, NULL, NULL
-};
-static PyObject* PyInit_ros(void)
-{
-  return PyModule_Create(&RosModule);
-}
-
 // PedestrianPlugin implementation
 
 PedestrianPlugin::PedestrianPlugin()
+: manager(PedestrianPluginManager::getInstance())
 {
-  actor_count++;
-  actor_id = actor_ids++;
+  
 }
 
 PedestrianPlugin::~PedestrianPlugin()
 {
-  actor_count--;
 }
 
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
@@ -93,9 +60,8 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   this->connections.push_back(event::Events::ConnectWorldUpdateBegin(
     std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
-  global_node = this->node = gazebo_ros::Node::Get(_sdf);
-  people_pub = this->node->create_publisher<people_msgs::msg::People>("/people", 10);
-  RCLCPP_INFO(this->node->get_logger(), "Loading Pedestrign plugin...");
+  actor_id = manager.addActor(_sdf);
+  RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
 
   this->Reset();
 }
@@ -103,8 +69,8 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 
 void PedestrianPlugin::Reset()
 {
-  std::lock_guard<std::mutex> guard(mtx);
-  RCLCPP_INFO(this->node->get_logger(), "Reset");
+  std::lock_guard<std::mutex> guard(manager.mtx);
+  RCLCPP_INFO(manager.get_logger(), "Reset");
 
   auto skelAnims = this->actor->SkeletonAnimations();
   auto it = skelAnims.find(WALKING_ANIMATION);
@@ -121,7 +87,7 @@ void PedestrianPlugin::Reset()
   // reset python context
   this->plugin_params.clear();
   if (global_python_loader->canReset()) {
-    RCLCPP_INFO(this->node->get_logger(), "global_python_loader reset");
+    RCLCPP_INFO(manager.get_logger(), "global_python_loader reset");
     global_python_loader->reset();
     PyImport_AppendInittab("ros", &PyInit_ros);
   }
@@ -133,7 +99,7 @@ void PedestrianPlugin::Reset()
     std::string key = child->GetName();
     if (key == "module") {
       this->module_name = child->Get<std::string>();
-      RCLCPP_INFO(this->node->get_logger(), "module name is %s", this->module_name.c_str());
+      RCLCPP_INFO(manager.get_logger(), "module name is %s", this->module_name.c_str());
       global_python_loader->loadModule(this->module_name);
       child = child->GetNextElement();
       continue;
@@ -141,7 +107,7 @@ void PedestrianPlugin::Reset()
     if (key == "robot") {
       auto robot_name = child->Get<std::string>();
       if (robot_name != "") {
-        RCLCPP_INFO(this->node->get_logger(), "robot name is %s", robot_name.c_str());
+        RCLCPP_INFO(manager.get_logger(), "robot name is %s", robot_name.c_str());
         robotModel = this->world->ModelByName(robot_name);
       }
       child = child->GetNextElement();
@@ -150,13 +116,13 @@ void PedestrianPlugin::Reset()
 
     sdf::ParamPtr typeAttr = child->GetAttribute("type");
     if (!typeAttr) {
-      RCLCPP_ERROR(this->node->get_logger(), "%s' type is not specified", key.c_str());
+      RCLCPP_ERROR(manager.get_logger(), "%s' type is not specified", key.c_str());
       child = child->GetNextElement();
       continue;
     }
     std::string type = typeAttr->GetAsString();
     std::string value = child->Get<std::string>();
-    RCLCPP_INFO(this->node->get_logger(), "plugin param %s (type=%s) value=%s",
+    RCLCPP_INFO(manager.get_logger(), "plugin param %s (type=%s) value=%s",
       key.c_str(), type.c_str(), value.c_str());
     this->plugin_params[key] = child;
     child = child->GetNextElement();
@@ -177,7 +143,7 @@ void PedestrianPlugin::Reset()
 
 void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
 {
-  std::lock_guard<std::mutex> guard(mtx);
+  std::lock_guard<std::mutex> guard(manager.mtx);
   IGN_PROFILE("PedestrianPlugin::Update");
   IGN_PROFILE_BEGIN("Update");
 
@@ -187,17 +153,10 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     return;
   }
   if (dt < 0.05) {  // 20hz
-    if (peopleMap.size() == actor_count) {
-      people_msgs::msg::People msg;
-      for (auto it : peopleMap) {
-        msg.people.push_back(it.second);
-      }
-      msg.header.frame_id="map_global";
-      people_pub->publish(msg);
-      peopleMap.clear();
-    }
     return;
   }
+  manager.publishPeopleIfReady();
+  
   this->lastUpdate = _info.simTime;
 
   PyObject* pFunc = global_python_loader->getFunc(this->module_name, "onUpdate");
@@ -242,7 +201,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       } else if (type == "bool") {
         temp = child->Get<bool>() ? Py_True : Py_False;
       } else {
-        RCLCPP_ERROR(this->node->get_logger(), "Unsupported type: %s", type.c_str());
+        RCLCPP_ERROR(manager.get_logger(), "Unsupported type: %s", type.c_str());
       }
       PyDict_SetItemString(pDict, pair.first.c_str(), temp);
       Py_DECREF(temp);
@@ -294,7 +253,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       person.velocity.y = std::sin(newYaw) * dd / dt;
       person.velocity.z = 0.0;
       person.reliability = 1.0;
-      peopleMap.insert({person.name, person});
+      manager.addPersonMessage(person);
 
       Py_DECREF(pRet);
     } else {

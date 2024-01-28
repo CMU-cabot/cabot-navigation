@@ -38,6 +38,7 @@ include_directories(
 
 add_library(${PROJECT_NAME} SHARED
   src/pedestrian_plugin.cpp
+  src/pedestrian_plugin_manager.cpp
   src/python_module_loader.cpp
   src/walking_pose.cpp
 )

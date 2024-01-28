@@ -31,10 +31,10 @@
 #include <vector>
 
 #include <gazebo_ros/node.hpp>
-#include <people_msgs/msg/people.hpp>
 #include "gazebo/common/Plugin.hh"
 #include "gazebo/physics/physics.hh"
 #include "gazebo/util/system.hh"
+#include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
 
 namespace gazebo {
 
@@ -48,7 +48,6 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
  private:
   void OnUpdate(const common::UpdateInfo& _info);
   void print_pyobject(PyObject* obj);
-  gazebo_ros::Node::SharedPtr node;
   sdf::ElementPtr sdf;
   physics::ActorPtr actor;
   physics::WorldPtr world;
@@ -60,6 +59,8 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   physics::TrajectoryInfoPtr trajectoryInfo;
 
   double* get_walking_pose(double distance);
+
+  PedestrianPluginManager &manager;
 
   // manage the actor location by the plugin
   // because animation can change its position
