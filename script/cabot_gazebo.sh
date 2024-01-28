@@ -104,16 +104,18 @@ fi
 
 # initialize local variables
 wait_sec=0
+gdb=false
 
 function usage {
     echo "Usage"
     echo ""
     echo "-h       show this help"
     echo "-w <sec> wait to launch in sec"
+    echo "-g       run with gdb"
     exit
 }
 
-while getopts "hw:" arg; do
+while getopts "hw:g" arg; do
     case $arg in
 	h)
 	    usage
@@ -121,6 +123,9 @@ while getopts "hw:" arg; do
 	    ;;
 	w)
 	    wait_sec=$OPTARG
+	    ;;
+	g)
+	    gdb=true
 	    ;;
     esac
 done
@@ -158,6 +163,7 @@ echo "Map                       : $map"
 
 blue "launch gazebo"
 com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
+        gdb:=$gdb \
         model:=$CABOT_MODEL \
         world_file:=$world \
         wireless_config_file:=$wireless_config \

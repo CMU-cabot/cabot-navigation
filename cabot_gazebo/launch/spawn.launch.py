@@ -10,7 +10,7 @@ from launch_ros.descriptions import ParameterValue
 def generate_launch_description():
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-    urdf_file_name = 'robots/cabot2-gt1.urdf.xacro'
+    urdf_file_name = 'robots/cabot2-gt1.urdf.xacro.xml'
 
     print("urdf_file_name : {}".format(urdf_file_name))
 

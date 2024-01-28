@@ -116,6 +116,7 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gazebo"
+      #- "-g"                   # run with gdb
 
   gui-base:
     extends: ros2-base

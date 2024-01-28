@@ -240,9 +240,9 @@ class Tester:
                 # publish initialpose for localization hint
                 pose = PoseWithCovarianceStamped()
                 pose.header.frame_id = "map"
-                pose.pose.pose.position.x = float(self.config['init_x'])
-                pose.pose.pose.position.y = float(self.config['init_y'])
-                pose.pose.pose.position.z = float(self.config['init_z'])
+                pose.pose.pose.position.x = float(init_x)
+                pose.pose.pose.position.y = float(init_y)
+                pose.pose.pose.position.z = float(init_z)
                 pose.pose.pose.orientation.x = q[0]
                 pose.pose.pose.orientation.y = q[1]
                 pose.pose.pose.orientation.z = q[2]

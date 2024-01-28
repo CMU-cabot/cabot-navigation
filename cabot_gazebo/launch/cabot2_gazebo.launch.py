@@ -96,6 +96,7 @@ def generate_launch_description():
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
+    gdb = LaunchConfiguration('gdb')
 
     gazebo_params = os.path.join(
         pkg_dir,
@@ -163,6 +164,11 @@ def generate_launch_description():
             'wireless_config_file',
             default_value='',
             description='wireless config file'
+        ),
+        DeclareLaunchArgument(
+            'gdb',
+            default_value='false',
+            description='use gdb'
         ),
 
         LogInfo(
@@ -240,6 +246,7 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource([get_package_share_directory('gazebo_ros'),
                                               '/launch/gzserver.launch.py']),
                 launch_arguments={
+                    'gdb': gdb,
                     'verbose': 'true',
                     'world': modified_world,
                     'params_file': str(gazebo_params)
