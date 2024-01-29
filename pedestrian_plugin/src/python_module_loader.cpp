@@ -60,19 +60,16 @@ void PythonModuleLoader::reset() {
 }
 
 PyObject* PythonModuleLoader::getFunc(const std::string& moduleName, const std::string& funcName) {
-  PyObject* module = modules[moduleName];
-  if (module == nullptr) {
-    module = loadModule(moduleName);
+  PyObject* module = loadModule(moduleName);
+  if (module == NULL) {
+    return NULL;
   }
 
-  if (module != NULL) {
-    PyObject* func = PyObject_GetAttrString(module, "onUpdate");
-    if (func == NULL || !PyCallable_Check(func)) {
-      Py_XDECREF(func);
-    }
-    return func;
+  PyObject* func = PyObject_GetAttrString(module, "onUpdate");
+  if (func == NULL || !PyCallable_Check(func)) {
+    Py_XDECREF(func);
   }
-  return NULL;
+  return func;
 }
 
 PyObject* PythonModuleLoader::loadModule(const std::string& moduleName) {
@@ -81,14 +78,17 @@ PyObject* PythonModuleLoader::loadModule(const std::string& moduleName) {
     Py_Initialize();
   }
 
+  auto it = modules.find(moduleName);
+  if (it != modules.end()) {
+    return it->second;
+  }
+
   PyObject* pName = PyUnicode_DecodeFSDefault(moduleName.c_str());
   PyObject* pModule = PyImport_Import(pName);
   Py_DECREF(pName);
 
-  auto now = std::chrono::system_clock::now();
-  if (pModule == nullptr && (now - lastErrorTime) > 5s) {
+  if (pModule == nullptr) {
     PyErr_Print();
-    lastErrorTime = now;
     return NULL;
   }
 

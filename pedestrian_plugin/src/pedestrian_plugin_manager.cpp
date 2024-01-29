@@ -91,8 +91,6 @@ PyObject* ParamValue::python_object() {
   }
 }
 
-
-
 void PedestrianPluginParams::addParam(std::string name, std::string type, std::string value) {
   paramMap_.insert({name, ParamValue::create(type, value)});
 }
@@ -150,6 +148,7 @@ rclcpp::Logger PedestrianPluginManager::get_logger() {
 void PedestrianPluginManager::handle_plugin_update(
     const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response) {
+  RCLCPP_INFO(get_logger(), "pedestrian plugin update service is called");
   for (const pedestrian_plugin_msgs::msg::Plugin & update : request->plugins) {
     std::string name = update.name;
     auto it = pluginMap_.find(name);
@@ -165,8 +164,12 @@ void PedestrianPluginManager::handle_plugin_update(
     for (const pedestrian_plugin_msgs::msg::PluginParam &param : update.params) {
       update_params.addParam(param.name, param.type, param.value);
     }
-
+    
+    RCLCPP_INFO(get_logger(), "update parameters %s", name.c_str());
     plugin->update_parameters(update_params);
+  }
+  for (const auto & it : pluginMap_) {
+    response->plugin_names.push_back(it.first);
   }
   response->message = "Plugin Updated";
 }

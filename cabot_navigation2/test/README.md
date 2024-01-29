@@ -36,6 +36,8 @@ func test_name(tester: Tester)
 - function with "_" as the first letter will be treated as private function
 
 ### Tester action functions and keyward args
+- `init_manager`:
+    - init PedestrianManager
 - `check_topic_error`
     - `topic` : topic name
     - `topic_type` : topic type
@@ -52,13 +54,14 @@ func test_name(tester: Tester)
 - `reset_position`: Move the robot to the specified initial location, restart localization, and wait until localize_status becomes TRACKING
     - `x`, `y`, `z`, and `a` (yaw angle in degree)
     - if not specified, the `tester.config` value is used
-- `spawn_actor` : spawn an actor to the specified position and orientation
-    - `name` : name of the actor
-    - `x`, `y`, `z`, and `a` (yaw angle in degree)
-    - `module` : python module to be used to control the actor
-    - `params` : Dict of parameters
-- `delete_actor` : delete the specified actor
-    - `name` : name of the actor
+- `setup_actor` : spawn/reuse actors to the specified position and orientation
+    - `actors`: [`ActorDict`]
+    - `ActorDict`:
+      - `name` : name of the actor
+      - `module` : python module to be used to control the actor
+      - `params` :
+        - `init_x`, `inity`, `init_z`, and `init_a` (yaw angle in degree)
+        - and custome parameters (should be int/float/str type)
 - `pub_topic` : publish a topic message
     - `topic` : topic name
     - `topic_type` : topic type

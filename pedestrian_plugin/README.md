@@ -79,3 +79,11 @@ __all__ = ['onUpdate']
 
 `ros` module is provided by the plugin code (not from your ROS environment)
 - `ros.info(message: str)`  : RCLCPP_INFO will be used to print the `message`
+
+## `/people` topic
+
+The plugin publishes pedestrian locations as `people_msgs::msg::People` message
+
+## `/pedestrian_plugin_update` service
+
+Once you insert this plugin, the actor can be updated via the service.

@@ -1,3 +1,4 @@
 Plugin[] plugins
 ---
+string[] plugin_names
 string message

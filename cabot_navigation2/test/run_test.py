@@ -43,11 +43,8 @@ from cabot_common.util import callee_name
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization_msgs.srv import RestartLocalization
 from gazebo_msgs.srv import SetEntityState
-from gazebo_msgs.srv import DeleteEntity
-from gazebo_msgs.srv import SpawnEntity
-from pedestrian_plugin_msgs.msg import Plugin
-from pedestrian_plugin_msgs.msg import PluginParam
-from pedestrian_plugin_msgs.srv import PluginUpdate
+
+from pedestrian.manager import PedestrianManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,23 +62,9 @@ def import_class(input_str):
     return getattr(module, class_str)
 
 
-def identify_variable_type(variable):
-    variable_type = type(variable)
-    if variable_type == int:
-        return "int"
-    elif variable_type == float:
-        return "float"
-    elif variable_type == bool:
-        return "bool"
-    elif variable_type == str:
-        return "str"
-    else:
-        return "str"
-
-
 # global
 node = None
-
+manager = None
 
 # decorator of test actions
 def wait_test(timeout=60):
@@ -119,9 +102,6 @@ class Tester:
         self.restart_localization_client = self.node.create_client(RestartLocalization, '/restart_localization')
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
-        self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
-        self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
-        self.pedestrian_plugin_update_client = self.node.create_client(PluginUpdate, '/pedestrian_plugin_update')
 
     def test(self, module, specific_test, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -158,6 +138,14 @@ class Tester:
 
     def info(self, text):
         logging.info(text)
+
+    @wait_test()
+    def init_manager(self, case, test_action):
+        logging.info(f"{callee_name()} {test_action}")
+        def done_callback(future):
+            logging.info(future.result())
+            case['done'] = True
+        manager.init(callback=done_callback)
 
     @wait_test(1)
     def check_topic_error(self, case, test_action):
@@ -271,103 +259,14 @@ class Tester:
         future.add_done_callback(done_callback)
 
     @wait_test()
-    def delete_actor(self, case, test_action):
+    def setup_actors(self, case, test_action):
         logging.info(f"{callee_name()} {test_action}")
-        request = DeleteEntity.Request()
-        name = test_action['name']
-        request.name = name
-        future = self.delete_entity_client.call_async(request)
-        self.futures[uuid] = future
-
         def done_callback(future):
             logging.info(future.result())
             case['done'] = True
-
-        future.add_done_callback(done_callback)
-
-    @wait_test()
-    def reuse_actor(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
-        request = PluginUpdate.Request()
-        plugins = test_action['plugins']
-        for plugin in plugins:
-            msg = Plugin()
-            if 'name' not in plugin or 'module' not in plugin:
-                logging.error("'name' and 'module' keys should be specified")
-                continue
-            msg.name = plugin['name']
-            msg.module = plugin['module']
-            if 'params' in plugin:
-                for key, value in plugin['params'].items():
-                    pMsg = PluginParam()
-                    pMsg.name = key
-                    pMsg.type = identify_variable_type(value)
-                    pMsg.value = str(value)
-                    msg.params.append(pMsg)
-            request.plugins.append(msg)
-
-        future = self.pedestrian_plugin_update_client.call_async(request)
-        self.futures[uuid] = future
-
-        def done_callback(future):
-            logging.info(future.result())
-            case['done'] = True
-
-        future.add_done_callback(done_callback)
-
-    @wait_test()
-    def spawn_actor(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
-        uuid = test_action['uuid']
-        name = test_action['name'] if 'name' in test_action else uuid
-        ax = test_action['x'] if 'x' in test_action else 0.0
-        ay = test_action['y'] if 'y' in test_action else 0.0
-        az = test_action['z'] if 'z' in test_action else 0.0
-        aa = test_action['a'] if 'a' in test_action else 0.0
-        module = test_action['module'] if 'module' in test_action else "pedestrian"
-        yaw = aa/180.0*math.pi
-        params = test_action['params'] if 'params' in test_action else {}
-        params_xml = ""
-        for k, v in params.items():
-            t = identify_variable_type(v)
-            params_xml += f"<{k} type=\"{t}\">{v}</{k}>"
-
-        self.actor_count += 1
-        actor_xml = f"""
-<?xml version="1.0" ?>
-<sdf version="1.6">
-    <actor name="{name}">
-        <pose>{ax} {ay} {az} 0 0 {yaw}</pose>
-        <skin>
-            <filename>walk.dae</filename>
-            <scale>1.0</scale>
-        </skin>
-        <animation name="walking">
-            <filename>walk.dae</filename>
-            <scale>1.0</scale>
-            <interpolate_x>true</interpolate_x>
-        </animation>
-        <plugin name="pedestrian_plugin_{name}" filename="libpedestrian_plugin.so">
-          <module>{module}</module>
-          <robot>mobile_base</robot>
-          {params_xml}
-        </plugin>
-    </actor>
-</sdf>
-"""
-        logging.info(actor_xml)
-        request = SpawnEntity.Request()
-        request.name = name
-        request.xml = actor_xml
-        request.reference_frame = "world"
-        future = self.spawn_entity_client.call_async(request)
-        self.futures[uuid] = future
-
-        def done_callback(future):
-            logging.info(future.result())
-            case['done'] = True
-
-        future.add_done_callback(done_callback)
+        manager.update(
+            actors=test_action['actors'],
+            callback=done_callback)
 
     @wait_test()
     def wait_topic(self, case, test_action):
@@ -429,7 +328,7 @@ class Tester:
 
 
 def main():
-    global node
+    global node, manager
     parser = OptionParser(usage="""
     Example
     {0} -m <module name>    # run test module
@@ -448,10 +347,12 @@ def main():
 
     rclpy.init()
     node = rclpy.node.Node("test_node")
-    tester = Tester(node)
+    manager = PedestrianManager(node)
 
+    tester = Tester(node)
     mod = importlib.import_module(options.module)
     tester.test(mod, options.func, wait_ready=options.wait_ready)
+
 
 if __name__ == "__main__":
     main()

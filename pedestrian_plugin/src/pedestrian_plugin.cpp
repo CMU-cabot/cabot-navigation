@@ -259,6 +259,9 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       person.velocity.y = std::sin(newYaw) * dd / dt;
       person.velocity.z = 0.0;
       person.reliability = 1.0;
+      if (dd / dt < 0.1) {
+        person.tags.push_back("stationary");
+      }
       manager.addPersonMessage(person);
 
       Py_DECREF(pRet);
