@@ -42,7 +42,6 @@ class PythonModuleLoader {
  public:
   PythonModuleLoader();
   ~PythonModuleLoader();
-  bool canReset();
   void reset();
   PyObject* getFunc(const std::string & moduleName, const std::string & funcName);
   PyObject* loadModule(const std::string& moduleName);

@@ -16,16 +16,21 @@ pRobot = None  # previous robot state
 
 # debug
 count=0
+initialized=False
 
 def onUpdate(**args):
-    global count, pRobot
+    global count, pRobot, initialized
+    if not initialized:
+        state.state.clear()
+        initialized = True
+
     dt = args['dt']
     name = args['name']
-    robot = args['robot']
+    robot = args['robot'] if 'robot' in args else None
 
     # here will be executed for all actors
     # but wait until all actors state is available
-    if len(state.state.keys()) == 30:
+    if len(state.state.keys()) == 10:
         # build state array for simulation
         temp = []
         index = 0
@@ -108,6 +113,4 @@ def onUpdate(**args):
 
     # store the current state
     state.state[name] = args
-
-    #ros.info(f"{args} {px} {py}")
     return args

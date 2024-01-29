@@ -45,6 +45,9 @@ from mf_localization_msgs.srv import RestartLocalization
 from gazebo_msgs.srv import SetEntityState
 from gazebo_msgs.srv import DeleteEntity
 from gazebo_msgs.srv import SpawnEntity
+from pedestrian_plugin_msgs.msg import Plugin
+from pedestrian_plugin_msgs.msg import PluginParam
+from pedestrian_plugin_msgs.srv import PluginUpdate
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,6 +63,20 @@ def import_class(input_str):
     # Import the module dynamically
     module = importlib.import_module(module_str)
     return getattr(module, class_str)
+
+
+def identify_variable_type(variable):
+    variable_type = type(variable)
+    if variable_type == int:
+        return "int"
+    elif variable_type == float:
+        return "float"
+    elif variable_type == bool:
+        return "bool"
+    elif variable_type == str:
+        return "str"
+    else:
+        return "str"
 
 
 # global
@@ -104,6 +121,7 @@ class Tester:
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
+        self.pedestrian_plugin_update_client = self.node.create_client(PluginUpdate, '/pedestrian_plugin_update')
 
     def test(self, module, specific_test, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -268,21 +286,38 @@ class Tester:
         future.add_done_callback(done_callback)
 
     @wait_test()
+    def reuse_actor(self, case, test_action):
+        logging.info(f"{callee_name()} {test_action}")
+        request = PluginUpdate.Request()
+        plugins = test_action['plugins']
+        for plugin in plugins:
+            msg = Plugin()
+            if 'name' not in plugin or 'module' not in plugin:
+                logging.error("'name' and 'module' keys should be specified")
+                continue
+            msg.name = plugin['name']
+            msg.module = plugin['module']
+            if 'params' in plugin:
+                for key, value in plugin['params'].items():
+                    pMsg = PluginParam()
+                    pMsg.name = key
+                    pMsg.type = identify_variable_type(value)
+                    pMsg.value = str(value)
+                    msg.params.append(pMsg)
+            request.plugins.append(msg)
+
+        future = self.pedestrian_plugin_update_client.call_async(request)
+        self.futures[uuid] = future
+
+        def done_callback(future):
+            logging.info(future.result())
+            case['done'] = True
+
+        future.add_done_callback(done_callback)
+
+    @wait_test()
     def spawn_actor(self, case, test_action):
         logging.info(f"{callee_name()} {test_action}")
-        def identify_variable_type(variable):
-            variable_type = type(variable)
-
-            if variable_type == int:
-                return "int"
-            elif variable_type == float:
-                return "float"
-            elif variable_type == bool:
-                return "bool"
-            elif variable_type == str:
-                return "str"
-            else:
-                return "str"
         uuid = test_action['uuid']
         name = test_action['name'] if 'name' in test_action else uuid
         ax = test_action['x'] if 'x' in test_action else 0.0

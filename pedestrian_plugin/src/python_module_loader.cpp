@@ -21,6 +21,7 @@
  *******************************************************************************/
 
 #include "pedestrian_plugin/python_module_loader.hpp"
+#include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
 
 using namespace std::chrono_literals;
 
@@ -30,14 +31,17 @@ PythonModuleLoader::PythonModuleLoader() {}
 
 PythonModuleLoader::~PythonModuleLoader() {
   // Release all loaded Python objects and finalize the Python Interpreter
-  reset();
-}
-
-bool PythonModuleLoader::canReset() {
-  return (std::chrono::system_clock::now() - lastResetTime) > 1s; 
+  for (auto& pair : modules) {
+    Py_DECREF(pair.second);
+  }
+  modules.clear();
 }
 
 void PythonModuleLoader::reset() {
+  if ((std::chrono::system_clock::now() - lastResetTime) < 1s) {
+    return;
+  }
+
   std::map<std::string, PyObject*> temp;
   for (auto& pair : modules) {
     PyObject *pReloadedModule = PyImport_ReloadModule(pair.second);
@@ -52,15 +56,6 @@ void PythonModuleLoader::reset() {
   for (auto& pair : temp) {
     modules.insert({pair.first, pair.second});
   }
-  /*
-  for (auto& pair : modules) {
-    Py_DECREF(pair.second);
-  }
-  modules.clear();
-  if (Py_IsInitialized()) {
-    Py_Finalize();
-  }
-  */
   lastResetTime = std::chrono::system_clock::now();
 }
 
@@ -82,6 +77,7 @@ PyObject* PythonModuleLoader::getFunc(const std::string& moduleName, const std::
 
 PyObject* PythonModuleLoader::loadModule(const std::string& moduleName) {
   if (!Py_IsInitialized()) {
+    PyImport_AppendInittab("ros", &PyInit_ros);
     Py_Initialize();
   }
 

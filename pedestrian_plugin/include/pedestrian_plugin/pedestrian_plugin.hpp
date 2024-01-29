@@ -44,6 +44,8 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   ~PedestrianPlugin();
   virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
   virtual void Reset();
+  void apply_parameters();
+  void update_parameters(PedestrianPluginParams params);
 
  private:
   void OnUpdate(const common::UpdateInfo& _info);
@@ -51,6 +53,7 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   sdf::ElementPtr sdf;
   physics::ActorPtr actor;
   physics::WorldPtr world;
+  std::string name;
   std::string module_name;
   gazebo::physics::ModelPtr robotModel;
 
@@ -73,7 +76,8 @@ class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin {
   double dist;
   int actor_id;
 
-  std::map<std::string, sdf::ElementPtr> plugin_params;
+  PedestrianPluginParams plugin_params;
+  bool needs_to_apply_params;
 
   // Need to be separated
   static double walking_time_factor;

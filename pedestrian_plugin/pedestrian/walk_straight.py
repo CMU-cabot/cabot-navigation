@@ -8,19 +8,19 @@ def onUpdate(**args):
     dt = args['dt']
     yaw = args['yaw']
 
-    if 'robot' not in args:
-        return args
+    #if 'robot' not in args:
+    #    return args
 
-    rx = args['robot']['x']
-    ry = args['robot']['y']
+    #rx = args['robot']['x']
+    #ry = args['robot']['y']
     x = args['x']
     y = args['y']
 
-    dx = rx - x
-    dy = ry - y
+    #dx = rx - x
+    #dy = ry - y
 
-    dist = math.sqrt(dx*dx+dy*dy)
-    vel = min(max(0, dist-1.5), vel)
+    #dist = math.sqrt(dx*dx+dy*dy)
+    #vel = min(max(0, dist-1.5), vel)
 
     args['x'] += vel * dt * math.cos(yaw)
     args['y'] += vel * dt * math.sin(yaw)

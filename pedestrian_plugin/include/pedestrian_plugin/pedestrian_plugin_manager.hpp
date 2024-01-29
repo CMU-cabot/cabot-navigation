@@ -25,12 +25,57 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include <people_msgs/msg/people.hpp>
 #include <gazebo_ros/node.hpp>
+#include <people_msgs/msg/people.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <pedestrian_plugin_msgs/srv/plugin_update.hpp>
 
 PyObject* PyInit_ros(void);
 
 namespace gazebo {
+
+class PedestrianPlugin;
+
+class ParamValue {
+public:
+  using ValueType = std::variant<std::monostate, int, double, std::string>;
+  static ParamValue null();
+  static ParamValue create(const std::string& type, const std::string& value);
+  bool isNull() const;
+  template<typename T>
+  T get() const {
+    if constexpr (std::is_same_v<T, ValueType>) {
+        return value_;
+    } else {
+      if (std::holds_alternative<T>(value_)) {
+        return std::get<T>(value_);
+      } else {
+        throw std::bad_variant_access();
+      }
+    }
+  }
+  PyObject* python_object();
+private:
+  ParamValue();
+  explicit ParamValue(ValueType value);
+  ValueType value_;
+};
+
+class PedestrianPluginParams {
+ public:
+  void addParam(std::string name, std::string type, std::string value);
+  ParamValue getParam(std::string name);
+
+  using iterator = std::map<std::string, ParamValue>::const_iterator;
+  iterator begin() const {
+    return paramMap_.begin();
+  }
+  iterator end() const {
+    return paramMap_.end();
+  }
+ private:
+  std::map<std::string, ParamValue> paramMap_;
+};
 
 class PedestrianPluginManager {
  public:
@@ -40,20 +85,24 @@ class PedestrianPluginManager {
   }  
   PedestrianPluginManager();
   ~PedestrianPluginManager();
-  size_t addActor(sdf::ElementPtr sdf);
+  size_t addPlugin(std::string name, PedestrianPlugin *plugin);
+  void removePlugin(std::string name);
   void publishPeopleIfReady();
   void addPersonMessage(people_msgs::msg::Person person);
   rclcpp::Logger get_logger();
 
-  std::mutex mtx;
+  std::recursive_mutex mtx;
 
  private:
+  void handle_plugin_update(
+      const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
+      std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
+
   gazebo_ros::Node::SharedPtr node_;
-  std::vector<sdf::ElementPtr> actors_;
+  std::map<std::string, PedestrianPlugin*> pluginMap_;
   std::map<std::string, people_msgs::msg::Person> peopleMap_;
   rclcpp::Publisher<people_msgs::msg::People>::SharedPtr people_pub_;
-  
-  
+  rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
 };
 
 }

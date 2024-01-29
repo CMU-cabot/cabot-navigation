@@ -49,27 +49,84 @@ PedestrianPlugin::PedestrianPlugin()
 
 PedestrianPlugin::~PedestrianPlugin()
 {
+  manager.removePlugin(this->name);
 }
 
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 {
   this->sdf = _sdf;
   this->actor = boost::dynamic_pointer_cast<physics::Actor>(_model);
+  this->name = this->actor->GetName();
   this->world = this->actor->GetWorld();
 
   this->connections.push_back(event::Events::ConnectWorldUpdateBegin(
     std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
-  actor_id = manager.addActor(_sdf);
+  actor_id = manager.addPlugin(this->name, this);
   RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
 
+  PedestrianPluginParams temp_params;
+  sdf::ElementPtr child = this->sdf->GetFirstElement();
+  while (child) {
+    std::string key = child->GetName();
+    std::string type = "str";
+    sdf::ParamPtr typeAttr = child->GetAttribute("type");
+    if (typeAttr) {
+      type = typeAttr->GetAsString();
+    }
+    std::string value = child->Get<std::string>();
+    RCLCPP_INFO(manager.get_logger(), "plugin param %s (type=%s) value=%s",
+      key.c_str(), type.c_str(), value.c_str());
+
+    if (key == "robot") {
+      if (value != "") {
+        robotModel = this->world->ModelByName(value);
+      }
+    } else {
+      temp_params.addParam(key, type, value);
+    }
+    child = child->GetNextElement();
+  }
+  update_parameters(temp_params);
   this->Reset();
 }
 
+void PedestrianPlugin::apply_parameters() {
+  RCLCPP_INFO(manager.get_logger(), "apply_parameters");
+  needs_to_apply_params = false;
+
+  for (const auto &it : plugin_params) {
+    RCLCPP_INFO(manager.get_logger(), "param %s", it.first.c_str());
+    if (it.first == "module") {
+      this->module_name = it.second.get<std::string>();
+      RCLCPP_INFO(manager.get_logger(), "module name is %s", this->module_name.c_str());
+      global_python_loader->reset();
+      global_python_loader->loadModule(this->module_name);
+    }
+    if (it.first == "init_x") {
+      this->x = it.second.get<double>();
+    }
+    if (it.first == "init_y") {
+      this->y = it.second.get<double>();
+    }
+    if (it.first == "init_z") {
+      this->z = it.second.get<double>();
+    }
+    if (it.first == "init_a") {
+      this->yaw = it.second.get<double>() /180.0 * M_PI;
+    }
+  }
+}
+
+void PedestrianPlugin::update_parameters(PedestrianPluginParams params) {
+  std::lock_guard<std::recursive_mutex> guard(manager.mtx);
+  plugin_params = params;
+  needs_to_apply_params = true;
+}
 
 void PedestrianPlugin::Reset()
 {
-  std::lock_guard<std::mutex> guard(manager.mtx);
+  std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   RCLCPP_INFO(manager.get_logger(), "Reset");
 
   auto skelAnims = this->actor->SkeletonAnimations();
@@ -84,50 +141,6 @@ void PedestrianPlugin::Reset()
     this->actor->SetCustomTrajectory(this->trajectoryInfo);
   }
 
-  // reset python context
-  this->plugin_params.clear();
-  if (global_python_loader->canReset()) {
-    RCLCPP_INFO(manager.get_logger(), "global_python_loader reset");
-    global_python_loader->reset();
-    PyImport_AppendInittab("ros", &PyInit_ros);
-  }
-  Py_Initialize();
-
-  // load python modulde and parse plugin parameters as python object
-  sdf::ElementPtr child = this->sdf->GetFirstElement();
-  while (child) {
-    std::string key = child->GetName();
-    if (key == "module") {
-      this->module_name = child->Get<std::string>();
-      RCLCPP_INFO(manager.get_logger(), "module name is %s", this->module_name.c_str());
-      global_python_loader->loadModule(this->module_name);
-      child = child->GetNextElement();
-      continue;
-    }
-    if (key == "robot") {
-      auto robot_name = child->Get<std::string>();
-      if (robot_name != "") {
-        RCLCPP_INFO(manager.get_logger(), "robot name is %s", robot_name.c_str());
-        robotModel = this->world->ModelByName(robot_name);
-      }
-      child = child->GetNextElement();
-      continue;
-    }
-
-    sdf::ParamPtr typeAttr = child->GetAttribute("type");
-    if (!typeAttr) {
-      RCLCPP_ERROR(manager.get_logger(), "%s' type is not specified", key.c_str());
-      child = child->GetNextElement();
-      continue;
-    }
-    std::string type = typeAttr->GetAsString();
-    std::string value = child->Get<std::string>();
-    RCLCPP_INFO(manager.get_logger(), "plugin param %s (type=%s) value=%s",
-      key.c_str(), type.c_str(), value.c_str());
-    this->plugin_params[key] = child;
-    child = child->GetNextElement();
-  }
-
   auto pose = this->actor->WorldPose();
   auto rpy = pose.Rot().Euler();
   this->x = pose.Pos().X();
@@ -137,15 +150,21 @@ void PedestrianPlugin::Reset()
   this->pitch = rpy.Y();
   this->yaw = rpy.Z();
   this->dist = 0;
+
+  apply_parameters();
 }
 
 
 
 void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
 {
-  std::lock_guard<std::mutex> guard(manager.mtx);
+  std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   IGN_PROFILE("PedestrianPlugin::Update");
   IGN_PROFILE_BEGIN("Update");
+
+  if (needs_to_apply_params) {
+    apply_parameters();
+  }
 
   auto dt = (_info.simTime - this->lastUpdate).Double();
   if (dt > 1 || dt < 0) {  // reset, initialize
@@ -188,21 +207,8 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
 
     // add parameter to the arguments
     for (const auto& pair : this->plugin_params) {
-      auto child = pair.second;
-      sdf::ParamPtr typeAttr = child->GetAttribute("type");
-      std::string type = typeAttr->GetAsString();
-      PyObject* temp;
-      if (type == "str") {
-        temp = PyUnicode_FromString(child->Get<std::string>().c_str());
-      } else if (type == "int") {
-        temp = PyLong_FromLong(child->Get<int>());
-      } else if (type == "float") {
-        temp = PyFloat_FromDouble(child->Get<double>());
-      } else if (type == "bool") {
-        temp = child->Get<bool>() ? Py_True : Py_False;
-      } else {
-        RCLCPP_ERROR(manager.get_logger(), "Unsupported type: %s", type.c_str());
-      }
+      auto value = pair.second;
+      PyObject *temp = value.python_object();
       PyDict_SetItemString(pDict, pair.first.c_str(), temp);
       Py_DECREF(temp);
     }

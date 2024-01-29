@@ -1,0 +1,3 @@
+Plugin[] plugins
+---
+string message
