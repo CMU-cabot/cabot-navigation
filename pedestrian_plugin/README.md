@@ -48,7 +48,11 @@
 ## Python module
 
 - You can change actor position by implementing onUpdate function of the specified module.
-- `pedestrian` module is provided as an example in this package.
+- Example modules are provided in this package.
+  - `walk_straight` : walks straight and stops if the robot gets closer
+  - `walk_across` : walks straight and does not stop, starts when the robot starts
+  - `walk_sfm` : walks based on Social Force Model by using [PySocialForce](https://github.com/yuxiang-gao/PySocialForce)
+  - `pool` : stay at the initial pose
 - Make sure your specified module is in the pythone path.
 - The simplest module is the following
 
@@ -79,6 +83,7 @@ __all__ = ['onUpdate']
 
 `ros` module is provided by the plugin code (not from your ROS environment)
 - `ros.info(message: str)`  : RCLCPP_INFO will be used to print the `message`
+- `ros.collision(name_of_actor: str, distance_to_robot: float)` : publish collision message (`pedestrian_plugin_msgs/msg/Collision``)
 
 ## `/people` topic
 
