@@ -32,6 +32,7 @@ function help()
     echo "Usage:"
     echo "-h          show this help"
     echo "-w          wait ready"
+    echo "-d          debug print"
 }
 
 blue "Start runnint tests"
@@ -42,8 +43,9 @@ cd $scriptdir
 scriptdir=`pwd`
 
 wait_ready_option=
+debug=
 
-while getopts "hw" arg; do
+while getopts "hwd" arg; do
     case $arg in
         h)
             help
@@ -52,6 +54,8 @@ while getopts "hw" arg; do
         w)
             wait_ready_option="-w"
             ;;
+	d)
+	    debug="-d"
     esac
 done
 shift $((OPTIND-1))
@@ -66,7 +70,8 @@ blue "testing with $CABOT_SITE"
 
 source $scriptdir/../install/setup.bash
 
-ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option
+echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
+ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
 result=$?
 
 echo "Test has completed"

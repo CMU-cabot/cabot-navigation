@@ -102,6 +102,9 @@ function help()
 {
     echo "Usage:"
     echo "-h          show this help"
+    echo "-d          do not record bag file"
+    echo "-D          debug"
+    echo "-r          record camera image as well"
     echo "-s          simulation mode"
     echo "-p <name>   docker compose's project name"
     echo "-n <name>   set log name prefix"
@@ -115,6 +118,7 @@ function help()
     echo "-t          run test"
     echo "-T <module> run test CABOT_SITE.<module>"
     echo "-f <test>   run test CABOT_SITE.<module>.<test>"
+    echo "-H          headless"
 }
 
 
@@ -310,7 +314,6 @@ dcfile=
 dcfile=docker-compose
 if [ ! -z $config_name ]; then dcfile="${dcfile}-$config_name"; fi
 if [ $simulation -eq 0 ]; then dcfile="${dcfile}-production"; fi
-if [ $debug -eq 1 ]; then dcfile=docker-compose-debug; fi            # only basic debug
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
@@ -377,7 +380,11 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test"
-    docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
+    if [[ $debug -eq 1 ]]; then
+	docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func  # debug
+    else
+	docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
+    fi
     pids+=($!)
     runtest_pid=$!
     snore 3

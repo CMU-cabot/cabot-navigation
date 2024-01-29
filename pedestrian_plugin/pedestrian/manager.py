@@ -30,13 +30,6 @@ from pedestrian_plugin_msgs.msg import Plugin
 from pedestrian_plugin_msgs.msg import PluginParam
 from pedestrian_plugin_msgs.srv import PluginUpdate
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='[PedestrianManager] %(asctime)s.%(msecs)03d [%(levelname)s]: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-)
-
-
 def identify_variable_type(variable):
     variable_type = type(variable)
     if variable_type == int:
@@ -63,13 +56,13 @@ class PedestrianManager():
         self.futures = {}
 
     def check_service(self):
-        logging.info("check_service")
+        logging.debug("check_service")
         if self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=0.5):
-            logging.info("service available")
+            logging.debug("service available")
             self.serviceReady = True
             self.timer.cancel()
 
-    def init(self, callback=None):
+    def init(self, callback=None):        
         if self.serviceReady:
             self._update(actors=[], callback=callback)
         else:
@@ -85,18 +78,18 @@ class PedestrianManager():
 
     def update(self, actors=None, callback=None):
         if actors is None:
-            logging.info("needs to specify actors")
+            logging.debug("needs to specify actors")
             return
         update_actors = []
         self.task_count = 0
 
         def complete(future):
             self.task_count -= 1
-            logging.info(f"remaining task = {self.task_count}")
+            logging.debug(f"remaining task = {self.task_count}")
             if self.task_count > 0:
                 return
             def complete2(future):
-                logging.info(f"done complete2 {future.result()}")
+                logging.debug(f"done complete2 {future.result()}")
                 if callback:
                     callback(future)
             if len(update_actors) > 0:
@@ -109,7 +102,7 @@ class PedestrianManager():
             alreadyAdded = {}
             for actor in actors:
                 if 'name' not in actor:
-                    logging.info("needs to specify actor name")
+                    logging.debug("needs to specify actor name")
                     continue
                 alreadyAdded[actor['name']] = True
                 if actor['name'] in self.actorMap:
@@ -133,7 +126,7 @@ class PedestrianManager():
                     pcount += 1
         if self.task_count == 0:
             def complete1(future):
-                logging.info(f"done complete1 {future.result()}")
+                logging.debug(f"done complete1 {future.result()}")
                 if callback:
                     callback(future)
             self._update(actors=update_actors, callback=complete1)
@@ -171,7 +164,7 @@ class PedestrianManager():
     </actor>
 </sdf>
 """
-        logging.info(actor_xml)
+        logging.debug(actor_xml)
         request = SpawnEntity.Request()
         request.name = name
         request.xml = actor_xml
@@ -204,13 +197,13 @@ class PedestrianManager():
                     msg.params.append(pMsg)
             request.plugins.append(msg)
 
-        logging.info(f"calling pedestrian_plugin_update {request}")
+        logging.debug(f"calling pedestrian_plugin_update {request}")
         future = self.pedestrian_plugin_update_client.call_async(request)
         self.futures[uuid.uuid4()] = future
 
         def done_callback(future):
             result = future.result()
-            logging.info(f"pedestrian_plugin_update service done: {result}")
+            logging.debug(f"pedestrian_plugin_update service done: {result}")
             for name in result.plugin_names:
                 if name not in self.actorMap:
                     self.actorMap[name] = {"name": name}

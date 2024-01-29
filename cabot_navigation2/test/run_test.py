@@ -46,12 +46,6 @@ from gazebo_msgs.srv import SetEntityState
 
 from pedestrian.manager import PedestrianManager
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s.%(msecs)03d [%(levelname)s]: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-)
-
 
 def import_class(input_str):
     # Split the input string and form module and class strings
@@ -65,17 +59,22 @@ def import_class(input_str):
 # global
 node = None
 manager = None
+logger = None
+
 
 # decorator of test actions
 def wait_test(timeout=60):
     def outer_wrap(function):
         def wrap(*args, **kwargs):
+            tester = args[0]
+
             t = kwargs['seconds'] if 'seconds' in kwargs else timeout
             t = kwargs['timeout'] if 'timeout' in kwargs else t
-            case = {'done': False}
+            action_name = function.__name__
+            case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': False, 'error': None}
             test_action = {'uuid': str(uuid.uuid4())}
 
-            # logging.info(f"calling {function} {case} {test_action} - {args} {kwargs}")
+            # logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
             args = args + (case,)
             test_action.update(kwargs)
             function(*args, test_action)
@@ -83,8 +82,13 @@ def wait_test(timeout=60):
             while not case['done'] and time.time() - start < t:
                 rclpy.spin_once(node, timeout_sec=1)
             if not case['done']:
-                logging.error("Timeout")
-                sys.exit(1)
+                case['success'] = False
+                case['error'] = "Timeout"
+                # logger.error("Timeout")
+                # continue other test
+            else:
+                case['success'] = True
+            tester.register_action_result(case['target'], case)
         return wrap
     return outer_wrap
 
@@ -102,6 +106,8 @@ class Tester:
         self.restart_localization_client = self.node.create_client(RestartLocalization, '/restart_localization')
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
+        self.test_func_name = None
+        self.result = {}
 
     def test(self, module, specific_test, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -113,21 +119,50 @@ class Tester:
                 functions.remove(func)
                 continue
             if func in functions:
-                logging.info(f"Calling {func}")
+                logger.debug(f"Calling {func}")
+                self.test_func_name = func
                 getattr(module, func)(self)
                 functions.remove(func)
 
         if specific_test and specific_test in functions:
-            logging.info(f"Testing {specific_test}")
+            logger.debug(f"Testing {specific_test}")
+            self.test_func_name = specific_test
             getattr(module, specific_test)(self)
-            sys.exit(0)
+        else:
+            for func in sorted(functions):
+                if func.startswith("_"):
+                    continue
+                logger.debug(f"Testing {func}")
+                self.test_func_name = func
+                getattr(module, func)(self)
 
-        for func in sorted(functions):
-            if func.startswith("_"):
-                continue
-            logging.info(f"Testing {func}")
-            getattr(module, func)(self)
+        logger.debug("Done all test")
+
+        for key in sorted(self.result.keys()):
+            tfResult = self.result[key]
+            success = True
+            for aResult in tfResult:
+                success = success and aResult['success']
+            if success:
+                logger.info(f"{key}: Success")
+            else:
+                logger.error(f"{key}: Failure")
+            for aResult in tfResult:
+                success = aResult['success']
+                action = aResult['action']
+                if success:
+                    logger.info(f" - {action}: Success")
+                else:
+                    logger.error(f" - {action}: Failure")
+                    logger.error(f"{aResult['error']}")
+            logger.info("--------------------------")
+
         sys.exit(0)
+
+    def register_action_result(self, target_function_name, case):
+        if target_function_name not in self.result:
+            self.result[target_function_name] = []
+        self.result[target_function_name].append(case)
 
     def default_config(self):
         self.config = {
@@ -138,19 +173,19 @@ class Tester:
         }
 
     def info(self, text):
-        logging.info(text)
+        logger.info(text)
 
     @wait_test()
     def init_manager(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         def done_callback(future):
-            logging.info(future.result())
+            logger.debug(future.result())
             case['done'] = True
         manager.init(callback=done_callback)
 
     @wait_test(1)
     def check_topic_error(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
@@ -162,12 +197,13 @@ class Tester:
                 context = {'msg': msg}
                 exec(f"result=({condition})", context)
                 if context['result']:
-                    logging.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
-                    self.alive = False
+                    logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
+                    case['success'] = False
+                    case['error'] = f"condition {condition} matched\n{msg}"
                     sub = self.subscriptions[uuid]
                     self.node.destroy_subscription(sub)
             except:
-                logging.error(traceback.format_exc())
+                logger.error(traceback.format_exc())
 
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.subscriptions[uuid] = sub
@@ -175,7 +211,7 @@ class Tester:
 
     @wait_test()
     def wait_ready(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         uuid = test_action['uuid']
         topic = '/cabot/activity_log'
         topic_type = import_class('cabot_msgs/msg/Log')
@@ -190,13 +226,13 @@ class Tester:
                     sub = self.subscriptions[uuid]
                     self.node.destroy_subscription(sub)
             except:
-                logging.error(traceback.format_exc())
+                logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.subscriptions[uuid] = sub
 
     @wait_test()
     def reset_position(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         uuid = test_action['uuid']
         topic = '/localize_status'
         topic_type = import_class('mf_localization_msgs/msg/MFLocalizeStatus')
@@ -239,7 +275,7 @@ class Tester:
                             self.node.destroy_subscription(sub)
                             time.sleep(2)
                     except:
-                        logging.error(traceback.format_exc())
+                        logger.error(traceback.format_exc())
                 sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
                 self.subscriptions[uuid] = sub
 
@@ -261,9 +297,9 @@ class Tester:
 
     @wait_test()
     def setup_actors(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         def done_callback(future):
-            logging.info(future.result())
+            logger.debug(future.result())
             case['done'] = True
         manager.update(
             actors=test_action['actors'],
@@ -271,7 +307,7 @@ class Tester:
 
     @wait_test()
     def wait_topic(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
@@ -287,13 +323,13 @@ class Tester:
                     sub = self.subscriptions[uuid]
                     self.node.destroy_subscription(sub)
             except:
-                logging.error(traceback.format_exc())
+                logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.subscriptions[uuid] = sub
 
     @wait_test()
     def pub_topic(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
@@ -310,7 +346,7 @@ class Tester:
 
     @wait_test()
     def wait(self, case, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         seconds = test_action['seconds']
         uuid = test_action['uuid']
 
@@ -324,12 +360,38 @@ class Tester:
         self.timers[uuid] = timer
 
     def terminate(self, test_action):
-        logging.info(f"{callee_name()} {test_action}")
+        logger.debug(f"{callee_name()} {test_action}")
         sys.exit(0)
 
 
+class LogColors:
+    DEBUG = '\033[94m'  # Blue
+    INFO = '\033[92m'   # Green
+    WARNING = '\033[93m' # Yellow
+    ERROR = '\033[91m'   # Red
+    CRITICAL = '\033[1;91m'  # Bold Red
+    RESET = '\033[0m'   # Reset
+
+# Custom formatter
+class ColorFormatter(logging.Formatter):
+    format = "%(asctime)s.%(msecs)03d %(levelname)s: %(message)s"# (%(filename)s:%(lineno)d)"
+
+    FORMATS = {
+        logging.DEBUG: LogColors.DEBUG + format + LogColors.RESET,
+        logging.INFO: LogColors.INFO + format + LogColors.RESET,
+        logging.WARNING: LogColors.WARNING + format + LogColors.RESET,
+        logging.ERROR: LogColors.ERROR + format + LogColors.RESET,
+        logging.CRITICAL: LogColors.CRITICAL + format + LogColors.RESET
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
+
 def main():
-    global node, manager
+    global node, manager, logger
     parser = OptionParser(usage="""
     Example
     {0} -m <module name>    # run test module
@@ -339,12 +401,19 @@ def main():
     parser.add_option('-m', '--module', type=str, help='test module name')
     parser.add_option('-f', '--func', type=str, help='test func name')
     parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
+    parser.add_option('-d', '--debug', action='store_true', help='debug print')
 
     (options, args) = parser.parse_args()
 
     if not options.module:
         parser.print_help()
         sys.exit(0)
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorFormatter())
+    logger.addHandler(handler)
 
     rclpy.init()
     node = rclpy.node.Node("test_node")
