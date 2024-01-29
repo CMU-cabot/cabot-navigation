@@ -128,6 +128,7 @@ class Tester:
             logger.debug(f"Testing {specific_test}")
             self.test_func_name = specific_test
             getattr(module, specific_test)(self)
+            self.cancel_subscription(specific_test)
         else:
             for func in sorted(functions):
                 if func.startswith("_"):
@@ -135,6 +136,7 @@ class Tester:
                 logger.debug(f"Testing {func}")
                 self.test_func_name = func
                 getattr(module, func)(self)
+                self.cancel_subscription(func)
 
         logger.debug("Done all test")
 
@@ -163,6 +165,17 @@ class Tester:
         if target_function_name not in self.result:
             self.result[target_function_name] = []
         self.result[target_function_name].append(case)
+
+    def add_subscription(self, target, sub):
+        if target not in self.subscriptions:
+            self.subscriptions[target] = []
+        self.subscriptions[target].append(sub)
+
+    def cancel_subscription(self, target):
+        if target in self.subscriptions:
+            for sub in self.subscriptions[target]:
+                self.node.destroy_subscription(sub)
+            del self.subscriptions[target]
 
     def default_config(self):
         self.config = {
@@ -200,14 +213,20 @@ class Tester:
                     logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
                     case['success'] = False
                     case['error'] = f"condition {condition} matched\n{msg}"
-                    sub = self.subscriptions[uuid]
-                    self.node.destroy_subscription(sub)
+                    self.cancel_subscription(case['target'])
             except:
                 logger.error(traceback.format_exc())
 
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.subscriptions[uuid] = sub
+        self.add_subscription(case['target'], sub)
         case['done'] = True
+
+    def check_collision(self):
+        return self.check_topic_error(
+            topic="/collision",
+            topic_type="pedestrian_plugin_msgs/msg/Collision",
+            condition="True"
+        )
 
     @wait_test()
     def wait_ready(self, case, test_action):

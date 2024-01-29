@@ -42,6 +42,11 @@ func test_name(tester: Tester)
     - `topic` : topic name
     - `topic_type` : topic type
     - `condition` : pyton snipet to check if the `msg` matches the condition
+- `check_collision`
+    - alias to to `check_topic_error` with
+      - `topic=/collision`
+      - `topic_type=pedestrian_plugin_msgs/msg/Collision`
+      - `condition=True`
 - `wait_ready`
     - wait until the system is ready. It is equivalent to the following `wait_topic` action
         ```
