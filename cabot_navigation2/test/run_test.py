@@ -110,6 +110,7 @@ class Tester:
         self.default_config()
         for func in ['config', 'checks', 'wait_ready']:
             if not wait_ready and func == 'wait_ready':
+                functions.remove(func)
                 continue
             if func in functions:
                 logging.info(f"Calling {func}")

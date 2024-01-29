@@ -10,14 +10,22 @@ py=None
 def onUpdate(**args):
     global count, px, py
 
+    name = args['name']
     vel = args['velocity'] if 'velocity' in args else 1.0
     dt = args['dt']
     yaw = args['yaw']
+    threshold = args['collision_threshold'] if 'collision_threshold' in args else 0.5
 
     rx = args['robot']['x']
     ry = args['robot']['y']
     x = args['x']
     y = args['y']
+    dx = rx - x
+    dy = ry - y
+    dist = math.sqrt(dx * dx + dy * dy)
+    if dist < threshold:
+        ros.info(f"collision {name} {dist}")
+        ros.collision(name, dist)
 
     dx = 0
     if px is not None and py is not None:

@@ -26,8 +26,10 @@
 #include <Python.h>
 
 #include <gazebo_ros/node.hpp>
+#include <geometry_msgs/msg/pose.hpp>
 #include <people_msgs/msg/people.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <pedestrian_plugin_msgs/msg/collision.hpp>
 #include <pedestrian_plugin_msgs/srv/plugin_update.hpp>
 
 PyObject* PyInit_ros(void);
@@ -88,8 +90,10 @@ class PedestrianPluginManager {
   size_t addPlugin(std::string name, PedestrianPlugin *plugin);
   void removePlugin(std::string name);
   void publishPeopleIfReady();
-  void addPersonMessage(people_msgs::msg::Person person);
+  void updateRobotPose(geometry_msgs::msg::Pose robot_pose);
+  void updatePersonMessage(std::string name, people_msgs::msg::Person person);
   rclcpp::Logger get_logger();
+  void process_collision(std::string actor_name, double distance);
 
   std::recursive_mutex mtx;
 
@@ -99,9 +103,12 @@ class PedestrianPluginManager {
       std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
 
   gazebo_ros::Node::SharedPtr node_;
+  geometry_msgs::msg::Pose::SharedPtr robot_pose_;
   std::map<std::string, PedestrianPlugin*> pluginMap_;
   std::map<std::string, people_msgs::msg::Person> peopleMap_;
+  std::map<std::string, bool> peopleReadyMap_;
   rclcpp::Publisher<people_msgs::msg::People>::SharedPtr people_pub_;
+  rclcpp::Publisher<pedestrian_plugin_msgs::msg::Collision>::SharedPtr collision_pub_;
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
 };
 

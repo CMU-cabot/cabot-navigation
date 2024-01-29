@@ -20,14 +20,14 @@
  * THE SOFTWARE.
  *******************************************************************************/
 
+#include "pedestrian_plugin/python_utils.hpp"
 #include "pedestrian_plugin/pedestrian_plugin.hpp"
 #include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
 
 using namespace gazebo;
 
 // exporting ros python module
-PyObject* ros_info(PyObject *self, PyObject *args)
-{
+PyObject* ros_info(PyObject* self, PyObject* args) {
   const char* message;
   if (PyArg_ParseTuple(args, "s", &message)) {
     RCLCPP_INFO(PedestrianPluginManager::getInstance().get_logger(), message);
@@ -35,33 +35,33 @@ PyObject* ros_info(PyObject *self, PyObject *args)
   Py_RETURN_NONE;
 }
 
-PyMethodDef RosMethods[] = {
-  {"info", ros_info, METH_VARARGS,
-   "call RCLCPP_INFO"},
-  {NULL, NULL, 0, NULL}
-};
-
-PyModuleDef RosModule = {
-  PyModuleDef_HEAD_INIT, "ros", NULL, -1, RosMethods,
-  NULL, NULL, NULL, NULL
-};
-
-PyObject* PyInit_ros(void)
-{
-  return PyModule_Create(&RosModule);
+PyObject* ros_collision(PyObject* self, PyObject* args) {
+  PyObject* unicode_obj;
+  double distance;
+  if (!PyArg_ParseTuple(args, "Ud", &unicode_obj, &distance)) {
+    RCLCPP_INFO(PedestrianPluginManager::getInstance().get_logger(), "error in parsing tuple");
+    return NULL;
+  }
+  std::string name = PythonUtils::PyUnicodeObject_ToStdString(unicode_obj);
+  PedestrianPluginManager::getInstance().process_collision(name, distance);
+  Py_RETURN_NONE;
 }
+
+PyMethodDef RosMethods[] = {{"info", ros_info, METH_VARARGS, "call RCLCPP_INFO"},
+                            {"collision", ros_collision, METH_VARARGS, "publish collision message"},
+                            {NULL, NULL, 0, NULL}};
+
+PyModuleDef RosModule = {PyModuleDef_HEAD_INIT, "ros", NULL, -1, RosMethods, NULL, NULL, NULL, NULL};
+
+PyObject* PyInit_ros(void) { return PyModule_Create(&RosModule); }
 
 ParamValue::ParamValue() : value_(std::monostate{}) {}
 
 ParamValue::ParamValue(ValueType value) : value_(std::move(value)) {}
 
-bool ParamValue::isNull() const {
-    return std::holds_alternative<std::monostate>(value_);
-}
+bool ParamValue::isNull() const { return std::holds_alternative<std::monostate>(value_); }
 
-ParamValue ParamValue::null() {
-  return ParamValue();
-}
+ParamValue ParamValue::null() { return ParamValue(); }
 
 ParamValue ParamValue::create(const std::string& type, const std::string& value) {
   if (type == "int") {
@@ -77,7 +77,7 @@ ParamValue ParamValue::create(const std::string& type, const std::string& value)
 
 PyObject* ParamValue::python_object() {
   const auto& val = get<ParamValue::ValueType>();
-  
+
   if (std::holds_alternative<int>(val)) {
     return PyLong_FromLong(std::get<int>(val));
   } else if (std::holds_alternative<double>(val)) {
@@ -103,72 +103,94 @@ ParamValue PedestrianPluginParams::getParam(std::string name) {
   return ParamValue::null();
 }
 
-PedestrianPluginManager::PedestrianPluginManager()
-    : node_(gazebo_ros::Node::Get())
-{
+PedestrianPluginManager::PedestrianPluginManager() : node_(gazebo_ros::Node::Get()) {
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
+  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
       "/pedestrian_plugin_update",
       std::bind(&PedestrianPluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
 }
 
-PedestrianPluginManager::~PedestrianPluginManager() {
-}
+PedestrianPluginManager::~PedestrianPluginManager() {}
 
-size_t PedestrianPluginManager::addPlugin(std::string name, PedestrianPlugin *plugin) {
+size_t PedestrianPluginManager::addPlugin(std::string name, PedestrianPlugin* plugin) {
   pluginMap_.insert({name, plugin});
   return pluginMap_.size();
 }
 
-void PedestrianPluginManager::removePlugin(std::string name) {
-  pluginMap_.erase(name);
-}
+void PedestrianPluginManager::removePlugin(std::string name) { pluginMap_.erase(name); }
 
 void PedestrianPluginManager::publishPeopleIfReady() {
-  if (peopleMap_.size() == pluginMap_.size()) {
+  if (peopleReadyMap_.size() == pluginMap_.size()) {
     people_msgs::msg::People msg;
     for (auto it : peopleMap_) {
       msg.people.push_back(it.second);
     }
-    msg.header.frame_id="map_global";
+    msg.header.frame_id = "map_global";
     people_pub_->publish(msg);
-    peopleMap_.clear();
+    peopleReadyMap_.clear();
   }
 }
 
-void PedestrianPluginManager::addPersonMessage(people_msgs::msg::Person person) {
-  peopleMap_.insert({person.name, person});
+void PedestrianPluginManager::updateRobotPose(geometry_msgs::msg::Pose robot_pose) {
+  if (robot_pose_ == nullptr) {
+    robot_pose_ = std::make_shared<geometry_msgs::msg::Pose>();
+  }
+  robot_pose_->position = robot_pose.position;
+  robot_pose_->orientation = robot_pose.orientation;
 }
 
-rclcpp::Logger PedestrianPluginManager::get_logger() {
-  return node_->get_logger();
+void PedestrianPluginManager::updatePersonMessage(std::string name, people_msgs::msg::Person person) {
+  peopleMap_.insert_or_assign(name, person);
+  peopleReadyMap_.insert({name, true});
 }
 
+rclcpp::Logger PedestrianPluginManager::get_logger() { return node_->get_logger(); }
+
+void PedestrianPluginManager::process_collision(std::string actor_name, double distance) {
+  if (robot_pose_ == nullptr) {
+    RCLCPP_ERROR(get_logger(), "no robot_pose");
+    return;
+  }
+  auto it = peopleMap_.find(actor_name);
+  if (it == peopleMap_.end()) {
+    RCLCPP_ERROR(get_logger(), "cannot find person msg for %s", actor_name.c_str());
+    return;
+  }
+  people_msgs::msg::Person collided_person = it->second;
+  pedestrian_plugin_msgs::msg::Collision msg;
+  msg.robot_pose = *robot_pose_;
+  msg.collided_person = collided_person;
+  msg.distance = distance;
+  collision_pub_->publish(msg);
+}
+
+// Private methods
 
 void PedestrianPluginManager::handle_plugin_update(
     const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response) {
   RCLCPP_INFO(get_logger(), "pedestrian plugin update service is called");
-  for (const pedestrian_plugin_msgs::msg::Plugin & update : request->plugins) {
+  for (const pedestrian_plugin_msgs::msg::Plugin& update : request->plugins) {
     std::string name = update.name;
     auto it = pluginMap_.find(name);
     if (it == pluginMap_.end()) {
       RCLCPP_ERROR(get_logger(), "could not find actor(%s)'s plugin", name.c_str());
       continue;
     }
-    PedestrianPlugin *plugin = it->second;
+    PedestrianPlugin* plugin = it->second;
 
     std::string module = update.module;
     PedestrianPluginParams update_params;
     update_params.addParam("module", "str", module);
-    for (const pedestrian_plugin_msgs::msg::PluginParam &param : update.params) {
+    for (const pedestrian_plugin_msgs::msg::PluginParam& param : update.params) {
       update_params.addParam(param.name, param.type, param.value);
     }
-    
+
     RCLCPP_INFO(get_logger(), "update parameters %s", name.c_str());
     plugin->update_parameters(update_params);
   }
-  for (const auto & it : pluginMap_) {
+  for (const auto& it : pluginMap_) {
     response->plugin_names.push_back(it.first);
   }
   response->message = "Plugin Updated";

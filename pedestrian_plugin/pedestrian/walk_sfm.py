@@ -27,6 +27,18 @@ def onUpdate(**args):
     dt = args['dt']
     name = args['name']
     robot = args['robot'] if 'robot' in args else None
+    collision_threshold = args['collision_threshold'] if 'collision_threshold' in args else 0.5
+
+    if robot:
+        rx = robot['x']
+        ry = robot['z']
+        x = args['x']
+        y = args['y']
+        dx = rx - x
+        dy = ry - y
+        dist = math.sqrt(dx * dx + dy * dy)
+        if dist < collision_threshold:
+            ros.collision(name, dist)
 
     # here will be executed for all actors
     # but wait until all actors state is available

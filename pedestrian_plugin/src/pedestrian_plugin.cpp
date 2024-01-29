@@ -187,13 +187,23 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     if (robotModel) {
       PyObject* pRobotPose = PyDict_New();
       ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
-      ignition::math::Vector3d rRpy = robotModel->WorldPose().Rot().Euler();
+      ignition::math::Quaterniond rRot = robotModel->WorldPose().Rot();
+      ignition::math::Vector3d rRpy = rRot.Euler();
       PythonUtils::setDictItemAsFloat(pRobotPose, "x", rPos.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "y", rPos.Y());
       PythonUtils::setDictItemAsFloat(pRobotPose, "z", rPos.Z());
       PythonUtils::setDictItemAsFloat(pRobotPose, "roll", rRpy.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.X());
+      geometry_msgs::msg::Pose robot_pose;
+      robot_pose.position.x = rPos.X();
+      robot_pose.position.y = rPos.Y();
+      robot_pose.position.z = rPos.Z();
+      robot_pose.orientation.x = rRot.X();
+      robot_pose.orientation.y = rRot.Y();
+      robot_pose.orientation.z = rRot.Z();
+      robot_pose.orientation.w = rRot.W();
+      manager.updateRobotPose(robot_pose);
       PyDict_SetItemString(pDict, "robot", pRobotPose);
       Py_DECREF(pRobotPose);
     }
@@ -262,7 +272,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       if (dd / dt < 0.1) {
         person.tags.push_back("stationary");
       }
-      manager.addPersonMessage(person);
+      manager.updatePersonMessage(this->actor->GetName(), person);
 
       Py_DECREF(pRet);
     } else {

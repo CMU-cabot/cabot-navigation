@@ -51,6 +51,28 @@ public:
     return d;
   }
 
+  // Utility function to convert Python Unicode object to std::string (UTF-8)
+  static std::string PyUnicodeObject_ToStdString(PyObject *unicodeObj) {
+    if (!unicodeObj || !PyUnicode_Check(unicodeObj)) {
+      throw std::runtime_error("Provided object is not a Unicode string");
+    }
+
+    PyObject *tempBytes = PyUnicode_AsEncodedString(unicodeObj, "utf-8", "strict");
+    if (!tempBytes) {
+      throw std::runtime_error("Encoding to UTF-8 failed");
+    }
+
+    const char *utf8String = PyBytes_AsString(tempBytes);
+    if (!utf8String) {
+      Py_DECREF(tempBytes);
+      throw std::runtime_error("Error converting to C string");
+    }
+
+    std::string result(utf8String);
+    Py_DECREF(tempBytes);
+    return result;
+  }
+
   // debug function
   static void print_pyobject(PyObject *obj, rclcpp::Logger logger)
   {

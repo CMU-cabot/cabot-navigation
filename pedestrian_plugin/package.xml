@@ -30,6 +30,9 @@ THE SOFTWARE. -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>gazebo_ros</depend>
+  <depend>geometry_msgs</depend>
+  <depend>people_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>pedestrian_plugin_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
