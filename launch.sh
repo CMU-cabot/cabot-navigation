@@ -102,6 +102,9 @@ function help()
 {
     echo "Usage:"
     echo "-h          show this help"
+    echo "-d          do not record bag file"
+    echo "-D          debug"
+    echo "-r          record camera image as well"
     echo "-s          simulation mode"
     echo "-p <name>   docker compose's project name"
     echo "-n <name>   set log name prefix"
@@ -113,6 +116,9 @@ function help()
     echo "-S          record screen cast"
     echo "-y          do not confirm"
     echo "-t          run test"
+    echo "-T <module> run test CABOT_SITE.<module>"
+    echo "-f <test>   run test CABOT_SITE.<module>.<test>"
+    echo "-H          headless"
 }
 
 
@@ -130,6 +136,8 @@ log_dmesg=0
 screen_recording=0
 yes=0
 run_test=0
+module=tests
+test_func=
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -150,7 +158,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsdrp:n:vc:3DMSytH" arg; do
+while getopts "hsdrp:n:vc:3DMSytHT:f:" arg; do
     case $arg in
         s)
             simulation=1
@@ -194,6 +202,12 @@ while getopts "hsdrp:n:vc:3DMSytH" arg; do
 	    ;;
 	t)
 	    run_test=1
+	    ;;
+	T)
+        module=$OPTARG
+	    ;;
+	f)
+	    test_func=$OPTARG
 	    ;;
 	H)
 	    export CABOT_HEADLESS=1
@@ -255,8 +269,9 @@ if [ $error -eq 1 ]; then
    exit 1
 fi
 
-cabot_site_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE)
-if [ -e $cabot_site_dir/server_data ]; then
+cabot_site_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE | head -1)
+if [[ -e $cabot_site_dir/server_data ]]; then
+    blue "found $CABOT_SITE/server_data"
     local_map_server=1
 fi
 
@@ -299,7 +314,6 @@ dcfile=
 dcfile=docker-compose
 if [ ! -z $config_name ]; then dcfile="${dcfile}-$config_name"; fi
 if [ $simulation -eq 0 ]; then dcfile="${dcfile}-production"; fi
-if [ $debug -eq 1 ]; then dcfile=docker-compose-debug; fi            # only basic debug
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
@@ -366,7 +380,11 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test"
-    docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh
+    if [[ $debug -eq 1 ]]; then
+	docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func  # debug
+    else
+	docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
+    fi
     pids+=($!)
     runtest_pid=$!
     snore 3

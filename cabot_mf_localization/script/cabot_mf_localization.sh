@@ -295,17 +295,20 @@ if [ $show_rviz -eq 1 ]; then
 fi
 
 if [ $cart_mapping -eq 1 ]; then
+    if [[ $gazebo -eq 0 ]]; then
+        imu_topic=/imu/data
+    fi
     cmd="$command ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
           run_cartographer:=${RUN_CARTOGRAPHER:-true} \
           record_wireless:=true \
           save_samples:=true \
           record_required:=true \
-          record_camera:=false \
+          record_points:=$gazebo_bool \
           use_xsens:=${USE_XSENS:-true} \
           use_arduino:=${USE_ARDUINO:-false} \
           use_esp32:=${USE_ESP32:-false} \
           use_velodyne:=${USE_VELODYNE:-true} \
-          imu_topic:=/imu/data \
+          imu_topic:=${imu_topic} \
           robot:=$robot_desc \
           use_sim_time:=$gazebo_bool \
           bag_filename:=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S` $commandpost"

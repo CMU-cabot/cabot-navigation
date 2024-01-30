@@ -1,4 +1,4 @@
-# Copyright (c) 2021  IBM Corporation
+# Copyright (c) 2024  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,28 +18,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import setuptools
-
-try:
-    with open("README.md", "r", encoding="utf-8") as fh:
-        long_description = fh.read()
-except:
-    long_description = ""
-
-setuptools.setup(
-    name="queue_utils_py",
-    version="1.0.0",
-    author="Tatsuya Ishihara",
-    author_email="tisihara@jp.ibm.com",
-    description="queue utility package",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="https://github.com/CMU-cabot/cabot",
-    packages=setuptools.find_packages(),
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
-    python_requires='>=3.6',
-)
+string name
+string type
+string value
