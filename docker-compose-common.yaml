@@ -58,6 +58,7 @@ services:
       - ./cabot:/home/developer/ros2_ws/src/cabot
       - ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
       - ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
+      - ./cabot_diagnostics:/home/developer/ros2_ws/src/cabot_diagnostics
       - ./cabot_gazebo:/home/developer/ros2_ws/src/cabot_gazebo
       - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
       - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
