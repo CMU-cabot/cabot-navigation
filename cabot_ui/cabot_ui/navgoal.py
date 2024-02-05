@@ -290,6 +290,72 @@ def make_goals(delegate, groute, anchor, yaw=None):
     return goals
 
 
+def create_ros_path(navcog_route, anchor, global_map_name):
+    """convert a NavCog path to ROS path"""
+
+    # convert route to points
+    points = []
+    CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
+    last_index = len(navcog_route)-1
+
+    def convert(g, a=anchor):
+        return geoutil.global2local(g, a)
+
+    for (index, item) in enumerate(navcog_route):
+        if index == 0 and isinstance(item.geometry, geojson.LineString):
+            # if the first item is link, add the source node
+            points.append(convert(item.source_node.geometry))
+        elif index == last_index:
+            # if last item is Point (Node), it would be same as the previous link target node
+            if isinstance(item.geometry, geojson.Point):
+                continue
+        else:
+            # if the link is a left of the graph and short
+            if isinstance(item, geojson.RouteLink):
+                if item.is_leaf and item.length < 3.0:
+                    continue
+
+        if isinstance(item.geometry, geojson.Point):
+            points.append(convert(item.geometry))
+        elif isinstance(item.geometry, geojson.LineString):
+            points.append(convert(item.target_node.geometry))
+        else:
+            CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
+        CaBotRclpyUtil.info(F"{index}: {str(points[-1])}")
+
+    # make a path from points
+    path = nav_msgs.msg.Path()
+    path.header.frame_id = global_map_name
+    path.poses = []
+    quat = None
+    pori = None
+    for i in range(0, len(points)):
+        start = points[i]
+        pose = geometry_msgs.msg.PoseStamped()
+        pose.header.frame_id = global_map_name
+        pose.pose = geometry_msgs.msg.Pose()
+        pose.pose.position.x = start.x
+        pose.pose.position.y = start.y
+        pose.pose.position.z = 0.0
+        if i+1 < len(points):
+            end = points[i+1]
+            direction = math.atan2(end.y - start.y, end.x - start.x)
+            quat = tf_transformations.quaternion_from_euler(0, 0, direction)
+
+            pose.pose.orientation.x = quat[0]
+            pose.pose.orientation.y = quat[1]
+            pose.pose.orientation.z = quat[2]
+            pose.pose.orientation.w = quat[3]
+            path.poses.append(pose)
+            pori = pose.pose.orientation
+        else:
+            pose.pose.orientation = pori
+            path.poses.append(pose)
+
+    CaBotRclpyUtil.info(F"path {path}")
+    return (path, path.poses[-1])
+
+
 class Goal(geoutil.TargetPlace):
     def __init__(self, delegate, **kwargs):
         super(Goal, self).__init__(**kwargs)
@@ -396,7 +462,7 @@ class NavGoal(Goal):
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
         self.anchor = anchor
-        (self.ros_path, last_pose) = self._create_ros_path()
+        (self.ros_path, last_pose) = create_ros_path(self.navcog_route, self.anchor, self.global_map_name)
         self.pois = self._extract_pois()
         self.handle = None
 
@@ -469,71 +535,6 @@ class NavGoal(Goal):
     @property
     def goal_description(self):
         return self._goal_description
-
-    def _create_ros_path(self):
-        """convert a NavCog path to ROS path"""
-
-        # convert route to points
-        points = []
-        CaBotRclpyUtil.info(F"create_ros_path, {str(self.navcog_route)}")
-        last_index = len(self.navcog_route)-1
-
-        def convert(g, a=self.anchor):
-            return geoutil.global2local(g, a)
-
-        for (index, item) in enumerate(self.navcog_route):
-            if index == 0 and isinstance(item.geometry, geojson.LineString):
-                # if the first item is link, add the source node
-                points.append(convert(item.source_node.geometry))
-            elif index == last_index:
-                # if last item is Point (Node), it would be same as the previous link target node
-                if isinstance(item.geometry, geojson.Point):
-                    continue
-            else:
-                # if the link is a left of the graph and short
-                if isinstance(item, geojson.RouteLink):
-                    if item.is_leaf and item.length < 3.0:
-                        continue
-
-            if isinstance(item.geometry, geojson.Point):
-                points.append(convert(item.geometry))
-            elif isinstance(item.geometry, geojson.LineString):
-                points.append(convert(item.target_node.geometry))
-            else:
-                CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
-            CaBotRclpyUtil.info(F"{index}: {str(points[-1])}")
-
-        # make a path from points
-        path = nav_msgs.msg.Path()
-        path.header.frame_id = self.global_map_name
-        path.poses = []
-        quat = None
-        pori = None
-        for i in range(0, len(points)):
-            start = points[i]
-            pose = geometry_msgs.msg.PoseStamped()
-            pose.header.frame_id = self.global_map_name
-            pose.pose = geometry_msgs.msg.Pose()
-            pose.pose.position.x = start.x
-            pose.pose.position.y = start.y
-            pose.pose.position.z = 0.0
-            if i+1 < len(points):
-                end = points[i+1]
-                direction = math.atan2(end.y - start.y, end.x - start.x)
-                quat = tf_transformations.quaternion_from_euler(0, 0, direction)
-
-                pose.pose.orientation.x = quat[0]
-                pose.pose.orientation.y = quat[1]
-                pose.pose.orientation.z = quat[2]
-                pose.pose.orientation.w = quat[3]
-                path.poses.append(pose)
-                pori = pose.pose.orientation
-            else:
-                pose.pose.orientation = pori
-                path.poses.append(pose)
-
-        CaBotRclpyUtil.info(F"path {path}")
-        return (path, path.poses[-1])
 
     def _extract_pois(self):
         """extract pois along the route"""

@@ -357,6 +357,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.plan_sub = node.create_subscription(nav_msgs.msg.Path, plan_input, self._plan_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         path_output = node.declare_parameter("path_topic", "/path").value
         self.path_pub = node.create_publisher(nav_msgs.msg.Path, path_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        path_all_output = node.declare_parameter("path_all_topic", "/path_all").value
+        self.path_all_pub = node.create_publisher(nav_msgs.msg.Path, path_all_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.updated_goal_sub = node.create_subscription(geometry_msgs.msg.PoseStamped, "/updated_goal", self._goal_updated_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -533,6 +535,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
+
+        # for dashboad        
+        (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
+        msg = nav_msgs.msg.Path()
+        msg.header = gpath.header
+        msg.header.frame_id = "map"
+        for pose in gpath.poses:
+            msg.poses.append(self.buffer.transform(pose, "map"))
+            msg.poses[-1].pose.position.z = 0.0
+        self.path_all_pub.publish(msg)
 
         # navigate from the first path
         self._navigate_next_sub_goal()
