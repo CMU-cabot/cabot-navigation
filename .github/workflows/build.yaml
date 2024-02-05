@@ -1,0 +1,36 @@
+name: Test Building Docker Image and Workspace
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build-docker-image.yaml'
+      - '**'
+      - '!docker/home/**'
+      - '!docker/*.sh'
+      - '!docker/timezone/**'
+      - '!docker/uid/**'
+
+jobs:
+  test_build:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Maximize build space
+      run:  |
+            sudo rm -rf /usr/local/lib/android # will release about 10 GB if you don't need Android
+            sudo rm -rf /usr/share/dotnet # will release about 20GB if you don't need .NET
+            sudo rm -rf /opt/ghc
+            echo "Available storage:"
+            df -h
+
+    - uses: actions/checkout@v3
+
+    - name: Install vcs
+      run: pip3 install vcstool
+
+    - name: Prepare thirdparty repos
+      run: ./setup-dependency.sh
+
+    - name: Build images
+      shell: bash
+      run: ./build-docker.sh -p -i -w
