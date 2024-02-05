@@ -79,6 +79,10 @@ __all__ = ['onUpdate']
 - The `args` dict also includes the parameters you specified in the `<plugin>` description.
   - `velocity=1.0`, `behavior=straight`, `max_dist=10`, and `loop=True` will be included in the `args` dict with the above example plugin description.
 
+### Collision
+
+- The plugin does not provide collision detection, but you can define your own logic (threshold, publish timing, etc) by using `ros.collision` API
+
 ### `ros` module API
 
 `ros` module is provided by the plugin code (not from your ROS environment)
@@ -92,3 +96,4 @@ The plugin publishes pedestrian locations as `people_msgs::msg::People` message
 ## `/pedestrian_plugin_update` service
 
 Once you insert this plugin, the actor can be updated via the service.
+
