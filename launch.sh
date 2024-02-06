@@ -32,22 +32,22 @@ function ctrl_c() {
     terminating=1
     cd $scriptdir
     if [[ ! -z $dccom ]]; then
-	while [[ $launched -lt 5 ]]; do
-	    snore 1
-	    launched=$((launched+1))
-	done
+        while [[ $launched -lt 5 ]]; do
+            snore 1
+            launched=$((launched+1))
+        done
 
-	red "$dccom down"
-	if [ $verbose -eq 1 ]; then
-	    $dccom down
-	else
-	    $dccom down > /dev/null 2>&1
-	fi
+        red "$dccom down"
+        if [ $verbose -eq 1 ]; then
+            $dccom down
+        else
+            $dccom down > /dev/null 2>&1
+        fi
     fi
 
     for pid in ${pids[@]}; do
         signal=2
-	if [[ "${termpids[*]}" =~ "$pid" ]]; then
+        if [[ "${termpids[*]}" =~ "$pid" ]]; then
             signal=15
         fi
         if [ $verbose -eq 1 ]; then
@@ -72,9 +72,9 @@ function ctrl_c() {
         fi
     done
     if [[ $run_test -eq 1 ]]; then
-	# not sure but record_system_stat.launch.xml cannot
-	# terminate child processes when running with run_test
-	pkill -f "python3.*command_logger.py.*"
+        # not sure but record_system_stat.launch.xml cannot
+        # terminate child processes when running with run_test
+        pkill -f "python3.*command_logger.py.*"
     fi
     exit $user
 }
@@ -102,18 +102,11 @@ function help()
 {
     echo "Usage:"
     echo "-h          show this help"
-    echo "-d          do not record bag file"
     echo "-D          debug"
-    echo "-r          record camera image as well"
     echo "-s          simulation mode"
-    echo "-p <name>   docker compose's project name"
     echo "-n <name>   set log name prefix"
     echo "-v          verbose option"
-    echo "-c <name>   config name (default=) docker-compose(-<name>)(-production).yaml will use"
-    echo "            if there is no nvidia-smi and config name is not set, automatically set to 'nuc'"
-    echo "-3          equivalent to -c rs3"
     echo "-M          log dmesg output"
-    echo "-S          record screen cast"
     echo "-y          do not confirm"
     echo "-t          run test"
     echo "-T <module> run test CABOT_SITE.<module>"
@@ -123,17 +116,11 @@ function help()
 
 
 simulation=0
-use_nuc=0
-nvidia_gpu=0
-project_option=
 log_prefix=cabot
 verbose=0
-config_name=
 local_map_server=0
 debug=0
-reset_all_realsence=0
 log_dmesg=0
-screen_recording=0
 yes=0
 run_test=0
 module=tests
@@ -145,20 +132,11 @@ cd $scriptdir
 scriptdir=`pwd`
 source $scriptdir/.env
 
-if [ -n "$CABOT_LAUNCH_CONFIG_NAME" ]; then
-    config_name=$CABOT_LAUNCH_CONFIG_NAME
-fi
-if [ -n "$CABOT_LAUNCH_DO_NOT_RECORD" ]; then
-    do_not_record=$CABOT_LAUNCH_DO_NOT_RECORD
-fi
-if [ -n "$CABOT_LAUNCH_RECORD_CAMERA" ]; then
-    record_cam=$CABOT_LAUNCH_RECORD_CAMERA
-fi
 if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsdrp:n:vc:3DMSytHT:f:" arg; do
+while getopts "hsn:vDMSytHT:f:" arg; do
     case $arg in
         s)
             simulation=1
@@ -167,51 +145,33 @@ while getopts "hsdrp:n:vc:3DMSytHT:f:" arg; do
             help
             exit
             ;;
-        d)
-            do_not_record=1
-            ;;
-        r)
-            record_cam=1
-            ;;
-        p)
-            project_option="-p $OPTARG"
-            ;;
         n)
             log_prefix=$OPTARG
             ;;
         v)
             verbose=1
             ;;
-	c)
-	    config_name=$OPTARG
-	    ;;
-	3)
-	    config_name=rs3
-	    ;;
-	D)
-	    debug=1
-	    ;;
-	M)
-	    log_dmesg=1
-	    ;;
-	S)
-	    screen_recording=1
-	    ;;
-	y)
-	    yes=1
-	    ;;
-	t)
-	    run_test=1
-	    ;;
-	T)
-        module=$OPTARG
-	    ;;
-	f)
-	    test_func=$OPTARG
-	    ;;
-	H)
-	    export CABOT_HEADLESS=1
-	    ;;
+        D)
+            debug=1
+            ;;
+        M)
+            log_dmesg=1
+            ;;
+        y)
+            yes=1
+            ;;
+        t)
+            run_test=1
+            ;;
+        T)
+            module=$OPTARG
+            ;;
+        f)
+            test_func=$OPTARG
+            ;;
+        H)
+            export CABOT_HEADLESS=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -220,16 +180,6 @@ shift $((OPTIND-1))
 ## private variables
 pids=()
 termpids=()
-
-## check nvidia-smi
-if [ -z `which nvidia-smi` ]; then
-    if [ -z $config_name ]; then
-	red "[WARNING] cannot find nvidia-smi, so config_name is changed to 'nuc'"
-	config_name=nuc
-    fi
-else
-    nvidia_gpu=1
-fi
 
 ## check required environment variables
 error=0
@@ -240,29 +190,6 @@ fi
 if [ -z $CABOT_SITE ]; then
     err "CABOT_SITE : environment variable should be specified (ex. cabot_site_cmu_3d"
     error=1
-fi
-
-if [ "$config_name" = "rs3" ]; then
-    if [ -z $CABOT_REALSENSE_SERIAL_1 ]; then
-	err "CABOT_REALSENSE_SERIAL_1: environment variable should be specified"
-	error=1
-    fi
-    if [ -z $CABOT_REALSENSE_SERIAL_2 ]; then
-	err "CABOT_REALSENSE_SERIAL_2: environment variable should be specified"
-	error=1
-    fi
-    if [ -z $CABOT_REALSENSE_SERIAL_3 ]; then
-	err "CABOT_REALSENSE_SERIAL_3: environment variable should be specified"
-	error=1
-    fi
-    reset_all_realsence=1
-fi
-
-if [[ "$config_name" = "nuc" ]]; then
-    if [[ -z $CABOT_JETSON_CONFIG ]]; then
-	err "CABOT_JETSON_CONFIG: environment variable should be specified to launch people on Jetson"
-	error=1
-    fi
 fi
 
 if [ $error -eq 1 ]; then
@@ -312,16 +239,15 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
-if [ ! -z $config_name ]; then dcfile="${dcfile}-$config_name"; fi
 if [ $simulation -eq 0 ]; then dcfile="${dcfile}-production"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
-    err "There is not $dcfile (config_name=$config_name, simulation=$simulation)"
+    err "There is not $dcfile, simulation=$simulation)"
     exit
 fi
 
-dccom="docker compose $project_option -f $dcfile"
+dccom="docker compose -f $dcfile"
 
 if [ $local_map_server -eq 1 ]; then
     blue "Checking the map server is available $( echo "$(date +%s.%N) - $start" | bc -l )"
@@ -329,27 +255,27 @@ if [ $local_map_server -eq 1 ]; then
     test=$?
     launching_server=0
     while [[ $test -ne 0 ]]; do
-	if [[ $launching_server -eq 1 ]]; then
-	    snore 5
-	    blue "waiting the map server is ready..."
-	    curl http://localhost:9090/map/map/floormaps.json --fail > /dev/null 2>&1
-	    test=$?
-	else
-	    if [[ $yes -eq 0 ]]; then
-		red "Note: launch.sh no longer launch server in the script"
-		red -n "You need to run local web server for $CABOT_SITE, do you want to launch the server [Y/N]: "
-		read -r ans
-	    else
-		ans=y
-	    fi
-	    if [[ $ans = 'y' ]] || [[ $ans = 'Y' ]]; then
-		launching_server=1
-		gnome-terminal -- bash -c "./server-launch.sh -d $cabot_site_dir/server_data; exit"
-	    else
-		echo ""
-		exit 1
-	    fi
-	fi
+        if [[ $launching_server -eq 1 ]]; then
+            snore 5
+            blue "waiting the map server is ready..."
+            curl http://localhost:9090/map/map/floormaps.json --fail > /dev/null 2>&1
+            test=$?
+        else
+            if [[ $yes -eq 0 ]]; then
+                red "Note: launch.sh no longer launch server in the script"
+                red -n "You need to run local web server for $CABOT_SITE, do you want to launch the server [Y/N]: "
+                read -r ans
+            else
+                ans=y
+            fi
+            if [[ $ans = 'y' ]] || [[ $ans = 'Y' ]]; then
+                launching_server=1
+                gnome-terminal -- bash -c "./server-launch.sh -d $cabot_site_dir/server_data; exit"
+            else
+                echo ""
+                exit 1
+            fi
+        fi
     done
 fi
 
@@ -381,9 +307,9 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 if [[ $run_test -eq 1 ]]; then
     blue "Running test"
     if [[ $debug -eq 1 ]]; then
-	docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func  # debug
+        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func  # debug
     else
-	docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
+        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
     fi
     pids+=($!)
     runtest_pid=$!
@@ -394,16 +320,16 @@ while [ 1 -eq 1 ];
 do
     # check if any of container got Exit status
     if [[ $terminating -eq 0 ]] && [[ `$dccom ps | grep Exit | wc -l` -gt 0 ]]; then
-	red "docker compose may have some issues. Check errors in the log or run with '-v' option."
-	ctrl_c 1
-	exit
+        red "docker compose may have some issues. Check errors in the log or run with '-v' option."
+        ctrl_c 1
+        exit
     fi
     if [[ $run_test -eq 1 ]]; then
-	kill -0 $runtest_pid
-	if [[ $? -eq 1 ]]; then
-	    ctrl_c 1
-	    exit
-	fi
+        kill -0 $runtest_pid
+        if [[ $? -eq 1 ]]; then
+            ctrl_c 1
+            exit
+        fi
     fi
     snore 1
 done
