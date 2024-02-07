@@ -1,4 +1,4 @@
-# mf_localization package (ROS1)
+# mf_localization package (ROS2)
 
 Provide multi-floor localization function.
 
