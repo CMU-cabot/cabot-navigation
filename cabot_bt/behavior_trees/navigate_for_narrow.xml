@@ -84,14 +84,14 @@
             <RateController hz="1" name="AvoidPeople">
               <Fallback name="AvoidPersonFallback">
                 <Sequence>
-                  <NeedToReplan path="{path}" />
+                  <NeedToReplan path="{path}" current_pose="{current_pose}" />
                   <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
                   <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
                   <PublishTopicPath topic="plan" value="{path}"/>
                 </Sequence>
                 <AlwaysSuccess/>
               </Fallback>
-            </RateController>>
+            </RateController>
 
             <!-- follow path -->
             <ReactiveFallback>
