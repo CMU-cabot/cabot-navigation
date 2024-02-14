@@ -80,6 +80,9 @@ def generate_launch_description():
     record_bag = LaunchConfiguration('record_bag')
     record_file = LaunchConfiguration('record_file')
 
+    # debug
+    log_level = LaunchConfiguration("log_level")
+
     # rviz
     # site = LaunchConfiguration('site')  # not used
 
@@ -103,6 +106,7 @@ def generate_launch_description():
             'current_map_filename:=current_floor_map_filename_temp',
             'current_area:=current_area_temp',
             'current_mode:=current_mode_temp',
+            'localize_status:=localize_status_temp',
             'map:=map_temp',
         ])
         if convert_points.perform(context) == 'true':
@@ -160,6 +164,9 @@ def generate_launch_description():
                                   'multi_floor',
                                   'multi_floor_manager.yaml'
                               ])),
+
+        # debug
+        DeclareLaunchArgument('log_level', default_value='info', description="logging level"),
 
         SetParameter('use_sim_time', use_sim_time),
 
@@ -266,7 +273,8 @@ def generate_launch_description():
                     ('gnss_fix', gnss_fix),
                     ('gnss_fix_velocity', gnss_fix_velocity),
                 ],
-                output="both"
+                output="both",
+                arguments=['--ros-args', '--log-level', PythonExpression(['"multi_floor_manager:=" + "', log_level, '"'])]
             ),
         ]),
 

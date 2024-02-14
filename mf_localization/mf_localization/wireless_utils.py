@@ -28,12 +28,12 @@ def extract_samples(samples, key="iBeacon"):
     # key = ["iBeacon" or "WiFi"]
     samples_new = []
     for s in samples:
-        s2 = copy.copy(s)
         s2_beacons = []
         for b in s["data"]["beacons"]:
             if b["type"] == key:
                 s2_beacons.append(b)
         if 0 < len(s2_beacons):
+            s2 = copy.copy(s)
             s2["data"]["beacons"] = s2_beacons
             samples_new.append(s2)
         else:

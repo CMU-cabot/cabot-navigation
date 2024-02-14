@@ -128,6 +128,31 @@ class RSSType(Enum):
     WiFi = 1
 
 
+def extract_samples_ble_wifi_other(samples):
+    import copy
+    samples_ble = []
+    samples_wifi = []
+    samples_other = []
+
+    for s in samples:
+        s2_ble = [b for b in s["data"]["beacons"] if b["type"] == "iBeacon"]
+        s2_wifi = [b for b in s["data"]["beacons"] if b["type"] == "WiFi"]
+
+        if 0 < len(s2_ble):
+            s2 = copy.copy(s)
+            s2["data"]["beacons"] = s2_ble
+            samples_ble.append(s2)
+        if 0 < len(s2_wifi):
+            s2 = copy.copy(s)
+            s2["data"]["beacons"] = s2_wifi
+            samples_wifi.append(s2)
+        if len(s2_ble) == 0 and len(s2_wifi):
+            s2 = copy.copy(s)
+            samples_other.append(s2)
+
+    return samples_ble, samples_wifi, samples_other
+
+
 def convert_samples_coordinate_slow(samples, from_anchor, to_anchor, floor):
     samples2 = []
     for s in samples:
@@ -145,6 +170,10 @@ def convert_samples_coordinate_slow(samples, from_anchor, to_anchor, floor):
 
 
 def convert_samples_coordinate(samples, from_anchor, to_anchor, floor):
+    # check empty list
+    if len(samples) == 0:
+        return []
+
     # convert from_anchor point to to_anchor coordinate
     xy = geoutil.Point(x=0.0, y=0.0)
     latlng = geoutil.local2global(xy, from_anchor)
@@ -1986,10 +2015,24 @@ if __name__ == "__main__":
     multi_floor_manager.initial_pose_variance = node.declare_parameter("initial_pose_variance", [3.0, 3.0, 0.1, 0.0, 0.0, 100.0]).value
     n_neighbors_floor = node.declare_parameter("n_neighbors_floor", 3).value
     n_neighbors_local = node.declare_parameter("n_neighbors_local", 3).value
+    n_strongest_floor = node.declare_parameter("n_strongest_floor", 10).value
+    n_strongest_local = node.declare_parameter("n_strongest_local", 10).value
     min_beacons_floor = node.declare_parameter("min_beacons_floor", 3).value
     min_beacons_local = node.declare_parameter("min_beacons_local", 3).value
     floor_localizer_type = node.declare_parameter("floor_localizer", "SimpleRSSLocalizer").value
     local_localizer_type = node.declare_parameter("local_localizer", "SimpleRSSLocalizer").value
+
+    # update localizer parameters by map_config
+    floor_localizer_type = map_config.get("floor_localizer", floor_localizer_type)
+    local_localizer_type = map_config.get("local_localizer", local_localizer_type)
+
+    # load use_ble and use_wifi
+    multi_floor_manager.use_ble = node.declare_parameter("use_ble", True).value
+    multi_floor_manager.use_wifi = node.declare_parameter("use_wifi", True).value
+
+    # update use_ble and use_wifi by map_config
+    multi_floor_manager.use_ble = map_config.get("use_ble", multi_floor_manager.use_ble)
+    multi_floor_manager.use_wifi = map_config.get("use_wifi", multi_floor_manager.use_wifi)
 
     # external localizer parameters
     use_gnss = node.declare_parameter("use_gnss", False).value
@@ -2078,11 +2121,9 @@ if __name__ == "__main__":
     multi_floor_manager.global_anchor = global_anchor
 
     samples_global_all = []
+    samples_ble_global_all = []
+    samples_wifi_global_all = []
     floor_set = set()
-
-    # load use_ble and use_wifi
-    multi_floor_manager.use_ble = node.declare_parameter("use_ble", True).value
-    multi_floor_manager.use_wifi = node.declare_parameter("use_wifi", True).value
 
     # load cartographer parameters
     cartographer_parameter_converter = CartographerParameterConverter(map_config)
@@ -2115,6 +2156,10 @@ if __name__ == "__main__":
                                 )
         load_state_filename = resource_utils.get_filename(map_dict["load_state_filename"])
         samples_filename = resource_utils.get_filename(map_dict["samples_filename"])
+        # rssi gain config
+        rssi_gain = map_dict.get("rssi_gain", 0.0)
+        rssi_gain_ble = map_dict.get("ble", {}).get("rssi_gain", rssi_gain)
+        rssi_gain_wifi = map_dict.get("wifi", {}).get("rssi_gain", rssi_gain)
         # keep the original string without resource resolving. if not found in map_dict, use "".
         map_filename = map_dict["map_filename"] if "map_filename" in map_dict else ""
         environment = map_dict["environment"] if "environment" in map_dict else "indoor"
@@ -2131,27 +2176,35 @@ if __name__ == "__main__":
         with open(samples_filename, "rb") as f:
             samples = orjson.loads(f.read())
 
-        # append area information to the samples
+        # append additional information to the samples
         for s in samples:
             s["information"]["area"] = area
+
+        # extract iBeacon, WiFi, and other samples
+        samples_ble, samples_wifi, samples_other = extract_samples_ble_wifi_other(samples)
+        # assign rssi gain
+        for s in samples_ble:
+            s["information"]["rssi_gain"] = rssi_gain_ble
+        for s in samples_wifi:
+            s["information"]["rssi_gain"] = rssi_gain_wifi
 
         # BLE beacon localizer
         ble_localizer_floor = None
         if multi_floor_manager.use_ble:
-            # extract iBeacon samples
-            samples_extracted = extract_samples(samples, key="iBeacon")
             # fit localizer for the floor
-            ble_localizer_floor = create_wireless_rss_localizer(local_localizer_type, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, rssi_offset=rssi_offset)
-            ble_localizer_floor.fit(samples_extracted)
+            ble_localizer_floor = create_wireless_rss_localizer(local_localizer_type, logger, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, rssi_offset=rssi_offset, n_strongest=n_strongest_local)
+            ble_localizer_floor.fit(samples_ble)
+        else:
+            samples_ble = []
 
         # WiFi localizer
         wifi_localizer_floor = None
         if multi_floor_manager.use_wifi:
-            # extract wifi samples
-            samples_wifi = extract_samples(samples, key="WiFi")
             # fit wifi localizer for the floor
-            wifi_localizer_floor = create_wireless_rss_localizer(local_localizer_type, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local)
+            wifi_localizer_floor = create_wireless_rss_localizer(local_localizer_type, logger, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, n_strongest=n_strongest_local)
             wifi_localizer_floor.fit(samples_wifi)
+        else:
+            samples_wifi = []
 
         if floor not in multi_floor_manager.ble_localizer_dict:
             multi_floor_manager.ble_localizer_dict[floor] = {}
@@ -2252,8 +2305,15 @@ if __name__ == "__main__":
             multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
 
         # convert samples to the coordinate of global_anchor
-        samples_global = convert_samples_coordinate(samples, anchor, global_anchor, floor)
-        samples_global_all.extend(samples_global)
+        samples_ble_global = convert_samples_coordinate(samples_ble, anchor, global_anchor, floor)
+        samples_wifi_global = convert_samples_coordinate(samples_wifi, anchor, global_anchor, floor)
+        samples_other_global = convert_samples_coordinate(samples_other, anchor, global_anchor, floor)
+
+        samples_ble_global_all.extend(samples_ble_global)
+        samples_wifi_global_all.extend(samples_wifi_global)
+        samples_global_all.extend(samples_ble_global)
+        samples_global_all.extend(samples_wifi_global_all)
+        samples_global_all.extend(samples_other_global)
 
         # calculate static transform
         xy = geoutil.global2local(anchor, global_anchor)
@@ -2295,14 +2355,12 @@ if __name__ == "__main__":
     # a localizer to estimate floor
     # ble floor localizer
     if multi_floor_manager.use_ble:
-        samples_global_all_extracted = extract_samples(samples_global_all, key="iBeacon")
-        multi_floor_manager.ble_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, rssi_offset=rssi_offset)
-        multi_floor_manager.ble_floor_localizer.fit(samples_global_all_extracted)
+        multi_floor_manager.ble_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, logger, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, rssi_offset=rssi_offset, n_strongest=n_strongest_floor)
+        multi_floor_manager.ble_floor_localizer.fit(samples_ble_global_all)
     # wifi floor localizer
     if multi_floor_manager.use_wifi:
-        samples_global_all_wifi = extract_samples(samples_global_all, key="WiFi")
-        multi_floor_manager.wifi_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor)
-        multi_floor_manager.wifi_floor_localizer.fit(samples_global_all_wifi)
+        multi_floor_manager.wifi_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, logger, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, n_strongest=n_strongest_floor)
+        multi_floor_manager.wifi_floor_localizer.fit(samples_wifi_global_all)
 
     # altitude manager and altitude floor estimator
     multi_floor_manager.altitude_manager = AltitudeManager(node)
