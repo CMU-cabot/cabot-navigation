@@ -270,7 +270,12 @@ if [ $local_map_server -eq 1 ]; then
             fi
             if [[ $ans = 'y' ]] || [[ $ans = 'Y' ]]; then
                 launching_server=1
-                gnome-terminal -- bash -c "./server-launch.sh -d $cabot_site_dir/server_data; exit"
+		if [[ $CABOT_HEADLESS -eq 1 ]]; then
+                    ./server-launch.sh -d $cabot_site_dir/server_data &
+		    disown
+		else
+                    gnome-terminal -- bash -c "./server-launch.sh -d $cabot_site_dir/server_data; exit"
+		fi
             else
                 echo ""
                 exit 1
