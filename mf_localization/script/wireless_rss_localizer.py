@@ -276,6 +276,8 @@ class SimpleFloorLocalizer(RSSLocalizer):
             return None
 
         # calculate weighted mean of rep positions
+        key_list = []
+        rssi_list = []
         rep_positions = []
         weights = []
 
@@ -289,11 +291,13 @@ class SimpleFloorLocalizer(RSSLocalizer):
             if key not in keys:
                 continue
 
+            key_list.append(key)
             idx = self._key_to_index[key]
             rep_position = self._index_to_rep_position[idx]
             rep_positions.append(rep_position)
 
             weight = 1.0/np.power(10, b["rssi"]/-20.0)
+            rssi_list.append(b["rssi"])
             weights.append(weight)
 
             count += 1
@@ -303,6 +307,8 @@ class SimpleFloorLocalizer(RSSLocalizer):
         rep_positions = np.array(rep_positions)
         weights = np.array(weights)
         weights = weights/np.sum(weights)  # normalize weight
+
+        self._logger.debug(f"keys={key_list}\nrssi_list={rssi_list}\nrep_positions={rep_positions}\nweights={weights}")
 
         loc = np.array([np.dot(weights, rep_positions)])
 

@@ -686,6 +686,8 @@ class MultiFloorManager:
 
                 # reject if the candidate area may be unreachable.
                 if self.area_distance_threshold < neigh_dist:
+                    if self.verbose:
+                        self.logger.info(F"pressure_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({target_floor}, {area})")
                     return
 
                 # set temporal variables
@@ -837,6 +839,26 @@ class MultiFloorManager:
                 or (self.mode == LocalizationMode.INIT and self.optimization_detected):
             if self.floor != floor:
                 self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
+
+                # check if the candidate pose is reachable
+                # get robot pose
+                try:
+                    robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                except RuntimeError as e:
+                    self.logger.warn(F"{e}")
+                    return
+                # detect area in target_floor
+                x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(floor) * self.area_floor_const]]  # [x,y,floor]
+                # find area candidates
+                neigh_dists, neigh_indices = self.area_localizer.kneighbors(x_area, n_neighbors=1)
+                area_candidates = self.Y_area[neigh_indices]
+                neigh_dist = neigh_dists[0][0]
+                area = area_candidates[0][0]
+                # reject if the candidate area may be unreachable.
+                if self.area_distance_threshold < neigh_dist:
+                    if self.verbose:
+                        self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
+                    return
             else:
                 self.logger.info(F"optimization_detected. change localization mode init->track")
 
