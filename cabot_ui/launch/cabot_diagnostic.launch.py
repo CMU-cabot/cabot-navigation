@@ -54,13 +54,6 @@ def generate_launch_description():
         OpaqueFunction(function=check_config_file),
 
         Node(
-            package="rqt_robot_monitor",
-            executable="rqt_robot_monitor",
-            name="rqt_robot_monitor",
-            condition=IfCondition(show_robot_monitor),
-            parameters=[{'use_sim_time': True}]
-        ),
-        Node(
             package="diagnostic_aggregator",
             executable="aggregator_node",
             name="diagnostic_aggregator",

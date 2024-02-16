@@ -240,6 +240,7 @@ dcfile=
 
 dcfile=docker-compose
 if [ $simulation -eq 0 ]; then dcfile="${dcfile}-production"; fi
+if [ $CABOT_HEADLESS -eq 1 ]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
