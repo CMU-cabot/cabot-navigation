@@ -56,7 +56,6 @@ class PedestrianManager():
         self.futures = {}
 
     def check_service(self):
-        logging.debug("check_service")
         if self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=0.5):
             logging.debug("service available")
             self.serviceReady = True

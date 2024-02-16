@@ -61,7 +61,6 @@ node = None
 manager = None
 logger = None
 
-
 # decorator of test actions
 def wait_test(timeout=60):
     def outer_wrap(function):
@@ -69,18 +68,19 @@ def wait_test(timeout=60):
             tester = args[0]
 
             t = kwargs['seconds'] if 'seconds' in kwargs else timeout
-            t = kwargs['timeout'] if 'timeout' in kwargs else t
-            action_name = function.__name__
+            t = kwargs['timeout'] if 'timeout' in kwargs else t*2  # make sure not timeout if wait seconds is specified
+            action_name = kwargs['action_name'] if 'action_name' in kwargs else function.__name__
             case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': False, 'error': None}
             test_action = {'uuid': str(uuid.uuid4())}
 
-            # logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
+            logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
             args = args + (case,)
             test_action.update(kwargs)
             function(*args, test_action)
             start = time.time()
+
             while not case['done'] and time.time() - start < t:
-                rclpy.spin_once(node, timeout_sec=1)
+                rclpy.spin_once(node, timeout_sec=0.1)
             if not case['done']:
                 case['success'] = False
                 case['error'] = "Timeout"
@@ -88,6 +88,7 @@ def wait_test(timeout=60):
                 # continue other test
             else:
                 case['success'] = True
+            logger.debug(f"finish: {case}")
             tester.register_action_result(case['target'], case)
         return wrap
     return outer_wrap
@@ -140,6 +141,7 @@ class Tester:
 
         logger.debug("Done all test")
 
+        allSuccess = True
         for key in sorted(self.result.keys()):
             tfResult = self.result[key]
             success = True
@@ -158,24 +160,52 @@ class Tester:
                     logger.error(f" - {action}: Failure")
                     logger.error(f"{aResult['error']}")
             logger.info("--------------------------")
+            allSuccess = allSuccess and success
 
-        sys.exit(0)
+        if allSuccess:
+            sys.exit(0)
+        else:
+            sys.exit(1)
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
             self.result[target_function_name] = []
         self.result[target_function_name].append(case)
 
-    def add_subscription(self, target, sub):
+    def add_subscription(self, case, sub):
+        if 'target' in case:
+            target = case['target']
+        else:
+            raise RuntimeError(f"no target in {case}")
+        if 'action' in case:
+            action = case['action']
+        else:
+            raise RuntimeError(f"no action in {case}")
         if target not in self.subscriptions:
-            self.subscriptions[target] = []
-        self.subscriptions[target].append(sub)
+            self.subscriptions[target] = {}
+        self.subscriptions[target][action] = sub
 
-    def cancel_subscription(self, target):
+    def cancel_subscription(self, case):
+        if isinstance(case, str):
+            target = case
+            action = None
+        else:
+            if 'target' in case:
+                target = case['target']
+            else:
+                raise RuntimeError(f"no target in {case}")
+            if 'action' in case:
+                action = case['action']
+            else:
+                raise RuntimeError(f"no action in {case}")
         if target in self.subscriptions:
-            for sub in self.subscriptions[target]:
-                self.node.destroy_subscription(sub)
-            del self.subscriptions[target]
+            for key, sub in self.subscriptions[target].items():
+                if action == None or key == action:
+                    self.node.destroy_subscription(sub)
+            if action:
+                del self.subscriptions[target][action]
+            else:
+                del self.subscriptions[target]
 
     def default_config(self):
         self.config = {
@@ -188,6 +218,84 @@ class Tester:
     def info(self, text):
         logger.info(text)
 
+    ### shorthand functions
+    def check_collision(self):
+        return self.check_topic_error(
+            action_name=f'check_collision',
+            topic="/collision",
+            topic_type="pedestrian_plugin_msgs/msg/Collision",
+            condition="True"
+        )
+
+    def goto_node(self, node_id):
+        self.pub_topic(
+            action_name=f'goto_node({node_id})',
+            topic='/cabot/event',
+            topic_type='std_msgs/msg/String',
+            message=f"data: 'navigation;destination;{node_id}'"
+        )
+
+    def cancel_navigation(self):
+        self.pub_topic(
+            action_name='cancel_navigation',
+            topic='/cabot/event',
+            topic_type='std_msgs/msg/String',
+            message="data: 'navigation;cancel'"
+        )
+
+    def button_down(self, button):
+        self.pub_topic(
+            action_name=f'button_down({button})',
+            topic='/cabot/event',
+            topic_type='std_msgs/msg/String',
+            message=f"data: 'button_down_{button}'")
+
+    def wait_navigation_completed(self):
+        self.wait_topic(
+            action_name='wait_navigation_completed',
+            topic='/cabot/activity_log',
+            topic_type='cabot_msgs/msg/Log',
+            condition="msg.category=='cabot/navigation' and msg.text=='completed'",
+            timeout=60)
+
+    def wait_navigation_arrived(self):
+        self.wait_topic(
+            action_name='wait_navigation_arrived',
+            topic='/cabot/activity_log',
+            topic_type='cabot_msgs/msg/Log',
+            condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+            timeout=60)
+
+    def wait_turn_towards(self):
+        self.wait_topic(
+            action_name='wait_turn_towards',
+            topic='/cabot/activity_log',
+            topic_type='cabot_msgs/msg/Log',
+            condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
+            timeout=60)
+
+    def check_navigation_arrived(self):
+        self.check_topic(
+            action_name='check_navigation_arrived',
+            topic='/cabot/activity_log',
+            topic_type='cabot_msgs/msg/Log',
+            condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+            timeout=60)
+
+    def check_turn_towards(self):
+        self.check_topic(
+            action_name='check_turn_towards',
+            topic='/cabot/activity_log',
+            topic_type='cabot_msgs/msg/Log',
+            condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
+            timeout=60)
+
+    def wait_for(self, seconds):
+        self.wait(
+            action_name=f'wait_for({seconds})',
+            seconds=seconds)
+
+    ### actual task needs to be waited
     @wait_test()
     def init_manager(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
@@ -213,20 +321,38 @@ class Tester:
                     logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
                     case['success'] = False
                     case['error'] = f"condition {condition} matched\n{msg}"
-                    self.cancel_subscription(case['target'])
+                    self.cancel_subscription(case)
             except:
                 logger.error(traceback.format_exc())
 
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.add_subscription(case['target'], sub)
+        self.add_subscription(case, sub)
         case['done'] = True
 
-    def check_collision(self):
-        return self.check_topic_error(
-            topic="/collision",
-            topic_type="pedestrian_plugin_msgs/msg/Collision",
-            condition="True"
-        )
+    @wait_test()
+    def check_topic(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        topic = test_action['topic']
+        topic_type = test_action['topic_type']
+        topic_type = import_class(topic_type)
+        condition = test_action['condition']
+        uuid = test_action['uuid']
+
+        def topic_callback(msg):
+            try:
+                context = {'msg': msg}
+                exec(f"result=({condition})", context)
+                if context['result']:
+                    logger.debug(f"success {condition}")
+                    case['success'] = True
+                    self.cancel_subscription(case)
+            except:
+                logger.error(traceback.format_exc())
+
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        self.add_subscription(case, sub)
+        case['done'] = True
+        case['success'] = False
 
     @wait_test()
     def wait_ready(self, case, test_action):
@@ -242,12 +368,11 @@ class Tester:
                 exec(f"result=({condition})", context)
                 if context['result']:
                     case['done'] = True
-                    sub = self.subscriptions[uuid]
-                    self.node.destroy_subscription(sub)
+                    self.cancel_subscription(case)
             except:
                 logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.subscriptions[uuid] = sub
+        self.add_subscription(case, sub)
 
     @wait_test()
     def reset_position(self, case, test_action):
@@ -290,13 +415,12 @@ class Tester:
                         exec(f"result=({condition})", context)
                         if context['result']:
                             case['done'] = True
-                            sub = self.subscriptions[uuid]
-                            self.node.destroy_subscription(sub)
+                            self.cancel_subscription(case)
                             time.sleep(2)
                     except:
                         logger.error(traceback.format_exc())
                 sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-                self.subscriptions[uuid] = sub
+                self.add_subscription(case, sub)
 
                 time.sleep(1)
                 # publish initialpose for localization hint
@@ -339,12 +463,11 @@ class Tester:
                 exec(f"result=({condition})", context)
                 if context['result']:
                     case['done'] = True
-                    sub = self.subscriptions[uuid]
-                    self.node.destroy_subscription(sub)
+                    self.cancel_subscription(case)
             except:
                 logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.subscriptions[uuid] = sub
+        self.add_subscription(case, sub)
 
     @wait_test()
     def pub_topic(self, case, test_action):
