@@ -120,52 +120,62 @@ class Tester:
                 functions.remove(func)
                 continue
             if func in functions:
-                logger.debug(f"Calling {func}")
+                logger.info(f"Calling {func}")
                 self.test_func_name = func
                 getattr(module, func)(self)
                 functions.remove(func)
 
+        if wait_ready:
+            success = self.print_result(self.result, func)
+            if not success:
+                sys.exit(1)
+
         if specific_test and specific_test in functions:
-            logger.debug(f"Testing {specific_test}")
+            logger.info(f"Testing {specific_test}")
             self.test_func_name = specific_test
             getattr(module, specific_test)(self)
+            success = self.print_result(self.result, specific_test)
             self.cancel_subscription(specific_test)
         else:
             for func in sorted(functions):
                 if func.startswith("_"):
                     continue
-                logger.debug(f"Testing {func}")
+                logger.info(f"Testing {func}")
                 self.test_func_name = func
                 getattr(module, func)(self)
+                success = self.print_result(self.result, func)
                 self.cancel_subscription(func)
 
-        logger.debug("Done all test")
+        logger.info("Done all test")
 
         allSuccess = True
         for key in sorted(self.result.keys()):
-            tfResult = self.result[key]
-            success = True
-            for aResult in tfResult:
-                success = success and aResult['success']
-            if success:
-                logger.info(f"{key}: Success")
-            else:
-                logger.error(f"{key}: Failure")
-            for aResult in tfResult:
-                success = aResult['success']
-                action = aResult['action']
-                if success:
-                    logger.info(f" - {action}: Success")
-                else:
-                    logger.error(f" - {action}: Failure")
-                    logger.error(f"{aResult['error']}")
-            logger.info("--------------------------")
             allSuccess = allSuccess and success
 
         if allSuccess:
             sys.exit(0)
         else:
             sys.exit(1)
+
+    def print_result(self, result, key):
+        tfResult = result[key]
+        success = True
+        for aResult in tfResult:
+            success = success and aResult['success']
+        if success:
+            logger.info(f"{key}: Success")
+        else:
+            logger.error(f"{key}: Failure")
+        for aResult in tfResult:
+            success = aResult['success']
+            action = aResult['action']
+            if success:
+                logger.info(f" - {action}: Success")
+            else:
+                logger.error(f" - {action}: Failure")
+                logger.error(f"{aResult['error']}")
+        logger.info("--------------------------")
+        return success
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
