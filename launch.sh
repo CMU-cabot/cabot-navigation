@@ -107,7 +107,7 @@ function help()
     echo "-n <name>   set log name prefix"
     echo "-v          verbose option"
     echo "-M          log dmesg output"
-    echo "-y          do not confirm"
+    echo "-y          do not confirm (deprecated - always launch server if there is no server)"
     echo "-t          run test"
     echo "-T <module> run test CABOT_SITE.<module>"
     echo "-f <test>   run test CABOT_SITE.<module>.<test>"
@@ -118,7 +118,6 @@ function help()
 simulation=0
 log_prefix=cabot
 verbose=0
-local_map_server=0
 debug=0
 log_dmesg=0
 yes=0
@@ -196,12 +195,6 @@ if [ $error -eq 1 ]; then
    exit 1
 fi
 
-cabot_site_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE | head -1)
-if [[ -e $cabot_site_dir/server_data ]]; then
-    blue "found $CABOT_SITE/server_data"
-    local_map_server=1
-fi
-
 log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
 export ROS_LOG_DIR="/home/developer/.ros/log/${log_name}"
 export ROS_LOG_DIR_ROOT="/root/.ros/log/${log_name}"
@@ -250,39 +243,11 @@ fi
 
 dccom="docker compose -f $dcfile"
 
-if [ $local_map_server -eq 1 ]; then
-    blue "Checking the map server is available $( echo "$(date +%s.%N) - $start" | bc -l )"
-    curl http://localhost:9090/map/map/floormaps.json --fail > /dev/null 2>&1
-    test=$?
-    launching_server=0
-    while [[ $test -ne 0 ]]; do
-        if [[ $launching_server -eq 1 ]]; then
-            snore 5
-            blue "waiting the map server is ready..."
-            curl http://localhost:9090/map/map/floormaps.json --fail > /dev/null 2>&1
-            test=$?
-        else
-            if [[ $yes -eq 0 ]]; then
-                red "Note: launch.sh no longer launch server in the script"
-                red -n "You need to run local web server for $CABOT_SITE, do you want to launch the server [Y/N]: "
-                read -r ans
-            else
-                ans=y
-            fi
-            if [[ $ans = 'y' ]] || [[ $ans = 'Y' ]]; then
-                launching_server=1
-		if [[ $CABOT_HEADLESS -eq 1 ]]; then
-                    ./server-launch.sh -d $cabot_site_dir/server_data &
-		    disown
-		else
-                    gnome-terminal -- bash -c "./server-launch.sh -d $cabot_site_dir/server_data; exit"
-		fi
-            else
-                echo ""
-                exit 1
-            fi
-        fi
-    done
+
+if [[ $CABOT_HEADLESS -eq 1 ]]; then
+    ./server-launch.sh -c -p $CABOT_SITE
+else
+    gnome-terminal -- bash -c "./server-launch.sh -c -p $CABOT_SITE -v; exit"
 fi
 
 if [ $verbose -eq 0 ]; then
@@ -317,9 +282,7 @@ if [[ $run_test -eq 1 ]]; then
     else
         docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
     fi
-    pids+=($!)
-    runtest_pid=$!
-    snore 3
+    exit $?
 fi
 
 while [ 1 -eq 1 ];
@@ -329,13 +292,6 @@ do
         red "docker compose may have some issues. Check errors in the log or run with '-v' option."
         ctrl_c 1
         exit
-    fi
-    if [[ $run_test -eq 1 ]]; then
-        kill -0 $runtest_pid
-        if [[ $? -eq 1 ]]; then
-            ctrl_c 1
-            exit
-        fi
     fi
     snore 1
 done

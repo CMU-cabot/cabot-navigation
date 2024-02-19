@@ -59,23 +59,20 @@ do
     count=$((count+1))
 done
 
-pushd $temp_dir
-
 blue "adding editor user"
 curl -b admin-cookie.txt -c admin-cookie.txt $HOST/admin.jsp
 curl -b admin-cookie.txt -c admin-cookie.txt -d "redirect_url=admin.jsp&user=${admin}&password=${pass}" $HOST/login.jsp
 curl -b admin-cookie.txt -d "user=$editor&password=$editor&password2=$edito&role=editor" "$HOST/api/user?action=add-user"
 
 blue "importing attachments.zip"
-if [ ! -e $data_dir/attachments.zip ]; then
-    if [ -e $data_dir/attachments ]; then
-	pushd $data_dir/attachments
-	zip -r ../attachments.zip .
-	popd
-    else
-	red "[WARNING] there is not attachments directory or attachments.zip"
-    fi
-fi
+mkdir -p $data_dir/attachments
+cd $data_dir
+find . -type f ! -name 'content-md5' ! -name 'attachments.zip' -exec md5sum {} + | LC_COLLATE=C sort -k 2 | md5sum > attachments/content-md5
+cd $data_dir/attachments
+zip -r ../attachments.zip .
+
+cd
+
 if [ -e $data_dir/attachments.zip ]; then
     curl -b admin-cookie.txt -c admin-cookie.txt $HOST/admin.jsp
     curl -b admin-cookie.txt -c admin-cookie.txt -d "redirect_url=admin.jsp&user=${admin}&password=${pass}" $HOST/login.jsp
