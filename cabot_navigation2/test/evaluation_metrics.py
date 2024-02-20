@@ -395,16 +395,25 @@ def person_on_robot_collision_count(agents, robot):
 
 
 def time_not_moving(agents, robot, linear_vel_threshold=0.01, angular_vel_threshold=0.02):
-    
+    time_stopped = 0
     not_moving = [0]*len(robot)
-    time_step = total_time(agents, robot)[0]/len(agents)
 
-    count = 0
-    for index, r in enumerate(robot):
-        if(r.linear_vel < linear_vel_threshold and abs(r.angular_vel < angular_vel_threshold)):
-            count=count+1
-            not_moving[index]=1
-    time_stopped = time_step*count
+    stamps = get_time_stamps(agents, robot)
+
+    for i in range(len(robot)):
+        r = robot[i]
+
+        if i == 0:
+            dt = (stamps[i+1] - stamps[i])/2.0
+        elif i == len(robot)-1:
+            dt = (stamps[i] - stamps[i-1])/2.0
+        else:
+            dt = (stamps[i+1] - stamps[i])/2.0 + (stamps[i] - stamps[i-1])/2.0
+
+        if (r.linear_vel < linear_vel_threshold and abs(r.angular_vel < angular_vel_threshold)):
+            time_stopped += dt
+            not_moving[i] = 1
+
     return [time_stopped, not_moving]
 
 
