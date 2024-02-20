@@ -174,6 +174,8 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   if (dt < 0.05) {  // 20hz
     return;
   }
+  auto stamp = gazebo_ros::Convert<builtin_interfaces::msg::Time>(_info.simTime);
+  manager.updateStamp(stamp);
   manager.publishPeopleIfReady();
   
   this->lastUpdate = _info.simTime;
@@ -189,12 +191,20 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
       ignition::math::Quaterniond rRot = robotModel->WorldPose().Rot();
       ignition::math::Vector3d rRpy = rRot.Euler();
+      ignition::math::Vector3d linearVel = robotModel->WorldLinearVel();
+      auto vel_x = linearVel.X();
+      auto vel_y = linearVel.Y();
+      auto vel_linear = linearVel.Length();
+      ignition::math::Vector3d angularVel = robotModel->WorldAngularVel();
+      auto vel_theta = angularVel.Z();
       PythonUtils::setDictItemAsFloat(pRobotPose, "x", rPos.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "y", rPos.Y());
       PythonUtils::setDictItemAsFloat(pRobotPose, "z", rPos.Z());
       PythonUtils::setDictItemAsFloat(pRobotPose, "roll", rRpy.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.X());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "vel_linear", vel_linear);
+      PythonUtils::setDictItemAsFloat(pRobotPose, "vel_theta", vel_theta);
       geometry_msgs::msg::Pose robot_pose;
       robot_pose.position.x = rPos.X();
       robot_pose.position.y = rPos.Y();
@@ -204,6 +214,22 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       robot_pose.orientation.z = rRot.Z();
       robot_pose.orientation.w = rRot.W();
       manager.updateRobotPose(robot_pose);
+
+      // update robot agent
+      pedestrian_plugin_msgs::msg::Agent robotAgent;
+      robotAgent.type = pedestrian_plugin_msgs::msg::Agent::ROBOT;
+      robotAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+      robotAgent.name = std::string("robot");
+      robotAgent.position = robot_pose;
+      robotAgent.yaw = rRpy.X();
+      robotAgent.velocity.linear.x = vel_x;
+      robotAgent.velocity.linear.y = vel_y;
+      robotAgent.velocity.angular.z = vel_theta;
+      robotAgent.linear_vel = vel_linear;
+      robotAgent.angular_vel = vel_theta;
+      robotAgent.radius = 0.45; // default robot raduis
+      manager.updateRobotAgent(robotAgent);
+
       PyDict_SetItemString(pDict, "robot", pRobotPose);
       Py_DECREF(pRobotPose);
     }
@@ -236,6 +262,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
       auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
       auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+      auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
       auto dx = newX - this->x;
       auto dy = newY - this->y;
       auto dz = newZ - this->z;
@@ -274,6 +301,27 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
         person.tags.push_back("stationary");
       }
       manager.updatePersonMessage(this->actor->GetName(), person);
+
+      // update human agent
+      double vel_linear = dd / dt;
+      pedestrian_plugin_msgs::msg::Agent humanAgent;
+      humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
+      if (this->module_name == "pedestrian.pool"){
+        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
+      }else{
+        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+      }
+      humanAgent.name = person.name;
+      humanAgent.position.position = person.position;
+      humanAgent.yaw = newYaw;
+      humanAgent.velocity.linear.x = person.velocity.x;
+      humanAgent.velocity.linear.y = person.velocity.y;
+      humanAgent.velocity.linear.z = person.velocity.z;
+      humanAgent.linear_vel = vel_linear;
+      // humanAgent.velocity.angular.z // undefined
+      // humanAgent.angular_vel // undefined
+      humanAgent.radius = radius;
+      manager.updateHumanAgent(person.name, humanAgent);
 
       Py_DECREF(pRet);
     } else {

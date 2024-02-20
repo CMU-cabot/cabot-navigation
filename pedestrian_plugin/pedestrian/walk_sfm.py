@@ -34,9 +34,11 @@ def onUpdate(**args):
     max_x = args.get('max_x', np.inf)
     min_y = args.get('min_y', -np.inf)
     max_y = args.get('max_y', np.inf)
+    radius = args.get('radius', 0.4)  # [m]
 
     args['goal_x'] = goal_x
     args['goal_y'] = goal_y
+    args['radius'] = radius
 
     name = args['name']
     dt = args['dt']

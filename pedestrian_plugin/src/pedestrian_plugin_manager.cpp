@@ -120,6 +120,8 @@ PedestrianPluginManager::PedestrianPluginManager() : node_(gazebo_ros::Node::Get
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
+  robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
+  human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
       "/pedestrian_plugin_update",
       std::bind(&PedestrianPluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
@@ -140,8 +142,22 @@ void PedestrianPluginManager::publishPeopleIfReady() {
     for (auto it : peopleMap_) {
       msg.people.push_back(it.second);
     }
+    msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
     people_pub_->publish(msg);
+
+    // publish robot and human messages
+    robotAgent_->header.stamp = *stamp_;
+    robotAgent_->header.frame_id = "map_global";
+    robot_pub_->publish(*robotAgent_);
+    pedestrian_plugin_msgs::msg::Agents humanAgentsMsg;
+    for (auto it: humanAgentsMap_){
+      humanAgentsMsg.agents.push_back(it.second);
+    }
+    humanAgentsMsg.header.stamp = *stamp_;
+    humanAgentsMsg.header.frame_id = "map_global";
+    human_pub_->publish(humanAgentsMsg);
+
     peopleReadyMap_.clear();
   }
 }
@@ -157,6 +173,24 @@ void PedestrianPluginManager::updateRobotPose(geometry_msgs::msg::Pose robot_pos
 void PedestrianPluginManager::updatePersonMessage(std::string name, people_msgs::msg::Person person) {
   peopleMap_.insert_or_assign(name, person);
   peopleReadyMap_.insert({name, true});
+}
+
+void PedestrianPluginManager::updateStamp(builtin_interfaces::msg::Time stamp) {
+  if (stamp_ == nullptr) {
+    stamp_ = std::make_shared<builtin_interfaces::msg::Time>();
+  }
+  *stamp_ = stamp;
+}
+
+void PedestrianPluginManager::updateRobotAgent(pedestrian_plugin_msgs::msg::Agent robotAgent) {
+  if (robotAgent_ == nullptr) {
+    robotAgent_ = std::make_shared<pedestrian_plugin_msgs::msg::Agent>();
+  }
+  *robotAgent_ = robotAgent;
+}
+
+void PedestrianPluginManager::updateHumanAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent) {
+  humanAgentsMap_.insert_or_assign(name, humanAgent);
 }
 
 rclcpp::Logger PedestrianPluginManager::get_logger() { return node_->get_logger(); }

@@ -15,6 +15,8 @@ def onUpdate(**args):
     decel_distance = args.get('decel_distance', 0.0)  # [m]
     pause_distance = args.get('pause_distance', 0.0)  # [m]
     stop_distance = args.get('stop_distance', 0.0)  # [m]
+    radius = args.get('radius', 0.4)  # [m]
+    args['radius'] = radius
 
     # plugin variables
     x = args['x']
