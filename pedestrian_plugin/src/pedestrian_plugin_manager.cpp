@@ -47,8 +47,21 @@ PyObject* ros_collision(PyObject* self, PyObject* args) {
   Py_RETURN_NONE;
 }
 
+PyObject* ros_metric(PyObject* self, PyObject* args) {
+  PyObject* unicode_obj;
+  double value;
+  if (!PyArg_ParseTuple(args, "Ud", &unicode_obj, &value)) {
+    RCLCPP_INFO(PedestrianPluginManager::getInstance().get_logger(), "error in parsing tuple");
+    return NULL;
+  }
+  std::string name = PythonUtils::PyUnicodeObject_ToStdString(unicode_obj);
+  PedestrianPluginManager::getInstance().process_metric(name, value);
+  Py_RETURN_NONE;
+}
+
 PyMethodDef RosMethods[] = {{"info", ros_info, METH_VARARGS, "call RCLCPP_INFO"},
                             {"collision", ros_collision, METH_VARARGS, "publish collision message"},
+                            {"metric", ros_metric, METH_VARARGS, "publish metric message"},
                             {NULL, NULL, 0, NULL}};
 
 PyModuleDef RosModule = {PyModuleDef_HEAD_INIT, "ros", NULL, -1, RosMethods, NULL, NULL, NULL, NULL};
@@ -106,6 +119,7 @@ ParamValue PedestrianPluginParams::getParam(std::string name) {
 PedestrianPluginManager::PedestrianPluginManager() : node_(gazebo_ros::Node::Get()) {
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
+  metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
       "/pedestrian_plugin_update",
       std::bind(&PedestrianPluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
@@ -163,6 +177,13 @@ void PedestrianPluginManager::process_collision(std::string actor_name, double d
   msg.collided_person = collided_person;
   msg.distance = distance;
   collision_pub_->publish(msg);
+}
+
+void PedestrianPluginManager::process_metric(std::string name, double value) {
+  pedestrian_plugin_msgs::msg::Metric msg;
+  msg.name = name;
+  msg.value = value;
+  metric_pub_->publish(msg);
 }
 
 // Private methods

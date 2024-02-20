@@ -16,6 +16,7 @@ endif()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   msg/Collision.msg
+  msg/Metric.msg
   msg/Plugin.msg
   msg/PluginParam.msg
   srv/PluginUpdate.srv

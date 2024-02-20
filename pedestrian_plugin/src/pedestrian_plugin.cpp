@@ -207,6 +207,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       PyDict_SetItemString(pDict, "robot", pRobotPose);
       Py_DECREF(pRobotPose);
     }
+    PythonUtils::setDictItemAsFloat(pDict, "time", _info.simTime.Float());
     PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
     PythonUtils::setDictItemAsFloat(pDict, "x", this->x);
     PythonUtils::setDictItemAsFloat(pDict, "y", this->y);

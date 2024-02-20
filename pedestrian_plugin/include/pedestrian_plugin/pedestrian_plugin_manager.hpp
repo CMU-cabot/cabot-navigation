@@ -30,6 +30,7 @@
 #include <people_msgs/msg/people.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <pedestrian_plugin_msgs/msg/collision.hpp>
+#include <pedestrian_plugin_msgs/msg/metric.hpp>
 #include <pedestrian_plugin_msgs/srv/plugin_update.hpp>
 
 PyObject* PyInit_ros(void);
@@ -94,6 +95,7 @@ class PedestrianPluginManager {
   void updatePersonMessage(std::string name, people_msgs::msg::Person person);
   rclcpp::Logger get_logger();
   void process_collision(std::string actor_name, double distance);
+  void process_metric(std::string name, double value);
 
   std::recursive_mutex mtx;
 
@@ -109,6 +111,7 @@ class PedestrianPluginManager {
   std::map<std::string, bool> peopleReadyMap_;
   rclcpp::Publisher<people_msgs::msg::People>::SharedPtr people_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Collision>::SharedPtr collision_pub_;
+  rclcpp::Publisher<pedestrian_plugin_msgs::msg::Metric>::SharedPtr metric_pub_;
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
 };
 
