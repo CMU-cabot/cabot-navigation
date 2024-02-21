@@ -83,7 +83,7 @@ def wait_test(timeout=60):
                 rclpy.spin_once(node, timeout_sec=0.1)
             if not case['done']:
                 case['success'] = False
-                case['error'] = "Timeout"
+                case['error'] = f"Timeout ({t} seconds)"
                 # logger.error("Timeout")
                 # continue other test
             else:
@@ -228,82 +228,119 @@ class Tester:
     def info(self, text):
         logger.info(text)
 
-    ### shorthand functions
-    def check_collision(self):
-        return self.check_topic_error(
-            action_name=f'check_collision',
-            topic="/collision",
-            topic_type="pedestrian_plugin_msgs/msg/Collision",
-            condition="True"
+    # shorthand functions
+    def check_collision(self, **kwargs):
+        return self.check_topic_error(**dict(
+            dict(
+                action_name=f'check_collision',
+                topic="/collision",
+                topic_type="pedestrian_plugin_msgs/msg/Collision",
+                condition="True"
+            ),
+            **kwargs)
         )
 
-    def goto_node(self, node_id):
-        self.pub_topic(
-            action_name=f'goto_node({node_id})',
-            topic='/cabot/event',
-            topic_type='std_msgs/msg/String',
-            message=f"data: 'navigation;destination;{node_id}'"
+    def goto_node(self, node_id, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'goto_node({node_id})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'navigation;destination;{node_id}'"
+            ),
+            **kwargs)
         )
 
-    def cancel_navigation(self):
-        self.pub_topic(
-            action_name='cancel_navigation',
-            topic='/cabot/event',
-            topic_type='std_msgs/msg/String',
-            message="data: 'navigation;cancel'"
+    def cancel_navigation(self, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name='cancel_navigation',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message="data: 'navigation;cancel'"
+            ),
+            **kwargs)
         )
 
-    def button_down(self, button):
-        self.pub_topic(
-            action_name=f'button_down({button})',
-            topic='/cabot/event',
-            topic_type='std_msgs/msg/String',
-            message=f"data: 'button_down_{button}'")
+    def button_down(self, button, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'button_down({button})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'button_down_{button}'"
+            ),
+            **kwargs)
+        )
 
-    def wait_navigation_completed(self):
-        self.wait_topic(
-            action_name='wait_navigation_completed',
-            topic='/cabot/activity_log',
-            topic_type='cabot_msgs/msg/Log',
-            condition="msg.category=='cabot/navigation' and msg.text=='completed'",
-            timeout=60)
+    def wait_navigation_completed(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_navigation_completed',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='completed'",
+                timeout=60
+            ),
+            **kwargs)
+        )
 
-    def wait_navigation_arrived(self):
-        self.wait_topic(
-            action_name='wait_navigation_arrived',
-            topic='/cabot/activity_log',
-            topic_type='cabot_msgs/msg/Log',
-            condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
-            timeout=60)
+    def wait_navigation_arrived(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_navigation_arrived',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+                timeout=60
+            ),
+            **kwargs)
+        )
 
-    def wait_turn_towards(self):
-        self.wait_topic(
-            action_name='wait_turn_towards',
-            topic='/cabot/activity_log',
-            topic_type='cabot_msgs/msg/Log',
-            condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-            timeout=60)
+    def wait_turn_towards(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_turn_towards',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
+                timeout=60
+            ),
+            **kwargs)
+        )
 
-    def check_navigation_arrived(self):
-        self.check_topic(
-            action_name='check_navigation_arrived',
-            topic='/cabot/activity_log',
-            topic_type='cabot_msgs/msg/Log',
-            condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
-            timeout=60)
+    def check_navigation_arrived(self, **kwargs):
+        self.check_topic(**dict(
+            dict(
+                action_name='check_navigation_arrived',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+                timeout=60
+            ),
+            **kwargs)
+        )
 
-    def check_turn_towards(self):
-        self.check_topic(
-            action_name='check_turn_towards',
-            topic='/cabot/activity_log',
-            topic_type='cabot_msgs/msg/Log',
-            condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-            timeout=60)
+    def check_turn_towards(self, **kwargs):
+        self.check_topic(**dict(
+            dict(
+                action_name='check_turn_towards',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
+                timeout=60
+            ),
+            **kwargs)
+        )
 
-    def wait_for(self, seconds):
-        self.wait(
-            action_name=f'wait_for({seconds})',
-            seconds=seconds)
+    def wait_for(self, seconds, **kwargs):
+        self.wait(**dict(
+            dict(
+                action_name=f'wait_for({seconds})',
+                seconds=seconds
+            ),
+            **kwargs)
+        )
 
     ### actual task needs to be waited
     @wait_test()
