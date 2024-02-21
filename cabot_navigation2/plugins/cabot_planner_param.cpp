@@ -149,6 +149,9 @@ void CaBotPlan::findIndex()
       }
     }
   }
+  if (nodes.size() < end_index) {
+    end_index = nodes.size() - 1;
+  }
   /*
   if (start_index < (uint64_t)(5.0/options_.initial_node_interval)) {
     start_index = 0;
