@@ -111,6 +111,9 @@ private:
       if (param.get_name() == "check_blind_space") {
         check_blind_space_ = param.as_bool();
       }
+      if (param.get_name() == "min_distance") {
+        min_distance_ = param.as_double();
+      }
     }
     results->successful = true;
     return *results;
