@@ -186,7 +186,18 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     PyObject* pArgs = PyTuple_New(0);
     PyObject* pDict = PyDict_New();
 
+    // add plugin parameters to the arguments
+    for (const auto& pair : this->plugin_params) {
+      auto value = pair.second;
+      PyObject *temp = value.python_object();
+      PyDict_SetItemString(pDict, pair.first.c_str(), temp);
+      Py_DECREF(temp);
+    }
+
+    // set robot values to pDict
     if (robotModel) {
+      auto robot_radius = PythonUtils::getDictItemAsDouble(pDict, "robot_radius", 0.45);
+
       PyObject* pRobotPose = PyDict_New();
       ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
       ignition::math::Quaterniond rRot = robotModel->WorldPose().Rot();
@@ -219,7 +230,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       pedestrian_plugin_msgs::msg::Agent robotAgent;
       robotAgent.type = pedestrian_plugin_msgs::msg::Agent::ROBOT;
       robotAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
-      robotAgent.name = std::string("robot");
+      robotAgent.name = robotModel->GetName();
       robotAgent.position = robot_pose;
       robotAgent.yaw = rRpy.Z();
       robotAgent.velocity.linear.x = vel_x;
@@ -227,12 +238,14 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       robotAgent.velocity.angular.z = vel_theta;
       robotAgent.linear_vel = vel_linear;
       robotAgent.angular_vel = vel_theta;
-      robotAgent.radius = 0.45; // default robot raduis
+      robotAgent.radius = robot_radius; // default robot raduis
       manager.updateRobotAgent(robotAgent);
 
       PyDict_SetItemString(pDict, "robot", pRobotPose);
       Py_DECREF(pRobotPose);
     }
+
+    // set actor values to pDict
     PythonUtils::setDictItemAsFloat(pDict, "time", _info.simTime.Float());
     PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
     PythonUtils::setDictItemAsFloat(pDict, "x", this->x);
@@ -241,20 +254,14 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     PythonUtils::setDictItemAsFloat(pDict, "roll", this->roll);
     PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
     PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
-
-    // add parameter to the arguments
-    for (const auto& pair : this->plugin_params) {
-      auto value = pair.second;
-      PyObject *temp = value.python_object();
-      PyDict_SetItemString(pDict, pair.first.c_str(), temp);
-      Py_DECREF(temp);
-    }
     
     PyObject *aname = PyUnicode_DecodeFSDefault(this->actor->GetName().c_str());
     PyDict_SetItemString(pDict, "name", aname);
     Py_DECREF(aname);
 
+    // call onUpdate in the python module
     auto pRet = PyObject_Call(pFunc, pArgs, pDict);
+
     if (pRet != NULL && PyDict_Check(pRet)) {
       auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
       auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
