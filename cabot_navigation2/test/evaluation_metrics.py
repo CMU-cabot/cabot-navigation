@@ -25,16 +25,11 @@
 # metrics implementation is based on Hunav Evaluator (MIT license)
 # https://github.com/robotics-upo/hunav_sim/tree/humble/hunav_evaluator
 
-from importlib.resources import path
-from tokenize import group
 import numpy as np
 import math
-import sys
 import rclpy
-from hunav_msgs.msg import Agents
-from hunav_msgs.msg import Agent
+from pedestrian_plugin_msgs.msg import Agent
 from geometry_msgs.msg import Pose
-from hunav_evaluator.sfm import SFM
 
 # Teaching Robot Navigation Behaviors to Optimal RRT Planners
 # Noé Pérez-Higueras, Fernando Caballero & Luis Merino
@@ -104,27 +99,35 @@ def total_time(agents, robot):
     t1 = rclpy.time.Time.from_msg(agents[0].header.stamp)
     dur = (t2 - t1).to_msg()
     secs = float(dur.sec + dur.nanosec/1e9)
-    print('\nTime_to_reach_goal computed: %.2f secs' % secs)
     return [secs]
 
-def robot_path_length(agents, robot):
+def robot_path_length(agents, robot, accumulation_threshold=0.01):
     path_length = 0.0
+    prev_position = robot[0].position
     for i in range(len(robot)-1):
-        path_length += euclidean_distance(robot[i+1].position, robot[i].position)
-    print('Path_length computed: %.2f m' % path_length)
+        distance = euclidean_distance(robot[i+1].position, prev_position)
+        # ignore small changes
+        if accumulation_threshold <= distance:
+            path_length += distance
+            prev_position = robot[i+1].position
     return [path_length]
 
-def cumulative_heading_changes(agents, robot):
+def cumulative_heading_changes(agents, robot, accumulation_threshold=math.radians(1)):
     chc_list = [0.0]
     chc = 0
+    prev_yaw = robot[0].yaw
     for i in range(len(robot) - 1):
-        norm = normalize_angle(robot[i].yaw - robot[i+1].yaw)
+        norm = normalize_angle(prev_yaw - robot[i+1].yaw)
         if norm < 0.0:
             norm *= -1
+        # ignore small changes
+        if accumulation_threshold <= norm:
+            prev_yaw = robot[i+1].yaw
+        else:
+            norm = 0.0
         chc += norm
         chc_list.append(norm)
 
-    print('Cumulative_heading_changes: %.2f rads' % chc)
     return [chc, chc_list]
 
 def normalize_angle(ang):
@@ -150,7 +153,6 @@ def avg_closest_person(agents, robot):
             min_dist_list.append(min_dist)
 
     avg_dist = avg_dist/len(robot)
-    print('Average_closest_person: %.2f m' % avg_dist)
     return [avg_dist, min_dist_list]
 
 
@@ -165,8 +167,6 @@ def minimum_distance_to_people(agents, robot):
             min_distance.append(d) 
     
     min_dist = min(min_distance)
-    
-    print('Minimum_distance_to_people: %.2f m' % min_dist)
 
     return [min_dist]
 
@@ -178,8 +178,6 @@ def maximum_distance_to_people(agents, robot):
             max_distance.append(euclidean_distance(robot[i].position, agent.position) - robot[i].radius)
     
     max_dist = max(max_distance)
-    
-    print('Maximum_distance_to_people: %.2f m' % max_dist)
 
     return [max_dist]
 
@@ -209,20 +207,18 @@ def space_intrusions(agents, robot, k):
 
 
 def intimate_space_intrusions(agents, robot):
-    percentage, slist =  space_intrusions(agents, robot, 'intimate')
-    print('Intimate_space_intrusions: %.2f %% of the total time' % percentage)
+    percentage, slist = space_intrusions(agents, robot, 'intimate')
     return [percentage, slist]
+
 
 def personal_space_intrusions(agents, robot):
-    percentage, slist =  space_intrusions(agents, robot, 'personal')
-    print('Personal_space_intrusions: %.2f %% of the total time' % percentage)
-    return [percentage, slist]
-    
-def social_space_intrusions(agents, robot):
-    percentage, slist =  space_intrusions(agents, robot, 'social')
-    print('Social_space_intrusions: %.2f %% of the total time' % percentage)
+    percentage, slist = space_intrusions(agents, robot, 'personal')
     return [percentage, slist]
 
+
+def social_space_intrusions(agents, robot):
+    percentage, slist = space_intrusions(agents, robot, 'social')
+    return [percentage, slist]
 
 
 def detect_groups(agents):
@@ -262,21 +258,17 @@ def group_space_intrusions(agents, robot, k):
 
 def group_intimate_space_intrusions(agents, robot):
     r = group_space_intrusions(agents, robot, 'intimate')
-    print('Group_intimate_space_intrusions: %.2f %% of the total time' % r[0])
     return r
+
 
 def group_personal_space_intrusions(agents, robot):
-    r =  group_space_intrusions(agents, robot, 'personal')
-    print('Group_personal_space_intrusions: %.2f %% of the total time' % r[0])
+    r = group_space_intrusions(agents, robot, 'personal')
     return r
 
+
 def group_social_space_intrusions(agents, robot):
-    r =  group_space_intrusions(agents, robot, 'social')
-    print('Group_social_space_intrusions: %.2f %% of the total time' % r[0])
-    return r          
-
-
-
+    r = group_space_intrusions(agents, robot, 'social')
+    return r
 
 
 # SEAN 2.0: Formalizing and Generating Social Situations for Robot Navigation
@@ -296,7 +288,7 @@ def collisions(agents, robot):
         for agent in agents[i].agents:
 
             if euclidean_distance(robot[i].position, agent.position) - robot[i].radius - agent.radius < 0.02:
-                
+
                 # Robot's angle
                 nrx = (robot[i].position.position.x - agent.position.position.x) * math.cos(agent.yaw) + (robot[i].position.position.y - agent.position.position.y) * math.sin(agent.yaw)
                 nry = -(robot[i].position.position.x - agent.position.position.x) * math.sin(agent.yaw) + (robot[i].position.position.y - agent.position.position.y) * math.cos(agent.yaw)
@@ -329,33 +321,91 @@ def collisions(agents, robot):
 
     return robot_collisions, person_collisions, robot_coll_list, person_coll_list
 
+
 def robot_on_person_collision(agents, robot):
-
     collision = collisions(agents, robot)
-    print('Robot_on_person_collision: %i ' % collision[0])
-
     return [collision[0], collision[2]]
 
-def person_on_robot_collision(agents, robot):
-    
-    collision = collisions(agents, robot)
-    print('Person_on_robot_collision: %i' % collision[1])
 
+def person_on_robot_collision(agents, robot):
+    collision = collisions(agents, robot)
     return [collision[1], collision[3]]
 
 
-def time_not_moving(agents, robot):
+def collision_count(agents, robot):
+    robot_coll_list = [0] * len(robot)
+    person_coll_list = [0] * len(robot)
+    robot_collisions = 0
+    person_collisions = 0
+
+    agents_in_collision = {}
+
+    for i in range(len(robot)):
+        for agent in agents[i].agents:
+            agent_name = agent.name
+
+            if euclidean_distance(robot[i].position, agent.position) - robot[i].radius - agent.radius < 0.02:
+                in_collision = agents_in_collision.get(agent_name, False)
+
+                # Robot's angle
+                nrx = (robot[i].position.position.x - agent.position.position.x) * math.cos(agent.yaw) + (robot[i].position.position.y - agent.position.position.y) * math.sin(agent.yaw)
+                nry = -(robot[i].position.position.x - agent.position.position.x) * math.sin(agent.yaw) + (robot[i].position.position.y - agent.position.position.y) * math.cos(agent.yaw)
+                alpha = math.atan2(nry, nrx)
+
+                # Agent's angle
+                nrx = (agent.position.position.x - robot[i].position.position.x) * math.cos(robot[i].yaw) + (agent.position.position.y - robot[i].position.position.y) * math.sin(robot[i].yaw)
+                nry = -(agent.position.position.x - robot[i].position.position.x) * math.sin(robot[i].yaw) + (agent.position.position.y - robot[i].position.position.y) * math.cos(robot[i].yaw)
+                alpha2 = math.atan2(nrx, nry)
+
+                if not in_collision:
+                    if abs(alpha) < abs(alpha2) and robot[i].linear_vel > agent.linear_vel:
+                        robot_collisions += 1
+                        robot_coll_list[i] += 1
+                    elif abs(alpha) > abs(alpha2) and robot[i].linear_vel < agent.linear_vel:
+                        person_collisions += 1
+                        person_coll_list[i] += 1
+                    elif abs(alpha) < abs(alpha2) and robot[i].linear_vel < agent.linear_vel:
+                        # person_collision += 1
+                        robot_collisions += 1
+                        robot_coll_list[i] += 1
+                    elif abs(alpha) > abs(alpha2) and robot[i].linear_vel > agent.linear_vel:
+                        # robot_collision += 1
+                        person_collisions += 1
+                        person_coll_list[i] += 1
+                    elif abs(alpha) == abs(alpha2) and robot[i].linear_vel == agent.linear_vel:
+                        robot_collisions += 1
+                        person_collisions += 1
+                        robot_coll_list[i] += 1
+                        person_coll_list[i] += 1
+
+                agents_in_collision[agent_name] = True
+            else:
+                agents_in_collision[agent_name] = False
+
+    return robot_collisions, person_collisions, robot_coll_list, person_coll_list
+
+
+def robot_on_person_collision_count(agents, robot):
+    collision = collision_count(agents, robot)
+    return [collision[0], collision[2]]
+
+
+def person_on_robot_collision_count(agents, robot):
+    collision = collision_count(agents, robot)
+    return [collision[1], collision[3]]
+
+
+def time_not_moving(agents, robot, linear_vel_threshold=0.01, angular_vel_threshold=0.02):
     
     not_moving = [0]*len(robot)
     time_step = total_time(agents, robot)[0]/len(agents)
 
     count = 0
     for index, r in enumerate(robot):
-        if(r.linear_vel < 0.01 and abs(r.angular_vel < 0.02)):
+        if(r.linear_vel < linear_vel_threshold and abs(r.angular_vel < angular_vel_threshold)):
             count=count+1
             not_moving[index]=1
     time_stopped = time_step*count
-    print('Time stopped: %i secs' % time_stopped)
     return [time_stopped, not_moving]
 
 
@@ -392,7 +442,7 @@ def minimum_goal_distance(agents, robot):
 
 
 # SocNavBench: A Grounded Simulation Testing Framework for Evaluating Social Navigation
-#ABHIJAT BISWAS, ALLAN WANG, GUSTAVO SILVERA, AARON STEINFELD, and HENNY AD-MONI, Carnegie Mellon University
+# ABHIJAT BISWAS, ALLAN WANG, GUSTAVO SILVERA, AARON STEINFELD, and HENNY AD-MONI, Carnegie Mellon University
 
 def avg_robot_linear_speed(agents, robot):
     speed_list = []
@@ -403,8 +453,8 @@ def avg_robot_linear_speed(agents, robot):
 
     speed = speed / len(robot)
 
-    print('Average_robot_speed: %.2f m/s' % speed)
     return [speed, speed_list]
+
 
 def avg_robot_angular_speed(agents, robot):
     speed_list = []
@@ -415,9 +465,7 @@ def avg_robot_angular_speed(agents, robot):
 
     speed = speed / len(robot)
 
-    print('Average_robot_speed: %.2f rad/s' % speed)
     return [speed, speed_list]
-
 
 
 def avg_acceleration(agents, robot):
@@ -437,8 +485,6 @@ def avg_acceleration(agents, robot):
             acceleration_list.append(0.0)
 
     acceleration = acceleration / len(robot)
-
-    print('Average_robot_acceleration: %.5f m/s^2' % acceleration)
 
     return [acceleration, acceleration_list]
 
@@ -461,8 +507,6 @@ def avg_overacceleration(agents, robot):
 
     jerk = jerk / len(robot)
 
-    print('Average_robot_jerk(over_acceleration): %.5f m/s^3' % jerk)
-
     return [jerk, jerk_list]
 
 
@@ -480,8 +524,6 @@ def avg_pedestrian_velocity(agents, robot):
         speed_list.append(speed2/len(agents[i].agents))
 
     speed = speed / (len(agents) * len(agents[0].agents))
-
-    print('Average_Pedestrian_speed: %.2f m/s' % speed)
     
     return [speed, speed_list]
 
@@ -502,9 +544,8 @@ def avg_closest_pedestrian_velocity(agents, robot):
         
         speed += closest.linear_vel
         speed_list.append(closest.linear_vel)
-    
+
     speed = speed/len(robot)
-    print('Speed average closest person: %.2f m/s' % speed)
     return [speed, speed_list]
 
 
@@ -515,68 +556,68 @@ def avg_pedestrian_angle(agents, robot):
 
 # metrics based on social force model
 
-# cumulative modulus of the social force provoked 
-# by the robot in the agents 
-def social_force_on_agents(agents, robot):
-    sfm = SFM()
-    sf = 0.0
-    sf_list = []
-    for agts, rb in zip(agents, robot):
-        f = sfm.modulusSocialForce2(rb, agts)
-        sf += f
-        sf_list.append(f)
-    return [sf, sf_list]
+# # cumulative modulus of the social force provoked 
+# # by the robot in the agents 
+# def social_force_on_agents(agents, robot):
+#     sfm = SFM()
+#     sf = 0.0
+#     sf_list = []
+#     for agts, rb in zip(agents, robot):
+#         f = sfm.modulusSocialForce2(rb, agts)
+#         sf += f
+#         sf_list.append(f)
+#     return [sf, sf_list]
 
-# cumulative modulus of the social force provoked 
-# by the agents in the robot
-def social_force_on_robot(agents, robot):
-    sfm = SFM()
-    sf = 0.0
-    sf_list = []
-    for agts, rb in zip(agents, robot):
-        f = sfm.modulusSocialForce(rb, agts)
-        sf += f
-        sf_list.append(f)
-    return [sf, sf_list]
+# # cumulative modulus of the social force provoked 
+# # by the agents in the robot
+# def social_force_on_robot(agents, robot):
+#     sfm = SFM()
+#     sf = 0.0
+#     sf_list = []
+#     for agts, rb in zip(agents, robot):
+#         f = sfm.modulusSocialForce(rb, agts)
+#         sf += f
+#         sf_list.append(f)
+#     return [sf, sf_list]
 
-# cumulative social work employed in this planner:
-# https://github.com/robotics-upo/social_force_window_planner
-def social_work(agents, robot):
-    sfm = SFM()
-    sw = 0.0
-    sw_list = []
-    for agts, rb in zip(agents, robot):
-        f = sfm.computeSocialWork(rb, agts)
-        sw += f
-        sw_list.append(f)
-    return [sw, sw_list]
-
-
-# cumulative obstacle force on the agents
-def obstacle_force_on_agents(agents, robot):
-    sfm = SFM()
-    of = 0.0
-    of_list = []
-    for agts in agents:
-        avg = 0.0
-        for a in agts.agents:
-            avg += np.linalg.norm(sfm.computeObstacleForce(a))
-        avg =avg/len(agts.agents)
-        of += avg
-        of_list.append(avg)
-    return [of, of_list]
+# # cumulative social work employed in this planner:
+# # https://github.com/robotics-upo/social_force_window_planner
+# def social_work(agents, robot):
+#     sfm = SFM()
+#     sw = 0.0
+#     sw_list = []
+#     for agts, rb in zip(agents, robot):
+#         f = sfm.computeSocialWork(rb, agts)
+#         sw += f
+#         sw_list.append(f)
+#     return [sw, sw_list]
 
 
-# cumulative obstacle force on the robot
-def obstacle_force_on_robot(agents, robot):
-    sfm = SFM()
-    of = 0.0
-    of_list = []
-    for r in robot:
-        f = np.linalg.norm(sfm.computeObstacleForce(r))
-        of += f
-        of_list.append(f)
-    return [of, of_list]
+# # cumulative obstacle force on the agents
+# def obstacle_force_on_agents(agents, robot):
+#     sfm = SFM()
+#     of = 0.0
+#     of_list = []
+#     for agts in agents:
+#         avg = 0.0
+#         for a in agts.agents:
+#             avg += np.linalg.norm(sfm.computeObstacleForce(a))
+#         avg =avg/len(agts.agents)
+#         of += avg
+#         of_list.append(avg)
+#     return [of, of_list]
+
+
+# # cumulative obstacle force on the robot
+# def obstacle_force_on_robot(agents, robot):
+#     sfm = SFM()
+#     of = 0.0
+#     of_list = []
+#     for r in robot:
+#         f = np.linalg.norm(sfm.computeObstacleForce(r))
+#         of += f
+#         of_list.append(f)
+#     return [of, of_list]
 
 
 #TODO
@@ -674,9 +715,9 @@ metrics = {
     'avg_closest_pedestrian_velocity': avg_closest_pedestrian_velocity,
 
     # metrics based on Social Force Model employed in different papers
-    'social_force_on_agents': social_force_on_agents,
-    'social_force_on_robot': social_force_on_robot,
-    'social_work': social_work,
-    'obstacle_force_on_robot': obstacle_force_on_robot,
-    'obstacle_force_on_agents': obstacle_force_on_agents,
+    # 'social_force_on_agents': social_force_on_agents,
+    # 'social_force_on_robot': social_force_on_robot,
+    # 'social_work': social_work,
+    # 'obstacle_force_on_robot': obstacle_force_on_robot,
+    # 'obstacle_force_on_agents': obstacle_force_on_agents,
 }
