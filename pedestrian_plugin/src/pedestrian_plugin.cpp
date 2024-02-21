@@ -201,8 +201,8 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       PythonUtils::setDictItemAsFloat(pRobotPose, "y", rPos.Y());
       PythonUtils::setDictItemAsFloat(pRobotPose, "z", rPos.Z());
       PythonUtils::setDictItemAsFloat(pRobotPose, "roll", rRpy.X());
-      PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.X());
-      PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.X());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.Y());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.Z());
       PythonUtils::setDictItemAsFloat(pRobotPose, "vel_linear", vel_linear);
       PythonUtils::setDictItemAsFloat(pRobotPose, "vel_theta", vel_theta);
       geometry_msgs::msg::Pose robot_pose;
@@ -221,7 +221,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       robotAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
       robotAgent.name = std::string("robot");
       robotAgent.position = robot_pose;
-      robotAgent.yaw = rRpy.X();
+      robotAgent.yaw = rRpy.Z();
       robotAgent.velocity.linear.x = vel_x;
       robotAgent.velocity.linear.y = vel_y;
       robotAgent.velocity.angular.z = vel_theta;
