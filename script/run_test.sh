@@ -4,7 +4,7 @@ trap ctrl_c INT QUIT TERM
 
 function ctrl_c() {
     echo "Test terminated"
-    exit 0
+    exit $1
 }
 
 function err {

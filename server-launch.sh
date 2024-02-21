@@ -115,9 +115,11 @@ mkdir -p $temp_dir
 if [[ $clean_server -eq 2 ]]; then
     blue "Clean servers"
     for service in "map_server" "map_data" "mongodb"; do
-        if [[ ! -z $(docker ps -f "name=$server" -q -a) ]]; then
-	    docker ps -f "name=$server" -q -a | xargs docker stop
-	    docker ps -f "name=$server" -q -a | xargs docker container rm
+        if [[ ! -z $(docker ps -f "name=$service" -q -a) ]]; then
+	    blue "stopping $service"
+	    docker ps -f "name=$service"
+	    docker ps -f "name=$service" -q -a | xargs docker stop
+	    docker ps -f "name=$service" -q -a | xargs docker container rm
         fi
     done
     exit 0

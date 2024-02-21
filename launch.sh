@@ -232,8 +232,8 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
-if [ $simulation -eq 0 ]; then dcfile="${dcfile}-production"; fi
-if [ $CABOT_HEADLESS -eq 1 ]; then dcfile="${dcfile}-headless"; fi
+if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
+if [[ $CABOT_HEADLESS -eq 1 ]]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
@@ -243,12 +243,8 @@ fi
 
 dccom="docker compose -f $dcfile"
 
-
-if [[ $CABOT_HEADLESS -eq 1 ]]; then
-    ./server-launch.sh -c -p $CABOT_SITE
-else
-    gnome-terminal -- bash -c "./server-launch.sh -c -p $CABOT_SITE -v; exit"
-fi
+## launch server
+./server-launch.sh -c -p $CABOT_SITE
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
@@ -282,7 +278,7 @@ if [[ $run_test -eq 1 ]]; then
     else
         docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
     fi
-    exit $?
+    ctrl_c $?
 fi
 
 while [ 1 -eq 1 ];
