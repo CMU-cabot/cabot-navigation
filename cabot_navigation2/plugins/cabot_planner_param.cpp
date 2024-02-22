@@ -150,7 +150,7 @@ void CaBotPlan::findIndex()
     }
   }
   if (nodes.size() < end_index) {
-    end_index = nodes.size() - 1;
+    end_index = nodes.size();
   }
   /*
   if (start_index < (uint64_t)(5.0/options_.initial_node_interval)) {
@@ -167,7 +167,7 @@ void CaBotPlan::adjustNodeInterval()
   bool changed = false;
   int devide_link_cell_interval_threshold = param.options.initial_node_interval * 2.0 / param.resolution;
   int shrink_link_cell_interval_threshold = param.options.initial_node_interval / 2.0 / param.resolution;
-  for (uint64_t i = 0; i < nodes.size() - 1; i++) {
+  for (uint64_t i = 0; i < nodes.size() - 2; i++) {
     if (nodes_backup.size() * 2 < nodes.size()) {
       break;
     }
@@ -567,13 +567,15 @@ std::vector<Node> CaBotPlannerParam::getNodes() const
   auto p1 = path.poses[0].pose.position;
   float mx = 0, my = 0;
   for (uint64_t i = 1; i < path.poses.size(); i++) {
+    worldToMap(p0.x, p0.y, mx,  my);
+    nodes.push_back(Node(mx, my));
     p1 = path.poses[i].pose.position;
 
     auto dist = std::hypot(p0.x - p1.x, p0.y - p1.y);
     int N = std::round(dist / initial_node_interval);
     if (N == 0) {continue;}
 
-    for (int j = 0; j <= N; j++) {
+    for (int j = 1; j <= N; j++) {
       // deal with the last pose
       if (j == N && i < path.poses.size() - 1) {
         continue;
