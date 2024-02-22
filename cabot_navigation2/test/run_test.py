@@ -46,6 +46,8 @@ from gazebo_msgs.srv import SetEntityState
 
 from pedestrian.manager import PedestrianManager
 
+# cabot_navigation2/test
+from evaluator import Evaluator
 
 def import_class(input_str):
     # Split the input string and form module and class strings
@@ -109,6 +111,11 @@ class Tester:
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.test_func_name = None
         self.result = {}
+        # evaluation
+        self.evaluator = None
+
+    def set_evaluator(self, evaluator):
+        self.evaluator = evaluator
 
     def test(self, module, specific_test, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -134,6 +141,7 @@ class Tester:
             logger.info(f"Testing {specific_test}")
             self.test_func_name = specific_test
             getattr(module, specific_test)(self)
+            self.stop_evaluation()  # automatically stop metric evaluation
             success = self.print_result(self.result, specific_test)
             self.cancel_subscription(specific_test)
         else:
@@ -143,6 +151,7 @@ class Tester:
                 logger.info(f"Testing {func}")
                 self.test_func_name = func
                 getattr(module, func)(self)
+                self.stop_evaluation()  # automatically stop metric evaluation
                 success = self.print_result(self.result, func)
                 self.cancel_subscription(func)
 
@@ -227,6 +236,41 @@ class Tester:
 
     def info(self, text):
         logger.info(text)
+
+    # evaluation
+    def set_evaluation_parameters(self, **kwargs):
+        """
+        Set parameters used for computing metrics
+
+        Parameters are defined as EvaluationParameter dataclass in evaluator module
+
+        Parameters
+        ----------
+        metrics: Optional[list] = []
+            List of metric functions to be computed. The callable functions are defined in evaluation_metrics.py
+
+        robot_radius: Optional[float] = None
+            The robot radius used to detect collisions in the metric computation.
+            If not defined, the default value (0.45) defined in the pedestrian plugin is used.
+        """
+        self.evaluator.set_evaluation_parameters(**kwargs)
+
+    def start_evaluation(self):
+        """
+        Start computing the metrics
+
+        This method should be called when ready to start the navigation
+        """
+        self.evaluator.start()
+
+    def stop_evaluation(self):
+        """
+        Stop comuting the metrics
+
+        It is usually not necessary to call this method because it is automatically called when the test ends.
+        This method can be used when the user intentionally stops the metric computation
+        """
+        self.evaluator.stop()
 
     # shorthand functions
     def check_collision(self, **kwargs):
@@ -608,7 +652,11 @@ def main():
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
 
+    evaluator = Evaluator(node)
+    evaluator.set_logger(logger)
+
     tester = Tester(node)
+    tester.set_evaluator(evaluator)
     mod = importlib.import_module(options.module)
     tester.test(mod, options.func, wait_ready=options.wait_ready)
 

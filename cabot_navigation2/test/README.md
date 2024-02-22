@@ -77,6 +77,22 @@ func test_name(tester: Tester)
     - `condition` : pyton snipet to check if the `msg` matches the condition
 - `wait` : wait for seconds
     - `seconds` : wait time in seconds
+- `set_evaluation_parameters(metrics=[], robot_radius=None)` : set parameters used for computing metrics
+    - `metrics : Optional[list], default=[]` : list of metric functions to be computed. The callable functions are defined in [evaluation_metrics.py](evaluation_metrics.py).
+        - Example
+            ```
+            metrics=[
+                "total_time",
+                "robot_path_length",
+                "time_not_moving",
+                "avg_robot_linear_speed",
+                "cumulative_heading_changes"
+            ]
+            ```
+        - Note: The implementation of the metric functions is not stable as it is under development.
+    - `robot_radius : Optional[float], default=None` : robot radius used to detect collisions in metric computation. If not defined, the default value (0.45) defined in the pedestrian plugin will be used.
+- `start_evaluation` : start computing the metrics. This method should be called when ready to start the navigation.
+- `stop_evaluation` : stop computing the metrics. It is usually not necessary to call this method because it is automatically called when the test ends.
 
 ---
 **old one with run_test_yaml.py**

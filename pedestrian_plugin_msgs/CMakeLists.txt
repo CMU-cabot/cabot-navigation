@@ -15,7 +15,10 @@ if(BUILD_TESTING)
 endif()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  msg/Agent.msg
+  msg/Agents.msg
   msg/Collision.msg
+  msg/Metric.msg
   msg/Plugin.msg
   msg/PluginParam.msg
   srv/PluginUpdate.srv
