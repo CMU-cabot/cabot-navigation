@@ -191,6 +191,8 @@ install(DIRECTORY test/ DESTINATION share/${PROJECT_NAME}/test/)
 install(PROGRAMS
   test/run_test.py
   test/run_test_yaml.py
+  test/evaluator.py
+  test/evaluation_metrics.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
