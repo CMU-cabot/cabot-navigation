@@ -239,12 +239,37 @@ class Tester:
 
     # evaluation
     def set_evaluation_parameters(self, **kwargs):
+        """
+        Set parameters used for computing metrics
+
+        Parameters are defined as EvaluationParameter dataclass in evaluator module
+
+        Parameters
+        ----------
+        metrics: Optional[list] = []
+            List of metric functions to be computed. The callable functions are defined in evaluation_metrics.py
+
+        robot_radius: Optional[float] = None
+            The robot radius used to detect collisions in the metric computation.
+            If not defined, the default value (0.45) defined in the pedestrian plugin is used.
+        """
         self.evaluator.set_evaluation_parameters(**kwargs)
 
     def start_evaluation(self):
+        """
+        Start computing the metrics
+
+        This method should be called when ready to start the navigation
+        """
         self.evaluator.start()
 
     def stop_evaluation(self):
+        """
+        Stop comuting the metrics
+
+        It is usually not necessary to call this method because it is automatically called when the test ends.
+        This method can be used when the user intentionally stops the metric computation
+        """
         self.evaluator.stop()
 
     # shorthand functions
