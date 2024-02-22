@@ -353,7 +353,7 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             path.poses.append(pose)
 
     CaBotRclpyUtil.info(F"path {path}")
-    return (path, path.poses[-1])
+    return (path, path.poses[-1] if len(path.poses) > 0 else None)
 
 
 class Goal(geoutil.TargetPlace):
