@@ -81,6 +81,10 @@ class TurnDetector:
     def detects(path, current_pose=None, visualize=False):
         start = 0
         min_dist = 1000
+
+        ## requires more than or eqauls to 13 poses
+        if len(path.poses) < 13:
+            return []
         if current_pose is not None:
             for p in path.poses:
                 dx = p.pose.position.x - current_pose.x
