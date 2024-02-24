@@ -1,0 +1,25 @@
+name: Run Unittest
+
+on:
+  pull-request:
+    branches: [ main ]
+
+jobs:
+  run_unittest:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install vcs
+      run: pip3 install vcstool
+
+    - name: Prepare thirdparty repos
+      run: ./setup-dependency.sh
+
+    - name: Build images
+      shell: bash
+      run: ./build-docker.sh -p -i -w
+
+    - name: Run unittest
+      shell: bash
+      run: ./launch.sh -u

@@ -112,6 +112,7 @@ function help()
     echo "-T <module> run test CABOT_SITE.<module>"
     echo "-f <test>   run test CABOT_SITE.<module>.<test>"
     echo "-H          headless"
+    echo "-u          unittest"
 }
 
 
@@ -124,6 +125,7 @@ yes=0
 run_test=0
 module=tests
 test_func=
+unittest=
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -135,7 +137,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsn:vDMSytHT:f:" arg; do
+while getopts "hsn:vDMSytHT:f:u" arg; do
     case $arg in
         s)
             simulation=1
@@ -171,6 +173,9 @@ while getopts "hsn:vDMSytHT:f:" arg; do
         H)
             export CABOT_HEADLESS=1
             ;;
+	u)
+	    unittest=1
+	    ;;
     esac
 done
 shift $((OPTIND-1))
@@ -179,6 +184,20 @@ shift $((OPTIND-1))
 ## private variables
 pids=()
 termpids=()
+
+
+if [[ $unittest -eq 1 ]]; then
+    code=0
+    docker compose run --rm navigation ./script/unittest.sh -a
+    if [[ $? -ne 0 ]]; then
+	code=1
+    fi
+    docker compose run --rm localization ./script/unittest.sh -a
+    if [[ $? -ne 0 ]]; then
+	code=1
+    fi
+    exit $code
+fi
 
 ## check required environment variables
 error=0

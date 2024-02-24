@@ -179,6 +179,7 @@ services:
       - ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
       - ./cabot_mf_localization:/home/developer/loc_ws/src/cabot_mf_localization
       - ./cabot_sites:/home/developer/loc_ws/src/cabot_sites
+      - ./script:/home/developer/loc_ws/script
       - ./mf_localization:/home/developer/loc_ws/src/mf_localization
       - ./mf_localization_gazebo:/home/developer/loc_ws/src/mf_localization_gazebo
       - ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
