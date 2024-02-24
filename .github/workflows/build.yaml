@@ -34,3 +34,14 @@ jobs:
     - name: Build images
       shell: bash
       run: ./build-docker.sh -p -i -w
+
+    # run test if build is okay
+    - name: Trigger Workflow in Sandbox
+      run: |
+        curl -X POST \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${{ secrets.TOKEN }}" \
+        https://api.github.com/repos/cmu-cabot/sandbox/dispatches \
+        -d '{"event_type": "build-and-test"}'
+      env:
+        PAT: ${{ secrets.TOKEN }}
