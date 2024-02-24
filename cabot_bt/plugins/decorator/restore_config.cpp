@@ -69,7 +69,7 @@ public:
         RCLCPP_INFO(node_->get_logger(), "Restored parameters (normal) %s", store_->begin()->first.c_str());
         client_->wait_for_service();
         restore_future_ = std::make_shared<std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>>>(
-            client_->set_parameters(store_->begin()->second));
+          client_->set_parameters(store_->begin()->second));
         while (restore_future_->wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
           rclcpp::spin_some(node_);
         }
@@ -89,7 +89,7 @@ public:
       RCLCPP_INFO(node_->get_logger(), "Restored parameters (normal) %s", store_->begin()->first.c_str());
       client_->wait_for_service();
       restore_future_ = std::make_shared<std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>>>(
-          client_->set_parameters(store_->begin()->second));
+        client_->set_parameters(store_->begin()->second));
       while (restore_future_->wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
         rclcpp::spin_some(node_);
       }
@@ -118,7 +118,7 @@ public:
   {
     return BT::PortsList{
       BT::InputPort<std::string>("store", "store name")
-      };
+    };
   }
 
 private:
