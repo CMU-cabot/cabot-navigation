@@ -198,3 +198,6 @@ class TestGeojson(unittest.TestCase):
 
         self.assertEqual(goal._was_approaching, True)
         self.assertEqual(goal._was_approached, True)
+
+    def get_logger(self):
+        return {}

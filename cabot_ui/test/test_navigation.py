@@ -67,14 +67,15 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
         self.node = rclpy.node.Node("test_navigation_node_node")
         CaBotRclpyUtil.initialize(self.node)
         self.runner = NavigationRunner(self.node)
+        self.runner.start()
 
         br = tf2_ros.TransformBroadcaster(self.node)
 
         def send_transform():
             msg = TransformStamped()
             msg.header.stamp = self.node.get_clock().now().to_msg()
-            msg.child_frame_id = "/map"
-            msg.header.frame_id = "/base_footprint"
+            msg.child_frame_id = "/map_global"
+            msg.header.frame_id = "/map"
             msg.transform.translation.x = 0.0
             msg.transform.translation.y = 0.0
             msg.transform.translation.z = 0.0
@@ -85,10 +86,10 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
             msg.transform.rotation.w = q[3]
             br.sendTransform(msg)
 
-        # rate = self.node.create_timer(0.1, send_transform)
+        rate = self.node.create_timer(0.1, send_transform)
 
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
-        du = datautil.DataUtil()
+        du = datautil.DataUtil(self.node)
 
         du.init_by_data(landmarks=du.get_landmarks(self.dir_path+"/data/landmarks1.json"),
                         node_map=du.get_node_map(self.dir_path+"/data/node_map1.json"),
@@ -97,6 +98,9 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
         self.nav = Navigation(self.node, datautil_instance=du,
                               anchor_file=self.dir_path+"/data/test_map.yaml",
                               wait_for_action=False)
+        buffer = tf2_ros.Buffer()
+        listener = tf2_ros.TransformListener(buffer, self.node)
+        self.nav.buffer = buffer
         self.nav.delegate = self
         # dummy local pose
         self.nav.current_local_pose = lambda: geoutil.Pose(x=0.0, y=0.0, z=0.0, r=0.0)
@@ -159,7 +163,10 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
 
         self.assertEqual(len(self.nav._sub_goals), 0)
         time.sleep(1)
-        self.nav.pause_navigation()
+        def callback(*arguments):
+            print(*arguments)
+        self.nav._pause_navigation(callback=callback)
+        time.sleep(1)
         self.assertEqual(len(self.nav._sub_goals), 1)
 
         self.nav._navigate_next_sub_goal()
@@ -192,5 +199,4 @@ class NavigationRunner:
         executor = SingleThreadedExecutor(context=self._context)
         executor.add_node(self._node)
         while self._run:
-            print(F"running {self._run}")
             executor.spin_once(timeout_sec=1.0)

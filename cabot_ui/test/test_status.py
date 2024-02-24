@@ -41,4 +41,4 @@ class TestStatus(unittest.TestCase):
         i2 = cabot_ui.status.StatusManager.get_instance()
 
         self.assertEqual(i1, i2)
-        self.assertEqual(i1.state, cabot_ui.status.State.idle)
+        self.assertEqual(i1.state, cabot_ui.status.State.in_preparation)
