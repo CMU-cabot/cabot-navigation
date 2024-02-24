@@ -93,7 +93,7 @@ def main():
 
     try:
         rclpy.spin(node)
-    except:
+    except:  # noqa: #722
         pass
 
 
