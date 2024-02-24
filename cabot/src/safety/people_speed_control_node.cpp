@@ -21,10 +21,9 @@
 // People speed control
 // Author: Daisuke Sato <daisukes@cmu.edu>
 
-#include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <tf2_ros/buffer.h>
 #include <tf2/utils.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <cmath>
 #include <limits>
@@ -39,6 +38,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace CaBotSafety
 {
@@ -106,13 +106,20 @@ public:
     RCLCPP_INFO(get_logger(), "People speed control - %s", __FUNCTION__);
 
     people_topic_ = declare_parameter("people_topic", people_topic_);
-    people_sub_ = create_subscription<people_msgs::msg::People>(people_topic_, 10, std::bind(&PeopleSpeedControlNode::peopleCallback, this, std::placeholders::_1));
+    people_sub_ =
+      create_subscription<people_msgs::msg::People>(
+      people_topic_, 10,
+      std::bind(&PeopleSpeedControlNode::peopleCallback, this, std::placeholders::_1));
 
     odom_topic_ = declare_parameter("odom_topic", odom_topic_);
-    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(odom_topic_, 10, std::bind(&PeopleSpeedControlNode::odomCallback, this, std::placeholders::_1));
+    odom_sub_ =
+      create_subscription<nav_msgs::msg::Odometry>(odom_topic_, 10, std::bind(&PeopleSpeedControlNode::odomCallback, this, std::placeholders::_1));
 
     plan_topic_ = declare_parameter("plan_topic", plan_topic_);
-    plan_sub_ = create_subscription<nav_msgs::msg::Path>(plan_topic_, 10, std::bind(&PeopleSpeedControlNode::planCallback, this, std::placeholders::_1));
+    plan_sub_ = create_subscription<nav_msgs::msg::Path>(
+      plan_topic_, 10, std::bind(
+        &PeopleSpeedControlNode::planCallback, this,
+        std::placeholders::_1));
 
     vis_topic_ = declare_parameter("visualize_topic", vis_topic_);
     vis_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(vis_topic_, 100);
@@ -159,7 +166,7 @@ private:
   void peopleCallback(const people_msgs::msg::People::SharedPtr input)
   {
     if (last_plan_.poses.size() == 0) {
-      auto& clk = *this->get_clock();
+      auto & clk = *this->get_clock();
       RCLCPP_INFO_THROTTLE(get_logger(), clk, 1000, "PeopleSpeedControl no plan");
       return;
     }
