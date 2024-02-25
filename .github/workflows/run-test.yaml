@@ -1,8 +1,13 @@
 name: Run Unittest
 
 on:
-  pull-request:
-    branches: [ main ]
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 jobs:
   run_unittest:
@@ -18,7 +23,7 @@ jobs:
 
     - name: Build images
       shell: bash
-      run: ./build-docker.sh -p -i -w
+      run: ./build-docker.sh -p -i -w -u 1000
 
     - name: Run unittest
       shell: bash
