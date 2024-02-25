@@ -28,7 +28,7 @@ set(msg_files
   msg/MFLocalPosition.msg
   msg/MFLocalizeStatus.msg
   msg/MFNavSAT.msg
-  )
+)
 
 set(srv_files
   srv/MFTrigger.srv
@@ -38,13 +38,13 @@ set(srv_files
   srv/RestartLocalization.srv
   srv/FloorChange.srv
   srv/ConvertLocalToGlobal.srv
-  )
+)
 
 set(dependencies
   builtin_interfaces
   std_msgs
   geometry_msgs
-  )
+)
 
 ## Generate messages in the 'msg' folder
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -53,6 +53,23 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES
   ${dependencies}
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_copyright REQUIRED)
+  # find_package(ament_cmake_cpplint REQUIRED)
+  # find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  # find_package(ament_cmake_uncrustify REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+
+  # set(MAX_LINE_LENGTH 200)
+  ament_copyright()
+  # ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  # ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_lint_cmake()
+  # ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_xmllint()
+endif()
 
 ament_export_dependencies(rosidl_default_runtime)
 
