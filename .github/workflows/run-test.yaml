@@ -31,7 +31,7 @@ jobs:
 
     - name: Build images
       shell: bash
-      run: ./build-docker.sh -p -i -w -u 1000
+      run: ./build-docker.sh -p -i -w
 
     - name: Run unittest
       shell: bash
