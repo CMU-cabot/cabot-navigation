@@ -22,12 +22,12 @@
 """Test cabot_ui.turn_detector module"""
 
 import unittest
-import random
 
 from cabot_ui.geoutil import Pose
 from cabot_ui.turn_detector import TurnDetector
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+
 
 class TestEvent(unittest.TestCase):
     """Test class"""
@@ -41,8 +41,8 @@ class TestEvent(unittest.TestCase):
             path = Path()
             for j in range(0, i):
                 pose = PoseStamped()
-                pose.pose.position.x = j*0.1;
-                pose.pose.position.y = j*0.1;
+                pose.pose.position.x = j * 0.1
+                pose.pose.position.y = j * 0.1
                 pose.pose.orientation.w = 1.0
                 path.poses.append(pose)
-            turns = TurnDetector.detects(path, current_pose=current_pose)
+            _ = TurnDetector.detects(path, current_pose=current_pose)

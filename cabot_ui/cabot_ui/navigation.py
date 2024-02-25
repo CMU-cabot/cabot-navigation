@@ -28,7 +28,6 @@ import traceback
 
 # ROS
 import rclpy
-from rclpy.time import Duration
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
@@ -40,7 +39,6 @@ import nav2_msgs.action
 import std_msgs.msg
 import nav_msgs.msg
 import geometry_msgs.msg
-from actionlib_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
 
 # Other
@@ -380,7 +378,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_social_distance = None
         self.current_social_distance = None
         get_social_distance_topic = node.declare_parameter("get_social_distance_topic", "/get_social_distance").value
-        self.get_social_distance_sub = node.create_subscription(geometry_msgs.msg.Point, get_social_distance_topic, self._get_social_distance_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.get_social_distance_sub = node.create_subscription(geometry_msgs.msg.Point, get_social_distance_topic,
+                                                                self._get_social_distance_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         set_social_distance_topic = node.declare_parameter("set_social_distance_topic", "/set_social_distance").value
         self.set_social_distance_pub = node.create_publisher(geometry_msgs.msg.Point, set_social_distance_topic, 10, callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -536,7 +535,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
 
-        # for dashboad        
+        # for dashboad
         (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
         msg = nav_msgs.msg.Path()
         msg.header = gpath.header
@@ -821,7 +820,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     if dist_robot_to_tail <= self.current_queue_interval:
                         # if distance to queue tail is smaller than queue wait interval, stop immediately
                         limit = 0.0
-                        self._logger.info(F"Stop at current position, tail is closer than next queue wait POI, Set speed limit={limit}, dist_robot_to_tail={dist_robot_to_tail}", throttle_duration_sec=1)
+                        self._logger.info(F"Stop at current position, tail is closer than next queue wait POI, Set speed limit={limit}, dist_robot_to_tail={dist_robot_to_tail}",
+                                          throttle_duration_sec=1)
                     else:
                         # adjust Queue POI position by moving closer to link target node
                         poi_orientation = tf_transformations.euler_from_quaternion([poi.link_orientation.x, poi.link_orientation.y, poi.link_orientation.z, poi.link_orientation.w])
@@ -830,7 +830,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                         if dist_tail_to_queue_wait > max(2.0*self.current_queue_interval - self._queue_tail_dist_error_tolerance, self.current_queue_interval):
                             # If distance from next queue wait point to queue tail is larger than twice of queue wait interval,
                             # there should be another queue wait point. Skip next queue wait point.
-                            self._logger.info(F"Skip next queue wait POI, POI is far from robot. dist_tail_to_queue_wait={dist_tail_to_queue_wait}, dist_robot_to_tail={dist_robot_to_tail}", throttle_duration_sec=1)
+                            self._logger.info(F"Skip next queue wait POI, POI is far from robot. dist_tail_to_queue_wait={dist_tail_to_queue_wait}, dist_robot_to_tail={dist_robot_to_tail}",
+                                              throttle_duration_sec=1)
                         else:
                             dist_tail_to_queue_path = numpy.linalg.norm(tail_global_position_on_queue_path - tail_global_position)
                             if (dist_tail_to_queue_path > self._queue_tail_ignore_path_dist):
@@ -1038,7 +1039,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         callback(True)
 
     def set_pause_control(self, flag):
-        self._logger.info(F"set_pause_control")
+        self._logger.info("set_pause_control")
         self.delegate.activity_log("cabot/navigation", "pause_control", str(flag))
         self.pause_control_msg.data = flag
         self.pause_control_pub.publish(self.pause_control_msg)

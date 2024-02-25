@@ -82,7 +82,7 @@ class TurnDetector:
         start = 0
         min_dist = 1000
 
-        ## requires more than or eqauls to 13 poses
+        # requires more than or eqauls to 13 poses
         if len(path.poses) < 13:
             return []
         if current_pose is not None:

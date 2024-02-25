@@ -35,7 +35,6 @@ Author: Daisuke Sato<daisuke@cmu.edu>
 
 import signal
 import sys
-import threading
 import traceback
 import yaml
 
@@ -109,7 +108,6 @@ class CabotUIManager(NavigationInterface, object):
             return stat
         self.updater.add(FunctionDiagnosticTask("UI Manager", manager_status))
 
-
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
     def create_menu(self):
@@ -135,7 +133,7 @@ class CabotUIManager(NavigationInterface, object):
                     temp = self._node.get_parameter("init_speed").value
                     if temp is not None:
                         init_speed = temp
-                except:
+                except:  # noqa: #722
                     self._logger.error(traceback.format_exc())
                     pass
                 self._logger.info(f"Initial Speed = {init_speed}")
@@ -143,9 +141,8 @@ class CabotUIManager(NavigationInterface, object):
 
             self.menu_stack = []
             self._logger.info("create_menu completed")
-        except:
+        except:  # noqa: #722
             self._logger.error(traceback.format_exc())
-
 
     # navigation delegate
     def activity_log(self, category="", text="", memo=""):
@@ -257,7 +254,7 @@ class CabotUIManager(NavigationInterface, object):
             return
         try:
             self.process_event(event)
-        except:
+        except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
     def reset(self):
@@ -534,7 +531,7 @@ class EventMapper(object):
         # state = self._manager.state
 
         if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
-            event.type != HoldDownEvent.TYPE:
+           event.type != HoldDownEvent.TYPE:
             return
 
         mevent = None
@@ -599,6 +596,7 @@ class EventMapper(object):
 def receiveSignal(signal_num, frame):
     print("Received:", signal_num)
     sys.exit()
+
 
 signal.signal(signal.SIGINT, receiveSignal)
 
