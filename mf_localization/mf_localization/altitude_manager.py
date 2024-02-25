@@ -88,6 +88,7 @@ class AltitudeManager():
 
         return False
 
+
 @dataclass
 class AltitudeFloorEstimatorParameters:
     enable: bool = True
@@ -110,6 +111,7 @@ class AltitudeFloorEstimatorResult:
     height_vel_est: float
     current_state: int
     floor_change_event: int
+
 
 class AltitudeFloorEstimator:
     def __init__(self, parameters: AltitudeFloorEstimatorParameters = AltitudeFloorEstimatorParameters()):

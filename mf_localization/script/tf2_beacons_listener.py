@@ -22,7 +22,6 @@
 # SOFTWARE.
 
 import json
-import threading
 import traceback
 
 import rclpy
@@ -178,8 +177,8 @@ def main():
         rclpy.spin(node)
     except rclpy.executors.ExternalShutdownException:
         node.get_logger().info('node is externally shutdown')
-    except Exception as e:
-        node.get_logger().info("caught an exception other than ExternalShutdownException: "+traceback.format_exc()) # e.g. RCLError
+    except Exception:
+        node.get_logger().info("caught an exception other than ExternalShutdownException: "+traceback.format_exc())  # e.g. RCLError
     except KeyboardInterrupt:
         node.get_logger().info("caught KeyboardInterrupt")
 

@@ -13,14 +13,27 @@ install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 install(DIRECTORY configuration_files/ DESTINATION share/${PROJECT_NAME}/configuration_files)
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_copyright REQUIRED)
+  find_package(ament_cmake_cpplint REQUIRED)
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  find_package(ament_cmake_uncrustify REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+
+  set(MAX_LINE_LENGTH 250)
+  ament_copyright()
+  ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_lint_cmake()
+  ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_xmllint()
 endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
 add_executable(multi_floor_topic_proxy
   src/multi_floor_topic_proxy.cpp
-  )
+)
 
 ament_target_dependencies(multi_floor_topic_proxy
   rclcpp
