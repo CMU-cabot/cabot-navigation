@@ -1,24 +1,22 @@
-/*******************************************************************************
- * Copyright (c) 2022  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2022  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "cabot_navigation2/cabot_planner_param.hpp"
 
@@ -65,7 +63,7 @@ nav_msgs::msg::Path CaBotPlan::getPlan(bool normalized, float normalize_length)
       q.setRPY(0, 0, yaw);
 
       float mx, my;
-      param.mapToWorld(mp0.x+0.5, mp0.y+0.5, mx, my);
+      param.mapToWorld(mp0.x + 0.5, mp0.y + 0.5, mx, my);
 
       geometry_msgs::msg::PoseStamped wp;
       wp.pose.position.x = mx;
@@ -90,7 +88,7 @@ nav_msgs::msg::Path CaBotPlan::getPlan(bool normalized, float normalize_length)
       q.setRPY(0, 0, yaw);
 
       float mx, my;
-      param.mapToWorld(mp0.x+0.5, mp0.y+0.5, mx, my);
+      param.mapToWorld(mp0.x + 0.5, mp0.y + 0.5, mx, my);
 
       geometry_msgs::msg::PoseStamped wp;
       wp.pose.position.x = mx;
@@ -145,7 +143,7 @@ void CaBotPlan::findIndex()
       if (checkPointIsOkay(*n1, detour_mode)) {
         break;
       } else {
-        end_distance = distance_from_start + (2.0 / param.resolution); // margin
+        end_distance = distance_from_start + (2.0 / param.resolution);  // margin
       }
     }
   }
@@ -287,16 +285,16 @@ bool CaBotPlan::checkPointIsOkay(Point & point, DetourMode detour_mode)
     if (index >= 0 && param.static_cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
       float mx, my;
       param.mapToWorld(point.x, point.y, mx, my);
-        RCLCPP_WARN(
-          logger_, "ignore mode: path above threshold at (%.2f, %.2f)", mx, my);
+      RCLCPP_WARN(
+        logger_, "ignore mode: path above threshold at (%.2f, %.2f)", mx, my);
       return false;
     }
   } else {
     if (index >= 0 && param.cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
       float mx, my;
       param.mapToWorld(point.x, point.y, mx, my);
-        RCLCPP_WARN(
-          logger_, "path above threshold at (%.2f, %.2f)", mx, my);
+      RCLCPP_WARN(
+        logger_, "path above threshold at (%.2f, %.2f)", mx, my);
       return false;
     }
   }
@@ -554,7 +552,7 @@ int CaBotPlannerParam::getIndex(float x, float y) const
 
 int CaBotPlannerParam::getIndexByPoint(Point & p) const
 {
-  return getIndex(p.x+0.5, p.y+0.5);
+  return getIndex(p.x + 0.5, p.y + 0.5);
 }
 
 std::vector<Node> CaBotPlannerParam::getNodes() const
@@ -567,7 +565,7 @@ std::vector<Node> CaBotPlannerParam::getNodes() const
   auto p1 = path.poses[0].pose.position;
   float mx = 0, my = 0;
   for (uint64_t i = 1; i < path.poses.size(); i++) {
-    worldToMap(p0.x, p0.y, mx,  my);
+    worldToMap(p0.x, p0.y, mx, my);
     nodes.push_back(Node(mx, my));
     p1 = path.poses[i].pose.position;
 

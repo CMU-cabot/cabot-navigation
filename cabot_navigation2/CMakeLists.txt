@@ -56,6 +56,21 @@ if(BUILD_TESTING)
   )
   ament_target_dependencies(test_util rclcpp nav2_costmap_2d OpenCV)
   add_ros_test(test/test_util.test.py TIMEOUT 120 ARGS "test_binary_dir:=${CMAKE_CURRENT_BINARY_DIR}")
+
+  find_package(ament_cmake_copyright REQUIRED)
+  find_package(ament_cmake_cpplint REQUIRED)
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  find_package(ament_cmake_uncrustify REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+
+  set(MAX_LINE_LENGTH 200)
+  ament_copyright()
+  ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_lint_cmake()
+  ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_xmllint()
 endif()
 
 include_directories(
@@ -64,10 +79,10 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" )
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
-if (NOT DEBUG) 
+if(NOT DEBUG)
 
 set(dependencies
   geometry_msgs
@@ -87,45 +102,45 @@ set(dependencies
   diagnostic_updater
   yaml_cpp_vendor
 #  OpenMP
-  )
+)
 
 ### dwb critics
 add_library(cabot_critics SHARED
   plugins/pose_align.cpp
   plugins/velocity_obstacle.cpp
   plugins/path_forward_prefer.cpp
-  )
+)
 
 target_compile_definitions(cabot_critics PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_critics
   ${dependencies}
-  )
+)
 
 ### goal checker
 add_library(cabot_goals SHARED
   plugins/cabot_simple_goal_checker.cpp
   plugins/util.cpp
-  )
+)
 
 target_compile_definitions(cabot_goals PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_goals
   ${dependencies}
-  )
+)
 
 ### costmap layers
 add_library(cabot_layers SHARED
   plugins/navcog_path_layer.cpp
   plugins/people_obstacle_layer.cpp
   plugins/navcog_path_util.cpp
-  )
+)
 
 target_compile_definitions(cabot_layers PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_layers
   ${dependencies}
-  )
+)
 
 ### planner plugin
 add_library(cabot_planners SHARED
@@ -134,13 +149,13 @@ add_library(cabot_planners SHARED
   plugins/cabot_planner_param.cpp
   plugins/cabot_planner_util.cpp
   plugins/navcog_path_util.cpp
-  )
+)
 
 target_compile_definitions(cabot_planners PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_planners
   ${dependencies}
-  )
+)
 
 target_link_libraries(cabot_planners
   ${OpenCV_LIBS}
@@ -150,19 +165,19 @@ target_link_libraries(cabot_planners
 ### scan multiplier
 add_executable(cabot_scan
   src/cabot_scan.cpp
-  )
+)
 
 ament_target_dependencies(cabot_scan
   ${dependencies}
-  )
+)
 
 ### cabot lifecycle manager
 add_executable(cabot_lifecycle_manager
   src/cabot_lifecycle_manager.cpp
-  )
+)
 ament_target_dependencies(cabot_lifecycle_manager
   ${dependencies}
-  )
+)
 
 install(TARGETS
   cabot_critics
@@ -182,7 +197,7 @@ install(FILES
   layers_plugins.xml
   planners_plugins.xml
   DESTINATION share/${PROJECT_NAME}
-  )
+)
 
 install(DIRECTORY params/ DESTINATION share/${PROJECT_NAME}/params/)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch/)
@@ -190,7 +205,6 @@ install(DIRECTORY test/ DESTINATION share/${PROJECT_NAME}/test/)
 
 install(PROGRAMS
   test/run_test.py
-  test/run_test_yaml.py
   test/evaluator.py
   test/evaluation_metrics.py
   DESTINATION lib/${PROJECT_NAME}
@@ -211,7 +225,7 @@ pluginlib_export_plugin_description_file(nav2_core planners_plugins.xml)
 
 endif()
 
-if (DEBUG)
+if(DEBUG)
 ### test
 
 set(dependencies_test

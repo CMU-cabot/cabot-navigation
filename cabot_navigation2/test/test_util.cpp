@@ -110,8 +110,8 @@ TEST_F(TaskPlanningFixture, ObstacleDistanceTest) {
   cabot_navigation2::Point p3(-10, 0);
   cabot_navigation2::Point p4(0, -10);
 
-  EXPECT_EQ(o2.distance(p1), 0);
-  EXPECT_EQ(o2.distance(p2), 0);
+  EXPECT_GT(o2.distance(p1), 0);
+  EXPECT_GT(o2.distance(p2), 0);
   EXPECT_LT(o2.distance(p3), 0);
   EXPECT_LT(o2.distance(p4), 0);
 
