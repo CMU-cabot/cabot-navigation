@@ -1,4 +1,3 @@
-###############################################################################
 # Copyright (c) 2024  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,10 +17,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-###############################################################################
 
 import logging
-import math
 import uuid
 
 from gazebo_msgs.srv import DeleteEntity
@@ -29,6 +26,7 @@ from gazebo_msgs.srv import SpawnEntity
 from pedestrian_plugin_msgs.msg import Plugin
 from pedestrian_plugin_msgs.msg import PluginParam
 from pedestrian_plugin_msgs.srv import PluginUpdate
+
 
 def identify_variable_type(variable):
     variable_type = type(variable)
@@ -61,7 +59,7 @@ class PedestrianManager():
             self.serviceReady = True
             self.timer.cancel()
 
-    def init(self, callback=None):        
+    def init(self, callback=None):
         if self.serviceReady:
             self._update(actors=[], callback=callback)
         else:
@@ -87,6 +85,7 @@ class PedestrianManager():
             logging.debug(f"remaining task = {self.task_count}")
             if self.task_count > 0:
                 return
+
             def complete2(future):
                 logging.debug(f"done complete2 {future.result()}")
                 if callback:
@@ -176,7 +175,6 @@ class PedestrianManager():
                 callback(future)
             self.actorMap[name] = actor
         future.add_done_callback(complete)
-
 
     def _update(self, actors=None, callback=None):
         request = PluginUpdate.Request()
