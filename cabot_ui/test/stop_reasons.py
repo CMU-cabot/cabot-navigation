@@ -1,18 +1,33 @@
 #!/usr/bin/env python3
 
+# Copyright (c) 2022  Carnegie Mellon University
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import logging
 import os
 from optparse import OptionParser
 import sys
 import rclpy
-from tf_transformations import quaternion_multiply, euler_from_quaternion
-
-from rclpy.serialization import deserialize_message
-from rosidl_runtime_py.utilities import get_message
 from cabot_common.rosbag2 import BagReader
 
-import cabot_ui.geoutil
-from cabot_ui.stop_reasoner import StopReasoner, StopReason, StopReasonFilter
+from cabot_ui.stop_reasoner import StopReasoner, StopReasonFilter
 
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -40,7 +55,7 @@ reader = BagReader(options.file)
 topic_types = reader.get_all_topics_and_types()
 type_map = {topic_types[i].name: topic_types[i].type for i in range(len(topic_types))}
 
-#tf_transformer = tf_bag.BagTfTransformer(bag)
+# tf_transformer = tf_bag.BagTfTransformer(bag)
 tf_transformer = None
 reasoner = StopReasoner(tf_transformer)
 
@@ -70,7 +85,7 @@ all_topics = [
 ]
 
 stop_reason_filter = StopReasonFilter(["NO_NAVIGATION", "NOT_STOPPED", "NO_TOUCH", "STOPPED_BUT_UNDER_THRESHOLD"])
-#stop_reason_filter = StopReasonFilter([])
+# stop_reason_filter = StopReasonFilter([])
 
 reader.set_filter_by_topics(all_topics)
 reader.set_filter_by_options(options)  # filter by start and duration
@@ -120,7 +135,6 @@ while reader.has_next() and rclpy.ok():
         if code:
             logger.info("### %.2f(%.2f), %s, %.2f, %s", t/1e9, st, code.name, duration,
                         "NAVIGATING" if reasoner.navigating else "NOT NAVIGATING")
-    except:
+    except:  # noqa: #722
         import traceback
         logger.error(traceback.format_exc())
-

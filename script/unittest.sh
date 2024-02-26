@@ -32,9 +32,11 @@ if [[ -z $package ]] && [[ -z $all ]]; then
 fi
 
 if [[ $all -eq 1 ]]; then
-    colcon test
+    colcon build && \
+    colcon test && \
     colcon test-result --verbose
 else
-    colcon test --packages-select $package
+    colcon build --packages-up-to $package && \
+    colcon test --packages-select $package && \
     colcon test-result --verbose --test-result-base build/$pacakge
 fi

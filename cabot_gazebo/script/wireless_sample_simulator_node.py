@@ -80,7 +80,7 @@ def main():
     _ = SimpleSampleSimulatorNode(node, "wifi")
     try:
         rclpy.spin(node)
-    except:
+    except:  # noqa: #722
         pass
 
 

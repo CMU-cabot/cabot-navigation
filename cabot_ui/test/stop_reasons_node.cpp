@@ -39,7 +39,7 @@
 
 #include "../src/stop_reasoner.hpp"
 
-using namespace cabot_ui;
+using cabot_ui;
 
 #define ODOM_TOPIC "/cabot/odom_raw"
 #define EVENT_TOPIC "/cabot/event"

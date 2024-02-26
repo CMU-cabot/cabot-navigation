@@ -49,6 +49,7 @@ from pedestrian.manager import PedestrianManager
 # cabot_navigation2/test
 from evaluator import Evaluator
 
+
 def import_class(input_str):
     # Split the input string and form module and class strings
     module_str, class_str = input_str.rsplit('/', 1)
@@ -62,6 +63,7 @@ def import_class(input_str):
 node = None
 manager = None
 logger = None
+
 
 # decorator of test actions
 def wait_test(timeout=60):
@@ -219,7 +221,7 @@ class Tester:
                 raise RuntimeError(f"no action in {case}")
         if target in self.subscriptions:
             for key, sub in self.subscriptions[target].items():
-                if action == None or key == action:
+                if action is None or key == action:
                     self.node.destroy_subscription(sub)
             if action:
                 del self.subscriptions[target][action]
@@ -240,7 +242,7 @@ class Tester:
     # evaluation
     def set_evaluation_parameters(self, **kwargs):
         """
-        Set parameters used for computing metrics
+        Set parameters used for computing metrics.
 
         Parameters are defined as EvaluationParameter dataclass in evaluator module
 
@@ -252,12 +254,13 @@ class Tester:
         robot_radius: Optional[float] = None
             The robot radius used to detect collisions in the metric computation.
             If not defined, the default value (0.45) defined in the pedestrian plugin is used.
+
         """
         self.evaluator.set_evaluation_parameters(**kwargs)
 
     def start_evaluation(self):
         """
-        Start computing the metrics
+        Start computing the metrics.
 
         This method should be called when ready to start the navigation
         """
@@ -265,7 +268,7 @@ class Tester:
 
     def stop_evaluation(self):
         """
-        Stop comuting the metrics
+        Stop comuting the metrics.
 
         It is usually not necessary to call this method because it is automatically called when the test ends.
         This method can be used when the user intentionally stops the metric computation
@@ -276,7 +279,7 @@ class Tester:
     def check_collision(self, **kwargs):
         return self.check_topic_error(**dict(
             dict(
-                action_name=f'check_collision',
+                action_name='check_collision',
                 topic="/collision",
                 topic_type="pedestrian_plugin_msgs/msg/Collision",
                 condition="True"
@@ -386,10 +389,11 @@ class Tester:
             **kwargs)
         )
 
-    ### actual task needs to be waited
+    # actual task needs to be waited
     @wait_test()
     def init_manager(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
+
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
@@ -402,7 +406,6 @@ class Tester:
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         condition = test_action['condition']
-        uuid = test_action['uuid']
 
         def topic_callback(msg):
             try:
@@ -413,7 +416,7 @@ class Tester:
                     case['success'] = False
                     case['error'] = f"condition {condition} matched\n{msg}"
                     self.cancel_subscription(case)
-            except:
+            except:  # noqa: #722
                 logger.error(traceback.format_exc())
 
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
@@ -427,7 +430,6 @@ class Tester:
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         condition = test_action['condition']
-        uuid = test_action['uuid']
 
         def topic_callback(msg):
             try:
@@ -437,7 +439,7 @@ class Tester:
                     logger.debug(f"success {condition}")
                     case['success'] = True
                     self.cancel_subscription(case)
-            except:
+            except:  # noqa: #722
                 logger.error(traceback.format_exc())
 
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
@@ -448,7 +450,6 @@ class Tester:
     @wait_test()
     def wait_ready(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
-        uuid = test_action['uuid']
         topic = '/cabot/activity_log'
         topic_type = import_class('cabot_msgs/msg/Log')
         condition = "msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'"
@@ -460,7 +461,7 @@ class Tester:
                 if context['result']:
                     case['done'] = True
                     self.cancel_subscription(case)
-            except:
+            except:  # noqa: #722
                 logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
@@ -508,7 +509,7 @@ class Tester:
                             case['done'] = True
                             self.cancel_subscription(case)
                             time.sleep(2)
-                    except:
+                    except:  # noqa: #722
                         logger.error(traceback.format_exc())
                 sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
                 self.add_subscription(case, sub)
@@ -532,6 +533,7 @@ class Tester:
     @wait_test()
     def setup_actors(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
+
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
@@ -546,7 +548,6 @@ class Tester:
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         condition = test_action['condition']
-        uuid = test_action['uuid']
 
         def topic_callback(msg):
             try:
@@ -555,7 +556,7 @@ class Tester:
                 if context['result']:
                     case['done'] = True
                     self.cancel_subscription(case)
-            except:
+            except:  # noqa: #722
                 logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
@@ -598,16 +599,17 @@ class Tester:
 
 
 class LogColors:
-    DEBUG = '\033[94m'  # Blue
-    INFO = '\033[92m'   # Green
-    WARNING = '\033[93m' # Yellow
-    ERROR = '\033[91m'   # Red
+    DEBUG = '\033[94m'       # Blue
+    INFO = '\033[92m'        # Green
+    WARNING = '\033[93m'     # Yellow
+    ERROR = '\033[91m'       # Red
     CRITICAL = '\033[1;91m'  # Bold Red
-    RESET = '\033[0m'   # Reset
+    RESET = '\033[0m'        # Reset
+
 
 # Custom formatter
 class ColorFormatter(logging.Formatter):
-    format = "%(asctime)s.%(msecs)03d %(levelname)s: %(message)s"# (%(filename)s:%(lineno)d)"
+    format = "%(asctime)s.%(msecs)03d %(levelname)s: %(message)s"
 
     FORMATS = {
         logging.DEBUG: LogColors.DEBUG + format + LogColors.RESET,

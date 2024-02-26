@@ -41,11 +41,10 @@ from launch.some_substitutions_type import SomeSubstitutionsType
 from launch.utilities import normalize_to_list_of_substitutions
 from launch.utilities import perform_substitutions
 from launch import LaunchContext
-from typing import List
-
 
 from launch.logging import launch_config
 from cabot_common.launch import AppendLogDirPrefix
+
 
 class BooleanSubstitution(Substitution):
     """
@@ -63,9 +62,9 @@ class BooleanSubstitution(Substitution):
         else:
             raise ValueError(f"Invalid boolean string: {self.__value}")
 
+
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_ui')
-    output = 'both'
 
     show_gazebo = LaunchConfiguration('show_gazebo')
     rviz_config_file = LaunchConfiguration('rviz_config_file')
@@ -80,14 +79,6 @@ def generate_launch_description():
     show_local_rviz_ = BooleanSubstitution(show_local_rviz)
     show_robot_monitor_ = BooleanSubstitution(show_robot_monitor)
     use_sim_time_ = BooleanSubstitution(use_sim_time)
-
-    check_gazebo_ready = Node(
-        package='cabot_gazebo',
-        executable='check_gazebo_ready.py',
-        name='check_gazebo_ready_node',
-        parameters=[{'check_mobile_base': True}],
-        condition=IfCondition(use_sim_time_),
-    )
 
     return LaunchDescription([
         # save all log file in the directory where the launch.log file is saved
@@ -132,13 +123,13 @@ def generate_launch_description():
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([get_package_share_directory('gazebo_ros'),
-                                            '/launch/gzclient.launch.py']),
+                                           '/launch/gzclient.launch.py']),
             condition=IfCondition(AndSubstitution(left=use_sim_time_, right=show_gazebo_)),
             launch_arguments={
                 'verbose': 'true'
             }.items()
         ),
-        LogInfo(msg='non gazebo env'),    
+        LogInfo(msg='non gazebo env'),
         Node(
             condition=IfCondition(show_rviz_),
             package='rviz2',

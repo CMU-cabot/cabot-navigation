@@ -35,7 +35,6 @@
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
-using namespace cabot_ui;
 
 #define ODOM_TOPIC "/cabot/odom_raw"
 #define EVENT_TOPIC "/cabot/event"
@@ -57,7 +56,7 @@ public:
   : rclcpp::Node("stop_reasoner_node", options),
     reasoner_(nullptr),
     stop_reason_filter_(nullptr),
-    prev_code_(StopReason::NONE)
+    prev_code_(cabot_ui::StopReason::NONE)
   {
     stop_reason_pub_ = this->create_publisher<cabot_msgs::msg::StopReason>("/stop_reason", 10);
     event_pub_ = this->create_publisher<std_msgs::msg::String>("/cabot/event", 10);
@@ -76,76 +75,84 @@ public:
 
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_odom(*msg);
+    }
   }
 
   void event_callback(const std_msgs::msg::String::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_event(*msg);
+    }
   }
 
   void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_cmd_vel(*msg);
+    }
   }
 
   void people_speed_callback(const std_msgs::msg::Float32::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_people_speed(*msg);
+    }
   }
 
   void touch_speed_callback(const std_msgs::msg::Float32::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_touch_speed(*msg);
+    }
   }
 
   void global_plan_callback(const nav_msgs::msg::Path::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_global_plan(*msg);
+    }
   }
 
   void replan_reason_callback(const people_msgs::msg::Person::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_replan_reason(*msg);
+    }
   }
 
   void current_frame_callback(const std_msgs::msg::String::SharedPtr msg)
   {
-    if (reasoner_ != nullptr)
+    if (reasoner_ != nullptr) {
       reasoner_->input_current_frame(*msg);
+    }
   }
 
   void timer_callback()
   {
     if (reasoner_ == nullptr) {
-      reasoner_ = std::make_shared<StopReasoner>(this->shared_from_this());
+      reasoner_ = std::make_shared<cabot_ui::StopReasoner>(this->shared_from_this());
       auto announce_no_touch = this->declare_parameter("announce_no_touch", rclcpp::ParameterValue(false)).get<bool>();
 
       if (announce_no_touch) {
         stop_reason_filter_ =
-          std::make_shared<StopReasonFilter>(
-          std::vector<StopReason>(
+          std::make_shared<cabot_ui::StopReasonFilter>(
+          std::vector<cabot_ui::StopReason>(
           {
-            StopReason::NO_NAVIGATION,
-            StopReason::NOT_STOPPED,
-            StopReason::STOPPED_BUT_UNDER_THRESHOLD
+            cabot_ui::StopReason::NO_NAVIGATION,
+            cabot_ui::StopReason::NOT_STOPPED,
+            cabot_ui::StopReason::STOPPED_BUT_UNDER_THRESHOLD
           }));
       } else {
         stop_reason_filter_ =
-          std::make_shared<StopReasonFilter>(
-          std::vector<StopReason>(
+          std::make_shared<cabot_ui::StopReasonFilter>(
+          std::vector<cabot_ui::StopReason>(
           {
-            StopReason::NO_NAVIGATION,
-            StopReason::NOT_STOPPED,
-            StopReason::NO_TOUCH,
-            StopReason::STOPPED_BUT_UNDER_THRESHOLD
+            cabot_ui::StopReason::NO_NAVIGATION,
+            cabot_ui::StopReason::NOT_STOPPED,
+            cabot_ui::StopReason::NO_TOUCH,
+            cabot_ui::StopReason::STOPPED_BUT_UNDER_THRESHOLD
           }));
       }
     }
@@ -154,27 +161,27 @@ public:
     stop_reason_filter_->update(duration, code);
     std::tie(duration, code) = stop_reason_filter_->event();
 
-    if (code != StopReason::NONE) {
+    if (code != cabot_ui::StopReason::NONE) {
       cabot_msgs::msg::StopReason msg;
       msg.header.stamp = this->get_clock()->now();
-      msg.reason = StopReasonUtil::toStr(code);
+      msg.reason = cabot_ui::StopReasonUtil::toStr(code);
       msg.duration = duration;
       stop_reason_pub_->publish(msg);
     }
     std::tie(duration, code) = stop_reason_filter_->summary();
-    if (code != StopReason::NONE) {
+    if (code != cabot_ui::StopReason::NONE) {
       std_msgs::msg::String msg;
-      msg.data = "navigation;stop-reason;" + StopReasonUtil::toStr(code);
+      msg.data = "navigation;stop-reason;" + cabot_ui::StopReasonUtil::toStr(code);
       event_pub_->publish(msg);
-      RCLCPP_INFO(this->get_logger(), "%.2f, %s, %.2f", this->get_clock()->now().nanoseconds() / 1e9f, StopReasonUtil::toStr(code).c_str(), duration);
+      RCLCPP_INFO(this->get_logger(), "%.2f, %s, %.2f", this->get_clock()->now().nanoseconds() / 1e9f, cabot_ui::StopReasonUtil::toStr(code).c_str(), duration);
     }
     stop_reason_filter_->conclude();
   }
 
 private:
-  std::shared_ptr<StopReasoner> reasoner_;
-  std::shared_ptr<StopReasonFilter> stop_reason_filter_;
-  StopReason prev_code_;
+  std::shared_ptr<cabot_ui::StopReasoner> reasoner_;
+  std::shared_ptr<cabot_ui::StopReasonFilter> stop_reason_filter_;
+  cabot_ui::StopReason prev_code_;
   rclcpp::Publisher<cabot_msgs::msg::StopReason>::SharedPtr stop_reason_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr event_pub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;

@@ -119,7 +119,7 @@ def main():
 
     # remap the grid map of current_frame to "map" frame for navigation and visualization
     if publish_map_topic:
-        multi_floor_map_server = CurrentMapTopicRemapper(node, local_map_frame, global_map_frame, frame_id_list)
+        multi_floor_map_server = CurrentMapTopicRemapper(node, local_map_frame, global_map_frame, frame_id_list)  # noqa
 
     rclpy.spin(node)
 

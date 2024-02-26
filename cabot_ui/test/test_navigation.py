@@ -86,7 +86,7 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
             msg.transform.rotation.w = q[3]
             br.sendTransform(msg)
 
-        rate = self.node.create_timer(0.1, send_transform)
+        rate = self.node.create_timer(0.1, send_transform)  # noqa: #841
 
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
         du = datautil.DataUtil(self.node)
@@ -99,7 +99,7 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
                               anchor_file=self.dir_path+"/data/test_map.yaml",
                               wait_for_action=False)
         buffer = tf2_ros.Buffer()
-        listener = tf2_ros.TransformListener(buffer, self.node)
+        listener = tf2_ros.TransformListener(buffer, self.node)  # noqa: #841
         self.nav.buffer = buffer
         self.nav.delegate = self
         # dummy local pose
@@ -163,6 +163,7 @@ class TestNavigationNode(unittest.TestCase, navgoal.GoalInterface, NavigationInt
 
         self.assertEqual(len(self.nav._sub_goals), 0)
         time.sleep(1)
+
         def callback(*arguments):
             print(*arguments)
         self.nav._pause_navigation(callback=callback)

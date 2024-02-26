@@ -1,8 +1,14 @@
 name: Run Unittest
 
 on:
-  pull-request:
-    branches: [ main ]
+  push:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 jobs:
   run_unittest:
@@ -16,9 +22,9 @@ jobs:
     - name: Prepare thirdparty repos
       run: ./setup-dependency.sh
 
-    - name: Build images
+    - name: Pull images and build workspace
       shell: bash
-      run: ./build-docker.sh -p -i -w
+      run: ./manage-docker-image.sh -a pull -i "ros2 localization" -o cmucal -t ros2-dev-latest
 
     - name: Run unittest
       shell: bash

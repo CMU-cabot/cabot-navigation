@@ -37,7 +37,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 include_directories(
   include
-  )
+)
 
 set(dependencies
   rcl
@@ -52,14 +52,20 @@ set(dependencies
 
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # uncomment the line when a copyright and license is not present in all source files
-  #set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # uncomment the line when this package is not in a git repo
-  #set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_copyright REQUIRED)
+  find_package(ament_cmake_cpplint REQUIRED)
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  find_package(ament_cmake_uncrustify REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+
+  set(MAX_LINE_LENGTH 200)
+  ament_copyright()
+  ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_lint_cmake()
+  ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_xmllint()
 endif()
 
 add_library(cabot_people_exist_bt_node SHARED
@@ -154,7 +160,7 @@ endforeach()
 
 add_executable(check_eval
   src/check_eval.cpp
-  )
+)
 
 set(dependencies
   rclcpp
@@ -166,7 +172,7 @@ set(dependencies
   nav2_msgs
   dwb_msgs
   geometry_msgs
-  )
+)
 
 ament_target_dependencies(check_eval ${dependencies})
 
@@ -177,15 +183,10 @@ install(TARGETS ${library_name}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
-  )
+)
 
 install(DIRECTORY behavior_trees DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include/)
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
-endif()
 
 ament_export_include_directories(include)
 ament_export_libraries(

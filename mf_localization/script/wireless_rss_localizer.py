@@ -192,8 +192,8 @@ class SimpleRSSLocalizer(RSSLocalizer):
         if x is None:
             return None
 
-        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)
-        X = self._X
+        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)  # noqa
+        X = self._X  # noqa
 
         nn = NearestNeighbors(n_neighbors=1)
         nn.fit(self._X)
@@ -318,8 +318,8 @@ class SimpleFloorLocalizer(RSSLocalizer):
         if x is None:
             return None
 
-        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)
-        X = self._X
+        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)  # noqa
+        X = self._X  # noqa
 
         nn = NearestNeighbors(n_neighbors=1)
         nn.fit(self._X)

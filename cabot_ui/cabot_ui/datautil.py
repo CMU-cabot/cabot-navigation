@@ -301,7 +301,7 @@ class DataUtil(object):
             self.current_route = geojson.Object.marshal_list(jfeatures)
             for obj in self.current_route:
                 obj.update_anchor(self._anchor)
-        except:
+        except:  # noqa: #722
             import traceback
             CaBotRclpyUtil.error(traceback.format_exc())
             CaBotRclpyUtil.error(F"parse error: {req.text}")

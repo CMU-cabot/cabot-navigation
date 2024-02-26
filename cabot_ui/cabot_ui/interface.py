@@ -19,7 +19,6 @@
 # SOFTWARE.
 
 import os
-import math
 
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -243,12 +242,12 @@ class UserInterface(object):
         self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
-        vibration = vibration.RIGHT_DEV
+        vib = vibration.RIGHT_DEV
         if angle > 0:
-            vibration = vibration.LEFT_DEV
+            vib = vibration.LEFT_DEV
 
         self._activity_log("cabot/interface", "human")
-        self.vibrate(pattern=vibration)
+        self.vibrate(pattern=vib)
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"))
 
     def have_arrived(self, goal):

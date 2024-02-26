@@ -223,7 +223,7 @@ def social_space_intrusions(agents, robot):
 def detect_groups(agents):
     group_ids = []
     for a in agents[0].agents:
-        if (a.group_id != -1 and ((a.group_id in group_ids) == False)):
+        if (a.group_id != -1 and ((a.group_id in group_ids) is False)):
             group_ids.append(a.group_id)
 
     return group_ids
@@ -422,7 +422,7 @@ def goal_reached(agents, robot):
     if (len(robot[-1].goals)):
         for g in robot[-1].goals:
             d = euclidean_distance(robot[-1].position, g) - robot[-1].goal_radius
-            if d<mind:
+            if d < mind:
                 return [True]
     return [False]
 

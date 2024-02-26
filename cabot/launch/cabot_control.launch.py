@@ -18,23 +18,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""
-Launch file for CaBot control (model independent)
-"""
+# Launch file for CaBot control (model independent)
+
 from launch.logging import launch_config
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.actions import GroupAction
-from launch.actions import LogInfo
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
 from launch.conditions import UnlessCondition
-from launch.conditions import LaunchConfigurationEquals
-from launch.conditions import LaunchConfigurationNotEquals
 from launch.event_handlers import OnShutdown
-from launch.substitutions import Command
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution

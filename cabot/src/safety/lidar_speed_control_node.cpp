@@ -21,10 +21,9 @@
 // LiDAR speed control
 // Author: Daisuke Sato <daisukes@cmu.edu>
 
-#include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <tf2_ros/buffer.h>
 #include <tf2/utils.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <limits>
 #include <sstream>
@@ -35,6 +34,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 
 namespace CaBotSafety
@@ -124,7 +124,10 @@ private:
     RCLCPP_INFO(get_logger(), "LiDAR speed control - %s", __FUNCTION__);
 
     laser_topic_ = declare_parameter("laser_topic", laser_topic_);
-    scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>(laser_topic_, rclcpp::SensorDataQoS(), std::bind(&LiDARSpeedControlNode::laserCallback, this, std::placeholders::_1));
+    scan_sub_ =
+      create_subscription<sensor_msgs::msg::LaserScan>(
+      laser_topic_, rclcpp::SensorDataQoS(),
+      std::bind(&LiDARSpeedControlNode::laserCallback, this, std::placeholders::_1));
 
     vis_topic_ = declare_parameter("visualize_topic", vis_topic_);
     vis_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(vis_topic_, 100);
@@ -147,7 +150,7 @@ private:
 
 
     callback_handler_ =
-        this->add_on_set_parameters_callback(std::bind(&LiDARSpeedControlNode::param_set_callback, this, std::placeholders::_1));
+      this->add_on_set_parameters_callback(std::bind(&LiDARSpeedControlNode::param_set_callback, this, std::placeholders::_1));
   }
 
   struct BlindSpot : CaBotSafety::Point

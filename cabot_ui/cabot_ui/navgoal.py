@@ -767,7 +767,6 @@ class ElevatorOutGoal(ElevatorGoal):
 
         self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
 
-
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorOutGoal completed")
         status = future.result().status
@@ -833,7 +832,6 @@ class NarrowGoal(NavGoal):
         # basically the same as a NavGoal, use BT_XML that makes the footprint the same as an elevator to pass through narrow spaces
         # self.delegate.navigate_through_poses(self.ros_path.poses[1:], NavGoal.DEFAULT_BT_XML, self.done_callback)
         self.delegate.navigate_to_pose(self.ros_path.poses[-1], bt, self.goal_handle_callback, self.done_callback)
-
 
     @util.setInterval(5, times=1)
     def wait_for_announce(self):

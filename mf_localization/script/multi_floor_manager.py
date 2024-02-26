@@ -73,7 +73,7 @@ from cartographer_ros_msgs.srv import ReadMetrics
 import mf_localization.geoutil as geoutil
 import mf_localization.resource_utils as resource_utils
 
-from mf_localization.wireless_utils import extract_samples
+# from mf_localization.wireless_utils import extract_samples
 from wireless_rss_localizer import create_wireless_rss_localizer
 
 from mf_localization_msgs.msg import MFGlobalPosition
@@ -86,10 +86,13 @@ from mf_localization_msgs.srv import RestartLocalization
 from mf_localization_msgs.srv import StartLocalization
 from mf_localization_msgs.srv import StopLocalization
 
-from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters, AltitudeFloorEstimatorResult
+from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
+
+import std_msgs.msg
+from cabot_msgs.srv import LookupTransform
 
 
 def json2anchor(jobj):
@@ -514,18 +517,18 @@ class MultiFloorManager:
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
 
-        self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode = LocalizationMode.TRACK)
+        self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
 
-    def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode = None):
+    def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode=None):
 
         # set target mode
-        if mode is not None: # update the target mode
+        if mode is not None:  # update the target mode
             target_mode = mode
         else:
             if self.mode is None:
                 target_mode = LocalizationMode.INIT
             else:
-                target_mode = self.mode # keep the current mode
+                target_mode = self.mode  # keep the current mode
 
         if self.floor is None:
             self.logger.info("floor is unknown. Set floor by calling /set_current_floor service before publishing the 2D pose estimate.")
@@ -553,7 +556,7 @@ class MultiFloorManager:
             try:
                 # this assumes frame_id of pose_stamped_msg is correctly set.
                 local_pose_stamped = tfBuffer.transform(pose_stamped_msg, frame_id, timeout=Duration(seconds=1.0))  # timeout 1.0 s
-            except RuntimeError as e:
+            except RuntimeError:
                 # when the frame_id of pose_stamped_msg is not correctly set (e.g. frame_id = map), assume the initial pose is published on the target frame.
                 # this workaround behaves intuitively in typical cases.
                 self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. Assuming initial pose is published on the target frame ({frame_id}).")
@@ -571,7 +574,7 @@ class MultiFloorManager:
 
             self.mode = target_mode
             self.area = target_area
-            
+
             self.start_trajectory_with_pose(local_pose)
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
 
@@ -609,7 +612,7 @@ class MultiFloorManager:
         self.resetpose_pub.publish(pose_cov_stamped)  # publish local_pose for visualization
         status_code_start_trajectory = self.start_trajectory_with_pose(local_pose)
         self.logger.info(F"called /{floor_manager.node_id}/{self.mode}/start_trajectory, code={status_code_start_trajectory}")
-            
+
         # set current_frame and publish it in the setter
         self.current_frame = frame_id
 
@@ -701,7 +704,7 @@ class MultiFloorManager:
                 try:
                     # tf from the origin of the target floor to the robot pose
                     local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
+                except RuntimeError:
                     self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
 
                 # update the trajectory only when local_transform is available
@@ -860,7 +863,7 @@ class MultiFloorManager:
                         self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
                     return
             else:
-                self.logger.info(F"optimization_detected. change localization mode init->track")
+                self.logger.info("optimization_detected. change localization mode init->track")
 
             # set temporal variables
             target_floor = floor
@@ -874,7 +877,7 @@ class MultiFloorManager:
             try:
                 # tf from the origin of the target floor to the robot pose
                 local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type), no_cache=True)
-            except RuntimeError as e:
+            except RuntimeError:
                 self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
 
             # update the trajectory only when local_transform is available
@@ -911,7 +914,7 @@ class MultiFloorManager:
                 if failure_detected and self.auto_relocalization:
                     self.restart_localization()
                     self.logger.error("Auto-relocalization. (localization failure detected)")
-            except RuntimeError as e:
+            except RuntimeError:
                 self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.base_link_frame}")
 
     # periodically check and update internal state variables (area and mode)
@@ -959,7 +962,7 @@ class MultiFloorManager:
                 if self.area != area:
                     self.logger.info(F"area change detected ({self.area} -> {area}).")
                 elif (self.mode == LocalizationMode.INIT and self.optimization_detected):
-                    self.logger.info(F"optimization_detected. change localization mode init->track")
+                    self.logger.info("optimization_detected. change localization mode init->track")
                 elif (self.mode == LocalizationMode.INIT and self.init_timeout_detected):
                     self.logger.info("optimization timeout detected. change localization mode init->track")
 
@@ -973,7 +976,7 @@ class MultiFloorManager:
                 try:
                     # tf from the origin of the target floor to the robot pose
                     local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
+                except RuntimeError:
                     self.logger.error('LookupTransform Error from ' + frame_id + " to " + self.base_link_frame)
 
                 # update the trajectory only when local_transform is available
@@ -1814,6 +1817,7 @@ class CurrentPublisher:
                 self.logger.info("try to publish")
 '''
 
+
 class CartographerParameterConverter:
     # yaml parameter structure
     #
@@ -1915,13 +1919,14 @@ def extend_node_parameter_dictionary(all_params: dict) -> dict:
     all_params_new["map_list"] = map_list
     return all_params_new
 
-#import yappi
-#yappi.start()
+
+# import yappi
+# yappi.start()
 def receiveSignal(signal_num, frame):
     print("Received:", signal_num)
     print("shutting down launch service")
-    #yappi.stop()
-    #yappi.get_func_stats().save('mf-callgrind.out', type='callgrind')
+    # yappi.stop()
+    # yappi.get_func_stats().save('mf-callgrind.out', type='callgrind')
     loop.create_task(launch_service.shutdown())
     thread.join()
     # debug
@@ -1930,8 +1935,7 @@ def receiveSignal(signal_num, frame):
     print(F"exit 0 {threading.get_ident()}")
     sys.exit(0)
 
-import std_msgs.msg
-from cabot_msgs.srv import LookupTransform
+
 class BufferProxy():
     def __init__(self, node):
         self._clock = node.get_clock()
@@ -1992,7 +1996,6 @@ class BufferProxy():
         do_transform = tf2_ros.TransformRegistration().get(type(pose_stamped))
         transform = self.lookup_transform(target, pose_stamped.header.frame_id)
         return do_transform(pose_stamped, transform)
-
 
 
 signal.signal(signal.SIGINT, receiveSignal)
@@ -2084,7 +2087,7 @@ if __name__ == "__main__":
     cartographer_qos_overrides_default = {"imu": {"subscription": {"depth": 100}}}  # imu QoS depth is increased to reduce the effect of dropping imu messages
     cartographer_qos_overrides = map_config["cartographer_qos_overrides"] if "cartographer_qos_overrides" in map_config else cartographer_qos_overrides_default
 
-    #current_publisher = CurrentPublisher(node, verbose=verbose)
+    # current_publisher = CurrentPublisher(node, verbose=verbose)
 
     # configuration file check
     configuration_directory = configuration_directory_raw  # resource_utils.get_filename(configuration_directory_raw)
@@ -2474,7 +2477,7 @@ if __name__ == "__main__":
     def main_loop():
         # detect optimization
         if multi_floor_manager.is_optimized():
-            tfBuffer.clear() # clear outdated tf before optimization
+            tfBuffer.clear()  # clear outdated tf before optimization
             multi_floor_manager.optimization_detected = True
 
         # detect area and mode switching

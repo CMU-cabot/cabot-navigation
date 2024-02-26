@@ -251,7 +251,7 @@ def generate_launch_description():
                     'world': modified_world,
                     'params_file': str(gazebo_params)
                 }.items()
-            ),            
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([pkg_dir,
                                               '/launch/gazebo_wireless_helper.launch.py']),
