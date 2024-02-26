@@ -331,69 +331,6 @@ def person_on_robot_collision(agents, robot):
     return [collision[1], collision[3]]
 
 
-def collision_count(agents, robot):
-    robot_coll_list = [0] * len(robot)
-    person_coll_list = [0] * len(robot)
-    robot_collisions = 0
-    person_collisions = 0
-
-    agents_in_collision = {}
-
-    for i in range(len(robot)):
-        for agent in agents[i].agents:
-            agent_name = agent.name
-
-            if euclidean_distance(robot[i].position, agent.position) - robot[i].radius - agent.radius < 0.02:
-                in_collision = agents_in_collision.get(agent_name, False)
-
-                # Robot's angle
-                nrx = (robot[i].position.position.x - agent.position.position.x) * math.cos(agent.yaw) + (robot[i].position.position.y - agent.position.position.y) * math.sin(agent.yaw)
-                nry = -(robot[i].position.position.x - agent.position.position.x) * math.sin(agent.yaw) + (robot[i].position.position.y - agent.position.position.y) * math.cos(agent.yaw)
-                alpha = math.atan2(nry, nrx)
-
-                # Agent's angle
-                nrx = (agent.position.position.x - robot[i].position.position.x) * math.cos(robot[i].yaw) + (agent.position.position.y - robot[i].position.position.y) * math.sin(robot[i].yaw)
-                nry = -(agent.position.position.x - robot[i].position.position.x) * math.sin(robot[i].yaw) + (agent.position.position.y - robot[i].position.position.y) * math.cos(robot[i].yaw)
-                alpha2 = math.atan2(nrx, nry)
-
-                if not in_collision:
-                    if abs(alpha) < abs(alpha2) and robot[i].linear_vel > agent.linear_vel:
-                        robot_collisions += 1
-                        robot_coll_list[i] += 1
-                    elif abs(alpha) > abs(alpha2) and robot[i].linear_vel < agent.linear_vel:
-                        person_collisions += 1
-                        person_coll_list[i] += 1
-                    elif abs(alpha) < abs(alpha2) and robot[i].linear_vel < agent.linear_vel:
-                        # person_collision += 1
-                        robot_collisions += 1
-                        robot_coll_list[i] += 1
-                    elif abs(alpha) > abs(alpha2) and robot[i].linear_vel > agent.linear_vel:
-                        # robot_collision += 1
-                        person_collisions += 1
-                        person_coll_list[i] += 1
-                    elif abs(alpha) == abs(alpha2) and robot[i].linear_vel == agent.linear_vel:
-                        robot_collisions += 1
-                        person_collisions += 1
-                        robot_coll_list[i] += 1
-                        person_coll_list[i] += 1
-
-                agents_in_collision[agent_name] = True
-            else:
-                agents_in_collision[agent_name] = False
-
-    return robot_collisions, person_collisions, robot_coll_list, person_coll_list
-
-
-def robot_on_person_collision_count(agents, robot):
-    collision = collision_count(agents, robot)
-    return [collision[0], collision[2]]
-
-
-def person_on_robot_collision_count(agents, robot):
-    collision = collision_count(agents, robot)
-    return [collision[1], collision[3]]
-
-
 def time_not_moving(agents, robot, linear_vel_threshold=0.01, angular_vel_threshold=0.02):
     time_stopped = 0
     not_moving = [0]*len(robot)
@@ -446,6 +383,74 @@ def minimum_goal_distance(agents, robot):
                 if d < min_dist:
                     min_dist = d
     return [min_dist]
+
+
+# collision count based on the collision criteria implemented in SEAN 2.0
+# https://github.com/yale-sean/social_sim_unity/blob/main/Assets/Scripts/SEAN/Metrics/CountCollisions.cs
+
+def collision_count(agents, robot):
+    return count_collisions_sean2(agents, robot)
+
+
+def robot_on_person_collision_count(agents, robot):
+    return count_robot_on_person_collisions_sean2(agents, robot)
+
+
+def person_on_robot_collision_count(agents, robot):
+    return count_person_on_robot_collisions_sean2(agents, robot)
+
+
+def count_collisions_sean2(agents, robot):
+    robot_coll_list = [0] * len(robot)
+    person_coll_list = [0] * len(robot)
+    robot_collisions = 0
+    person_collisions = 0
+
+    # variable to count independent collisions
+    agents_in_collision = {}
+
+    for i in range(len(robot)):
+        for agent in agents[i].agents:
+            agent_name = agent.name
+
+            if euclidean_distance(robot[i].position, agent.position) - robot[i].radius - agent.radius <= 0.0:  # exact collision couting without margin
+                in_collision = agents_in_collision.get(agent_name, False)
+
+                # agent angle with respect to the robot orientation (yaw)
+                nrx = (agent.position.position.x - robot[i].position.position.x) * math.cos(robot[i].yaw) + (agent.position.position.y - robot[i].position.position.y) * math.sin(robot[i].yaw)
+                nry = -(agent.position.position.x - robot[i].position.position.x) * math.sin(robot[i].yaw) + (agent.position.position.y - robot[i].position.position.y) * math.cos(robot[i].yaw)
+                alpha2 = math.atan2(nry, nrx)  # math.atan2(y, x)
+
+                # collision criteria based on SEAN 2.0
+                # If the robot isn't moving, it can't be at fault
+                vel = round(robot[i].linear_vel, 3)
+                # If the robot is oriented towards the other agent
+                oriented_towards_other = np.abs(alpha2) < np.radians(90.0)
+                is_robot_at_fault = (vel != 0.0) and oriented_towards_other
+
+                if not in_collision:
+                    if is_robot_at_fault:
+                        robot_collisions += 1
+                        robot_coll_list[i] += 1
+                    else:
+                        person_collisions += 1
+                        person_coll_list[i] += 1
+
+                agents_in_collision[agent_name] = True
+            else:
+                agents_in_collision[agent_name] = False
+
+    return robot_collisions, person_collisions, robot_coll_list, person_coll_list
+
+
+def count_robot_on_person_collisions_sean2(agents, robot):
+    collision = count_collisions_sean2(agents, robot)
+    return [collision[0], collision[2]]
+
+
+def count_person_on_robot_collisions_sean2(agents, robot):
+    collision = count_collisions_sean2(agents, robot)
+    return [collision[1], collision[3]]
 
 
 # SocNavBench: A Grounded Simulation Testing Framework for Evaluating Social Navigation
