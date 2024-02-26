@@ -44,34 +44,6 @@ find_package(rosbag2_storage REQUIRED)
 find_package(rosbag2_compression REQUIRED)
 #find_package(OpenMP REQUIRED)
 
-if(BUILD_TESTING)
-  find_package(ament_cmake_gtest REQUIRED)
-  find_package(ros_testing REQUIRED)
-
-  ament_add_gtest_executable(test_util
-    test/test_util.cpp
-    plugins/util.cpp
-    plugins/cabot_planner_util.cpp
-    plugins/navcog_path_util.cpp
-  )
-  ament_target_dependencies(test_util rclcpp nav2_costmap_2d OpenCV)
-  add_ros_test(test/test_util.test.py TIMEOUT 120 ARGS "test_binary_dir:=${CMAKE_CURRENT_BINARY_DIR}")
-
-  find_package(ament_cmake_copyright REQUIRED)
-  find_package(ament_cmake_cpplint REQUIRED)
-  find_package(ament_cmake_flake8 REQUIRED)
-  find_package(ament_cmake_lint_cmake REQUIRED)
-  find_package(ament_cmake_uncrustify REQUIRED)
-  find_package(ament_cmake_xmllint REQUIRED)
-
-  set(MAX_LINE_LENGTH 200)
-  ament_copyright()
-  ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
-  ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
-  ament_lint_cmake()
-  ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
-  ament_xmllint()
-endif()
 
 include_directories(
   include
@@ -222,6 +194,31 @@ pluginlib_export_plugin_description_file(dwb_core critics_plugins.xml)
 pluginlib_export_plugin_description_file(nav2_core goal_plugins.xml)
 pluginlib_export_plugin_description_file(nav2_costmap_2d layers_plugins.xml)
 pluginlib_export_plugin_description_file(nav2_core planners_plugins.xml)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ros_testing REQUIRED)
+
+  ament_add_gtest(${PROJECT_NAME}_test_util test/test_util.cpp)
+  target_link_libraries(${PROJECT_NAME}_test_util cabot_goals)
+  ament_add_gtest(${PROJECT_NAME}_test_cabot_planner_util test/test_cabot_planner_util.cpp)
+  target_link_libraries(${PROJECT_NAME}_test_cabot_planner_util cabot_planners)
+
+  find_package(ament_cmake_copyright REQUIRED)
+  find_package(ament_cmake_cpplint REQUIRED)
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  find_package(ament_cmake_uncrustify REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+
+  set(MAX_LINE_LENGTH 200)
+  ament_copyright()
+  ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_lint_cmake()
+  ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_xmllint()
+endif()
 
 endif()
 
