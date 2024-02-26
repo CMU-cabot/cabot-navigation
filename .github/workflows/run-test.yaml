@@ -13,14 +13,6 @@ jobs:
   run_unittest:
     runs-on: ubuntu-20.04
     steps:
-    - name: Maximize build space
-      run:  |
-            sudo rm -rf /usr/local/lib/android # will release about 10 GB if you don't need Android
-            sudo rm -rf /usr/share/dotnet # will release about 20GB if you don't need .NET
-            sudo rm -rf /opt/ghc
-            echo "Available storage:"
-            df -h
-
     - uses: actions/checkout@v4
 
     - name: Install vcs
@@ -29,9 +21,9 @@ jobs:
     - name: Prepare thirdparty repos
       run: ./setup-dependency.sh
 
-    - name: Build images
+    - name: Pull images and build workspace
       shell: bash
-      run: ./build-docker.sh -p -i -w
+      run: ./manage-docker-image.sh -a pull -i "ros2 localization" -o cmucal -t ros2-dev-latest
 
     - name: Run unittest
       shell: bash
