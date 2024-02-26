@@ -33,7 +33,7 @@ fi
 
 if [[ $all -eq 1 ]]; then
     colcon build
-    colcon test --packages-skip cabot_common cabot_msgs
+    colcon test --packages-skip
     colcon test-result --verbose
 else
     colcon build --packages-up-to $package
