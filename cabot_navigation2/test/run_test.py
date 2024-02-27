@@ -41,7 +41,7 @@ from tf_transformations import quaternion_from_euler
 from cabot_common.util import callee_name
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from mf_localization_msgs.srv import RestartLocalization
+from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
 
 from pedestrian.manager import PedestrianManager
@@ -108,7 +108,9 @@ class Tester:
         self.futures = {}
         self.timers = {}
         self.actor_count = 0
-        self.restart_localization_client = self.node.create_client(RestartLocalization, '/restart_localization')
+        self.stop_localization_client = self.node.create_client(StopLocalization, '/stop_localization')
+        self.start_localization_client = self.node.create_client(StartLocalization, '/start_localization')
+        self.set_current_floor_client = self.node.create_client(MFSetInt, '/set_current_floor')
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.test_func_name = None
@@ -234,6 +236,7 @@ class Tester:
             'init_y': 0.0,
             'init_z': 0.0,
             'init_a': 0.0,
+            'init_floor': 0
         }
 
     def info(self, text):
@@ -474,33 +477,34 @@ class Tester:
         topic_type = import_class('mf_localization_msgs/msg/MFLocalizeStatus')
         condition = "msg.status==msg.TRACKING"
 
-        # change gazebo model position
-        request = SetEntityState.Request()
-        request.state.name = 'mobile_base'
-        init_x = test_action['x'] if 'x' in test_action else self.config['init_x']
-        init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
-        init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
-        init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
-        init_yaw = init_a / 180.0 * math.pi
-        request.state.pose.position.x = float(init_x)
-        request.state.pose.position.y = float(init_y)
-        request.state.pose.position.z = float(init_z)
-        q = quaternion_from_euler(0, 0, init_yaw)
-        request.state.pose.orientation.x = q[0]
-        request.state.pose.orientation.y = q[1]
-        request.state.pose.orientation.z = q[2]
-        request.state.pose.orientation.w = q[3]
-        future = self.set_entity_state_client.call_async(request)
-        self.futures[uuid] = future
+        # use true pose as initial pose guess or not
+        use_initialpose = test_action.get("use_initialpose", True)
 
-        def done_callback(future):
-            # request to restart localization
-            request = RestartLocalization.Request()
-            self.restart_localization_client.call_async(request)
-            self.futures[uuid] = future
+        # request to stop localization
+        request = StopLocalization.Request()
+        self.futures[uuid] = self.stop_localization_client.call_async(request)
 
-            def done_callback2(future):
-                # check localize status to be tracking
+        def done_stop_localization_callback(future):
+            # change gazebo model position
+            request = SetEntityState.Request()
+            request.state.name = 'mobile_base'
+            init_x = test_action['x'] if 'x' in test_action else self.config['init_x']
+            init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
+            init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
+            init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
+            init_yaw = init_a / 180.0 * math.pi
+            request.state.pose.position.x = float(init_x)
+            request.state.pose.position.y = float(init_y)
+            request.state.pose.position.z = float(init_z)
+            q = quaternion_from_euler(0, 0, init_yaw)
+            request.state.pose.orientation.x = q[0]
+            request.state.pose.orientation.y = q[1]
+            request.state.pose.orientation.z = q[2]
+            request.state.pose.orientation.w = q[3]
+            self.futures[uuid] = self.set_entity_state_client.call_async(request)
+
+            def done_set_entity_state_callback(future):
+                # define callback to check localize status to be tracking
                 def topic_callback(msg):
                     try:
                         context = {'msg': msg}
@@ -511,24 +515,47 @@ class Tester:
                             time.sleep(2)
                     except:  # noqa: #722
                         logger.error(traceback.format_exc())
-                sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-                self.add_subscription(case, sub)
 
-                time.sleep(1)
-                # publish initialpose for localization hint
-                pose = PoseWithCovarianceStamped()
-                pose.header.frame_id = "map"
-                pose.pose.pose.position.x = float(init_x)
-                pose.pose.pose.position.y = float(init_y)
-                pose.pose.pose.position.z = float(init_z)
-                pose.pose.pose.orientation.x = q[0]
-                pose.pose.pose.orientation.y = q[1]
-                pose.pose.pose.orientation.z = q[2]
-                pose.pose.pose.orientation.w = q[3]
-                self.initialpose_pub.publish(pose)
+                if use_initialpose:
+                    # request to set current floor
+                    request = MFSetInt.Request()
+                    init_floor = test_action['floor'] if 'floor' in test_action else self.config['init_floor']
+                    request.data = int(init_floor)
+                    self.futures[uuid] = self.set_current_floor_client.call_async(request)
 
-            future.add_done_callback(done_callback2)
-        future.add_done_callback(done_callback)
+                    def done_set_current_floor_callback(future):
+                        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+                        self.add_subscription(case, sub)
+
+                        time.sleep(1)
+                        # publish initialpose to start localization with initial pose guess
+                        pose = PoseWithCovarianceStamped()
+                        pose.header.frame_id = "map"
+                        pose.pose.pose.position.x = float(init_x)
+                        pose.pose.pose.position.y = float(init_y)
+                        pose.pose.pose.position.z = float(init_z)
+                        pose.pose.pose.orientation.x = q[0]
+                        pose.pose.pose.orientation.y = q[1]
+                        pose.pose.pose.orientation.z = q[2]
+                        pose.pose.pose.orientation.w = q[3]
+                        self.initialpose_pub.publish(pose)
+
+                    self.futures[uuid].add_done_callback(done_set_current_floor_callback)
+
+                else:
+                    # request to start localization
+                    request = StartLocalization.Request()
+                    self.futures[uuid] = self.start_localization_client.call_async(request)
+
+                    def done_start_localization_callback(future):
+                        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+                        self.add_subscription(case, sub)
+
+                    self.futures[uuid].add_done_callback(done_start_localization_callback)
+
+            self.futures[uuid].add_done_callback(done_set_entity_state_callback)
+
+        self.futures[uuid].add_done_callback(done_stop_localization_callback)
 
     @wait_test()
     def setup_actors(self, case, test_action):
