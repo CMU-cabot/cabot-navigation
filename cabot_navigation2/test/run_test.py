@@ -625,6 +625,29 @@ class ColorFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+class ROS2LogHandler(logging.Handler):
+    """A logging handler that forwards Python logging messages to ROS2 logging."""
+
+    def __init__(self, node: rclpy.node.Node):
+        super().__init__()
+        self.node = node
+
+    def emit(self, record):
+        """Override emit to forward the log message to ROS2 logging."""
+        msg = self.format(record)
+        level = record.levelno
+        if level >= logging.CRITICAL:
+            self.node.get_logger().fatal(msg)
+        elif level >= logging.ERROR:
+            self.node.get_logger().error(msg)
+        elif level >= logging.WARNING:
+            self.node.get_logger().warn(msg)
+        elif level >= logging.INFO:
+            self.node.get_logger().info(msg)
+        else:  # DEBUG and NOTSET
+            self.node.get_logger().debug(msg)
+
+
 def main():
     global node, manager, logger
     parser = OptionParser(usage="""
@@ -653,6 +676,9 @@ def main():
     rclpy.init()
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
+
+    ros2Handler = ROS2LogHandler(node)
+    logger.addHandler(ros2Handler)
 
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
