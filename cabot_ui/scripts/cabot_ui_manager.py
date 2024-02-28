@@ -374,6 +374,10 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info("NavigationState: Pause control = True")
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
+            if self._status_manager.state == State.in_pause:
+                    self._logger.info("NavigationState: resuming (user)")
+                    self._status_manager.set_state(State.in_manual)
+                    self._navigation.manual_navigation()
 
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
@@ -494,6 +498,12 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.resume_navigation()
                     self._status_manager.set_state(State.in_action)
                     self._navigation.resume_navigation()
+                    self._logger.info("NavigationState: resumed (user)")
+                elif self._status_manager.state == State.in_manual:
+                    self._logger.info("NavigationState: resuming (user)")
+                    self._interface.resume_navigation()
+                    self._status_manager.set_state(State.in_action)
+                    self._navigation.auto_navigation()
                     self._logger.info("NavigationState: resumed (user)")
                 else:
                     self._logger.info("NavigationState: state is not in pause state")

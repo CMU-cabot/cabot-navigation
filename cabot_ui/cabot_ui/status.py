@@ -36,6 +36,8 @@ class State(Enum):
     in_pausing = 4
     # pausing action to wait user's decision
     in_pause = 5
+    # manual navigation
+    in_manual = 6
 
     # transition from in_action to in_pause
     # waiting_pause = 4
