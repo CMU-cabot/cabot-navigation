@@ -164,6 +164,8 @@ class BufferProxy():
         req = LookupTransform.Request()
         req.target_frame = target
         req.source_frame = source
+        if not self.lookup_transform_service.wait_for_service(timeout_sec=1.0):
+            raise RuntimeError("lookup transform service is not available")
         result = self.lookup_transform_service.call(req)
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
