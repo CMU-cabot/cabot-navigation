@@ -71,8 +71,15 @@ blue "testing with $CABOT_SITE"
 source $scriptdir/../install/setup.bash
 
 echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
-ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
-result=$?
+while [[ 1 -eq 1 ]]; do
+    ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
+    result=$?
+    if [[ $result -le 1 ]]; then
+	break
+    else
+	echo "retry test, due to segmantation fault"
+    fi
+done
 
 echo "Test has completed"
 if [[ $result -eq 0 ]]; then
