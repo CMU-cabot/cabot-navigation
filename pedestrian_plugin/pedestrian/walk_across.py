@@ -23,35 +23,51 @@ import math
 from pedestrian import state
 
 stopped = False
+initial_time = None
 count = 0
 px = None
 py = None
+progress = 0  # variable to notify the progress of movement in each repeat cycle
 
 
 def onUpdate(**args):
     global stopped
+    global initial_time
     global count, px, py
+    global progress
 
     # parameters
     name = args['name']
+    init_x = args['init_x']
+    init_y = args['init_y']
+    goal_x = args.get('goal_x', None)
+    goal_y = args.get('goal_y', None)
     vel = args.get('velocity', 1.0)  # [m/s]
+    start_after = args.get('start_after', 0.0)  # [sec]
     collision_threshold = args.get('collision_threshold', 0.5)  # [m]
     decel_distance = args.get('decel_distance', 0.0)  # [m]
     pause_distance = args.get('pause_distance', 0.0)  # [m]
     stop_distance = args.get('stop_distance', 0.0)  # [m]
-    radius = args.get('radius', 0.4)  # [m]
-    args['radius'] = radius
+    repeat = args.get('repeat', None)  # If defined, repeat after the goal arrival.
+    goal_radius = args.get('goal_raduis', 0.5)
+    radius = args.get('radius', 0.4)  # [m] person radius used in the pedestrian plugin
+    args['radius'] = radius  # module -> plugin
 
-    # variables
+    # plugin variables
     x = args['x']
     y = args['y']
     yaw = args['yaw']
     dt = args['dt']
+    t = args['time']
 
     # wait until robot pose is available
     if 'robot' not in args:
         return args
 
+    if initial_time is None:
+        initial_time = t
+
+    # plugin variables
     rx = args['robot']['x']
     ry = args['robot']['y']
 
@@ -84,14 +100,27 @@ def onUpdate(**args):
             count = 10
         else:
             vel = 0
+            initial_time = t  # reset this variable to enable start_after after the robot starts to move
         count -= 1
     px = rx
     py = ry
 
     # update actor variables
-    args['x'] += vel * dt * math.cos(yaw)
-    args['y'] += vel * dt * math.sin(yaw)
-    args['yaw'] = yaw
+    if t - initial_time >= start_after:
+        args['x'] += vel * dt * math.cos(yaw)
+        args['y'] += vel * dt * math.sin(yaw)
+        args['yaw'] = yaw
+        progress += 1
+        args['progress'] = progress
+
+    # apply repeat
+    if repeat is not None and goal_x is not None and goal_y is not None:
+        dist_goal = math.sqrt((x - goal_x)**2 + (y - goal_y)**2)
+        if dist_goal <= goal_radius:
+            args['x'] = init_x
+            args['y'] = init_y
+            args['yaw'] = yaw  # keep the same direction
+            args['progress'] = 0  # notify the start of repeat to the plugin
 
     # save state
     state.state[name] = args

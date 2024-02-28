@@ -517,7 +517,11 @@ class MultiFloorManager:
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
 
-        self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
+        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
+
+        # set is_active to True if succeeded to start trajectory
+        if status_code == 0:
+            self.is_active = True
 
     def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode=None):
 
@@ -575,7 +579,7 @@ class MultiFloorManager:
             self.mode = target_mode
             self.area = target_area
 
-            self.start_trajectory_with_pose(local_pose)
+            status_code = self.start_trajectory_with_pose(local_pose)
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
 
             # reset altitude_floor_estimator in floor initialization process
@@ -591,6 +595,8 @@ class MultiFloorManager:
                 self.localize_status = MFLocalizeStatus.LOCATING
             elif self.mode == LocalizationMode.TRACK:
                 self.localize_status = MFLocalizeStatus.TRACKING
+
+            return status_code  # result of start_trajectory_with_pose
 
     def restart_floor(self, local_pose: Pose):
         # set z = 0 to ensure 2D position on the local map
@@ -1050,7 +1056,7 @@ class MultiFloorManager:
         if not self.is_active:
             response.status.code = 1
             response.status.message = "Stop localization failed. (localization is aleady stopped.)"
-            return resp
+            return response
         try:
             self.is_active = False
             self.finish_trajectory()

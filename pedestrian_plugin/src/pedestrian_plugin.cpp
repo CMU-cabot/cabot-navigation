@@ -269,11 +269,17 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
       auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
       auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
       auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+      // variables only get from the module
       auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
+      auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
+
       auto dx = newX - this->x;
       auto dy = newY - this->y;
       auto dz = newZ - this->z;
       auto dd = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (progress == 0.0) {
+        dd = 0.0;
+      }
       auto newDist = this->dist + dd;
       double * wPose = get_walking_pose(newDist);
 
