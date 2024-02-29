@@ -665,7 +665,10 @@ class ElevatorWaitGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"cab poi      {str(self.cab_poi.local_geometry)}")
         pose = geoutil.Pose.pose_from_points(self.cab_poi.door_geometry, self.delegate.current_pose)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
-        self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
+        if self.delegate.is_manual:
+            self.done_callback(True)
+        else:
+            self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, result):
         if result:
@@ -707,7 +710,10 @@ class ElevatorTurnGoal(ElevatorGoal):
         CaBotRclpyUtil.info("call turn_towards")
         pose = geoutil.Pose(x=self.cab_poi.x, y=self.cab_poi.y, r=self.cab_poi.r)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
-        self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
+        if self.delegate.is_manual:
+            self.done_callback(True)
+        else:
+            self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
 
     def done_callback(self, result):
         if result:

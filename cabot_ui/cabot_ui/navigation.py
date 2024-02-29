@@ -320,6 +320,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._exist_elevator_goal = False
         self._start_manual_floor = None
+        self.is_manual = False
 
         self._max_speed = node.declare_parameter("max_speed", 1.1).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
@@ -598,15 +599,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _manual_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "manual")
+        self._navigate_next_sub_goal()
 
+        self.is_manual = True
         self._logger.info(F"manual navigation sub_goals : {self._sub_goals}")
         if any(isinstance(goal, navgoal.ElevatorOutGoal) for goal in self._sub_goals):
             self._exist_elevator_goal = True
         else:
             return
 
-        self._logger.info(F"manual navigation start_manual_floor : {self._start_manual_floor}")
         self._start_manual_floor = self.current_floor
+        self._logger.info(F"manual navigation start_manual_floor : {self._start_manual_floor}")
 
     # wrap execution by a queue
     def auto_navigation(self, callback=None):
@@ -616,15 +619,21 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "auto")
 
+        self.is_manual = False
         self._logger.info(F"auto_navigation exist_elevator_goal : {self._exist_elevator_goal}")
         self._logger.info(F"auto_navigation start_manual_floor : {self._start_manual_floor}")
         self._logger.info(F"auto_navigation current_floor : {self.current_floor}")
         if self._exist_elevator_goal and (self._start_manual_floor != self.current_floor):
-            index = next((i for i, goal in enumerate(self._sub_goals) if isinstance(goal, navgoal.ElevatorOutGoal)), None)
-            del self._sub_goals[:index + 1]
-            self._logger.info(F"auto navigation sub_goals : {self._sub_goals}")
             self._exist_elevator_goal = False
             self._start_manual_floor = None
+            index = next((i for i, goal in enumerate(self._sub_goals) if isinstance(goal, navgoal.ElevatorOutGoal)), None)
+            if index is None:
+                self._sub_goals.insert(0, self._current_goal)
+            elif index != 0:
+                del self._sub_goals[:index + 1]
+            else:
+                return
+            self._logger.info(F"auto navigation sub_goals : {self._sub_goals}")
             self._navigate_next_sub_goal()
 
     # wrap execution by a queue

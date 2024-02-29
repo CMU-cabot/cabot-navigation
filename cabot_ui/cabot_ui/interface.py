@@ -195,9 +195,9 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "status", "prepare")
         self.speak(i18n.localized_string("IN_PRERARATION"))
 
-    def in_preparation(self): #TODO
-        self._activity_log("cabot/interface", "status", "manual")
-        # self.speak(i18n.localized_string("IN_PRERARATION"))
+    # def in_preparation(self): #TODO
+    #     self._activity_log("cabot/interface", "status", "manual")
+    #     # self.speak(i18n.localized_string("IN_PRERARATION"))
 
     def i_am_ready(self):
         self._activity_log("cabot/interface", "status", "ready")
