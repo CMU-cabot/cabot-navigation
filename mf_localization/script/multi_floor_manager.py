@@ -2376,10 +2376,12 @@ if __name__ == "__main__":
         for mode in modes:
             floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
             # rospy service
-            floor_manager.get_trajectory_states = node.create_client(GetTrajectoryStates, node_id+"/"+str(mode)+'/get_trajectory_states', callback_group=MutuallyExclusiveCallbackGroup())
-            floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=MutuallyExclusiveCallbackGroup())
-            floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=MutuallyExclusiveCallbackGroup())
-            floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=MutuallyExclusiveCallbackGroup())
+            # define callback group accessing the same ros node
+            node_service_callback_group = MutuallyExclusiveCallbackGroup()
+            floor_manager.get_trajectory_states = node.create_client(GetTrajectoryStates, node_id+"/"+str(mode)+'/get_trajectory_states', callback_group=node_service_callback_group)
+            floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=node_service_callback_group)
+            floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=node_service_callback_group)
+            floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=node_service_callback_group)
 
     multi_floor_manager.floor_list = list(floor_set)
 
@@ -2419,22 +2421,24 @@ if __name__ == "__main__":
     multi_floor_manager.Y_area = np.array(Y_area)
     multi_floor_manager.area_localizer = area_classifier
 
+    # define callback group accessing the state variables
+    state_update_callback_group = MutuallyExclusiveCallbackGroup()
+
     # global subscribers
     sensor_qos = qos_profile_sensor_data
-    beacons_sub = node.create_subscription(String, "beacons", multi_floor_manager.beacons_callback, 1, callback_group=MutuallyExclusiveCallbackGroup())
-    wifi_sub = node.create_subscription(String, "wifi", multi_floor_manager.wifi_callback, 1, callback_group=MutuallyExclusiveCallbackGroup())
-    initialpose_sub = node.create_subscription(PoseWithCovarianceStamped, "initialpose", multi_floor_manager.initialpose_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
-    pressure_sub = node.create_subscription(FluidPressure, "pressure", multi_floor_manager.pressure_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
-    # global subscribers for redirect
+    beacons_sub = node.create_subscription(String, "beacons", multi_floor_manager.beacons_callback, 1, callback_group=state_update_callback_group)
+    wifi_sub = node.create_subscription(String, "wifi", multi_floor_manager.wifi_callback, 1, callback_group=state_update_callback_group)
+    initialpose_sub = node.create_subscription(PoseWithCovarianceStamped, "initialpose", multi_floor_manager.initialpose_callback, 10, callback_group=state_update_callback_group)
+    pressure_sub = node.create_subscription(FluidPressure, "pressure", multi_floor_manager.pressure_callback, 10, callback_group=state_update_callback_group)
 
     # services
-    stop_localization_service = node.create_service(StopLocalization, "stop_localization", multi_floor_manager.stop_localization_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    start_localization_service = node.create_service(StartLocalization, "start_localization", multi_floor_manager.start_localization_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    restart_localization_service = node.create_service(RestartLocalization, "restart_localization", multi_floor_manager.restart_localization_callback, callback_group=MutuallyExclusiveCallbackGroup())
+    stop_localization_service = node.create_service(StopLocalization, "stop_localization", multi_floor_manager.stop_localization_callback, callback_group=state_update_callback_group)
+    start_localization_service = node.create_service(StartLocalization, "start_localization", multi_floor_manager.start_localization_callback, callback_group=state_update_callback_group)
+    restart_localization_service = node.create_service(RestartLocalization, "restart_localization", multi_floor_manager.restart_localization_callback, callback_group=state_update_callback_group)
     enable_relocalization_service = node.create_service(MFTrigger, "enable_auto_relocalization", multi_floor_manager.enable_relocalization_callback, callback_group=MutuallyExclusiveCallbackGroup())
     disable_relocalization_service = node.create_service(MFTrigger, "disable_auto_relocalization", multi_floor_manager.disable_relocalization_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    set_current_floor_service = node.create_service(MFSetInt, "set_current_floor", multi_floor_manager.set_current_floor_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    convert_local_to_global_service = node.create_service(ConvertLocalToGlobal, "convert_local_to_global", multi_floor_manager.convert_local_to_global_callback, callback_group=MutuallyExclusiveCallbackGroup())
+    set_current_floor_service = node.create_service(MFSetInt, "set_current_floor", multi_floor_manager.set_current_floor_callback, callback_group=state_update_callback_group)
+    convert_local_to_global_service = node.create_service(ConvertLocalToGlobal, "convert_local_to_global", multi_floor_manager.convert_local_to_global_callback, callback_group=state_update_callback_group)
 
     # external localizer
     if gnss_config is not None:
@@ -2443,8 +2447,8 @@ if __name__ == "__main__":
     if use_gnss:
         multi_floor_manager.gnss_is_active = True
         multi_floor_manager.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
-        gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix")
-        gnss_fix_velocity_sub = message_filters.Subscriber(node, TwistWithCovarianceStamped, "gnss_fix_velocity")
+        gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix", callback_group=state_update_callback_group)
+        gnss_fix_velocity_sub = message_filters.Subscriber(node, TwistWithCovarianceStamped, "gnss_fix_velocity", callback_group=state_update_callback_group)
         time_synchronizer = message_filters.TimeSynchronizer([gnss_fix_sub, gnss_fix_velocity_sub], 10)
         time_synchronizer.registerCallback(multi_floor_manager.gnss_fix_callback)
         mf_navsat_sub = node.create_subscription(MFNavSAT, "mf_navsat", multi_floor_manager.mf_navsat_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -2454,7 +2458,7 @@ if __name__ == "__main__":
 
     if use_global_localizer:
         multi_floor_manager.is_active = False  # deactivate multi_floor_manager
-        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
         # call external global localization service
         logger.info("wait for service /global_localizer/request_localization")
         global_localizer_request_localization = node.create_client(MFSetInt, '/global_localizer/request_localization', callback_group=MutuallyExclusiveCallbackGroup())
@@ -2493,7 +2497,7 @@ if __name__ == "__main__":
         if use_gnss:
             multi_floor_manager.publish_map_frame_adjust_tf()
 
-    main_timer = node.create_timer(1.0 / spin_rate, main_loop, callback_group=MutuallyExclusiveCallbackGroup())
+    main_timer = node.create_timer(1.0 / spin_rate, main_loop, callback_group=state_update_callback_group)
 
     def run():
         executor = MultiThreadedExecutor()
