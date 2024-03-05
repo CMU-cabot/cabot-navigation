@@ -45,6 +45,8 @@ from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetI
 from gazebo_msgs.srv import SetEntityState
 
 from pedestrian.manager import PedestrianManager
+from gazebo_msgs.srv import DeleteEntity
+from gazebo_msgs.srv import SpawnEntity
 
 # cabot_navigation2/test
 from evaluator import Evaluator
@@ -415,6 +417,24 @@ class Tester:
             **kwargs)
         )
 
+    @wait_test()
+    def spawn_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ElevatorDoorSimulator.instance().spawn_door(**test_action)
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def delete_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ElevatorDoorSimulator.instance().delete_door(**test_action)
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
     # actual task needs to be waited
     @wait_test()
     def init_manager(self, case, test_action):
@@ -668,6 +688,66 @@ class Tester:
     def terminate(self, test_action):
         logger.debug(f"{callee_name()} {test_action}")
         sys.exit(0)
+
+
+class ElevatorDoorSimulator:
+    _instance = None
+
+    @classmethod
+    def instance(cls):
+        ElevatorDoorSimulator._instance = ElevatorDoorSimulator()
+        return ElevatorDoorSimulator._instance
+
+    def __init__(self):
+        print("init")
+        self.spawn_entity_client = node.create_client(SpawnEntity, '/spawn_entity')
+        self.delete_entity_client = node.create_client(DeleteEntity, '/delete_entity')
+
+    def delete_door(self, **kwargs):
+        name = kwargs['name']
+        request = DeleteEntity.Request()
+        request.name = name
+        future = self.delete_entity_client.call_async(request)
+        return future
+
+    def spawn_door(self, **kwargs):
+        name = kwargs['name']
+        x = kwargs['x']
+        y = kwargs['y']
+        yaw = kwargs['yaw']
+
+        door_xml = f"""
+<?xml version="1.0" ?>
+<sdf version="1.6">
+    <model name="{name}">
+        <static>true</static>
+        <link name="{name}-link">
+            <pose>{x} {y} 1 0 {math.pi/2} {yaw}</pose>
+            <visual name="{name}-visual">
+                <geometry>
+                    <box>
+                        <size>2 2 0.01</size>
+                    </box>
+                </geometry>
+            </visual>
+            <collision name="{name}-collision">
+                <geometry>
+                    <box>
+                        <size>2 2 0.01</size>
+                    </box>
+                </geometry>
+            </collision>
+        </link>
+    </model>
+</sdf>
+"""
+        logging.debug(door_xml)
+        request = SpawnEntity.Request()
+        request.name = name
+        request.xml = door_xml
+        request.reference_frame = "world"
+        future = self.spawn_entity_client.call_async(request)
+        return future
 
 
 class LogColors:
