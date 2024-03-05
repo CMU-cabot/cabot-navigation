@@ -75,9 +75,10 @@ while [[ 1 -eq 1 ]]; do
     ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
     result=$?
     if [[ $result -le 1 ]]; then
-	break
+        break
     else
-	echo "retry test, due to segmantation fault"
+        echo "retry test, due to segmantation fault"
+        wait_ready_option=""
     fi
 done
 

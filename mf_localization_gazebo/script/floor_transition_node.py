@@ -99,9 +99,9 @@ class FloorTransition:
         self._logger.info(F"current_floor = {self.current_floor}")
 
     def handle_floor_change(self, request, response):
-        next_floor = int(self.current_floor + request.diff.data)
+        next_floor = int(self.current_floor + request.diff)
         while next_floor not in self._floors:
-            next_floor = int(next_floor + request.diff.data)
+            next_floor = int(next_floor + request.diff)
 
         self._logger.info(F"handle_floor_change, next_floor={next_floor}")
 

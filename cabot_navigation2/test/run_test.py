@@ -301,6 +301,17 @@ class Tester:
             **kwargs)
         )
 
+    def floor_change(self, diff, **kwargs):
+        self.call_service(**dict(
+            dict(
+                action_name=f'floor_chage({diff})',
+                service='/floor_change',
+                service_type='mf_localization_msgs.srv/FloorChange',
+                request=f"diff: {diff}"
+            ),
+            **kwargs)
+        )
+
     def cancel_navigation(self, **kwargs):
         self.pub_topic(**dict(
             dict(
@@ -319,6 +330,18 @@ class Tester:
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
                 message=f"data: 'button_down_{button}'"
+            ),
+            **kwargs)
+        )
+
+    def wait_elevator_in(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_elevator_in',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='go_to_floor'",
+                timeout=60
             ),
             **kwargs)
         )
@@ -604,6 +627,28 @@ class Tester:
         pub.publish(msg)
         self.node.destroy_publisher(pub)
         case['done'] = True
+
+    @wait_test()
+    def call_service(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        service = test_action['service']
+        service_type_str = test_action['service_type']
+        service_type = import_class(service_type_str)
+        request = test_action['request']
+        request_type = service_type.Request
+        uuid = test_action['uuid']
+
+        req = request_type()
+        data = yaml.safe_load(request)
+        set_message_fields(req, data)
+
+        srv = self.node.create_client(service_type, service)
+        self.futures[uuid] = srv.call_async(req)
+
+        def done_callback(future):
+            case['done'] = True
+
+        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def wait(self, case, test_action):

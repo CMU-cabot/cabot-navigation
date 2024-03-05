@@ -303,7 +303,7 @@ void MultifloorLocalizationPanel::sendFloorChange(int diff)
 {
   RCLCPP_INFO(node_->get_logger(), "sendFloorChange");
   auto req = std::make_shared<mf_localization_msgs::srv::FloorChange::Request>();
-  req->diff.data = diff;
+  req->diff = diff;
   floor_change_client_->async_send_request(req);
 }
 
