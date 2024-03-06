@@ -419,6 +419,30 @@ class Tester:
             **kwargs)
         )
 
+    def wait_ready(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_ready',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'",
+                timeout=60
+            ),
+            **kwargs)
+        )
+
+    def wait_localization_started(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_localization_started',
+                topic='/localize_status',
+                topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
+                condition='msg.status==1',
+                timeout=60
+            ),
+            **kwargs)
+        )
+
     @wait_test()
     def clean_door(self, case, test_action):
         uuid = test_action['uuid']
@@ -511,25 +535,6 @@ class Tester:
         self.add_subscription(case, sub)
         case['done'] = True
         case['success'] = False
-
-    @wait_test()
-    def wait_ready(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        topic = '/cabot/activity_log'
-        topic_type = import_class('cabot_msgs/msg/Log')
-        condition = "msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'"
-
-        def topic_callback(msg):
-            try:
-                context = {'msg': msg}
-                exec(f"result=({condition})", context)
-                if context['result']:
-                    case['done'] = True
-                    self.cancel_subscription(case)
-            except:  # noqa: #722
-                logger.error(traceback.format_exc())
-        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.add_subscription(case, sub)
 
     @wait_test()
     def reset_position(self, case, test_action):
