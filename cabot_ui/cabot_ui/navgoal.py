@@ -429,6 +429,13 @@ class Goal(geoutil.TargetPlace):
             self.cancel()
 
     def cancel(self, callback=None):
+        try:
+            self._cancel(callback)
+        except:  # noqa: #722
+            import traceback
+            self._logger.error(traceback.format_exc())
+
+    def _cancel(self, callback=None):
         self._is_canceled = True
 
         if len(self._handles) > 0:
@@ -728,7 +735,7 @@ class ElevatorFloorGoal(ElevatorGoal):
 
     def enter(self):
         super(ElevatorFloorGoal, self).enter()
-        self.delegate.goto_floor(self.cab_poi.floor, self.done_callback)
+        self.delegate.goto_floor(self.cab_poi.floor, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, result):
         CaBotRclpyUtil.info("ElevatorFloorGoal completed")
