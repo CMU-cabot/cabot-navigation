@@ -421,6 +421,7 @@ class Tester:
     def spawn_door(self, case, test_action):
         uuid = test_action['uuid']
         self.futures[uuid] = ElevatorDoorSimulator.instance().spawn_door(**test_action)
+
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
@@ -430,6 +431,7 @@ class Tester:
     def delete_door(self, case, test_action):
         uuid = test_action['uuid']
         self.futures[uuid] = ElevatorDoorSimulator.instance().delete_door(**test_action)
+
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
