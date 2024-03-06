@@ -887,6 +887,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         if goal.is_canceled:
             self.delegate.goal_canceled(goal)
+            self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             self._stop_loop()
             return
 
@@ -894,6 +895,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         goal.exit()
+        self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
+
         self._current_goal = None
         if goal.need_to_announce_arrival:
             self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
