@@ -74,7 +74,7 @@ def wait_test(timeout=60):
             tester = args[0]
 
             t = kwargs['seconds'] if 'seconds' in kwargs else timeout
-            t = kwargs['timeout'] if 'timeout' in kwargs else t*2  # make sure not timeout if wait seconds is specified
+            t = kwargs['timeout'] if 'timeout' in kwargs else t+5  # make sure not timeout if wait seconds is specified
             action_name = kwargs['action_name'] if 'action_name' in kwargs else function.__name__
             case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': False, 'error': None}
             test_action = {'uuid': str(uuid.uuid4())}
@@ -82,7 +82,7 @@ def wait_test(timeout=60):
             logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
             args = args + (case,)
             test_action.update(kwargs)
-            function(*args, test_action)
+            result = function(*args, test_action)
             start = time.time()
 
             while not case['done'] and time.time() - start < t:
@@ -96,6 +96,7 @@ def wait_test(timeout=60):
                 case['success'] = True
             logger.debug(f"finish: {case}")
             tester.register_action_result(case['target'], case)
+            return result
         return wrap
     return outer_wrap
 
@@ -228,7 +229,8 @@ class Tester:
                 if action is None or key == action:
                     self.node.destroy_subscription(sub)
             if action:
-                del self.subscriptions[target][action]
+                if action in self.subscriptions[target]:
+                    del self.subscriptions[target][action]
             else:
                 del self.subscriptions[target]
 
@@ -336,13 +338,13 @@ class Tester:
             **kwargs)
         )
 
-    def wait_elevator_in(self, **kwargs):
+    def wait_elevator_goal(self, goalName, **kwargs):
         self.wait_topic(**dict(
             dict(
-                action_name='wait_elevator_in',
+                action_name=f'wait_elevator_goal({goalName})',
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/navigation' and msg.text=='go_to_floor'",
+                condition=f"msg.category=='cabot/navigation' and msg.text=='goal_completed' and msg.memo=='{goalName}'",
                 timeout=60
             ),
             **kwargs)
@@ -418,6 +420,17 @@ class Tester:
         )
 
     @wait_test()
+    def clean_door(self, case, test_action):
+        uuid = test_action['uuid']
+
+        def done_callback(future):
+            case['done'] = True
+        future = ElevatorDoorSimulator.instance().clean(callback=done_callback)
+        if not future:
+            return
+        self.futures[uuid] = future
+
+    @wait_test()
     def spawn_door(self, case, test_action):
         uuid = test_action['uuid']
         self.futures[uuid] = ElevatorDoorSimulator.instance().spawn_door(**test_action)
@@ -470,6 +483,10 @@ class Tester:
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
         case['done'] = True
+
+        def cancel_func():
+            self.cancel_subscription(case)
+        return cancel_func
 
     @wait_test()
     def check_topic(self, case, test_action):
@@ -697,25 +714,41 @@ class ElevatorDoorSimulator:
 
     @classmethod
     def instance(cls):
-        ElevatorDoorSimulator._instance = ElevatorDoorSimulator()
+        if not ElevatorDoorSimulator._instance:
+            ElevatorDoorSimulator._instance = ElevatorDoorSimulator()
         return ElevatorDoorSimulator._instance
 
     def __init__(self):
-        print("init")
         self.spawn_entity_client = node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = node.create_client(DeleteEntity, '/delete_entity')
+        self.remaining = []
+
+    def clean(self, callback):
+        if self.remaining:
+            future = self.delete_door(name=self.ramaining[0])
+
+            def done_callback(future):
+                self.clean(callback)
+            future.add_done_callback(done_callback)
+        else:
+            callback("Done")
 
     def delete_door(self, **kwargs):
         name = kwargs['name']
         request = DeleteEntity.Request()
         request.name = name
         future = self.delete_entity_client.call_async(request)
+
+        def callback(future):
+            self.remaining.remove(name)
+        future.add_done_callback(callback)
         return future
 
     def spawn_door(self, **kwargs):
         name = kwargs['name']
         x = kwargs['x']
         y = kwargs['y']
+        z = kwargs['z']
         yaw = kwargs['yaw']
 
         door_xml = f"""
@@ -724,7 +757,7 @@ class ElevatorDoorSimulator:
     <model name="{name}">
         <static>true</static>
         <link name="{name}-link">
-            <pose>{x} {y} 1 0 {math.pi/2} {yaw}</pose>
+            <pose>{x} {y} {z+1} 0 {math.pi/2} {yaw}</pose>
             <visual name="{name}-visual">
                 <geometry>
                     <box>
@@ -749,6 +782,10 @@ class ElevatorDoorSimulator:
         request.xml = door_xml
         request.reference_frame = "world"
         future = self.spawn_entity_client.call_async(request)
+
+        def callback(future):
+            self.remaining.append(name)
+        future.add_done_callback(callback)
         return future
 
 
