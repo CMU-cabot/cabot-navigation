@@ -28,4 +28,4 @@ jobs:
 
     - name: Run unittest
       shell: bash
-      run: ./launch.sh -u
+      run: ./launch.sh -u -- -a
