@@ -96,7 +96,7 @@ class LineString(Geometry):
         self.end = geoutil.Latlng(lat=self.coordinates[1][1], lng=self.coordinates[1][0])
 
     def distance_to(self, point):
-        if isinstance(point, Point):
+        if isinstance(point, geoutil.Latlng):
             return self.nearest_point_on_line(point).distance_to(point)
         raise RuntimeError(F"Need to pass a Point object ({type(point)})")
 

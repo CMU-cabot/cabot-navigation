@@ -102,8 +102,10 @@ def q_inverse(q):
     return [q[0], q[1], q[2], -q[3]]
 
 
-def q_diff(q1, q2):
-    rot = [0, 0, 1, 0]  # 180 degree turn
+def q_diff(q1, q2, rotate=True):
+    rot = [0, 0, 0, 1]
+    if rotate:
+        rot = [0, 0, 1, 0]  # 180 degree turn
     return quaternion_multiply(quaternion_multiply(q2, rot), q_inverse(q1))
 
 
@@ -113,7 +115,7 @@ def get_yaw(q):
 
 
 # pose1 and pose2 is supporsed to be facing
-def in_angle(pose1, pose2, margin_in_degree):
+def in_angle(pose1, pose2, margin_in_degree, rotate=True):
     """
     pose1: robot pose
     pose2: POI pose
@@ -132,16 +134,16 @@ def in_angle(pose1, pose2, margin_in_degree):
     quat2 = q_from_msg(pose2.orientation)
 
     # check orientation diff from pose2 orientation to rotated pose1 orientation
-    _, _, yaw1 = euler_from_quaternion(q_diff(quat2, quat1))
+    _, _, yaw1 = euler_from_quaternion(q_diff(quat2, quat1, rotate))
 
     # check orientation diff from pose2 orientation to rotated p1->p2 orientation
-    _, _, yaw2 = euler_from_quaternion(q_diff(quat2, p1_p2))
+    _, _, yaw2 = euler_from_quaternion(q_diff(quat2, p1_p2, rotate))
 
     # check both in the margin
     return abs(yaw1) <= margin and abs(yaw2) <= margin
 
 
-def diff_in_angle(quat1, quat2, margin_in_degree):
+def diff_in_angle(quat1, quat2, margin_in_degree, rotate=True):
     """
     margin_in_degree: angle margin in degree
     return True if two poses in margin
@@ -149,7 +151,7 @@ def diff_in_angle(quat1, quat2, margin_in_degree):
     margin = margin_in_degree / 180.0 * math.pi
 
     # check orientation diff from pose2 orientation to rotated pose1 orientation
-    _, _, yaw1 = euler_from_quaternion(q_diff(quat2, quat1))
+    _, _, yaw1 = euler_from_quaternion(q_diff(quat2, quat1, rotate))
 
     # check both in the margin
     return abs(yaw1) <= margin
@@ -474,8 +476,8 @@ class TargetPlace(Pose):
     APPROACHED_THRETHOLD = 1.0
     PASSED_THRETHOLD = 1.0
 
-    def in_angle(self, pose):
-        return in_angle(pose, self, self._angle)
+    def in_angle(self, pose, rotate=True):
+        return in_angle(pose, self, self._angle, rotate)
 
     def is_approaching(self, pose):
         """the pose is approaching to the poi"""
