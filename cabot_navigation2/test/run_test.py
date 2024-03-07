@@ -147,8 +147,7 @@ class Tester:
             getattr(module, specific_test)(self)
             self.stop_evaluation()  # automatically stop metric evaluation
             success = self.print_result(self.result, specific_test)
-            # should be handled by test itself
-            # self.cancel_subscription(specific_test)
+            self.cancel_subscription(specific_test)
         else:
             for func in sorted(functions):
                 if func.startswith("_"):
@@ -158,8 +157,7 @@ class Tester:
                 getattr(module, func)(self)
                 self.stop_evaluation()  # automatically stop metric evaluation
                 success = self.print_result(self.result, func)
-                # should be handled by test itself
-                # self.cancel_subscription(func)
+                self.cancel_subscription(func)
 
         logger.info("Done all test")
 
