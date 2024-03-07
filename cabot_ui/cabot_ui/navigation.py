@@ -311,6 +311,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self.i_am_ready = False
         self._sub_goals = None
+        self._goal_index = -1
         self._current_goal = None
 
         # self.client = None
@@ -536,6 +537,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
+        self._goal_index = -1
 
         # for dashboad
         (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
@@ -560,7 +562,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
 
         if self._current_goal:
-            self._sub_goals.insert(0, self._current_goal)
+            self._goal_index -= 1
             self._navigate_next_sub_goal()
 
     # wrap execution by a queue
@@ -579,7 +581,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
 
         if self._current_goal:
-            self._sub_goals.insert(0, self._current_goal)
+            self._goal_index -= 1
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
@@ -599,6 +601,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "cancel")
         self._sub_goals = None
+        self._goal_index = -1
         self._stop_loop()
         if self._current_goal:
             self._current_goal.cancel(callback)
@@ -613,9 +616,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("navigation is canceled")
             return
 
-        if self._sub_goals:
+        if self._sub_goals and self._goal_index+1 < len(self._sub_goals):
             self.delegate.activity_log("cabot/navigation", "next_sub_goal")
-            self._current_goal = self._sub_goals.pop(0)
+            self._goal_index += 1
+            self._current_goal = self._sub_goals[self._goal_index]
             self._current_goal.reset()
             self._navigate_sub_goal(self._current_goal)
             return
