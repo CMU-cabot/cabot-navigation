@@ -94,6 +94,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
 
     while index < len(groute):
         link_or_node = groute[index]
+        link_or_node.update_anchor(anchor)   ## not sure
         temp.append(link_or_node)
         index += 1
 
@@ -284,7 +285,8 @@ def make_goals(delegate, groute, anchor, yaw=None):
             goals.append(NavGoal(delegate, temp, anchor, is_last=True))
 
     if yaw is not None:
-        goals.append(TurnGoal(delegate, anchor, yaw))
+        goal_node = groute[-1]  # should be Node
+        goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
     CaBotRclpyUtil.info(F"{goals}")
     return goals
@@ -356,7 +358,19 @@ def create_ros_path(navcog_route, anchor, global_map_name):
     return (path, path.poses[-1] if len(path.poses) > 0 else None)
 
 
+def estimate_next_goal(goals, current_pose, current_floor):
+    for goal in goals[::-1]:   # iterate backword
+        if goal.completed(pose=current_pose, floor=current_floor):
+            continue
+        if goal.match(pose=current_pose, floor=current_floor):
+            return goal
+    return None  # might be reached the goal
+
+
 class Goal(geoutil.TargetPlace):
+    GOAL_XY_THRETHOLD = 0.5
+    GOAL_ANGLE_THRETHOLD_IN_DEGREE = 15
+
     def __init__(self, delegate, **kwargs):
         super(Goal, self).__init__(**kwargs)
         if delegate is None:
@@ -452,9 +466,16 @@ class Goal(geoutil.TargetPlace):
                 callback()
             self._logger.info("done cancel goal")
 
+    def match(self, pose, floor):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def completed(self, pose, floor):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
 
 class NavGoal(Goal):
     DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_replanning_and_recovery.xml"
+    NEIGHBOR_THRESHOLD = 3.0
 
     def __init__(self, delegate, navcog_route, anchor, target_poi=None, set_back=(0, 0), **kwargs):
         if navcog_route is None or len(navcog_route) == 0:
@@ -591,14 +612,33 @@ class NavGoal(Goal):
         CaBotRclpyUtil.info("Updated goal position")
         # self.delegate.send_goal(goal, self.done_callback)
 
+    def match(self, pose, floor):
+        # work around, Link.distance_to is not implemented for local geometry
+        g = geoutil.local2global(pose, self.anchor)
+        for node_or_link in self.navcog_route:
+            try:
+                # todo consider floor
+                if node_or_link.distance_to(g) < NavGoal.NEIGHBOR_THRESHOLD:
+                    return True
+            except:  # noqa: #722
+                CaBotRclpyUtil.error(F"{node_or_link}")
+        return False
+
+    def completed(self, pose, floor):
+        return floor == self._floor and \
+            self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+
 
 class TurnGoal(Goal):
-    def __init__(self, delegate, anchor, yaw, **kwargs):
+    def __init__(self, delegate, goal_node, anchor, yaw, **kwargs):
+        def convert(g, a=anchor):
+            return geoutil.global2local(g, a)
+        goal = convert(goal_node.geometry)
         self.yaw_target = (- yaw + 90 + anchor.rotate) / 180.0 * math.pi
-        CaBotRclpyUtil.info(F"TurnGoal {yaw} {anchor.rotate} {self.yaw_target}")
-        pose = geoutil.Pose(x=0, y=0, r=self.yaw_target)
-        pose._angle = 0  # dummy
-        pose._floor = 0  # dummy
+        CaBotRclpyUtil.info(F"TurnGoal {goal} {yaw} {anchor.rotate} {self.yaw_target}")
+        pose = geoutil.Pose(x=goal.x, y=goal.y, r=self.yaw_target)
+        pose._angle = Goal.GOAL_ANGLE_THRETHOLD_IN_DEGREE
+        pose._floor = goal_node.floor
         super(TurnGoal, self).__init__(delegate, target=pose, **kwargs)
 
     def enter(self):
@@ -616,6 +656,14 @@ class TurnGoal(Goal):
             CaBotRclpyUtil.info("TurnGoal not completed but cancelled")
             return
         self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback)
+
+    def match(self, pose, floor):
+        return self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+
+    def completed(self, pose, floor):
+        return floor == self._floor and \
+            self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD and \
+            self.in_angle(pose, rotate=False)
 
 
 class DoorGoal(Goal):
