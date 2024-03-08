@@ -338,10 +338,10 @@ class Tester:
             **kwargs)
         )
 
-    def wait_elevator_goal(self, goalName, **kwargs):
+    def wait_goal(self, goalName, **kwargs):
         self.wait_topic(**dict(
             dict(
-                action_name=f'wait_elevator_goal({goalName})',
+                action_name=f'wait_goal({goalName})',
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition=f"msg.category=='cabot/navigation' and msg.text=='goal_completed' and msg.memo=='{goalName}'",

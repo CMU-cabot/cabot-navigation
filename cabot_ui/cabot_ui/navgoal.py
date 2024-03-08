@@ -125,7 +125,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                 goals.append(NavGoal(delegate, temp[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
             # CaBotRclPyUtil.info(goals[-1])
             # ask user to pass the door
-            goals.append(DoorGoal(delegate, doors[0]))
+            goals.append(DoorGoal(delegate, link, anchor, doors[0]))
             # CaBotRclPyUtil.info(goals[-1])
             temp = []
 
@@ -202,7 +202,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                                 dist_poi_r_start = numpy.linalg.norm(temp_queue_wait_position-temp_r_start_position)
                                 if dist_poi_r_start > temp_queue_wait_interval:
                                     temp_r_end_pose = geoutil.Pose.pose_from_points(queue_target_groute[idx_temp_r].target_node.local_geometry,
-                                                                                    queue_target_groute[idx_temp_r].source_node.local_geometry)
+                                                                                    queue_target_groute[idx_temp_r].source_node.local_geometry, backward=True)
                                     temp_queue_wait_x = temp_queue_wait.local_geometry.x - math.cos(temp_r_end_pose.r) * temp_queue_wait_interval
                                     temp_queue_wait_y = temp_queue_wait.local_geometry.y - math.sin(temp_r_end_pose.r) * temp_queue_wait_interval
 
@@ -359,12 +359,13 @@ def create_ros_path(navcog_route, anchor, global_map_name):
 
 
 def estimate_next_goal(goals, current_pose, current_floor):
-    for goal in goals[::-1]:   # iterate backword
+    for i in range(len(goals), 0, -1):
+        goal = goals[i-1]
         if goal.completed(pose=current_pose, floor=current_floor):
             continue
         if goal.match(pose=current_pose, floor=current_floor):
-            return goal
-    return None  # might be reached the goal
+            return (goal, i-1)
+    return (None, -1)  # might be reached the goal
 
 
 class Goal(geoutil.TargetPlace):
@@ -435,7 +436,7 @@ class Goal(geoutil.TargetPlace):
         return ret
 
     def __repr__(self):
-        return F"{type(self)}<{super(Goal, self).__repr__()}>"
+        return F"{super(Goal, self).__repr__()}"
 
     def goal_handle_callback(self, handle):
         self._handles.append(handle)
@@ -475,7 +476,7 @@ class Goal(geoutil.TargetPlace):
 
 class NavGoal(Goal):
     DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_replanning_and_recovery.xml"
-    NEIGHBOR_THRESHOLD = 3.0
+    NEIGHBOR_THRESHOLD = 1.0
 
     def __init__(self, delegate, navcog_route, anchor, target_poi=None, set_back=(0, 0), **kwargs):
         if navcog_route is None or len(navcog_route) == 0:
@@ -517,7 +518,7 @@ class NavGoal(Goal):
                                        .format(set_back, str(target_poi)))
 
                 backward = geoutil.Pose.pose_from_points(last_obj.source_node.local_geometry,
-                                                         last_obj.target_node.local_geometry)
+                                                         last_obj.target_node.local_geometry, backward=True)
 
                 CaBotRclpyUtil.info(F"set_back {backward.r:.4} * ({str(set_back)})")
 
@@ -617,23 +618,23 @@ class NavGoal(Goal):
         g = geoutil.local2global(pose, self.anchor)
         for node_or_link in self.navcog_route:
             try:
-                # todo consider floor
-                if node_or_link.distance_to(g) < NavGoal.NEIGHBOR_THRESHOLD:
+                # CaBotRclpyUtil.info(F"NavGoal.match distance_to ({node_or_link._id}, ({pose.x}, {pose.y})) = {node_or_link.distance_to(g)}")
+                if node_or_link.floor == floor and \
+                   node_or_link.distance_to(g) < NavGoal.NEIGHBOR_THRESHOLD:
                     return True
             except:  # noqa: #722
                 CaBotRclpyUtil.error(F"{node_or_link}")
         return False
 
     def completed(self, pose, floor):
+        # CaBotRclpyUtil.info(F"NavGoal.completed distance_to ({pose}) = {self.distance_to(pose)}")
         return floor == self._floor and \
             self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
 
 
 class TurnGoal(Goal):
     def __init__(self, delegate, goal_node, anchor, yaw, **kwargs):
-        def convert(g, a=anchor):
-            return geoutil.global2local(g, a)
-        goal = convert(goal_node.geometry)
+        goal = geoutil.global2local(goal_node.geometry, anchor)
         self.yaw_target = (- yaw + 90 + anchor.rotate) / 180.0 * math.pi
         CaBotRclpyUtil.info(F"TurnGoal {goal} {yaw} {anchor.rotate} {self.yaw_target}")
         pose = geoutil.Pose(x=goal.x, y=goal.y, r=self.yaw_target)
@@ -658,17 +659,32 @@ class TurnGoal(Goal):
         self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback)
 
     def match(self, pose, floor):
-        return self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+        # CaBotRclpyUtil.info(F"TurnGoal.match distance_to ({pose}) = {self.distance_to(pose)}")
+        return floor == self._floor and \
+            self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
 
     def completed(self, pose, floor):
+        diff = geoutil.diff_angle(self.orientation, pose.orientation)
+        # CaBotRclpyUtil.info(F"TurnGoal.completed distance_to ({pose}) = {self.distance_to(pose)}, angle diff {diff}")
         return floor == self._floor and \
             self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD and \
-            self.in_angle(pose, rotate=False)
+            diff < 0.1
 
 
 class DoorGoal(Goal):
-    def __init__(self, delegate, poi):
-        super(DoorGoal, self).__init__(delegate, target=poi)
+    APPROACHED_THRESHOLD = 0.5
+
+    def __init__(self, delegate, link, anchor, poi):
+        self._link = link
+        self._anchor = anchor
+        target = geoutil.TargetPlace(
+            x=link.end_node.local_geometry.x,
+            y=link.end_node.local_geometry.y,
+            r=link.pose.r,
+            angle=45,
+            floor=link.floor,
+        )
+        super(DoorGoal, self).__init__(delegate, target=target)
 
     def enter(self):
         self.delegate.please_pass_door()
@@ -680,13 +696,29 @@ class DoorGoal(Goal):
             return
         elif self.is_approached(current_pose):
             return
-        elif self.is_passed(current_pose):
+
+        pose_to_door = geoutil.Pose.pose_from_points(current_pose, self)
+        # CaBotRclpyUtil.info(F"DoorGoal.check distance_to (({self.x}, {self.y}) ({current_pose.x}, {current_pose.y})) = {self.distance_to(current_pose)}"
+        #                     F", {pose_to_door.r} <=> {self.r} - {geoutil.in_angle(pose_to_door, self, 90)}")
+        if self.distance_to(current_pose) < DoorGoal.APPROACHED_THRESHOLD and geoutil.in_angle(pose_to_door, self, 90):
             self._is_completed = True
 
     def exit(self):
         self.delegate.door_passed()
         self.delegate.set_pause_control(False)
         super(DoorGoal, self).exit()
+
+    def match(self, pose, floor):
+        gpose = geoutil.local2global(pose, self._anchor)  # work around
+        # CaBotRclpyUtil.info(F"DoorGoal.match distance_to ({self._link._id}, ({pose.x}, {pose.y})) = {self._link.distance_to(gpose)}")
+        return floor == self._floor and \
+            self._link.distance_to(gpose) < NavGoal.NEIGHBOR_THRESHOLD
+
+    def completed(self, pose, floor):
+        pose_to_door = geoutil.Pose.pose_from_points(pose, self)
+        # CaBotRclpyUtil.info(F"DoorGoal.completed distance_to (({self.x}, {self.y}) ({pose.x}, {pose.y})) = {self.distance_to(pose)}, {pose_to_door.r} <=> {self.r}")
+        return floor == self._floor and \
+            self.distance_to(pose) < DoorGoal.APPROACHED_THRESHOLD and geoutil.in_angle(pose_to_door, self, 90)
 
 
 class ElevatorGoal(Goal):
@@ -718,7 +750,7 @@ class ElevatorWaitGoal(ElevatorGoal):
         CaBotRclpyUtil.info("call turn_towards")
         CaBotRclpyUtil.info(F"current pose {str(self.delegate.current_pose)}")
         CaBotRclpyUtil.info(F"cab poi      {str(self.cab_poi.local_geometry)}")
-        pose = geoutil.Pose.pose_from_points(self.cab_poi.door_geometry, self.delegate.current_pose)
+        pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
@@ -732,7 +764,7 @@ class ElevatorWaitGoal(ElevatorGoal):
         if self._is_canceled:
             CaBotRclpyUtil.info("ElevatorWaitGoal not completed but cancelled")
             return
-        pose = geoutil.Pose.pose_from_points(self.cab_poi.door_geometry, self.delegate.current_pose)
+        pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
@@ -949,7 +981,7 @@ def make_queue_goals(delegate, queue_route, anchor):
             else:
                 queue_r_end = queue_route[queue_r_idx+1].source_node
             # add goal to turn for goal
-            queue_r_end_pose = geoutil.Pose.pose_from_points(queue_r_end.local_geometry, queue_r_start.local_geometry)
+            queue_r_end_pose = geoutil.Pose.pose_from_points(queue_r_end.local_geometry, queue_r_start.local_geometry, backward=True)
             goals.append(QueueTurnGoal(delegate, queue_r.floor, queue_r_end_pose))
 
             # check if next goal is queue target node (e.g. cashier in store)

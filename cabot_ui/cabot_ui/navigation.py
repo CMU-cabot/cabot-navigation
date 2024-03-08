@@ -591,6 +591,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "resume")
+
+        current_pose = self.current_local_pose()
+        _, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+        self._goal_index = index-1
+
         self._navigate_next_sub_goal()
 
     # wrap execution by a queue
@@ -966,7 +971,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.visualizer.visualize()
 
         self._logger.info("sending goal")
-        self._logger.info("".join(traceback.format_stack()))
         future = client.send_goal_async(goal)
         self._logger.info("add done callback")
         future.add_done_callback(lambda future: self._navigate_to_pose_sent_goal(goal, future, gh_cb, done_cb))

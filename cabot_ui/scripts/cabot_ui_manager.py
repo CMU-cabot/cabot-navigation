@@ -391,8 +391,6 @@ class CabotUIManager(NavigationInterface, object):
                 self._navigation.cancel_navigation(done_callback)
                 return
 
-            self._logger.info("".join(traceback.format_stack()))
-
             self._logger.info(F"Destination: {event.param}")
             self._retry_count = 0
             self.destination = event.param
