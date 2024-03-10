@@ -63,6 +63,7 @@ function help()
     echo "-v           verbose"
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
+    echo "-l           location tools server"
 }
 
 pwd=`pwd`
@@ -74,8 +75,9 @@ data_dir=
 ignore_error=0
 verbose=0
 clean_server=0
+location_tools=0
 
-while getopts "hd:p:fvcC" arg; do
+while getopts "hd:p:fvcCl" arg; do
     case $arg in
         h)
             help
@@ -100,6 +102,9 @@ while getopts "hd:p:fvcC" arg; do
         C)
             clean_server=2
             ;;
+	l)
+	    location_tools=1
+	    ;;
     esac
 done
 shift $((OPTIND-1))
@@ -110,18 +115,27 @@ pids=()
 temp_dir=$scriptdir/.tmp
 mkdir -p $temp_dir
 
-
 # forcely clean and extit
 if [[ $clean_server -eq 2 ]]; then
     blue "Clean servers"
-    for service in "map_server" "map_data" "mongodb"; do
-        if [[ ! -z $(docker ps -f "name=$service" -q -a) ]]; then
+
+    services="map_server map_data mongodb"
+    if [[ $location_tools -eq 1 ]]; then
+	services="location_tools mongodb_lt"
+    fi
+    for service in $services; do
+        if [[ ! -z $(docker ps -f "name=$service-" -q -a) ]]; then
 	    blue "stopping $service"
-	    docker ps -f "name=$service"
-	    docker ps -f "name=$service" -q -a | xargs docker stop
-	    docker ps -f "name=$service" -q -a | xargs docker container rm
+	    docker ps -f "name=$service-"
+	    docker ps -f "name=$service-" -q -a | xargs docker stop
+	    docker ps -f "name=$service-" -q -a | xargs docker container rm
         fi
     done
+    exit 0
+fi
+
+	if [[ $location_tools -eq 1 ]]; then
+    docker compose -f docker-compose-location-tools.yaml up -d
     exit 0
 fi
 
