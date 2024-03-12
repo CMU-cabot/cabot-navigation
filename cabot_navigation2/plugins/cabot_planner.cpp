@@ -342,7 +342,7 @@ void CaBotPlanner::configure(
   node->get_parameter(name + ".people_topic", people_topic_);
   declare_parameter_if_not_declared(node, name + ".obstacles_topic", rclcpp::ParameterValue("/obstacles"));
   node->get_parameter(name + ".obstacles_topic", obstacles_topic_);
-  declare_parameter_if_not_declared(node, name + ".queue_topic", rclcpp::ParameterValue("/queue_people_py/queue"));
+  declare_parameter_if_not_declared(node, name + ".queue_topic", rclcpp::ParameterValue("/queue"));
   node->get_parameter(name + ".queue_topic", queue_topic_);
   rclcpp::QoS people_qos(10);
   people_sub_ = node->create_subscription<people_msgs::msg::People>(

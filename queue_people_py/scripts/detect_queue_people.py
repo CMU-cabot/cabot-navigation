@@ -34,6 +34,7 @@ from queue_msgs.msg import Queue
 import rclpy
 import rclpy.node
 import rclpy.duration
+import rclpy.time
 from std_msgs.msg import Header, String
 from tf_transformations import quaternion_from_euler
 import tf2_geometry_msgs  # noqa: to register class for transform
@@ -309,6 +310,7 @@ class DetectQueuePeopleNode():
             detect_queue_people.update_frame_id(msg.data)
 
     def people_cb(self, msg):
+        self.node.get_logger().info(f"people_cb {self.current_frame}", throttle_duration_sec=1.0)
         self.last_people_msg = msg
         if not self.current_frame:
             return
@@ -336,7 +338,6 @@ class DetectQueuePeopleNode():
     def pub_result(self, msg, sorted_queue_people_name_list, sorted_queue_people_position_list, navigate_pose_list, adjusted_navigate_pose_list, queue_name):
         # publish queue message
         queue_msg = Queue()
-        queue_msg.header.seq = msg.header.seq
         queue_msg.header.stamp = msg.header.stamp
         queue_msg.header.frame_id = msg.header.frame_id
         queue_msg.name = queue_name
@@ -368,15 +369,15 @@ class DetectQueuePeopleNode():
             else:
                 marker.type = Marker.CYLINDER
             marker.action = Marker.ADD
-            marker.lifetime = rclpy.duration.Duration(1.0).to_msg()
+            marker.lifetime = rclpy.duration.Duration(seconds=1.0).to_msg()
             marker.scale.x = 0.5
             marker.scale.y = 0.5
             marker.scale.z = 0.2
             marker.pose.position = person_position
-            marker.pose.orientation.x = 0
-            marker.pose.orientation.y = 0
-            marker.pose.orientation.z = 0
-            marker.pose.orientation.w = 1
+            marker.pose.orientation.x = 0.0
+            marker.pose.orientation.y = 0.0
+            marker.pose.orientation.z = 0.0
+            marker.pose.orientation.w = 1.0
             marker.color.r = self.list_colors[int(person_name) % len(self.list_colors)][0]
             marker.color.g = self.list_colors[int(person_name) % len(self.list_colors)][1]
             marker.color.b = self.list_colors[int(person_name) % len(self.list_colors)][2]
@@ -392,7 +393,7 @@ class DetectQueuePeopleNode():
             marker.id = idx
             marker.type = Marker.ARROW
             marker.action = Marker.ADD
-            marker.lifetime = rclpy.duration.Duration(1.0).to_msg()
+            marker.lifetime = rclpy.duration.Duration(seconds=1.0).to_msg()
             marker.scale.x = 0.2
             marker.scale.y = 0.05
             marker.scale.z = 0.05
@@ -412,7 +413,7 @@ class DetectQueuePeopleNode():
             marker.id = idx
             marker.type = Marker.ARROW
             marker.action = Marker.ADD
-            marker.lifetime = rclpy.duration.Duration(1.0).to_msg()
+            marker.lifetime = rclpy.duration.Duration(seconds=1.0).to_msg()
             marker.scale.x = 0.2
             marker.scale.y = 0.1
             marker.scale.z = 0.1
@@ -436,7 +437,7 @@ class DetectQueuePeopleNode():
             marker.id = idx
             marker.type = Marker.ARROW
             marker.action = Marker.ADD
-            marker.lifetime = rclpy.duration.Durationt(1.0).to_msg()
+            marker.lifetime = rclpy.duration.Duration(seconds=1.0).to_msg()
             marker.scale.x = 0.5
             marker.scale.y = 0.2
             marker.scale.z = 0.2
@@ -463,7 +464,7 @@ class DetectQueuePeopleNode():
         if self.last_people_msg is None:
             stat.summary(DiagnosticStatus.ERROR, "people message has not been published")
             return stat
-        if (self.node.get_clock().now() - rclpy.Time.from_msg(self.last_people_msg.header.stamp)).nanoseconds()/1000000000 > 3.0:
+        if (self.node.get_clock().now() - rclpy.time.Time.from_msg(self.last_people_msg.header.stamp)).nanoseconds/1e9 > 3.0:
             stat.summary(DiagnosticStatus.ERROR, "people message has been stopped")
             return stat
         if not self.current_frame:
@@ -501,10 +502,13 @@ def main():
 
     queue_annotation_frame_id_dict = {}
     try:
+        node.get_logger().info("config file loading")
         queue_annotation_frame_id_dict = file_utils.load_queue_annotation_list_file(file_utils.get_filename(queue_annotation_list_file))
+        node.get_logger().info("config file loaded")
     except file_utils.QueueUtilError as error:
         queue_util_error = error
-
+        import traceback
+        node.get_logger().error(traceback.format_exc())
     detect_queue_people_list = []
     for frame_id in queue_annotation_frame_id_dict.keys():
         for idx, queue_annotation in enumerate(queue_annotation_frame_id_dict[frame_id]):

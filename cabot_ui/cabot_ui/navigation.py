@@ -367,7 +367,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_msg = None
         self.need_queue_start_arrived_info = False
         self.need_queue_proceed_info = False
-        queue_input = node.declare_parameter("queue_topic", "/queue_people_py/queue").value
+        queue_input = node.declare_parameter("queue_topic", "/queue").value
         self.queue_sub = node.create_subscription(queue_msgs.msg.Queue, queue_input, self._queue_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         queue_speed_output = node.declare_parameter("queue_speed_topic", "/cabot/queue_speed").value
         self.queue_speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, queue_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -820,7 +820,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             current_position = numpy.array([current_pose.x, current_pose.y])
             current_position_on_queue_path = geoutil.get_projected_point_to_line(current_position, poi_position, poi.link_orientation)
 
-            if len(self.current_queue_msg.people) > 0:
+            if self.current_queue_msg and len(self.current_queue_msg.people) > 0:
                 tail_pose = geometry_msgs.msg.PoseStamped()
                 tail_pose.header = self.current_queue_msg.header
                 tail_pose.pose.position = self.current_queue_msg.people[-1].position
