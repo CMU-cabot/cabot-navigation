@@ -101,19 +101,21 @@ function snore()
 function help()
 {
     echo "Usage:"
-    echo "-h          show this help"
+    echo "-A          find all test module under cabot_sites"
     echo "-D          debug"
-    echo "-s          simulation mode"
-    echo "-n <name>   set log name prefix"
-    echo "-v          verbose option"
+    echo "-f <test>   run test CABOT_SITE.<module>.<test>"
+    echo "-h          show this help"
+    echo "-H          headless"
     echo "-M          log dmesg output"
-    echo "-y          do not confirm (deprecated - always launch server if there is no server)"
+    echo "-n <name>   set log name prefix"
+    echo "-r          retry test when segmentation fault"
+    echo "-s          simulation mode"
+    echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
     echo "-T <module> run test CABOT_SITE.<module>"
-    echo "-f <test>   run test CABOT_SITE.<module>.<test>"
-    echo "-H          headless"
+    echo "-y          do not confirm (deprecated - always launch server if there is no server)"
     echo "-u <options> unittest"
-    echo "-r          retry test when segmentation fault"
+    echo "-v          verbose option"
 }
 
 
@@ -139,35 +141,14 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsn:vDMSytHT:f:ur" arg; do
+while getopts "hDf:HMn:rsS:tT:uvy" arg; do
     case $arg in
-        s)
-            simulation=1
-            ;;
         h)
             help
             exit
             ;;
-        n)
-            log_prefix=$OPTARG
-            ;;
-        v)
-            verbose=1
-            ;;
         D)
             debug=1
-            ;;
-        M)
-            log_dmesg=1
-            ;;
-        y)
-            yes=1
-            ;;
-        t)
-            run_test=1
-            ;;
-        T)
-            module=$OPTARG
             ;;
         f)
             test_func=$OPTARG
@@ -175,21 +156,43 @@ while getopts "hsn:vDMSytHT:f:ur" arg; do
         H)
             export CABOT_HEADLESS=1
             ;;
-        u)
-            unittest=1
+        M)
+            log_dmesg=1
+            ;;
+        n)
+            log_prefix=$OPTARG
             ;;
         r)
             retryoption="-r"
+            ;;
+        s)
+            simulation=1
+            ;;
+        S)
+            export CABOT_SITE=$OPTARG  # override the default
+            ;;
+        t)
+            run_test=1
+            ;;
+        T)
+            module=$OPTARG
+            ;;
+        u)
+            unittest=1
+            ;;
+        v)
+            verbose=1
+            ;;
+        y)
+            yes=1
             ;;
     esac
 done
 shift $((OPTIND-1))
 
-
 ## private variables
 pids=()
 termpids=()
-
 
 if [[ $unittest -eq 1 ]]; then
     code=0
@@ -296,7 +299,7 @@ done
 blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
-    blue "Running test"
+    blue "Running test $module $test_func"
     if [[ $debug -eq 1 ]]; then
         docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func $retryoption # debug
     else
