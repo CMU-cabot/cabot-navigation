@@ -351,7 +351,9 @@ class UserInterface(object):
             self.announce_social(message)
 
     def please_follow_behind(self):
+        self._activity_log("cabot/interface", "navigation", "please_follow_behind")
         self.speak(i18n.localized_string("FOLLOW_BEHIND_PLEASE_NARROW"))
 
     def please_return_position(self):
+        self._activity_log("cabot/interface", "navigation", "please_return_position")
         self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
