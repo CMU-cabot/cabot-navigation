@@ -31,6 +31,7 @@ import traceback
 import uuid
 import yaml
 import logging
+import re
 
 from optparse import OptionParser
 import rclpy
@@ -124,7 +125,7 @@ class Tester:
     def set_evaluator(self, evaluator):
         self.evaluator = evaluator
 
-    def test(self, module, specific_test, wait_ready=False):
+    def test(self, module, test_pat, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
 
         # prepare the test
@@ -144,23 +145,18 @@ class Tester:
             if not success:
                 sys.exit(1)
 
-        if specific_test and specific_test in functions:
-            logger.info(f"Testing {specific_test}")
-            self.test_func_name = specific_test
-            getattr(module, specific_test)(self)
+        for func in sorted(functions):
+            if func.startswith("_"):
+                continue
+            if test_pat and not test_pat.match(func):
+                continue
+            logger.info(f"Testing {func}")
+            self.test_func_name = func
+            getattr(module, func)(self)
             self.stop_evaluation()  # automatically stop metric evaluation
-            success = self.print_result(self.result, specific_test)
-            self.cancel_subscription(specific_test)
-        else:
-            for func in sorted(functions):
-                if func.startswith("_"):
-                    continue
-                logger.info(f"Testing {func}")
-                self.test_func_name = func
-                getattr(module, func)(self)
-                self.stop_evaluation()  # automatically stop metric evaluation
-                success = self.print_result(self.result, func)
-                self.cancel_subscription(func)
+            success = self.print_result(self.result, func)
+            self.register_action_result(func, self.result)
+            self.cancel_subscription(func)
 
         logger.info("Done all test")
 
@@ -849,7 +845,7 @@ def main():
     parser = OptionParser(usage="""
     Example
     {0} -m <module name>    # run test module
-    {0} -f <func name>      # run only func
+    {0} -f <func name pat>  # run only func that mataches the pattern
     """.format(sys.argv[0]))
 
     parser.add_option('-m', '--module', type=str, help='test module name')
@@ -882,7 +878,15 @@ def main():
     tester = Tester(node)
     tester.set_evaluator(evaluator)
     mod = importlib.import_module(options.module)
-    tester.test(mod, options.func, wait_ready=options.wait_ready)
+    func_pat = None
+    if options.func:
+        try:
+            func_pat = re.compile(options.func)
+            logger.info(f"test func = {options.func}")
+        except re.error as error:
+            logger.error(error)
+            return
+    tester.test(mod, func_pat, wait_ready=options.wait_ready)
 
 
 if __name__ == "__main__":
