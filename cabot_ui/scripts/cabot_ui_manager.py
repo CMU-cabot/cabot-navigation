@@ -182,18 +182,21 @@ class CabotUIManager(NavigationInterface, object):
         self._logger.info("NavigationState: retried (system)")
 
     def have_arrived(self, goal):
+        # do not read arrival message from robot
         # self._logger.info("delegate have_arrived called")
         # self._interface.have_arrived(goal)
-        self._logger.info("NavigationState: arrived")
+        pass
 
+    def have_completed(self):
+        self._status_manager.set_state(State.idle)
+
+        # send navigation_arrived event when all goals are completed
+        self._logger.info("NavigationState: arrived")
         # notify external nodes about arrival
         e = NavigationEvent("arrived", None)
         msg = std_msgs.msg.String()
         msg.data = str(e)
         self._eventPub.publish(msg)
-
-    def have_completed(self):
-        self._status_manager.set_state(State.idle)
 
     def approaching_to_poi(self, poi=None):
         self._interface.approaching_to_poi(poi=poi)
