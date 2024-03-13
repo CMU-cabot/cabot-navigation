@@ -80,39 +80,41 @@ class GoalInterface(object):
 
 
 def make_goals(delegate, groute, anchor, yaw=None):
-    # based on the navcog routeing, this function will make one or multiple goal towards the destination
-    # one of goal could be just a goal of navigation2 stack, other could be special goal like getting on
-    # or waiting for an elevator cab
-    goals = []
-    temp = []
-    index = 0
-    narrow = False
-    need_narrow_announce = False
+    """
+    This function makes one or multiple action goals towards the destination to deal with
+    manual door, elevators, queue, narrow path, and so on.
 
+    :param delegate: delegate instance for Goal
+    :type  delegate: GoalInterface
+    :param groute: route obtained from MapService in global coordinate
+    :type  groute: [geojson.Object]
+    :param anchor: anchor to convert the global coordinate to local coordinate
+    :type  anchor: geoutil.Anchor
+
+    :returns: a list of Goal
+    :rtype: [navgoal.Goal]
+    """
     CaBotRclpyUtil.info(F"--make_goals-{len(groute)}--------------------")
     CaBotRclpyUtil.info(F"{groute}")
 
+    if len(groute) < 2:
+        CaBotRclpyUtil.error(F"groute should be longer than 2: {groute}")
+        return []
+
+    goals = []
+    route_objs = []
+    index = 1
+    narrow = groute[1].is_narrow
+
     while index < len(groute):
         link_or_node = groute[index]
-        link_or_node.update_anchor(anchor)   ## not sure
-        temp.append(link_or_node)
+        route_objs.append(link_or_node)
         index += 1
-
         if not isinstance(link_or_node, geojson.RouteLink):
             continue
-
         link = link_or_node
 
-        if not need_narrow_announce and link.need_narrow_announce:
-            need_narrow_announce = True
-
-        if link.is_temp:
-            if link.is_narrow:
-                narrow = True
-            continue
-
         # there is a manual door
-
         # find manual door
         doors = list(filter(lambda x: isinstance(x, geojson.DoorPOI) and not x.is_auto, link.pois))
         if doors:
@@ -121,13 +123,13 @@ def make_goals(delegate, groute, anchor, yaw=None):
                 CaBotRclpyUtil.warn("don't put multiple door pois into a link")
 
             # set goal 1 meter behind the door
-            if len(temp) >= 2:
-                goals.append(NavGoal(delegate, temp[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
+            if len(route_objs) >= 2:
+                goals.append(NavGoal(delegate, route_objs[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
             # CaBotRclPyUtil.info(goals[-1])
             # ask user to pass the door
             goals.append(DoorGoal(delegate, link, anchor, doors[0]))
             # CaBotRclPyUtil.info(goals[-1])
-            temp = []
+            route_objs = []
 
         # find queue target
         queue_targets = list(filter(lambda x: isinstance(x, geojson.QueueTargetPOI), link.pois))
@@ -220,7 +222,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                 # create one goal to queue exit node
                 goals.append(QueueNavLastGoal(delegate, queue_exit_groute, anchor))
 
-                temp = []
+                route_objs = []
 
         if link.is_elevator:
             continue
@@ -228,26 +230,25 @@ def make_goals(delegate, groute, anchor, yaw=None):
         if link.target_node.is_elevator:
             # find cab POIs
             # elevator cab POIs are associated with non elevator links
-            src_cabs = list(filter(lambda x: isinstance(x, geojson.ElevatorCabPOI), temp[-1].pois))
+            src_cabs = list(filter(lambda x: isinstance(x, geojson.ElevatorCabPOI), route_objs[-1].pois))
             CaBotRclpyUtil.info(F"src_cabs {str(src_cabs)}")
             if len(src_cabs) == 0:
                 CaBotRclpyUtil.error("require elevator cab POI")
-                CaBotRclpyUtil.error(temp[-1])
+                CaBotRclpyUtil.error(route_objs[-1])
                 return None
             else:
                 if len(src_cabs) > 1:
                     # TODO
                     CaBotRclpyUtil.warn("multiple cabs are not supported yet, use the first")
 
-                # navigat to in front of the elevator cab (3.0 meters from the cab as default)
-                goals.append(NavGoal(delegate, temp, anchor, target_poi=src_cabs[0], set_back=src_cabs[0].set_back))
-                # CaBotRclPyUtil.info(goals[-1])
+                if len(route_objs) > 1:
+                    # navigat to in front of the elevator cab (3.0 meters from the cab as default)
+                    goals.append(NavGoal(delegate, route_objs, anchor, target_poi=src_cabs[0], set_back=src_cabs[0].set_back))
                 # turn towards door
                 goals.append(ElevatorWaitGoal(delegate, src_cabs[0]))
                 # wait cab and get on the cab
                 goals.append(ElevatorInGoal(delegate, src_cabs[0]))
-                # CaBotRclPyUtil.info(goals[-1])
-                temp = []
+                route_objs = []
 
         if link.source_node.is_elevator:
             dest_cabs = list(filter(lambda x: isinstance(x, geojson.ElevatorCabPOI), link.pois))
@@ -263,32 +264,31 @@ def make_goals(delegate, groute, anchor, yaw=None):
             # forward 3.0 meters (as default) without global mapping support
             goals.append(ElevatorOutGoal(delegate, dest_cabs[0], set_forward=dest_cabs[0].set_forward))
             # CaBotRclPyUtil.info(goals[-1])
-            temp = [link]
+            route_objs = [link]
 
         if link.is_narrow and not narrow:
             narrow = True
-            goals.append(NavGoal(delegate, temp[:-1], anchor))
-            temp = [link]
+            goals.append(NavGoal(delegate, route_objs[:-1], anchor))
+            route_objs = [link]
 
         if (not link.is_narrow) and narrow:
             narrow = False
-            goals.append(NarrowGoal(delegate, temp[:-1], anchor, need_to_announce_follow=need_narrow_announce))
-            need_narrow_announce = False
-            temp = [link]
+            goals.append(NarrowGoal(delegate, route_objs[:-1], anchor))
+            route_objs = [link]
 
         # TODO: escalator
-    if len(temp) > 1:
+    if len(route_objs) > 0:
         if narrow:
             narrow = False
-            goals.append(NarrowGoal(delegate, temp, anchor, need_to_announce_follow=need_narrow_announce, is_last=True))
+            goals.append(NarrowGoal(delegate, route_objs, anchor, is_last=True))
         else:
-            goals.append(NavGoal(delegate, temp, anchor, is_last=True))
+            goals.append(NavGoal(delegate, route_objs, anchor, is_last=True))
 
     if yaw is not None:
         goal_node = groute[-1]  # should be Node
         goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
-    CaBotRclpyUtil.info(F"{goals}")
+    CaBotRclpyUtil.info(F"goals: {goals}")
     return goals
 
 
@@ -311,11 +311,13 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             # if last item is Point (Node), it would be same as the previous link target node
             if isinstance(item.geometry, geojson.Point):
                 continue
-        else:
-            # if the link is a left of the graph and short
-            if isinstance(item, geojson.RouteLink):
-                if item.is_leaf and item.length < 3.0:
-                    continue
+
+        # TODO: This is a hulistic rule to deal with the last leaf link towards doorway in corridor
+        # It needs to check if the last link has perpendicular turn
+        # if the link is a leaf of the graph and short
+        # if isinstance(item, geojson.RouteLink):
+        #     if item.is_leaf and item.length < 3.0:
+        #         continue
 
         if isinstance(item.geometry, geojson.Point):
             points.append(convert(item.geometry))
@@ -323,7 +325,7 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             points.append(convert(item.target_node.geometry))
         else:
             CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
-        CaBotRclpyUtil.info(F"{index}: {str(points[-1])}")
+        CaBotRclpyUtil.info(F"{index}: {str(points)}")
 
     # make a path from points
     path = nav_msgs.msg.Path()
@@ -469,9 +471,11 @@ class Goal(geoutil.TargetPlace):
 
     def match(self, pose, floor):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+        return False
 
     def completed(self, pose, floor):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+        return False
 
 
 class NavGoal(Goal):
@@ -871,9 +875,13 @@ class NarrowGoal(NavGoal):
     LITTLE_NARROW_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_little_narrow.xml"
 
     def __init__(self, delegate, navcog_route, anchor, **kwargs):
-        self._need_to_announce_follow = False
-        if 'need_to_announce_follow' in kwargs:
-            self._need_to_announce_follow = bool(kwargs['need_to_announce_follow'])
+        # if one of the link is very narrow, it needs to announce
+        self._need_narrow_announce = False
+        for link_or_node in navcog_route:
+            CaBotRclpyUtil.info(F"{link_or_node}")
+            if not isinstance(link_or_node, geojson.RouteLink):
+                continue
+            self._need_narrow_announce = self._need_narrow_announce or link_or_node.need_narrow_announce
 
         super(NarrowGoal, self).__init__(delegate, navcog_route, anchor, **kwargs)
 
@@ -893,7 +901,7 @@ class NarrowGoal(NavGoal):
         self.delegate.publish_path(path)
         CaBotRclpyUtil.info("NarrowGoal publish path")
 
-        if self._need_to_announce_follow:
+        if self._need_narrow_announce:
             self.delegate.please_follow_behind()
             self.wait_for_announce()
         else:
@@ -905,7 +913,7 @@ class NarrowGoal(NavGoal):
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
         if self._is_canceled:
             return
-        if self._need_to_announce_follow:
+        if self._need_narrow_announce:
             self.delegate.please_return_position()
             self.wait_next_navi(future)
         else:
