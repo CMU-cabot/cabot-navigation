@@ -85,9 +85,13 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
 
 nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & start)
 {
+  nav_msgs::msg::Path ret;
+  ret.header = path.header;
+  ret.poses.push_back(start);
+
   double mindist = std::numeric_limits<double>::max();
   auto minit = path.poses.begin();
-  geometry_msgs::msg::PoseStamped minpose;
+  geometry_msgs::msg::PoseStamped minpose = path.poses[0];
 
   for (auto it = path.poses.begin(); it < path.poses.end() - 1; it++) {
     auto s = it;
@@ -101,10 +105,6 @@ nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const 
       minpose = nearest;
     }
   }
-
-  nav_msgs::msg::Path ret;
-  ret.header = path.header;
-  ret.poses.push_back(start);
 
   if (mindist > FIRST_LINK_THRETHOLD) {
     ret.poses.push_back(minpose);

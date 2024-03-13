@@ -290,6 +290,11 @@ class DataUtil(object):
         self.current_route = []
         try:
             jfeatures = json.loads(req.text)
+            if "error" in jfeatures:
+                CaBotRclpyUtil.info(F"got error from the MapService {jfeatures}")
+                node = geojson.Object.get_object_by_id(to_id)
+                if node:
+                    return [node]
 
             import tempfile
             f = open(F"{tempfile.gettempdir()}/route_{from_id}_{to_id}", "w")

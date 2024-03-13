@@ -97,9 +97,12 @@ def make_goals(delegate, groute, anchor, yaw=None):
     CaBotRclpyUtil.info(F"--make_goals-{len(groute)}--------------------")
     CaBotRclpyUtil.info(F"{groute}")
 
-    if len(groute) < 2:
-        CaBotRclpyUtil.error(F"groute should be longer than 2: {groute}")
+    if len(groute) == 0:
+        CaBotRclpyUtil.error("groute length should not be 0")
         return []
+    if len(groute) == 1:
+        # if route is only a node
+        return [NavGoal(delegate, groute, anchor, is_last=True)]
 
     goals = []
     route_objs = []
@@ -294,9 +297,11 @@ def make_goals(delegate, groute, anchor, yaw=None):
 
 def create_ros_path(navcog_route, anchor, global_map_name):
     """convert a NavCog path to ROS path"""
-
     # convert route to points
     points = []
+    if len(navcog_route) == 0:
+        CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
+        return points
     CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
     last_index = len(navcog_route)-1
 
@@ -308,8 +313,11 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             # if the first item is link, add the source node
             points.append(convert(item.source_node.geometry))
         elif index == last_index:
-            # if last item is Point (Node), it would be same as the previous link target node
             if isinstance(item.geometry, geojson.Point):
+                # if navcog_route only has one Node
+                if len(navcog_route) == 1:
+                    points.append(convert(item.geometry))
+                # if last item is Point (Node), it would be same as the previous link target node
                 continue
 
         # TODO: This is a hulistic rule to deal with the last leaf link towards doorway in corridor
@@ -331,8 +339,8 @@ def create_ros_path(navcog_route, anchor, global_map_name):
     path = nav_msgs.msg.Path()
     path.header.frame_id = global_map_name
     path.poses = []
-    quat = None
-    pori = None
+    quaternion = None
+    prev_orientation = geometry_msgs.msg.Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
     for i in range(0, len(points)):
         start = points[i]
         pose = geometry_msgs.msg.PoseStamped()
@@ -344,16 +352,16 @@ def create_ros_path(navcog_route, anchor, global_map_name):
         if i+1 < len(points):
             end = points[i+1]
             direction = math.atan2(end.y - start.y, end.x - start.x)
-            quat = tf_transformations.quaternion_from_euler(0, 0, direction)
+            quaternion = tf_transformations.quaternion_from_euler(0, 0, direction)
 
-            pose.pose.orientation.x = quat[0]
-            pose.pose.orientation.y = quat[1]
-            pose.pose.orientation.z = quat[2]
-            pose.pose.orientation.w = quat[3]
+            pose.pose.orientation.x = quaternion[0]
+            pose.pose.orientation.y = quaternion[1]
+            pose.pose.orientation.z = quaternion[2]
+            pose.pose.orientation.w = quaternion[3]
             path.poses.append(pose)
-            pori = pose.pose.orientation
+            prev_orientation = pose.pose.orientation
         else:
-            pose.pose.orientation = pori
+            pose.pose.orientation = prev_orientation
             path.poses.append(pose)
 
     CaBotRclpyUtil.info(F"path {path}")
