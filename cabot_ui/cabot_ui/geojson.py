@@ -96,7 +96,7 @@ class LineString(Geometry):
         self.end = geoutil.Latlng(lat=self.coordinates[1][1], lng=self.coordinates[1][0])
 
     def distance_to(self, point):
-        if isinstance(point, Point):
+        if isinstance(point, geoutil.Latlng):
             return self.nearest_point_on_line(point).distance_to(point)
         raise RuntimeError(F"Need to pass a Point object ({type(point)})")
 
@@ -377,6 +377,9 @@ class Object(object):
     def reset(self):
         pass
 
+    def copy(self):
+        return copy.deepcopy(self)
+
 
 class Link(Object):
     """Link class"""
@@ -457,6 +460,10 @@ class Link(Object):
         if self.start_node is None or self.end_node is None:
             return float('nan')
         return self.start_node.geometry.distance_to(self.end_node.geometry)
+
+    @property
+    def pose(self):
+        return geoutil.Pose.pose_from_points(self.start_node.local_geometry, self.end_node.local_geometry)
 
     def register_poi(self, poi):
         self.pois.append(poi)

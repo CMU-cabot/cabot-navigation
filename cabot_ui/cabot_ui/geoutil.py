@@ -81,20 +81,21 @@ def p_from_msg(msg):
 
 
 def q_from_points(msg1, msg2):
-    """get quaternion array from two points"""
-    point1 = p_from_msg(msg1)
-    point2 = p_from_msg(msg2)
+    # Convert points to numpy arrays
+    p1 = p_from_msg(msg1)
+    p2 = p_from_msg(msg2)
 
-    org = numpy.array([1, 0, 0])  # robot default orientation
-    diff = numpy.subtract(point2, point1)  # get difference
-    diff = diff / numpy.linalg.norm(diff)  # normalize
+    # Calculate angles relative to the x-axis
+    delta_theta = numpy.arctan2(p2[1]-p1[1], p2[0]-p1[0])
 
-    cross = numpy.cross(org, diff)
-    dot = numpy.dot(org, diff)
-    org_len = numpy.linalg.norm(org)
-    diff_len = numpy.linalg.norm(diff)
+    # Construct the quaternion
+    q_w = numpy.cos(delta_theta / 2)  # real part
+    q_z = numpy.sin(delta_theta / 2)  # z-axis part, since rotation is around z-axis in 2D
 
-    return numpy.append(cross, [org_len * diff_len + dot])
+    # Since we're rotating in 2D, the quaternion's x and y components are 0
+    q_x, q_y = 0, 0
+
+    return (q_x, q_y, q_z, q_w)
 
 
 def q_inverse(q):
@@ -141,6 +142,7 @@ def in_angle(pose1, pose2, margin_in_degree):
     return abs(yaw1) <= margin and abs(yaw2) <= margin
 
 
+# quat1 and quat2 is supporsed to be facing
 def diff_in_angle(quat1, quat2, margin_in_degree):
     """
     margin_in_degree: angle margin in degree
@@ -263,10 +265,14 @@ class Pose(Point):
         return F"{type(self)}({self.x:#8.2f}, {self.y:#8.2f})[{self.r/math.pi*180:#8.2f} deg]"
 
     @staticmethod
-    def pose_from_points(p1, p2):
+    def pose_from_points(p1, p2, backward=False):
         p1_p2 = q_from_points(p1, p2)
-        _, _, yaw = euler_from_quaternion(q_diff([0, 0, 0, 1], p1_p2))
-        return Pose(x=p1.x, y=p1.y, r=yaw)
+        if backward:
+            _, _, yaw = euler_from_quaternion(q_diff([0, 0, 0, 1], p1_p2))
+            return Pose(x=p1.x, y=p1.y, r=yaw)
+        else:
+            _, _, yaw = euler_from_quaternion(p1_p2)
+            return Pose(x=p1.x, y=p1.y, r=yaw)
 
     @property
     def orientation(self):
@@ -454,6 +460,12 @@ class TargetPlace(Pose):
             self._floor = kwargs['floor']
 
         self.reset_target()
+
+    def same_floor(self, floor, tollerance=0.1):
+        return abs(self._floor - floor) < tollerance
+
+    def same_direction(self, orientation, tollerance=0.1):
+        return abs(diff_angle(self.orientation, orientation)) < tollerance
 
     def reset_target(self):
         self._was_approaching = False

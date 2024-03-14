@@ -311,7 +311,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self.i_am_ready = False
         self._sub_goals = None
+        self._goal_index = -1
         self._current_goal = None
+        self._last_estimated_goal_check = None
 
         # self.client = None
         self._loop_handle = None
@@ -365,7 +367,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_msg = None
         self.need_queue_start_arrived_info = False
         self.need_queue_proceed_info = False
-        queue_input = node.declare_parameter("queue_topic", "/queue_people_py/queue").value
+        queue_input = node.declare_parameter("queue_topic", "/queue").value
         self.queue_sub = node.create_subscription(queue_msgs.msg.Queue, queue_input, self._queue_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         queue_speed_output = node.declare_parameter("queue_speed_topic", "/cabot/queue_speed").value
         self.queue_speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, queue_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -536,6 +538,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
+        self._goal_index = -1
 
         # for dashboad
         (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
@@ -560,7 +563,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
 
         if self._current_goal:
-            self._sub_goals.insert(0, self._current_goal)
+            self._goal_index -= 1
             self._navigate_next_sub_goal()
 
     # wrap execution by a queue
@@ -579,7 +582,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
 
         if self._current_goal:
-            self._sub_goals.insert(0, self._current_goal)
+            self._goal_index -= 1
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
@@ -588,6 +591,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "resume")
+
+        current_pose = self.current_local_pose()
+        _, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+        self._goal_index = index-1
+
         self._navigate_next_sub_goal()
 
     # wrap execution by a queue
@@ -599,6 +607,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "cancel")
         self._sub_goals = None
+        self._goal_index = -1
         self._stop_loop()
         if self._current_goal:
             self._current_goal.cancel(callback)
@@ -613,9 +622,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("navigation is canceled")
             return
 
-        if self._sub_goals:
+        if self._sub_goals and self._goal_index+1 < len(self._sub_goals):
             self.delegate.activity_log("cabot/navigation", "next_sub_goal")
-            self._current_goal = self._sub_goals.pop(0)
+            self._goal_index += 1
+            self._current_goal = self._sub_goals[self._goal_index]
             self._current_goal.reset()
             self._navigate_sub_goal(self._current_goal)
             return
@@ -810,7 +820,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             current_position = numpy.array([current_pose.x, current_pose.y])
             current_position_on_queue_path = geoutil.get_projected_point_to_line(current_position, poi_position, poi.link_orientation)
 
-            if len(self.current_queue_msg.people) > 0:
+            if self.current_queue_msg and len(self.current_queue_msg.people) > 0:
                 tail_pose = geometry_msgs.msg.PoseStamped()
                 tail_pose.header = self.current_queue_msg.header
                 tail_pose.pose.position = self.current_queue_msg.people[-1].position
@@ -885,6 +895,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         goal.check(current_pose)
 
+        # estimate next goal
+        now = self._node.get_clock().now()
+        interval = rclpy.duration.Duration(seconds=1.0)
+        if not self._last_estimated_goal_check or now - self._last_estimated_goal_check > interval:
+            estimated_goal = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+            self._logger.info(F"Estimated next goal = {estimated_goal}")
+            self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"{repr(estimated_goal)}")
+            self._last_estimated_goal_check = now
+
         if goal.is_canceled:
             self.delegate.goal_canceled(goal)
             self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
@@ -899,7 +918,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
 
         self._current_goal = None
-        if goal.need_to_announce_arrival:
+        if goal.is_last:
+            # keep this for test
             self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
             self.delegate.have_arrived(goal)
 
@@ -952,7 +972,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.visualizer.visualize()
 
         self._logger.info("sending goal")
-        self._logger.info("".join(traceback.format_stack()))
         future = client.send_goal_async(goal)
         self._logger.info("add done callback")
         future.add_done_callback(lambda future: self._navigate_to_pose_sent_goal(goal, future, gh_cb, done_cb))

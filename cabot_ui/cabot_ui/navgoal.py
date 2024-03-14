@@ -80,55 +80,63 @@ class GoalInterface(object):
 
 
 def make_goals(delegate, groute, anchor, yaw=None):
-    # based on the navcog routeing, this function will make one or multiple goal towards the destination
-    # one of goal could be just a goal of navigation2 stack, other could be special goal like getting on
-    # or waiting for an elevator cab
-    goals = []
-    temp = []
-    index = 0
-    narrow = False
-    need_narrow_announce = False
+    """
+    This function makes one or multiple action goals towards the destination to deal with
+    manual door, elevators, queue, narrow path, and so on.
 
+    :param delegate: delegate instance for Goal
+    :type  delegate: GoalInterface
+    :param groute: route obtained from MapService in global coordinate
+    :type  groute: [geojson.Object]
+    :param anchor: anchor to convert the global coordinate to local coordinate
+    :type  anchor: geoutil.Anchor
+
+    :returns: a list of Goal
+    :rtype: [navgoal.Goal]
+    """
     CaBotRclpyUtil.info(F"--make_goals-{len(groute)}--------------------")
     CaBotRclpyUtil.info(F"{groute}")
 
+    if len(groute) == 0:
+        CaBotRclpyUtil.error("groute length should not be 0")
+        return []
+    if len(groute) == 1:
+        # if route is only a node
+        return [NavGoal(delegate, groute, anchor, is_last=True)]
+
+    goals = []
+    route_objs = []
+    index = 1
+    narrow = groute[1].is_narrow
+
     while index < len(groute):
         link_or_node = groute[index]
-        temp.append(link_or_node)
+        route_objs.append(link_or_node)
         index += 1
-
         if not isinstance(link_or_node, geojson.RouteLink):
             continue
-
         link = link_or_node
 
-        if not need_narrow_announce and link.need_narrow_announce:
-            need_narrow_announce = True
-
-        if link.is_temp:
-            if link.is_narrow:
-                narrow = True
-            continue
-
-        # there is a manual door
-
-        # find manual door
+        # Handle Door POIs
+        #
+        #      o======== (Door) ========o
+        #  x-----1.0m----(Door)----1.0m-----x
+        #
         doors = list(filter(lambda x: isinstance(x, geojson.DoorPOI) and not x.is_auto, link.pois))
         if doors:
             if len(doors) > 1:
-                # will not support
+                # will not support multiple doors in a link
                 CaBotRclpyUtil.warn("don't put multiple door pois into a link")
 
-            # set goal 1 meter behind the door
-            if len(temp) >= 2:
-                goals.append(NavGoal(delegate, temp[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
-            # CaBotRclPyUtil.info(goals[-1])
+            # set previous goal 1.0 meter behind the door
+            if len(route_objs) >= 2:
+                goals.append(NavGoal(delegate, route_objs[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
             # ask user to pass the door
-            goals.append(DoorGoal(delegate, doors[0]))
-            # CaBotRclPyUtil.info(goals[-1])
-            temp = []
+            goals.append(DoorGoal(delegate, link, anchor, doors[0]))
+            route_objs = []
 
-        # find queue target
+        # Handle Queue Target and Queue Wait
+        # TBD
         queue_targets = list(filter(lambda x: isinstance(x, geojson.QueueTargetPOI), link.pois))
         if queue_targets:
             if len(queue_targets) > 1:
@@ -201,7 +209,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                                 dist_poi_r_start = numpy.linalg.norm(temp_queue_wait_position-temp_r_start_position)
                                 if dist_poi_r_start > temp_queue_wait_interval:
                                     temp_r_end_pose = geoutil.Pose.pose_from_points(queue_target_groute[idx_temp_r].target_node.local_geometry,
-                                                                                    queue_target_groute[idx_temp_r].source_node.local_geometry)
+                                                                                    queue_target_groute[idx_temp_r].source_node.local_geometry, backward=True)
                                     temp_queue_wait_x = temp_queue_wait.local_geometry.x - math.cos(temp_r_end_pose.r) * temp_queue_wait_interval
                                     temp_queue_wait_y = temp_queue_wait.local_geometry.y - math.sin(temp_r_end_pose.r) * temp_queue_wait_interval
 
@@ -219,7 +227,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                 # create one goal to queue exit node
                 goals.append(QueueNavLastGoal(delegate, queue_exit_groute, anchor))
 
-                temp = []
+                route_objs = []
 
         if link.is_elevator:
             continue
@@ -227,26 +235,25 @@ def make_goals(delegate, groute, anchor, yaw=None):
         if link.target_node.is_elevator:
             # find cab POIs
             # elevator cab POIs are associated with non elevator links
-            src_cabs = list(filter(lambda x: isinstance(x, geojson.ElevatorCabPOI), temp[-1].pois))
+            src_cabs = list(filter(lambda x: isinstance(x, geojson.ElevatorCabPOI), route_objs[-1].pois))
             CaBotRclpyUtil.info(F"src_cabs {str(src_cabs)}")
             if len(src_cabs) == 0:
                 CaBotRclpyUtil.error("require elevator cab POI")
-                CaBotRclpyUtil.error(temp[-1])
+                CaBotRclpyUtil.error(route_objs[-1])
                 return None
             else:
                 if len(src_cabs) > 1:
                     # TODO
                     CaBotRclpyUtil.warn("multiple cabs are not supported yet, use the first")
 
-                # navigat to in front of the elevator cab (3.0 meters from the cab as default)
-                goals.append(NavGoal(delegate, temp, anchor, target_poi=src_cabs[0], set_back=src_cabs[0].set_back))
-                # CaBotRclPyUtil.info(goals[-1])
+                if len(route_objs) > 1:
+                    # navigat to in front of the elevator cab (3.0 meters from the cab as default)
+                    goals.append(NavGoal(delegate, route_objs, anchor, target_poi=src_cabs[0], set_back=src_cabs[0].set_back))
                 # turn towards door
                 goals.append(ElevatorWaitGoal(delegate, src_cabs[0]))
                 # wait cab and get on the cab
                 goals.append(ElevatorInGoal(delegate, src_cabs[0]))
-                # CaBotRclPyUtil.info(goals[-1])
-                temp = []
+                route_objs = []
 
         if link.source_node.is_elevator:
             dest_cabs = list(filter(lambda x: isinstance(x, geojson.ElevatorCabPOI), link.pois))
@@ -262,39 +269,41 @@ def make_goals(delegate, groute, anchor, yaw=None):
             # forward 3.0 meters (as default) without global mapping support
             goals.append(ElevatorOutGoal(delegate, dest_cabs[0], set_forward=dest_cabs[0].set_forward))
             # CaBotRclPyUtil.info(goals[-1])
-            temp = [link]
+            route_objs = []
 
         if link.is_narrow and not narrow:
             narrow = True
-            goals.append(NavGoal(delegate, temp[:-1], anchor))
-            temp = [link]
+            goals.append(NavGoal(delegate, route_objs[:-1], anchor))
+            route_objs = [link]
 
         if (not link.is_narrow) and narrow:
             narrow = False
-            goals.append(NarrowGoal(delegate, temp[:-1], anchor, need_to_announce_follow=need_narrow_announce))
-            need_narrow_announce = False
-            temp = [link]
+            goals.append(NarrowGoal(delegate, route_objs[:-1], anchor))
+            route_objs = [link]
 
         # TODO: escalator
-    if len(temp) > 1:
+    if len(route_objs) > 0:
         if narrow:
             narrow = False
-            goals.append(NarrowGoal(delegate, temp, anchor, need_to_announce_follow=need_narrow_announce, is_last=True))
+            goals.append(NarrowGoal(delegate, route_objs, anchor, is_last=True))
         else:
-            goals.append(NavGoal(delegate, temp, anchor, is_last=True))
+            goals.append(NavGoal(delegate, route_objs, anchor, is_last=True))
 
     if yaw is not None:
-        goals.append(TurnGoal(delegate, anchor, yaw))
+        goal_node = groute[-1]  # should be Node
+        goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
-    CaBotRclpyUtil.info(F"{goals}")
+    CaBotRclpyUtil.info(F"goals: {goals}")
     return goals
 
 
-def create_ros_path(navcog_route, anchor, global_map_name):
+def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_back=[0.0, 0.0]):
     """convert a NavCog path to ROS path"""
-
     # convert route to points
     points = []
+    if len(navcog_route) == 0:
+        CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
+        return points
     CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
     last_index = len(navcog_route)-1
 
@@ -306,14 +315,19 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             # if the first item is link, add the source node
             points.append(convert(item.source_node.geometry))
         elif index == last_index:
-            # if last item is Point (Node), it would be same as the previous link target node
             if isinstance(item.geometry, geojson.Point):
+                # if navcog_route only has one Node
+                if len(navcog_route) == 1:
+                    points.append(convert(item.geometry))
+                # if last item is Point (Node), it would be same as the previous link target node
                 continue
-        else:
-            # if the link is a left of the graph and short
-            if isinstance(item, geojson.RouteLink):
-                if item.is_leaf and item.length < 3.0:
-                    continue
+
+        # TODO: This is a hulistic rule to deal with the last leaf link towards doorway in corridor
+        # It needs to check if the last link has perpendicular turn
+        # if the link is a leaf of the graph and short
+        # if isinstance(item, geojson.RouteLink):
+        #     if item.is_leaf and item.length < 3.0:
+        #         continue
 
         if isinstance(item.geometry, geojson.Point):
             points.append(convert(item.geometry))
@@ -321,14 +335,14 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             points.append(convert(item.target_node.geometry))
         else:
             CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
-        CaBotRclpyUtil.info(F"{index}: {str(points[-1])}")
+        CaBotRclpyUtil.info(F"{index}: {str(points)}")
 
     # make a path from points
     path = nav_msgs.msg.Path()
     path.header.frame_id = global_map_name
     path.poses = []
-    quat = None
-    pori = None
+    quaternion = None
+    prev_orientation = geometry_msgs.msg.Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
     for i in range(0, len(points)):
         start = points[i]
         pose = geometry_msgs.msg.PoseStamped()
@@ -340,23 +354,58 @@ def create_ros_path(navcog_route, anchor, global_map_name):
         if i+1 < len(points):
             end = points[i+1]
             direction = math.atan2(end.y - start.y, end.x - start.x)
-            quat = tf_transformations.quaternion_from_euler(0, 0, direction)
+            quaternion = tf_transformations.quaternion_from_euler(0, 0, direction)
 
-            pose.pose.orientation.x = quat[0]
-            pose.pose.orientation.y = quat[1]
-            pose.pose.orientation.z = quat[2]
-            pose.pose.orientation.w = quat[3]
+            pose.pose.orientation.x = quaternion[0]
+            pose.pose.orientation.y = quaternion[1]
+            pose.pose.orientation.z = quaternion[2]
+            pose.pose.orientation.w = quaternion[3]
             path.poses.append(pose)
-            pori = pose.pose.orientation
+            prev_orientation = pose.pose.orientation
         else:
-            pose.pose.orientation = pori
+            pose.pose.orientation = prev_orientation
             path.poses.append(pose)
+
+    # if target_poi is specified, the last_pose will be the target_poi
+    if target_poi:
+        last_pose = target_poi.to_pose_msg()
+        # if set_back is specified too, move the last_pose based on the last link direction
+        if set_back[0] > 0 or set_back[1] > 0:
+            i = 1
+            last_obj = navcog_route[-1]
+            while isinstance(last_obj, geojson.Node) and i < len(navcog_route):
+                i += 1
+                last_obj = navcog_route[-i]
+            if not isinstance(last_obj, geojson.RouteLink):
+                raise RuntimeError("There should be at least one link towards target POI,"
+                                   F"if it is provided with set_back (={set_back}) \n===POI===\n{str(target_poi)}\n=========")
+            backward = geoutil.Pose.pose_from_points(last_obj.source_node.local_geometry,
+                                                     last_obj.target_node.local_geometry, backward=True)
+            CaBotRclpyUtil.info(F"set_back {backward.r:.4} * ({str(set_back)})")
+            last_pose.position.x += math.cos(backward.r) * set_back[0] - math.sin(backward.r) * set_back[1]
+            last_pose.position.y += math.sin(backward.r) * set_back[0] + math.cos(backward.r) * set_back[1]
+        if target_poi is not None:
+            path.poses[-1].pose.position.x = last_pose.position.x
+            path.poses[-1].pose.position.y = last_pose.position.y
 
     CaBotRclpyUtil.info(F"path {path}")
     return (path, path.poses[-1] if len(path.poses) > 0 else None)
 
 
+def estimate_next_goal(goals, current_pose, current_floor):
+    for i in range(len(goals), 0, -1):
+        goal = goals[i-1]
+        if goal.completed(pose=current_pose, floor=current_floor):
+            continue
+        if goal.match(pose=current_pose, floor=current_floor):
+            return (goal, i-1)
+    return (None, -1)  # might be reached the goal
+
+
 class Goal(geoutil.TargetPlace):
+    GOAL_XY_THRETHOLD = 0.5
+    GOAL_ANGLE_THRETHOLD_IN_DEGREE = 15
+
     def __init__(self, delegate, **kwargs):
         super(Goal, self).__init__(**kwargs)
         if delegate is None:
@@ -395,10 +444,6 @@ class Goal(geoutil.TargetPlace):
     def is_canceled(self):
         return self._is_canceled
 
-    @property
-    def need_to_announce_arrival(self):
-        return False
-
     def exit(self):
         self.delegate.exit_goal(self)
 
@@ -421,7 +466,7 @@ class Goal(geoutil.TargetPlace):
         return ret
 
     def __repr__(self):
-        return F"{type(self)}<{super(Goal, self).__repr__()}>"
+        return F"{super(Goal, self).__repr__()}"
 
     def goal_handle_callback(self, handle):
         self._handles.append(handle)
@@ -452,9 +497,24 @@ class Goal(geoutil.TargetPlace):
                 callback()
             self._logger.info("done cancel goal")
 
+    def match(self, pose, floor):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+        return False
+
+    def completed(self, pose, floor):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+        return False
+
 
 class NavGoal(Goal):
+    """
+    only a node:  (R)     o
+    only a link:  (R)     -----
+    link and node:(R)     -----o-----
+    link and node:(R)     -----o-----o
+    """
     DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_replanning_and_recovery.xml"
+    NEIGHBOR_THRESHOLD = 1.0
 
     def __init__(self, delegate, navcog_route, anchor, target_poi=None, set_back=(0, 0), **kwargs):
         if navcog_route is None or len(navcog_route) == 0:
@@ -469,79 +529,10 @@ class NavGoal(Goal):
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
         self.anchor = anchor
-        (self.ros_path, last_pose) = create_ros_path(self.navcog_route, self.anchor, self.global_map_name)
+        (self.ros_path, last_pose) = create_ros_path(self.navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)
         self.pois = self._extract_pois()
         self.handle = None
-
-        floor = None
-        last_obj = navcog_route[-1]
-        if isinstance(last_obj, geojson.Node):
-            floor = last_obj.floor
-        elif isinstance(last_obj, geojson.RouteLink):
-            floor = last_obj.end_node.floor
-
-        # if target_poi is specified, the last_pose will be the target_poi
-        if target_poi is not None:
-            last_pose = target_poi.to_pose_msg()
-
-            # if set_back is specified too, move the last_pose based on the last link direction
-            if set_back[0] > 0 or set_back[1] > 0:
-                i = 1
-                while isinstance(last_obj, geojson.Node) and i < len(navcog_route):
-                    i += 1
-                    last_obj = navcog_route[-i]
-                if not isinstance(last_obj, geojson.RouteLink):
-                    raise RuntimeError("There should be at least one link towards target POI,"
-                                       "if it is provided with set_back (={}) \n===POI===\n{}\n========="
-                                       .format(set_back, str(target_poi)))
-
-                backward = geoutil.Pose.pose_from_points(last_obj.source_node.local_geometry,
-                                                         last_obj.target_node.local_geometry)
-
-                CaBotRclpyUtil.info(F"set_back {backward.r:.4} * ({str(set_back)})")
-
-                last_pose.position.x += math.cos(backward.r) * set_back[0] - math.sin(backward.r) * set_back[1]
-                last_pose.position.y += math.sin(backward.r) * set_back[0] + math.cos(backward.r) * set_back[1]
-            self.ros_path.poses[-1].pose.position.x = last_pose.position.x
-            self.ros_path.poses[-1].pose.position.y = last_pose.position.y
-
-        super(NavGoal, self).__init__(delegate, angle=180, floor=floor, pose_msg=last_pose, **kwargs)
-
-        self._need_to_announce_arrival = self.is_last
-        if 'need_to_announce_arrival' in kwargs:
-            self._need_to_announce_arrival = bool(kwargs['need_to_announce_arrival'])
-
-        self._goal_name_pron = None
-        self._goal_description = None
-        if self._need_to_announce_arrival:
-            if not isinstance(navcog_route[-1], geojson.Node):
-                CaBotRclpyUtil.info(navcog_route[-1])
-                return
-            CaBotRclpyUtil.info(str(navcog_route[-1]))
-            if not navcog_route[-1].facility:
-                return
-
-            if navcog_route[-1].facility.name_pron:
-                self._goal_name_pron = navcog_route[-1].facility.name_pron
-            else:
-                self._goal_name_pron = navcog_route[-1].facility.name
-            self._goal_description = navcog_route[-1].facility.long_description
-            if self.goal_name_pron:
-                CaBotRclpyUtil.info(F"{self.goal_name_pron.encode('utf-8')}")
-            if self.goal_description:
-                CaBotRclpyUtil.info(F"{self.goal_description.encode('utf-8')}")
-
-    @property
-    def need_to_announce_arrival(self):
-        return self._need_to_announce_arrival
-
-    @property
-    def goal_name_pron(self):
-        return self._goal_name_pron
-
-    @property
-    def goal_description(self):
-        return self._goal_description
+        super(NavGoal, self).__init__(delegate, angle=180, floor=navcog_route[-1].floor, pose_msg=last_pose, **kwargs)
 
     def _extract_pois(self):
         """extract pois along the route"""
@@ -591,14 +582,33 @@ class NavGoal(Goal):
         CaBotRclpyUtil.info("Updated goal position")
         # self.delegate.send_goal(goal, self.done_callback)
 
+    def match(self, pose, floor):
+        # work around, Link.distance_to is not implemented for local geometry
+        g = geoutil.local2global(pose, self.anchor)
+        for node_or_link in self.navcog_route:
+            try:
+                # CaBotRclpyUtil.info(F"NavGoal.match distance_to ({node_or_link._id}, ({pose.x}, {pose.y})) = {node_or_link.distance_to(g)}")
+                if node_or_link.floor == floor and \
+                   node_or_link.distance_to(g) < NavGoal.NEIGHBOR_THRESHOLD:
+                    return True
+            except:  # noqa: #722
+                CaBotRclpyUtil.error(F"{node_or_link}")
+        return False
+
+    def completed(self, pose, floor):
+        # CaBotRclpyUtil.info(F"NavGoal.completed distance_to ({pose}) = {self.distance_to(pose)}")
+        return floor == self._floor and \
+            self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+
 
 class TurnGoal(Goal):
-    def __init__(self, delegate, anchor, yaw, **kwargs):
+    def __init__(self, delegate, goal_node, anchor, yaw, **kwargs):
+        goal = geoutil.global2local(goal_node.geometry, anchor)
         self.yaw_target = (- yaw + 90 + anchor.rotate) / 180.0 * math.pi
-        CaBotRclpyUtil.info(F"TurnGoal {yaw} {anchor.rotate} {self.yaw_target}")
-        pose = geoutil.Pose(x=0, y=0, r=self.yaw_target)
-        pose._angle = 0  # dummy
-        pose._floor = 0  # dummy
+        CaBotRclpyUtil.info(F"TurnGoal {goal} {yaw} {anchor.rotate} {self.yaw_target}")
+        pose = geoutil.Pose(x=goal.x, y=goal.y, r=self.yaw_target)
+        pose._angle = Goal.GOAL_ANGLE_THRETHOLD_IN_DEGREE
+        pose._floor = goal_node.floor
         super(TurnGoal, self).__init__(delegate, target=pose, **kwargs)
 
     def enter(self):
@@ -617,10 +627,33 @@ class TurnGoal(Goal):
             return
         self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback)
 
+    def match(self, pose, floor):
+        # CaBotRclpyUtil.info(F"TurnGoal.match distance_to ({pose}) = {self.distance_to(pose)}")
+        return floor == self._floor and \
+            self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+
+    def completed(self, pose, floor):
+        diff = geoutil.diff_angle(self.orientation, pose.orientation)
+        # CaBotRclpyUtil.info(F"TurnGoal.completed distance_to ({pose}) = {self.distance_to(pose)}, angle diff {diff}")
+        return floor == self._floor and \
+            self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD and \
+            diff < 0.1
+
 
 class DoorGoal(Goal):
-    def __init__(self, delegate, poi):
-        super(DoorGoal, self).__init__(delegate, target=poi)
+    APPROACHED_THRESHOLD = 0.25
+
+    def __init__(self, delegate, link, anchor, poi: geojson.POI):
+        self._link = link
+        self._anchor = anchor
+        target = geoutil.TargetPlace(
+            x=poi.local_geometry.x + math.cos(link.pose.r)*1.0,
+            y=poi.local_geometry.x + math.sin(link.pose.r)*1.0,
+            r=link.pose.r,
+            angle=45,
+            floor=link.floor,
+        )
+        super(DoorGoal, self).__init__(delegate, target=target)
 
     def enter(self):
         self.delegate.please_pass_door()
@@ -632,7 +665,11 @@ class DoorGoal(Goal):
             return
         elif self.is_approached(current_pose):
             return
-        elif self.is_passed(current_pose):
+
+        pose_to_door = geoutil.Pose.pose_from_points(current_pose, self)
+        # CaBotRclpyUtil.info(F"DoorGoal.check distance_to (({self.x}, {self.y}) ({current_pose.x}, {current_pose.y})) = {self.distance_to(current_pose)}"
+        #                     F", {pose_to_door.r} <=> {self.r} - {geoutil.in_angle(pose_to_door, self, 90)}")
+        if self.distance_to(current_pose) < DoorGoal.APPROACHED_THRESHOLD and geoutil.in_angle(pose_to_door, self, 90):
             self._is_completed = True
 
     def exit(self):
@@ -640,23 +677,41 @@ class DoorGoal(Goal):
         self.delegate.set_pause_control(False)
         super(DoorGoal, self).exit()
 
+    def match(self, pose, floor):
+        gpose = geoutil.local2global(pose, self._anchor)  # work around
+        # CaBotRclpyUtil.info(F"DoorGoal.match distance_to ({self._link._id}, ({pose.x}, {pose.y})) = {self._link.distance_to(gpose)}")
+        return floor == self._floor and \
+            self._link.distance_to(gpose) < NavGoal.NEIGHBOR_THRESHOLD
+
+    def completed(self, pose, floor):
+        pose_to_door = geoutil.Pose.pose_from_points(pose, self)
+        # CaBotRclpyUtil.info(F"DoorGoal.completed distance_to (({self.x}, {self.y}) ({pose.x}, {pose.y})) = {self.distance_to(pose)}, {pose_to_door.r} <=> {self.r}")
+        return floor == self._floor and \
+            self.distance_to(pose) < DoorGoal.APPROACHED_THRESHOLD and geoutil.in_angle(pose_to_door, self, 90)
+
 
 class ElevatorGoal(Goal):
     # using odom frame
     ELEVATOR_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_elevator.xml"
     LOCAL_ODOM_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_local_odom.xml"
+    MATCH_TOLLERANCE = 0.5
 
     def __init__(self, delegate, cab_poi, **kwargs):
         super(ElevatorGoal, self).__init__(delegate, target=cab_poi, **kwargs)
         self.cab_poi = cab_poi
+
+        def dist(offset):
+            return math.sqrt(offset[0] * offset[0] + offset[1] * offset[1])
+        self.set_back_distance = dist(cab_poi.set_back)
+        self.set_forward_distance = dist(cab_poi.set_forward)
 
 
 class ElevatorWaitGoal(ElevatorGoal):
     ELEVATOR_SOCIAL_DISTANCE_X = 0.0
     ELEVATOR_SOCIAL_DISTANCE_Y = 0.0
 
-    def __init__(self, delegate, cab_poi, **kwargs):
-        super(ElevatorWaitGoal, self).__init__(delegate, cab_poi, **kwargs)
+    def __init__(self, delegate, cab_poi):
+        super(ElevatorWaitGoal, self).__init__(delegate, cab_poi)
 
     def enter(self):
         # change social distance setting
@@ -670,7 +725,7 @@ class ElevatorWaitGoal(ElevatorGoal):
         CaBotRclpyUtil.info("call turn_towards")
         CaBotRclpyUtil.info(F"current pose {str(self.delegate.current_pose)}")
         CaBotRclpyUtil.info(F"cab poi      {str(self.cab_poi.local_geometry)}")
-        pose = geoutil.Pose.pose_from_points(self.cab_poi.door_geometry, self.delegate.current_pose)
+        pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
@@ -684,9 +739,23 @@ class ElevatorWaitGoal(ElevatorGoal):
         if self._is_canceled:
             CaBotRclpyUtil.info("ElevatorWaitGoal not completed but cancelled")
             return
-        pose = geoutil.Pose.pose_from_points(self.cab_poi.door_geometry, self.delegate.current_pose)
+        pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
+
+    def match(self, pose, floor):
+        target_pose = geoutil.Pose.pose_from_points(pose, self.cab_poi.door_geometry)
+        same_direction = abs(geoutil.diff_angle(target_pose.orientation, pose.orientation)) < 0.1
+        CaBotRclpyUtil.info(F"target pose {str(target_pose)}, same_direction={same_direction}")
+        return self.same_floor(floor) and \
+            self.distance_to(pose) > ElevatorGoal.MATCH_TOLLERANCE and \
+            self.distance_to(pose) < self.set_back_distance + ElevatorGoal.MATCH_TOLLERANCE and \
+            not same_direction
+
+    def completed(self, pose, floor):
+        target_pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
+        same_direction = abs(geoutil.diff_angle(target_pose.orientation, pose.orientation)) < 0.1
+        return self.same_floor(floor) and same_direction and self.distance_to(pose) > 0.5
 
 
 class ElevatorInGoal(ElevatorGoal):
@@ -703,6 +772,18 @@ class ElevatorInGoal(ElevatorGoal):
         status = future.result().status
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
+
+    def match(self, pose, floor):
+        target_pose = geoutil.Pose.pose_from_points(pose, self.cab_poi.door_geometry)
+        same_direction = abs(geoutil.diff_angle(target_pose.orientation, pose.orientation)) < 0.3
+        CaBotRclpyUtil.info(f"ElevatorInGoal match: self.r={self.r}, pose.r={target_pose.r}, distance={self.distance_to(pose)}")
+        return self.same_floor(floor) and \
+            self.distance_to(pose) > ElevatorGoal.MATCH_TOLLERANCE and \
+            self.distance_to(pose) < self.set_back_distance + ElevatorGoal.MATCH_TOLLERANCE and \
+            (same_direction or self.distance_to(pose) < ElevatorGoal.MATCH_TOLLERANCE*3)
+
+    def completed(self, pose, floor):
+        return self.same_floor(floor) and self.distance_to(pose) <= ElevatorGoal.MATCH_TOLLERANCE
 
 
 class ElevatorTurnGoal(ElevatorGoal):
@@ -728,6 +809,13 @@ class ElevatorTurnGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
+    def match(self, pose, floor):
+        CaBotRclpyUtil.info(f"ElevatorTurnGoal match: self.r={self.r}, pose.r={pose.r}, distance={self.distance_to(pose)}")
+        return not self.same_direction(pose.orientation) and self.distance_to(pose) < ElevatorGoal.MATCH_TOLLERANCE
+
+    def completed(self, pose, floor):
+        return self.same_direction(pose.orientation) and self.distance_to(pose) < ElevatorGoal.MATCH_TOLLERANCE
+
 
 class ElevatorFloorGoal(ElevatorGoal):
     def __init__(self, delegate, cab_poi, **kwargs):
@@ -740,6 +828,13 @@ class ElevatorFloorGoal(ElevatorGoal):
     def done_callback(self, result):
         CaBotRclpyUtil.info("ElevatorFloorGoal completed")
         self._is_completed = result
+
+    def match(self, pose, floor):
+        CaBotRclpyUtil.info(f"ElevatorFloorGoal match: self.floor={self._floor}, floor={floor}, self.r={self.r}, pose.r={pose.r}, distance={self.distance_to(pose)}")
+        return not self.same_floor(floor) and self.same_direction(pose.orientation) and self.distance_to(pose) < 0.5
+
+    def completed(self, pose, floor):
+        return self.same_floor(floor) and self.same_direction(pose.orientation) and self.distance_to(pose) < 0.5
 
 
 class ElevatorOutGoal(ElevatorGoal):
@@ -785,15 +880,26 @@ class ElevatorOutGoal(ElevatorGoal):
             msg = self.delegate.initial_social_distance
             self.delegate.set_social_distance_pub.publish(msg)
 
+    def match(self, pose, floor):
+        CaBotRclpyUtil.info(f"ElevatorOutGoal match: self.floor={self._floor}, floor={floor}, distance={self.distance_to(pose)}")
+        return self.same_floor(floor) and self.distance_to(pose) < self.set_forward_distance
+
+    def completed(self, pose, floor):
+        return self.same_floor(floor) and self.distance_to(pose) > self.set_forward_distance
+
 
 class NarrowGoal(NavGoal):
     NARROW_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_narrow.xml"
     LITTLE_NARROW_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_little_narrow.xml"
 
     def __init__(self, delegate, navcog_route, anchor, **kwargs):
-        self._need_to_announce_follow = False
-        if 'need_to_announce_follow' in kwargs:
-            self._need_to_announce_follow = bool(kwargs['need_to_announce_follow'])
+        # if one of the link is very narrow, it needs to announce
+        self._need_narrow_announce = False
+        for link_or_node in navcog_route:
+            CaBotRclpyUtil.info(F"{link_or_node}")
+            if not isinstance(link_or_node, geojson.RouteLink):
+                continue
+            self._need_narrow_announce = self._need_narrow_announce or link_or_node.need_narrow_announce
 
         super(NarrowGoal, self).__init__(delegate, navcog_route, anchor, **kwargs)
 
@@ -813,7 +919,7 @@ class NarrowGoal(NavGoal):
         self.delegate.publish_path(path)
         CaBotRclpyUtil.info("NarrowGoal publish path")
 
-        if self._need_to_announce_follow:
+        if self._need_narrow_announce:
             self.delegate.please_follow_behind()
             self.wait_for_announce()
         else:
@@ -825,7 +931,7 @@ class NarrowGoal(NavGoal):
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
         if self._is_canceled:
             return
-        if self._need_to_announce_follow:
+        if self._need_narrow_announce:
             self.delegate.please_return_position()
             self.wait_next_navi(future)
         else:
@@ -901,7 +1007,7 @@ def make_queue_goals(delegate, queue_route, anchor):
             else:
                 queue_r_end = queue_route[queue_r_idx+1].source_node
             # add goal to turn for goal
-            queue_r_end_pose = geoutil.Pose.pose_from_points(queue_r_end.local_geometry, queue_r_start.local_geometry)
+            queue_r_end_pose = geoutil.Pose.pose_from_points(queue_r_end.local_geometry, queue_r_start.local_geometry, backward=True)
             goals.append(QueueTurnGoal(delegate, queue_r.floor, queue_r_end_pose))
 
             # check if next goal is queue target node (e.g. cashier in store)
