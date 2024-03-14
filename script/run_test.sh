@@ -70,9 +70,14 @@ blue "testing with $CABOT_SITE"
 
 source $scriptdir/../install/setup.bash
 
-echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
 while [[ 1 -eq 1 ]]; do
-    ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
+    if [[ ! -z $debug ]]; then
+	echo "ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
+	ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args python3' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
+    else
+	echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
+	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option
+    fi
     result=$?
     if [[ $result -le 1 ]]; then
 	break
