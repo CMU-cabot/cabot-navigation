@@ -887,13 +887,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         if goal.is_canceled:
             self.delegate.goal_canceled(goal)
+            self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             self._stop_loop()
+            self._current_goal = None
             return
 
         if not goal.is_completed:
             return
 
         goal.exit()
+        self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
+
         self._current_goal = None
         if goal.need_to_announce_arrival:
             self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
@@ -1015,30 +1019,69 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.notify_turn(turn=Turn(self.current_pose.to_pose_stamped_msg(self._global_map_name), angle))
         self._logger.info(F"notify turn {turn_yaw}")
 
-    def goto_floor(self, floor, callback):
+    def goto_floor(self, floor, gh_callback, callback):
+        try:
+            self._goto_floor(floor, gh_callback, callback)
+        except:  # noqa: #722
+            self._logger.error(traceback.format_exc())
+
+    def _goto_floor(self, floor, gh_callback, callback):
         self._logger.info(F"go to floor {floor}")
         self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
-        rate = self._node.create_rate(2)
-        while self.current_floor != floor:
-            rate.sleep()
 
-        self._logger.info("floor is changed")
-        self.delegate.floor_changed(self.current_floor)
-        while rclpy.ok():
-            self._logger.info(F"trying to find tf from map to {self.current_frame}")
-            try:
-                rate.sleep()
-                self.buffer.lookup_transform("map", self.current_frame, CaBotRclpyUtil.time_zero())
-                break
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
-                    tf2_ros.ExtrapolationException):
-                self._logger.warn(F"Could not find tf from map to {self.current_frame}")
-                continue
+        class GotoFloorTask():
+            def __init__(self, nav):
+                self._nav = nav
+                self._node = nav._node
+                self._logger = nav._logger
+                self.buffer = nav.buffer
+                self.delegate = nav.delegate
+                self.future = self._node.executor.create_task(self.handler)
+                self.future.add_done_callback(lambda x: callback(True))
+                self.rate = self._nav._node.create_rate(2)
+                self.cancelled = False
 
-        self._logger.info("tf is changed")
-        rate.sleep()
+            def cancel_goal_async(self):
+                def dummy():
+                    self._logger.info("cancel goal async wait")
+                    self.rate.sleep()
+                    self._logger.info("cancel goal async done")
+                    self.cancel_future.done()
+                self.cancel_future = self._node.executor.create_task(dummy)
+                self.cancelled = True
+                return self.cancel_future
 
-        callback(True)
+            def handler(self):
+                try:
+                    self._handle()
+                except:  # noqa: #722
+                    self._logger.error(traceback.format_exc())
+
+            def _handle(self):
+                first = True
+                while rclpy.ok():
+                    self.rate.sleep()
+                    self._logger.info(F"GotoFloorTask loop cancelled={self.cancelled}")
+                    if self.cancelled:
+                        self._logger.info("GotoFloorTask cancelled")
+                        break
+                    if self._nav.current_floor != floor:
+                        continue
+                    if first:
+                        first = False
+                        self.delegate.floor_changed(self._nav.current_floor)
+
+                    self._logger.info(F"trying to find tf from map to {self._nav.current_frame}")
+                    try:
+                        self.buffer.lookup_transform("map", self._nav.current_frame, CaBotRclpyUtil.time_zero())
+                        break
+                    except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
+                            tf2_ros.ExtrapolationException):
+                        self._logger.warn(F"Could not find tf from map to {self._nav.current_frame}")
+                self.future.done()
+
+        task = GotoFloorTask(self)
+        gh_callback(task)
 
     def set_pause_control(self, flag):
         self._logger.info("set_pause_control")

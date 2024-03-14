@@ -112,7 +112,8 @@ function help()
     echo "-T <module> run test CABOT_SITE.<module>"
     echo "-f <test>   run test CABOT_SITE.<module>.<test>"
     echo "-H          headless"
-    echo "-u          unittest"
+    echo "-u <options> unittest"
+    echo "-r          retry test when segmentation fault"
 }
 
 
@@ -126,6 +127,7 @@ run_test=0
 module=tests
 test_func=
 unittest=
+retryoption=
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -137,7 +139,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsn:vDMSytHT:f:u" arg; do
+while getopts "hsn:vDMSytHT:f:ur" arg; do
     case $arg in
         s)
             simulation=1
@@ -173,9 +175,12 @@ while getopts "hsn:vDMSytHT:f:u" arg; do
         H)
             export CABOT_HEADLESS=1
             ;;
-	u)
-	    unittest=1
-	    ;;
+        u)
+            unittest=1
+            ;;
+        r)
+            retryoption="-r"
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -188,11 +193,11 @@ termpids=()
 
 if [[ $unittest -eq 1 ]]; then
     code=0
-    docker compose run --rm navigation ./script/unittest.sh -a
+    docker compose run --rm navigation ./script/unittest.sh $@
     if [[ $? -ne 0 ]]; then
 	code=1
     fi
-    docker compose run --rm localization ./script/unittest.sh -a
+    docker compose run --rm localization ./script/unittest.sh $@
     if [[ $? -ne 0 ]]; then
 	code=1
     fi
@@ -293,9 +298,9 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 if [[ $run_test -eq 1 ]]; then
     blue "Running test"
     if [[ $debug -eq 1 ]]; then
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func  # debug
+        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func $retryoption # debug
     else
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
+        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func $retryoption
     fi
     ctrl_c $?
 fi

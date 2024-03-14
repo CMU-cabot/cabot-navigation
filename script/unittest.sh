@@ -6,22 +6,27 @@ function help()
     echo "-h           show this help"
     echo "-p <pacakge> package for test"
     echo "-a           all"
+    echo "-b           build"
 }
 
 package=
 all=
+build=
 
-while getopts "hp:a" arg; do
+while getopts "hp:ab" arg; do
     case $arg in
-	h)
-	    help
-	    ;;
+        h)
+            help
+            ;;
         p)
             package=$OPTARG
             ;;
-	a)
-	    all=1
-	    ;;
+        a)
+            all=1
+            ;;
+        b)
+            build=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -32,11 +37,11 @@ if [[ -z $package ]] && [[ -z $all ]]; then
 fi
 
 if [[ $all -eq 1 ]]; then
-    colcon build && \
+    ([[ -z $build ]] ||  colcon build) && \
     colcon test && \
     colcon test-result --verbose
 else
-    colcon build --packages-up-to $package && \
+    ([[ -z $build ]] ||  colcon build --packages-up-to $package) && \
     colcon test --packages-select $package && \
     colcon test-result --verbose --test-result-base build/$pacakge
 fi

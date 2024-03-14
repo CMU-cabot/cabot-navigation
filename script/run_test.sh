@@ -44,8 +44,9 @@ scriptdir=`pwd`
 
 wait_ready_option=
 debug=
+retry=0
 
-while getopts "hwd" arg; do
+while getopts "hwdr" arg; do
     case $arg in
         h)
             help
@@ -54,8 +55,12 @@ while getopts "hwd" arg; do
         w)
             wait_ready_option="-w"
             ;;
-	d)
-	    debug="-d"
+        d)
+            debug="-d"
+            ;;
+        r)
+            retry=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -80,9 +85,13 @@ while [[ 1 -eq 1 ]]; do
     fi
     result=$?
     if [[ $result -le 1 ]]; then
-	break
+        break
     else
-	echo "retry test, due to segmantation fault"
+        if [[ $retry -eq 0 ]]; then
+            break
+        fi
+        echo "retry test, due to segmantation fault"
+        wait_ready_option=""
     fi
 done
 

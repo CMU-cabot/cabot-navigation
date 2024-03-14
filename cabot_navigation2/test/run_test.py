@@ -45,6 +45,8 @@ from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetI
 from gazebo_msgs.srv import SetEntityState
 
 from pedestrian.manager import PedestrianManager
+from gazebo_msgs.srv import DeleteEntity
+from gazebo_msgs.srv import SpawnEntity
 
 # cabot_navigation2/test
 from evaluator import Evaluator
@@ -72,7 +74,7 @@ def wait_test(timeout=60):
             tester = args[0]
 
             t = kwargs['seconds'] if 'seconds' in kwargs else timeout
-            t = kwargs['timeout'] if 'timeout' in kwargs else t*2  # make sure not timeout if wait seconds is specified
+            t = kwargs['timeout'] if 'timeout' in kwargs else t+5  # make sure not timeout if wait seconds is specified
             action_name = kwargs['action_name'] if 'action_name' in kwargs else function.__name__
             case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': False, 'error': None}
             test_action = {'uuid': str(uuid.uuid4())}
@@ -80,7 +82,7 @@ def wait_test(timeout=60):
             logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
             args = args + (case,)
             test_action.update(kwargs)
-            function(*args, test_action)
+            result = function(*args, test_action)
             start = time.time()
 
             while not case['done'] and time.time() - start < t:
@@ -94,6 +96,7 @@ def wait_test(timeout=60):
                 case['success'] = True
             logger.debug(f"finish: {case}")
             tester.register_action_result(case['target'], case)
+            return result
         return wrap
     return outer_wrap
 
@@ -226,7 +229,8 @@ class Tester:
                 if action is None or key == action:
                     self.node.destroy_subscription(sub)
             if action:
-                del self.subscriptions[target][action]
+                if action in self.subscriptions[target]:
+                    del self.subscriptions[target][action]
             else:
                 del self.subscriptions[target]
 
@@ -301,6 +305,17 @@ class Tester:
             **kwargs)
         )
 
+    def floor_change(self, diff, **kwargs):
+        self.call_service(**dict(
+            dict(
+                action_name=f'floor_chage({diff})',
+                service='/floor_change',
+                service_type='mf_localization_msgs.srv/FloorChange',
+                request=f"diff: {diff}"
+            ),
+            **kwargs)
+        )
+
     def cancel_navigation(self, **kwargs):
         self.pub_topic(**dict(
             dict(
@@ -319,6 +334,18 @@ class Tester:
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
                 message=f"data: 'button_down_{button}'"
+            ),
+            **kwargs)
+        )
+
+    def wait_elevator_goal(self, goalName, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name=f'wait_elevator_goal({goalName})',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition=f"msg.category=='cabot/navigation' and msg.text=='goal_completed' and msg.memo=='{goalName}'",
+                timeout=60
             ),
             **kwargs)
         )
@@ -392,6 +419,61 @@ class Tester:
             **kwargs)
         )
 
+    def wait_ready(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_ready',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'",
+                timeout=60
+            ),
+            **kwargs)
+        )
+
+    def wait_localization_started(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_localization_started',
+                topic='/localize_status',
+                topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
+                condition='msg.status==1',
+                timeout=60
+            ),
+            **kwargs)
+        )
+
+    @wait_test()
+    def clean_door(self, case, test_action):
+        uuid = test_action['uuid']
+
+        def done_callback(future):
+            case['done'] = True
+        future = ElevatorDoorSimulator.instance().clean(callback=done_callback)
+        if not future:
+            return
+        self.futures[uuid] = future
+
+    @wait_test()
+    def spawn_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ElevatorDoorSimulator.instance().spawn_door(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def delete_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ElevatorDoorSimulator.instance().delete_door(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
     # actual task needs to be waited
     @wait_test()
     def init_manager(self, case, test_action):
@@ -426,6 +508,10 @@ class Tester:
         self.add_subscription(case, sub)
         case['done'] = True
 
+        def cancel_func():
+            self.cancel_subscription(case)
+        return cancel_func
+
     @wait_test()
     def check_topic(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
@@ -449,25 +535,6 @@ class Tester:
         self.add_subscription(case, sub)
         case['done'] = True
         case['success'] = False
-
-    @wait_test()
-    def wait_ready(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        topic = '/cabot/activity_log'
-        topic_type = import_class('cabot_msgs/msg/Log')
-        condition = "msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'"
-
-        def topic_callback(msg):
-            try:
-                context = {'msg': msg}
-                exec(f"result=({condition})", context)
-                if context['result']:
-                    case['done'] = True
-                    self.cancel_subscription(case)
-            except:  # noqa: #722
-                logger.error(traceback.format_exc())
-        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.add_subscription(case, sub)
 
     @wait_test()
     def reset_position(self, case, test_action):
@@ -606,6 +673,28 @@ class Tester:
         case['done'] = True
 
     @wait_test()
+    def call_service(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        service = test_action['service']
+        service_type_str = test_action['service_type']
+        service_type = import_class(service_type_str)
+        request = test_action['request']
+        request_type = service_type.Request
+        uuid = test_action['uuid']
+
+        req = request_type()
+        data = yaml.safe_load(request)
+        set_message_fields(req, data)
+
+        srv = self.node.create_client(service_type, service)
+        self.futures[uuid] = srv.call_async(req)
+
+        def done_callback(future):
+            case['done'] = True
+
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
     def wait(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
         seconds = test_action['seconds']
@@ -623,6 +712,86 @@ class Tester:
     def terminate(self, test_action):
         logger.debug(f"{callee_name()} {test_action}")
         sys.exit(0)
+
+
+class ElevatorDoorSimulator:
+    _instance = None
+
+    @classmethod
+    def instance(cls):
+        if not ElevatorDoorSimulator._instance:
+            ElevatorDoorSimulator._instance = ElevatorDoorSimulator()
+        return ElevatorDoorSimulator._instance
+
+    def __init__(self):
+        self.spawn_entity_client = node.create_client(SpawnEntity, '/spawn_entity')
+        self.delete_entity_client = node.create_client(DeleteEntity, '/delete_entity')
+        self.remaining = []
+
+    def clean(self, callback):
+        if self.remaining:
+            future = self.delete_door(name=self.ramaining[0])
+
+            def done_callback(future):
+                self.clean(callback)
+            future.add_done_callback(done_callback)
+        else:
+            callback("Done")
+
+    def delete_door(self, **kwargs):
+        name = kwargs['name']
+        request = DeleteEntity.Request()
+        request.name = name
+        future = self.delete_entity_client.call_async(request)
+
+        def callback(future):
+            self.remaining.remove(name)
+        future.add_done_callback(callback)
+        return future
+
+    def spawn_door(self, **kwargs):
+        name = kwargs['name']
+        x = kwargs['x']
+        y = kwargs['y']
+        z = kwargs['z']
+        yaw = kwargs['yaw']
+
+        door_xml = f"""
+<?xml version="1.0" ?>
+<sdf version="1.6">
+    <model name="{name}">
+        <static>true</static>
+        <link name="{name}-link">
+            <pose>{x} {y} {z+1} 0 {math.pi/2} {yaw}</pose>
+            <visual name="{name}-visual">
+                <geometry>
+                    <box>
+                        <size>2 2 0.01</size>
+                    </box>
+                </geometry>
+            </visual>
+            <collision name="{name}-collision">
+                <geometry>
+                    <box>
+                        <size>2 2 0.01</size>
+                    </box>
+                </geometry>
+            </collision>
+        </link>
+    </model>
+</sdf>
+"""
+        logging.debug(door_xml)
+        request = SpawnEntity.Request()
+        request.name = name
+        request.xml = door_xml
+        request.reference_frame = "world"
+        future = self.spawn_entity_client.call_async(request)
+
+        def callback(future):
+            self.remaining.append(name)
+        future.add_done_callback(callback)
+        return future
 
 
 class LogColors:
