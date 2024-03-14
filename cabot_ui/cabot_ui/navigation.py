@@ -918,7 +918,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
 
         self._current_goal = None
-        if goal.need_to_announce_arrival:
+        if goal.is_last:
+            # keep this for test
             self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
             self.delegate.have_arrived(goal)
 

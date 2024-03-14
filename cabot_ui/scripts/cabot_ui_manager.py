@@ -189,7 +189,6 @@ class CabotUIManager(NavigationInterface, object):
 
     def have_completed(self):
         self._status_manager.set_state(State.idle)
-
         # send navigation_arrived event when all goals are completed
         self._logger.info("NavigationState: arrived")
         # notify external nodes about arrival

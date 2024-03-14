@@ -117,24 +117,26 @@ def make_goals(delegate, groute, anchor, yaw=None):
             continue
         link = link_or_node
 
-        # there is a manual door
-        # find manual door
+        # Handle Door POIs
+        #
+        #      o======== (Door) ========o
+        #  x-----1.0m----(Door)----1.0m-----x
+        #
         doors = list(filter(lambda x: isinstance(x, geojson.DoorPOI) and not x.is_auto, link.pois))
         if doors:
             if len(doors) > 1:
-                # will not support
+                # will not support multiple doors in a link
                 CaBotRclpyUtil.warn("don't put multiple door pois into a link")
 
-            # set goal 1 meter behind the door
+            # set previous goal 1.0 meter behind the door
             if len(route_objs) >= 2:
                 goals.append(NavGoal(delegate, route_objs[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
-            # CaBotRclPyUtil.info(goals[-1])
             # ask user to pass the door
             goals.append(DoorGoal(delegate, link, anchor, doors[0]))
-            # CaBotRclPyUtil.info(goals[-1])
             route_objs = []
 
-        # find queue target
+        # Handle Queue Target and Queue Wait
+        # TBD
         queue_targets = list(filter(lambda x: isinstance(x, geojson.QueueTargetPOI), link.pois))
         if queue_targets:
             if len(queue_targets) > 1:
@@ -295,7 +297,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     return goals
 
 
-def create_ros_path(navcog_route, anchor, global_map_name):
+def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_back=[0.0, 0.0]):
     """convert a NavCog path to ROS path"""
     # convert route to points
     points = []
@@ -364,6 +366,28 @@ def create_ros_path(navcog_route, anchor, global_map_name):
             pose.pose.orientation = prev_orientation
             path.poses.append(pose)
 
+    # if target_poi is specified, the last_pose will be the target_poi
+    if target_poi:
+        last_pose = target_poi.to_pose_msg()
+        # if set_back is specified too, move the last_pose based on the last link direction
+        if set_back[0] > 0 or set_back[1] > 0:
+            i = 1
+            while isinstance(last_obj, geojson.Node) and i < len(navcog_route):
+                i += 1
+                last_obj = navcog_route[-i]
+            if not isinstance(last_obj, geojson.RouteLink):
+                raise RuntimeError("There should be at least one link towards target POI,"
+                                    "if it is provided with set_back (={}) \n===POI===\n{}\n========="
+                                    .format(set_back, str(target_poi)))
+            backward = geoutil.Pose.pose_from_points(last_obj.source_node.local_geometry,
+                                                        last_obj.target_node.local_geometry, backward=True)
+            CaBotRclpyUtil.info(F"set_back {backward.r:.4} * ({str(set_back)})")
+            last_pose.position.x += math.cos(backward.r) * set_back[0] - math.sin(backward.r) * set_back[1]
+            last_pose.position.y += math.sin(backward.r) * set_back[0] + math.cos(backward.r) * set_back[1]
+        if target_poi is not None:
+            path.poses[-1].pose.position.x = last_pose.position.x
+            path.poses[-1].pose.position.y = last_pose.position.y
+
     CaBotRclpyUtil.info(F"path {path}")
     return (path, path.poses[-1] if len(path.poses) > 0 else None)
 
@@ -419,10 +443,6 @@ class Goal(geoutil.TargetPlace):
     @property
     def is_canceled(self):
         return self._is_canceled
-
-    @property
-    def need_to_announce_arrival(self):
-        return False
 
     def exit(self):
         self.delegate.exit_goal(self)
@@ -487,6 +507,12 @@ class Goal(geoutil.TargetPlace):
 
 
 class NavGoal(Goal):
+    """
+    only a node:  (R)     o
+    only a link:  (R)     -----
+    link and node:(R)     -----o-----
+    link and node:(R)     -----o-----o
+    """
     DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_replanning_and_recovery.xml"
     NEIGHBOR_THRESHOLD = 1.0
 
@@ -503,79 +529,10 @@ class NavGoal(Goal):
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
         self.anchor = anchor
-        (self.ros_path, last_pose) = create_ros_path(self.navcog_route, self.anchor, self.global_map_name)
+        (self.ros_path, last_pose) = create_ros_path(self.navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)
         self.pois = self._extract_pois()
         self.handle = None
-
-        floor = None
-        last_obj = navcog_route[-1]
-        if isinstance(last_obj, geojson.Node):
-            floor = last_obj.floor
-        elif isinstance(last_obj, geojson.RouteLink):
-            floor = last_obj.end_node.floor
-
-        # if target_poi is specified, the last_pose will be the target_poi
-        if target_poi is not None:
-            last_pose = target_poi.to_pose_msg()
-
-            # if set_back is specified too, move the last_pose based on the last link direction
-            if set_back[0] > 0 or set_back[1] > 0:
-                i = 1
-                while isinstance(last_obj, geojson.Node) and i < len(navcog_route):
-                    i += 1
-                    last_obj = navcog_route[-i]
-                if not isinstance(last_obj, geojson.RouteLink):
-                    raise RuntimeError("There should be at least one link towards target POI,"
-                                       "if it is provided with set_back (={}) \n===POI===\n{}\n========="
-                                       .format(set_back, str(target_poi)))
-
-                backward = geoutil.Pose.pose_from_points(last_obj.source_node.local_geometry,
-                                                         last_obj.target_node.local_geometry, backward=True)
-
-                CaBotRclpyUtil.info(F"set_back {backward.r:.4} * ({str(set_back)})")
-
-                last_pose.position.x += math.cos(backward.r) * set_back[0] - math.sin(backward.r) * set_back[1]
-                last_pose.position.y += math.sin(backward.r) * set_back[0] + math.cos(backward.r) * set_back[1]
-            self.ros_path.poses[-1].pose.position.x = last_pose.position.x
-            self.ros_path.poses[-1].pose.position.y = last_pose.position.y
-
-        super(NavGoal, self).__init__(delegate, angle=180, floor=floor, pose_msg=last_pose, **kwargs)
-
-        self._need_to_announce_arrival = self.is_last
-        if 'need_to_announce_arrival' in kwargs:
-            self._need_to_announce_arrival = bool(kwargs['need_to_announce_arrival'])
-
-        self._goal_name_pron = None
-        self._goal_description = None
-        if self._need_to_announce_arrival:
-            if not isinstance(navcog_route[-1], geojson.Node):
-                CaBotRclpyUtil.info(navcog_route[-1])
-                return
-            CaBotRclpyUtil.info(str(navcog_route[-1]))
-            if not navcog_route[-1].facility:
-                return
-
-            if navcog_route[-1].facility.name_pron:
-                self._goal_name_pron = navcog_route[-1].facility.name_pron
-            else:
-                self._goal_name_pron = navcog_route[-1].facility.name
-            self._goal_description = navcog_route[-1].facility.long_description
-            if self.goal_name_pron:
-                CaBotRclpyUtil.info(F"{self.goal_name_pron.encode('utf-8')}")
-            if self.goal_description:
-                CaBotRclpyUtil.info(F"{self.goal_description.encode('utf-8')}")
-
-    @property
-    def need_to_announce_arrival(self):
-        return self._need_to_announce_arrival
-
-    @property
-    def goal_name_pron(self):
-        return self._goal_name_pron
-
-    @property
-    def goal_description(self):
-        return self._goal_description
+        super(NavGoal, self).__init__(delegate, angle=180, floor=navcog_route[-1].floor, pose_msg=last_pose, **kwargs)
 
     def _extract_pois(self):
         """extract pois along the route"""
@@ -684,14 +641,14 @@ class TurnGoal(Goal):
 
 
 class DoorGoal(Goal):
-    APPROACHED_THRESHOLD = 0.5
+    APPROACHED_THRESHOLD = 0.25
 
-    def __init__(self, delegate, link, anchor, poi):
+    def __init__(self, delegate, link, anchor, poi: geojson.POI):
         self._link = link
         self._anchor = anchor
         target = geoutil.TargetPlace(
-            x=link.end_node.local_geometry.x,
-            y=link.end_node.local_geometry.y,
+            x=poi.local_geometry.x + math.cos(link.pose.r)*1.0,
+            y=poi.local_geometry.x + math.sin(link.pose.r)*1.0,
             r=link.pose.r,
             angle=45,
             floor=link.floor,

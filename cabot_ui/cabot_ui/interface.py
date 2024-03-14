@@ -251,6 +251,7 @@ class UserInterface(object):
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"))
 
     def have_arrived(self, goal):
+        raise RuntimeError("Should no use this func")
         name = goal.goal_name_pron
         desc = goal.goal_description
 
