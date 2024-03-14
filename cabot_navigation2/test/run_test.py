@@ -857,7 +857,7 @@ def main():
 
     if not options.module:
         parser.print_help()
-        sys.exit(0)
+        sys.exit(1)
 
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
@@ -877,7 +877,11 @@ def main():
 
     tester = Tester(node)
     tester.set_evaluator(evaluator)
-    mod = importlib.import_module(options.module)
+    try:
+        mod = importlib.import_module(options.module)
+    except ModuleNotFoundError:
+        logger.error(f"{options.module} is not found.")
+        sys.exit(1)
     func_pat = None
     if options.func:
         try:

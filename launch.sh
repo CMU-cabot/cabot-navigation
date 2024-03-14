@@ -301,7 +301,7 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 if [[ $run_test -eq 1 ]]; then
     blue "Running test $module $test_func"
     if [[ $debug -eq 1 ]]; then
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func $retryoption # debug
+        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func $retryoption # debug
     else
         docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func $retryoption
     fi
