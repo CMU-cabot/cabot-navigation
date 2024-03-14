@@ -269,7 +269,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
             # forward 3.0 meters (as default) without global mapping support
             goals.append(ElevatorOutGoal(delegate, dest_cabs[0], set_forward=dest_cabs[0].set_forward))
             # CaBotRclPyUtil.info(goals[-1])
-            route_objs = [link]
+            route_objs = []
 
         if link.is_narrow and not narrow:
             narrow = True
@@ -372,6 +372,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         # if set_back is specified too, move the last_pose based on the last link direction
         if set_back[0] > 0 or set_back[1] > 0:
             i = 1
+            last_obj = navcog_route[-1]
             while isinstance(last_obj, geojson.Node) and i < len(navcog_route):
                 i += 1
                 last_obj = navcog_route[-i]
@@ -694,18 +695,22 @@ class ElevatorGoal(Goal):
     # using odom frame
     ELEVATOR_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_elevator.xml"
     LOCAL_ODOM_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_local_odom.xml"
+    MATCH_TOLLERANCE = 0.5
 
     def __init__(self, delegate, cab_poi, **kwargs):
         super(ElevatorGoal, self).__init__(delegate, target=cab_poi, **kwargs)
         self.cab_poi = cab_poi
+        dist = lambda offset: math.sqrt(offset[0] * offset[0] + offset[1] * offset[1])
+        self.set_back_distance = dist(cab_poi.set_back)
+        self.set_forward_distance = dist(cab_poi.set_forward)
 
 
 class ElevatorWaitGoal(ElevatorGoal):
     ELEVATOR_SOCIAL_DISTANCE_X = 0.0
     ELEVATOR_SOCIAL_DISTANCE_Y = 0.0
 
-    def __init__(self, delegate, cab_poi, **kwargs):
-        super(ElevatorWaitGoal, self).__init__(delegate, cab_poi, **kwargs)
+    def __init__(self, delegate, cab_poi):
+        super(ElevatorWaitGoal, self).__init__(delegate, cab_poi)
 
     def enter(self):
         # change social distance setting
@@ -737,6 +742,20 @@ class ElevatorWaitGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
+    def match(self, pose, floor):
+        target_pose = geoutil.Pose.pose_from_points(pose, self.cab_poi.door_geometry)
+        same_direction = abs(geoutil.diff_angle(target_pose.orientation, pose.orientation)) < 0.1
+        CaBotRclpyUtil.info(F"target pose {str(target_pose)}, same_direction={same_direction}")
+        return self.same_floor(floor) and \
+            self.distance_to(pose) > ElevatorGoal.MATCH_TOLLERANCE and \
+            self.distance_to(pose) < self.set_back_distance + ElevatorGoal.MATCH_TOLLERANCE and \
+            not same_direction
+
+    def completed(self, pose, floor):
+        target_pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
+        same_direction = abs(geoutil.diff_angle(target_pose.orientation, pose.orientation)) < 0.1
+        return self.same_floor(floor) and same_direction and self.distance_to(pose) > 0.5
+
 
 class ElevatorInGoal(ElevatorGoal):
     def __init__(self, delegate, cab_poi, **kwargs):
@@ -752,6 +771,18 @@ class ElevatorInGoal(ElevatorGoal):
         status = future.result().status
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
+
+    def match(self, pose, floor):
+        target_pose = geoutil.Pose.pose_from_points(pose, self.cab_poi.door_geometry)
+        same_direction = abs(geoutil.diff_angle(target_pose.orientation, pose.orientation)) < 0.3
+        CaBotRclpyUtil.info(f"ElevatorInGoal match: self.r={self.r}, pose.r={target_pose.r}, distance={self.distance_to(pose)}")
+        return self.same_floor(floor) and \
+            self.distance_to(pose) > ElevatorGoal.MATCH_TOLLERANCE and \
+            self.distance_to(pose) < self.set_back_distance + ElevatorGoal.MATCH_TOLLERANCE and \
+            (same_direction or self.distance_to(pose) < ElevatorGoal.MATCH_TOLLERANCE*3)
+
+    def completed(self, pose, floor):
+        return self.same_floor(floor) and self.distance_to(pose) <= ElevatorGoal.MATCH_TOLLERANCE
 
 
 class ElevatorTurnGoal(ElevatorGoal):
@@ -777,6 +808,13 @@ class ElevatorTurnGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
+    def match(self, pose, floor):
+        CaBotRclpyUtil.info(f"ElevatorTurnGoal match: self.r={self.r}, pose.r={pose.r}, distance={self.distance_to(pose)}")
+        return not self.same_direction(pose.orientation) and self.distance_to(pose) < ElevatorGoal.MATCH_TOLLERANCE
+
+    def completed(self, pose, floor):
+        return self.same_direction(pose.orientation) and self.distance_to(pose) < ElevatorGoal.MATCH_TOLLERANCE
+
 
 class ElevatorFloorGoal(ElevatorGoal):
     def __init__(self, delegate, cab_poi, **kwargs):
@@ -789,6 +827,13 @@ class ElevatorFloorGoal(ElevatorGoal):
     def done_callback(self, result):
         CaBotRclpyUtil.info("ElevatorFloorGoal completed")
         self._is_completed = result
+
+    def match(self, pose, floor):
+        CaBotRclpyUtil.info(f"ElevatorFloorGoal match: self.floor={self._floor}, floor={floor}, self.r={self.r}, pose.r={pose.r}, distance={self.distance_to(pose)}")
+        return not self.same_floor(floor) and self.same_direction(pose.orientation) and self.distance_to(pose) < 0.5
+
+    def completed(self, pose, floor):
+        return self.same_floor(floor) and self.same_direction(pose.orientation) and self.distance_to(pose) < 0.5
 
 
 class ElevatorOutGoal(ElevatorGoal):
@@ -833,6 +878,13 @@ class ElevatorOutGoal(ElevatorGoal):
         if self.delegate.initial_social_distance is not None:
             msg = self.delegate.initial_social_distance
             self.delegate.set_social_distance_pub.publish(msg)
+
+    def match(self, pose, floor):
+        CaBotRclpyUtil.info(f"ElevatorOutGoal match: self.floor={self._floor}, floor={floor}, distance={self.distance_to(pose)}")
+        return self.same_floor(floor) and self.distance_to(pose) < self.set_forward_distance
+
+    def completed(self, pose, floor):
+        return self.same_floor(floor) and self.distance_to(pose) > self.set_forward_distance
 
 
 class NarrowGoal(NavGoal):

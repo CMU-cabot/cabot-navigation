@@ -461,6 +461,12 @@ class TargetPlace(Pose):
 
         self.reset_target()
 
+    def same_floor(self, floor, tollerance=0.1):
+        return abs(self._floor - floor) < tollerance
+
+    def same_direction(self, orientation, tollerance=0.1):
+        return abs(diff_angle(self.orientation, orientation)) < tollerance
+
     def reset_target(self):
         self._was_approaching = False
         self._pose_approaching = None
