@@ -1,0 +1,90 @@
+<!--
+ Copyright (c) 2024  Carnegie Mellon University
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+-->
+
+<root>
+  <BehaviorTree ID="Navigation">
+    <Sequence>
+      <!-- clear global costmap -->
+      <RecoveryNode number_of_retries="999999999" name="InitialComputePathRepeat">
+        <Sequence name="ComputePathSequence">
+          <!-- clear costmap -->
+          <ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000"
+            service_name="/global_costmap/clear_entirely_global_costmap" />
+          <WaitFloat wait_duration_float="0.5" />
+          <CurrentPose global_frame="map" robot_base_frame="base_footprint"
+            pose="{current_pose}" />
+          <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}"
+            planner_id="CaBot" />
+          <PublishTopicPath topic="plan" value="{path}" />
+          <!-- front vibration -->
+          <PublishTopic topic="/cabot/event" value="navigation;event;navigation_start" />
+        </Sequence>
+        <AlwaysSuccess />
+      </RecoveryNode>
+
+      <!-- main loop -->
+      <RecoveryNode number_of_retries="999999999" name="NavigateRecovery">
+        <!-- navigation -->
+        <PipelineSequence name="NavigateWithReplanning">
+          <!-- Check people status frequently -->
+          <RateController hz="1"
+            name="AvoidPeople">
+            <Fallback name="AvoidPersonFallback">
+              <Sequence>
+                <CurrentPose global_frame="map" robot_base_frame="base_footprint"
+                  pose="{current_pose}" />
+                <NeedToReplan path="{path}" current_pose="{current_pose}" />
+                <ComputePathToPose start="{current_pose}" goal="{goal}"
+                  path="{path}" planner_id="CaBot" />
+                <PublishTopicPath topic="plan" value="{path}" />
+              </Sequence>
+              <AlwaysSuccess />
+            </Fallback>
+          </RateController>
+
+          <!-- follow path -->
+          <FollowPath path="{path}" controller_id="FollowPath"
+            goal_checker_id="cabot_goal_checker" />
+        </PipelineSequence>
+
+        <!-- if follow path is aborted, compute path and try again -->
+        <RecoveryNode number_of_retries="999999999" name="RecoveryComputePathRepeat">
+          <Sequence name="ComputePathSequence">
+            <!-- clear costmap -->
+            <ClearEntireCostmap name="ClearGlobalCostmap-context-2"
+              server_timeout="5000"
+              service_name="/global_costmap/clear_entirely_global_costmap" />
+
+            <!-- wait long enough to include neighbor obstacles -->
+            <Wait wait_duration="1.0" />
+            <CurrentPose global_frame="map" robot_base_frame="base_footprint"
+              pose="{current_pose}" />
+            <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}"
+              planner_id="CaBot" />
+            <PublishTopicPath topic="plan" value="{path}" />
+          </Sequence>
+          <AlwaysSuccess />
+        </RecoveryNode>
+      </RecoveryNode>
+    </Sequence>
+  </BehaviorTree>
+</root>
