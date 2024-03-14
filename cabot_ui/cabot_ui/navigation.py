@@ -901,7 +901,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if not self._last_estimated_goal_check or now - self._last_estimated_goal_check > interval:
             estimated_goal = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
             self._logger.info(F"Estimated next goal = {estimated_goal}")
-            self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"\{repr(estimated_goal)}")
+            self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"{repr(estimated_goal)}")
             self._last_estimated_goal_check = now
 
         if goal.is_canceled:

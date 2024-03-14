@@ -429,8 +429,7 @@ bool CaBotPlannerParam::adjustPath()
 
   estimatePathWidthAndAdjust(path, costmap, pe_options);
   if (options.adjust_start) {
-    RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld, start = (%.2f, %.2f)",
-      path.poses.size(), start.pose.position.x, start.pose.position.y);
+    RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld, start = (%.2f, %.2f)", path.poses.size(), start.pose.position.x, start.pose.position.y);
     path = adjustedPathByStart(path, start);
     RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld", path.poses.size());
   }

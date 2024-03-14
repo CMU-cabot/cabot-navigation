@@ -378,10 +378,9 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
                 last_obj = navcog_route[-i]
             if not isinstance(last_obj, geojson.RouteLink):
                 raise RuntimeError("There should be at least one link towards target POI,"
-                                    "if it is provided with set_back (={}) \n===POI===\n{}\n========="
-                                    .format(set_back, str(target_poi)))
+                                   F"if it is provided with set_back (={set_back}) \n===POI===\n{str(target_poi)}\n=========")
             backward = geoutil.Pose.pose_from_points(last_obj.source_node.local_geometry,
-                                                        last_obj.target_node.local_geometry, backward=True)
+                                                     last_obj.target_node.local_geometry, backward=True)
             CaBotRclpyUtil.info(F"set_back {backward.r:.4} * ({str(set_back)})")
             last_pose.position.x += math.cos(backward.r) * set_back[0] - math.sin(backward.r) * set_back[1]
             last_pose.position.y += math.sin(backward.r) * set_back[0] + math.cos(backward.r) * set_back[1]
@@ -700,7 +699,9 @@ class ElevatorGoal(Goal):
     def __init__(self, delegate, cab_poi, **kwargs):
         super(ElevatorGoal, self).__init__(delegate, target=cab_poi, **kwargs)
         self.cab_poi = cab_poi
-        dist = lambda offset: math.sqrt(offset[0] * offset[0] + offset[1] * offset[1])
+
+        def dist(offset):
+            return math.sqrt(offset[0] * offset[0] + offset[1] * offset[1])
         self.set_back_distance = dist(cab_poi.set_back)
         self.set_forward_distance = dist(cab_poi.set_forward)
 
