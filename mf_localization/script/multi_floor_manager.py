@@ -2471,7 +2471,7 @@ if __name__ == "__main__":
     multi_floor_manager.send_static_transforms()
 
     # global position
-    global_position_timer = node.create_timer(global_position_interval, multi_floor_manager.global_position_callback, callback_group=MutuallyExclusiveCallbackGroup())
+    global_position_timer = node.create_timer(global_position_interval, multi_floor_manager.global_position_callback, callback_group=state_update_callback_group)
 
     # detect optimization
     multi_floor_manager.map2odom = None
