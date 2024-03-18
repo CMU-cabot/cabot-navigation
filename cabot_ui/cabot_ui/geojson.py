@@ -233,6 +233,15 @@ class Object(object):
         return temp
 
     @staticmethod
+    def get_objects_by_exact_type(_type):
+        """get objects of specified type"""
+        temp = []
+        for obj in Object._all_objects:
+            if type(obj) is _type:
+                temp.append(obj)
+        return temp
+
+    @staticmethod
     def get_all_objects():
         return Object._all_objects
 
@@ -527,11 +536,6 @@ class Node(Object):
             if hasattr(self.properties, attr):
                 Object.get_object_by_id(getattr(self.properties, attr), self._add_link)
 
-        if hasattr(self.properties, 'floor'):
-            self.floor = self.properties.floor
-        else:
-            self.floor = 0
-
         self.facility = None
         Facility.get_facility_by_id(self._id, self._set_facility)
 
@@ -540,6 +544,12 @@ class Node(Object):
 
     def _set_facility(self, facility):
         self.facility = facility
+
+    @property
+    def floor(self):
+        if hasattr(self.properties, 'floor'):
+            return self.properties.floor
+        return 0
 
     @property
     def is_leaf(self):
@@ -554,6 +564,25 @@ class Node(Object):
             res = res or link.is_elevator
         return res
 
+class Entrance:
+    def __init__(self, prop, i):
+        def get_prop(name):
+            key = f"ent{i}_{name}"
+            return getattr(prop, key) if hasattr(prop, key) else None
+        self.node = None
+        self.node_id = get_prop("node")
+        if self.node_id:
+            Object.get_object_by_id(self.node_id, self._set_entrance_node)
+        self.name = i18n.localized_attr(prop, f"ent{i}_n")
+
+    def _set_entrance_node(self, node):
+        self.node = node
+
+    @property
+    def floor(self):
+        if self.node:
+            return self.node.floor
+        return 0
 
 class Facility(Object):
     """Facility class"""
@@ -578,10 +607,13 @@ class Facility(Object):
             attr = F"ent{i}_node"
             if hasattr(self.properties, attr):
                 Facility._id_map[getattr(self.properties, attr)] = self
-                Object.get_object_by_id(getattr(self.properties, attr), self._add_facility)
+                self.entrances.append(Entrance(self.properties, i))
 
-    def _add_facility(self, node):
-        self.entrances.append(node)
+    @property
+    def floor(self):
+        if self.entrances:
+            return self.entrances[0].floor  # assume all entrance is same floor
+        return 0
 
     @property
     def name(self):
@@ -642,13 +674,9 @@ class POI(Facility, geoutil.TargetPlace):
 
     def __init__(self, **dic):
         if 'properties' in dic:
-            prop = dic['properties']
-
-            def get_prop(prop, key):
-                return prop[key] if key in prop else Properties.DEFAULT_VALUES[key]
-            r = (-get_prop(prop, 'hulop_heading') + 90) / 180.0 * math.pi
-            angle = get_prop(prop, 'hulop_angle')
-            self.floor = get_prop(prop, 'hulop_height')
+            self.prop = dic['properties']
+            r = (-self._get_prop('hulop_heading') + 90) / 180.0 * math.pi
+            angle = self._get_prop('hulop_angle')
 
         super(POI, self).__init__(r=r, x=0, y=0, angle=angle, floor=self.floor, **dic)
 
@@ -659,6 +687,13 @@ class POI(Facility, geoutil.TargetPlace):
 
         # backward compatibility
         self.local_pose = self
+
+    def _get_prop(self, key):
+        return self.prop[key] if key in self.prop else Properties.DEFAULT_VALUES[key]
+
+    @property
+    def floor(self):
+        return self._get_prop('hulop_height')
 
     def approaching_statement(self):
         return None

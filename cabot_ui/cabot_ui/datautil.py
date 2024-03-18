@@ -225,6 +225,10 @@ class DataUtil(object):
         elevator_cabs = geojson.Object.get_objects_by_type(geojson.ElevatorCabPOI)
         for poi in elevator_cabs:
             min_link = geojson.Object.get_nearest_link(poi, exclude=lambda x: x.is_elevator)
+            if min_link is None:
+                CaBotRclpyUtil.debug(F"poi {poi._id} ({poi.floor}) is not registered.")
+                continue
+
             min_dist = min_link.geometry.distance_to(poi.geometry)
 
             if min_dist < 5:

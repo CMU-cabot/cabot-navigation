@@ -540,6 +540,32 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
         self._goal_index = -1
 
+        # check facilities
+        facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+        for facility in facilities:
+            self._logger.info(f"facility {facility._id}: {facility.name}")
+            if not facility.name:
+                continue
+            for ent in facility.entrances:
+                min_dist = 5
+                min_link = None
+                for link in groute:
+                    if not isinstance(link, geojson.RouteLink):
+                        continue
+                    if link._id.startswith("_TEMP_LINK"):
+                        continue
+                    if facility.floor != link.floor:
+                        continue
+                    if not ent.node:
+                        continue
+                    dist = link.geometry.distance_to(ent.node.geometry)
+                    if dist < min_dist:
+                        min_dist = dist
+                        min_link = link
+                if min_link:
+                    self._logger.info(f"Facility - Link ({min_dist:.2f}), {facility._id}, {facility.name}:{ent.name}, {min_link._id}")
+
+
         # for dashboad
         (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
         msg = nav_msgs.msg.Path()
