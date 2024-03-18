@@ -155,12 +155,12 @@ class BufferProxy():
         if key in self.transformMap:
             (transform, last_time) = self.transformMap[key]
             if now - last_time < self.min_interval:
-                self._logger.info(f"found old lookup_transform({target}, {source}, {(now - last_time).nanoseconds/1000000000:.2f}sec)")
+                self._logger.debug(f"found old lookup_transform({target}, {source}, {(now - last_time).nanoseconds/1000000000:.2f}sec)")
                 return transform
 
         if __debug__:
             self.debug()
-        self._logger.info(f"lookup_transform({target}, {source})")
+        self._logger.debug(f"lookup_transform({target}, {source})")
         req = LookupTransform.Request()
         req.target_frame = target
         req.source_frame = source
@@ -541,9 +541,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._goal_index = -1
 
         # check facilities
+        self.nearby_facilities = []
         facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
         for facility in facilities:
-            self._logger.info(f"facility {facility._id}: {facility.name}")
+            self._logger.debug(f"facility {facility._id}: {facility.name}")
             if not facility.name:
                 continue
             for ent in facility.entrances:
@@ -563,8 +564,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                         min_dist = dist
                         min_link = link
                 if min_link:
-                    self._logger.info(f"Facility - Link ({min_dist:.2f}), {facility._id}, {facility.name}:{ent.name}, {min_link._id}")
-
+                    self._logger.debug(f"Facility - Link ({min_dist:.2f}), {facility._id}, {facility.name}:{ent.name}, {min_link._id}")
+                    ent.set_target(min_link)
+                    self.nearby_facilities.append({
+                        "facility": facility,
+                        "entrance": ent
+                    })
 
         # for dashboad
         (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
@@ -754,6 +759,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         try:
             self._check_info_poi(self.current_pose)
+            self._check_nearby_facility(self.current_pose)
             self._check_speed_limit(self.current_pose)
             self._check_turn(self.current_pose)
             self._check_queue_wait(self.current_pose)
@@ -780,6 +786,28 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
+
+    def _check_nearby_facility(self, current_pose):
+        if not self.nearby_facilities:
+            return
+        entry = min(self.nearby_facilities, key=lambda p, c=current_pose: p["entrance"].distance_to(c))
+        if entry is None:
+            return
+        entrance = entry["entrance"]
+        facility = entry["facility"]
+
+        if entrance is not None and entrance.distance_to(current_pose) < 8:
+            # self._logger.info(F"_check_nearby_facility: {entrance._id}, {entrance}, {current_pose}")
+            if entrance.is_approaching(current_pose):
+                self._logger.info(F"_check_nearby_facility approaching {entrance._id}")
+                self.delegate.approaching_to_poi(poi=entrance)
+            elif entrance.is_approached(current_pose):
+                self._logger.info(F"_check_nearby_facility approached {entrance._id}")
+                self.delegate.approached_to_poi(poi=entrance)
+            elif entrance.is_passed(current_pose):
+                self._logger.info(F"_check_nearby_facility passed {entrance._id}")
+                self.delegate.passed_poi(poi=entrance)
+
 
     def _check_speed_limit(self, current_pose):
         # check speed limit

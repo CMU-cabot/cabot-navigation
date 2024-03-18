@@ -284,6 +284,10 @@ class Pose(Point):
         orientation.w = q[3]
         return orientation
 
+    @property
+    def quaternion(self):
+        return quaternion_from_euler(0.0, 0.0, self.r)
+
     @classmethod
     def from_pose_msg(cls, msg):
         """instanciate Pose from ROS pose msg"""

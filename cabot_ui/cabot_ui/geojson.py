@@ -35,7 +35,7 @@ import scipy
 import scipy.spatial
 import numpy
 import numpy.linalg
-from tf_transformations import quaternion_from_euler
+from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
@@ -564,25 +564,47 @@ class Node(Object):
             res = res or link.is_elevator
         return res
 
-class Entrance:
-    def __init__(self, prop, i):
-        def get_prop(name):
-            key = f"ent{i}_{name}"
-            return getattr(prop, key) if hasattr(prop, key) else None
-        self.node = None
-        self.node_id = get_prop("node")
-        if self.node_id:
-            Object.get_object_by_id(self.node_id, self._set_entrance_node)
-        self.name = i18n.localized_attr(prop, f"ent{i}_n")
 
-    def _set_entrance_node(self, node):
+class Entrance(geoutil.TargetPlace):
+    def __init__(self, facility, i, node):
+        self.facility = facility
         self.node = node
+        self.node_id = node._id
+        self._id = f"{facility._id}_ent{i}"
+        self.name = i18n.localized_attr(facility.properties, f"ent{i}_n")
+        super(Entrance, self).__init__(r=0, x=0, y=0, angle=45, floor=self.floor)
+        Object._register(self)
 
     @property
     def floor(self):
-        if self.node:
-            return self.node.floor
-        return 0
+        return self.node.floor
+
+    def update_anchor(self, anchor):
+        self.anchor = anchor
+
+    def reset(self):
+        self.reset_target()
+
+    def set_target(self, link):
+        gpoint = link.geometry.nearest_point_on_line(self.node.geometry)
+        lpoint = geoutil.global2local(gpoint, self.anchor)
+        self.update_pose(lpoint, link.pose.r + math.pi)
+
+    def approaching_statement(self):
+        return None
+
+    def approached_statement(self):
+        p1 = geoutil.q_from_points(self, self.node.local_geometry)
+        diff = geoutil.q_diff(self.quaternion, p1)
+        _, _, angle = euler_from_quaternion(diff)
+        CaBotRclpyUtil.info(f"Entrance.approacehd_statement {diff} {angle}")
+        direction = "RIGHT_SIDE" if angle < 0 else "LEFT_SIDE"
+        i18n_direction = i18n.localized_string(direction)
+        return i18n.localized_string("APPROACEHD_TO_FACILITY").format(self.facility.name, i18n_direction)
+
+    def passed_statement(self):
+        return None
+
 
 class Facility(Object):
     """Facility class"""
@@ -607,7 +629,12 @@ class Facility(Object):
             attr = F"ent{i}_node"
             if hasattr(self.properties, attr):
                 Facility._id_map[getattr(self.properties, attr)] = self
-                self.entrances.append(Entrance(self.properties, i))
+                Object.get_object_by_id(getattr(self.properties, attr), self._add_entrance(i))
+
+    def _add_entrance(self, i):
+        def inner_func(node):
+            self.entrances.append(Entrance(self, i, node))
+        return inner_func
 
     @property
     def floor(self):
