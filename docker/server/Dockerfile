@@ -31,8 +31,8 @@ RUN apt update && \
 	apt install -y \
 	wget \
 	curl \
-	openjdk-8-jre \
-	openjdk-8-jdk \
+	openjdk-11-jre \
+	openjdk-11-jdk \
 	zip \
 	maven \
 	git \
@@ -70,7 +70,8 @@ RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtim
 #        ./server create defaultServer
 #
 
-RUN git clone https://github.com/daisukes/MapService -b hokoukukan_2018-docker && \
+#RUN git clone https://github.com/daisukes/MapService -b hokoukukan_2018-docker && \
+RUN git clone https://github.com/CMU-cabot/MapService -b daisukes/cabot-hokoukukan_2018 && \
 	cd MapService && \
 	sh download-lib.sh
 

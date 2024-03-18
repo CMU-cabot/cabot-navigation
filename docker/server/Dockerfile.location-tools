@@ -31,8 +31,8 @@ RUN apt update && \
 	apt install -y \
 	wget \
 	curl \
-	openjdk-8-jre \
-	openjdk-8-jdk \
+	openjdk-11-jre \
+	openjdk-11-jdk \
 	zip \
 	maven \
 	git \
