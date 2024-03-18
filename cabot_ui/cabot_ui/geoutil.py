@@ -177,6 +177,14 @@ def get_rotation(src, target):
     return yaw
 
 
+def normalize_angle(ang):
+    while (ang <= -math.pi):
+        ang += 2 * math.pi
+    while (ang > math.pi):
+        ang -= 2 * math.pi
+    return ang
+
+
 def get_projected_point_to_line(point, line_point, line_orientation):
     """
     calculate the point that project a given point perpendicular to given line segment
@@ -484,7 +492,7 @@ class TargetPlace(Pose):
     def update_pose(self, point, rotate):
         self.x = point.x
         self.y = point.y
-        self.r = rotate
+        self.r = normalize_angle(rotate)
 
     APPROACHING_THRETHOLD = 5.0
     APPROACHED_THRETHOLD = 1.0

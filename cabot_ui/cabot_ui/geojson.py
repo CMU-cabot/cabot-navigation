@@ -519,6 +519,10 @@ class RouteLink(Link):
     def is_temp(self):
         return self._id.startswith("_TEMP_LINK")
 
+    @property
+    def pose(self):
+        return geoutil.Pose.pose_from_points(self.source_node.local_geometry, self.target_node.local_geometry)
+
 
 class Node(Object):
     """Node class"""
