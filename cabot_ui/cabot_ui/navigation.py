@@ -797,7 +797,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if entry is None:
             return
         entrance = entry["entrance"]
-        facility = entry["facility"]
 
         if entrance is not None and entrance.distance_to(current_pose) < 8:
             # self._logger.info(F"_check_nearby_facility: {entrance._id}, {entrance}, {current_pose}")
@@ -810,7 +809,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif entrance.is_passed(current_pose):
                 self._logger.info(F"_check_nearby_facility passed {entrance._id}")
                 self.delegate.passed_poi(poi=entrance)
-
 
     def _check_speed_limit(self, current_pose):
         # check speed limit

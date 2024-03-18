@@ -275,7 +275,7 @@ class Object(object):
         """reset all state in the objects"""
         for obj in Object._all_objects:
             obj.reset()
-        ## dirty hack to deal with _TEMP_NODE_
+        # dirty hack to deal with _TEMP_NODE_
         temp_node = Object.get_object_by_id("_TEMP_NODE_")
         if temp_node:
             Object._unregister(temp_node)
@@ -645,8 +645,8 @@ class Facility(Object):
                 Facility._id_map[getattr(self.properties, attr)] = self
                 Object.get_object_by_id(getattr(self.properties, attr), self._add_entrance(i))
         if hasattr(self.properties, "hulop_tags"):
-           hulop_tags = getattr(self.properties, "hulop_tags")
-           self._is_read = ("read" in hulop_tags) if hulop_tags else False
+            hulop_tags = getattr(self.properties, "hulop_tags")
+            self._is_read = ("read" in hulop_tags) if hulop_tags else False
 
     def _add_entrance(self, i):
         def inner_func(node):
