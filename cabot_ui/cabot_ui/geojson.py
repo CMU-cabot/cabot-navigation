@@ -246,6 +246,12 @@ class Object(object):
         return Object._all_objects
 
     @staticmethod
+    def _unregister(obj):
+        _id = obj._id
+        if _id in Object._id_map:
+            del Object._id_map[_id]
+
+    @staticmethod
     def _register(obj):
         """store object with id and type"""
         # register with id
@@ -269,6 +275,10 @@ class Object(object):
         """reset all state in the objects"""
         for obj in Object._all_objects:
             obj.reset()
+        ## dirty hack to deal with _TEMP_NODE_
+        temp_node = Object.get_object_by_id("_TEMP_NODE_")
+        if temp_node:
+            Object._unregister(temp_node)
 
     @staticmethod
     def _reset_link_index():
