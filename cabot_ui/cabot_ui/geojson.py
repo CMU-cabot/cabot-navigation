@@ -597,7 +597,7 @@ class Entrance(geoutil.TargetPlace):
         p1 = geoutil.q_from_points(self, self.node.local_geometry)
         diff = geoutil.q_diff(self.quaternion, p1)
         _, _, angle = euler_from_quaternion(diff)
-        CaBotRclpyUtil.info(f"Entrance.approacehd_statement {diff} {angle}")
+        CaBotRclpyUtil.debug(f"Entrance.approacehd_statement {diff} {angle}")
         direction = "RIGHT_SIDE" if angle < 0 else "LEFT_SIDE"
         i18n_direction = i18n.localized_string(direction)
         return i18n.localized_string("APPROACEHD_TO_FACILITY").format(self.facility.name, i18n_direction)
@@ -630,6 +630,9 @@ class Facility(Object):
             if hasattr(self.properties, attr):
                 Facility._id_map[getattr(self.properties, attr)] = self
                 Object.get_object_by_id(getattr(self.properties, attr), self._add_entrance(i))
+        if hasattr(self.properties, "hulop_tags"):
+           hulop_tags = getattr(self.properties, "hulop_tags")
+           self._is_read = ("read" in hulop_tags) if hulop_tags else False
 
     def _add_entrance(self, i):
         def inner_func(node):
@@ -653,6 +656,10 @@ class Facility(Object):
     @property
     def long_description(self):
         return i18n.localized_attr(self.properties, "hulop_long_description")
+
+    @property
+    def is_read(self):
+        return self._is_read
 
     _id_map = {}
 

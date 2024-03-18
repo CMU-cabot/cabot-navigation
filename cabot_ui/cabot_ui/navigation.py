@@ -547,6 +547,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.debug(f"facility {facility._id}: {facility.name}")
             if not facility.name:
                 continue
+            if not facility.is_read:
+                continue
+
             for ent in facility.entrances:
                 min_dist = 5
                 min_link = None
