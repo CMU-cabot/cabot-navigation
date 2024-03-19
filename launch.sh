@@ -102,8 +102,6 @@ function help()
 {
     echo "Usage:"
     echo "-A          find all test module under cabot_sites"
-    echo "-D          debug"
-    echo "-f <test>   run test CABOT_SITE.<module>.<test>"
     echo "-h          show this help"
     echo "-H          headless"
     echo "-M          log dmesg output"
@@ -112,10 +110,15 @@ function help()
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
-    echo "-T <module> run test CABOT_SITE.<module>"
     echo "-y          do not confirm (deprecated - always launch server if there is no server)"
     echo "-u <options> unittest"
     echo "-v          verbose option"
+    echo ""
+    echo "run test (-t) options"
+    echo "  -D          debug"
+    echo "  -f <test>   run test CABOT_SITE.<module>.<test>"
+    echo "  -l          list test functions"
+    echo "  -T <module> run test CABOT_SITE.<module>"
 }
 
 
@@ -130,6 +133,7 @@ module=tests
 test_func=
 unittest=
 retryoption=
+list_functions=0
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -141,7 +145,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDf:HMn:rsS:tT:uvy" arg; do
+while getopts "hDf:HlMn:rsS:tT:uvy" arg; do
     case $arg in
         h)
             help
@@ -156,6 +160,9 @@ while getopts "hDf:HMn:rsS:tT:uvy" arg; do
         H)
             export CABOT_HEADLESS=1
             ;;
+	l)
+	    list_functions=1
+	    ;;
         M)
             log_dmesg=1
             ;;
@@ -221,6 +228,12 @@ fi
 if [ $error -eq 1 ]; then
    exit 1
 fi
+
+if [[ $list_functions -eq 1 ]]; then
+    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -l $module
+    exit
+fi
+
 
 log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
 export ROS_LOG_DIR="/home/developer/.ros/log/${log_name}"

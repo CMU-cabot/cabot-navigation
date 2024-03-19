@@ -842,16 +842,13 @@ class ROS2LogHandler(logging.Handler):
 
 def main():
     global node, manager, logger
-    parser = OptionParser(usage="""
-    Example
-    {0} -m <module name>    # run test module
-    {0} -f <func name pat>  # run only func that mataches the pattern
-    """.format(sys.argv[0]))
+    parser = OptionParser()
 
     parser.add_option('-m', '--module', type=str, help='test module name')
-    parser.add_option('-f', '--func', type=str, help='test func name')
-    parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
     parser.add_option('-d', '--debug', action='store_true', help='debug print')
+    parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
+    parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
 
     (options, args) = parser.parse_args()
 
@@ -864,6 +861,13 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
+
+    if options.list_functions:
+        module = importlib.import_module(options.module)
+        functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
+        for f in functions:
+            logger.info(f)
+        sys.exit()
 
     rclpy.init()
     node = rclpy.node.Node("test_node")
