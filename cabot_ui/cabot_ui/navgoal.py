@@ -38,6 +38,9 @@ from cabot_common import util
 
 
 class GoalInterface(object):
+    def activity_log(self, category="", text="", memo=""):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
     def enter_goal(self, goal):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
@@ -290,6 +293,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
 
 def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_back=[0.0, 0.0]):
     """convert a NavCog path to ROS path"""
+    mode = geojson.NavigationMode.Standard
     # convert route to points
     points = []
     if len(navcog_route) == 0:
@@ -317,8 +321,11 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         # It needs to check if the last link has perpendicular turn
         # if the link is a leaf of the graph and short
         if isinstance(item, geojson.RouteLink):
-            if item.is_leaf and item.length < 3.0:
+            if item.target_node.is_leaf and item.length < 3.0:
                 continue
+
+        if hasattr(item, "navigation_mode"):
+            mode = item.navigation_mode
 
         if isinstance(item.geometry, geojson.Point):
             points.append(convert(item.geometry))
@@ -380,7 +387,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
             path.poses[-1].pose.position.y = last_pose.position.y
 
     CaBotRclpyUtil.info(F"path {path}")
-    return (path, path.poses[-1] if len(path.poses) > 0 else None, navcog_route)
+    return (path, path.poses[-1] if len(path.poses) > 0 else None, mode)
 
 
 def estimate_next_goal(goals, current_pose, current_floor):
@@ -525,12 +532,18 @@ class NavGoal(Goal):
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
         self.anchor = anchor
-        separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
-        self.navcog_routes = [create_ros_path(route,
-                                              self.anchor,
-                                              self.global_map_name,
-                                              target_poi=target_poi,
-                                              set_back=set_back) for route in separated_route]
+
+        # handle corner case (only a node is in the navcog_route)
+        if len(navcog_route) == 1 and isinstance(navcog_route[0], geojson.Node):
+            separated_route = [navcog_route]
+            self.navcog_routes = [create_ros_path(navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)]
+        else:
+            separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
+            self.navcog_routes = [create_ros_path(route,
+                                                self.anchor,
+                                                self.global_map_name,
+                                                target_poi=target_poi,
+                                                set_back=set_back) for route in separated_route]
         last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
         self.handle = None
@@ -762,11 +775,13 @@ class NavGoal(Goal):
                 "param_value": 0.25
             }]
 
+    # TODO(daisukes): need to wait tight route announce
     def check_mode(self):
-        new_mode = self.navcog_routes[self.route_index][2][0].navigation_mode
-        CaBotRclpyUtil.info(F"NavGoal.check_mode {self.mode}, {new_mode}")
+        CaBotRclpyUtil.info(F"NavGoal.check_mode mode={self.mode}, route_index={self.route_index}")
+        new_mode = self.navcog_routes[self.route_index][2]
         if self.mode == new_mode:
             return
+        CaBotRclpyUtil.info(F"NavGoal.check_mode new_mode={new_mode}")
         if new_mode == geojson.NavigationMode.Tight:
             self.set_speed_limit(1.0, self.delegate.please_follow_behind, 2.5, 0.1)
         if self.mode == geojson.NavigationMode.Tight:
@@ -807,13 +822,19 @@ class NavGoal(Goal):
             return
 
         CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
-        self.route_index += 1
-        if self.route_index == len(self.navcog_routes):
-            status = future.result().status
+        status = future.result().status
+
+        # TODO(daisuke): needs to change test case conditions
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
+                self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
+
+        if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
+            self.route_index += 1
+            self.enter()
+        else:
             self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
             self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
-        else:
-            self.enter()
 
     def update_goal(self, goal):
         CaBotRclpyUtil.info("Updated goal position")

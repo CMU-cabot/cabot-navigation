@@ -985,6 +985,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._navigate_next_sub_goal()
 
     # GoalInterface
+    
+    def activity_log(self, category="", text="", memo=""):
+        self.delegate.activity_log(category, text, memo)
 
     def get_logger(self):
         return self._logger
