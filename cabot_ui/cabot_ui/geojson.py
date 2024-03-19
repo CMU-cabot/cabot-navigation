@@ -35,7 +35,7 @@ import scipy
 import scipy.spatial
 import numpy
 import numpy.linalg
-from tf_transformations import quaternion_from_euler
+from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
@@ -233,8 +233,23 @@ class Object(object):
         return temp
 
     @staticmethod
+    def get_objects_by_exact_type(_type):
+        """get objects of specified type"""
+        temp = []
+        for obj in Object._all_objects:
+            if type(obj) is _type:
+                temp.append(obj)
+        return temp
+
+    @staticmethod
     def get_all_objects():
         return Object._all_objects
+
+    @staticmethod
+    def _unregister(obj):
+        _id = obj._id
+        if _id in Object._id_map:
+            del Object._id_map[_id]
 
     @staticmethod
     def _register(obj):
@@ -260,6 +275,10 @@ class Object(object):
         """reset all state in the objects"""
         for obj in Object._all_objects:
             obj.reset()
+        # dirty hack to deal with _TEMP_NODE_
+        temp_node = Object.get_object_by_id("_TEMP_NODE_")
+        if temp_node:
+            Object._unregister(temp_node)
 
     @staticmethod
     def _reset_link_index():
@@ -510,6 +529,10 @@ class RouteLink(Link):
     def is_temp(self):
         return self._id.startswith("_TEMP_LINK")
 
+    @property
+    def pose(self):
+        return geoutil.Pose.pose_from_points(self.source_node.local_geometry, self.target_node.local_geometry)
+
 
 class Node(Object):
     """Node class"""
@@ -527,11 +550,6 @@ class Node(Object):
             if hasattr(self.properties, attr):
                 Object.get_object_by_id(getattr(self.properties, attr), self._add_link)
 
-        if hasattr(self.properties, 'floor'):
-            self.floor = self.properties.floor
-        else:
-            self.floor = 0
-
         self.facility = None
         Facility.get_facility_by_id(self._id, self._set_facility)
 
@@ -540,6 +558,12 @@ class Node(Object):
 
     def _set_facility(self, facility):
         self.facility = facility
+
+    @property
+    def floor(self):
+        if hasattr(self.properties, 'floor'):
+            return self.properties.floor
+        return 0
 
     @property
     def is_leaf(self):
@@ -553,6 +577,47 @@ class Node(Object):
         for link in self.links:
             res = res or link.is_elevator
         return res
+
+
+class Entrance(geoutil.TargetPlace):
+    def __init__(self, facility, i, node):
+        self.facility = facility
+        self.node = node
+        self.node_id = node._id
+        self._id = f"{facility._id}_ent{i}"
+        self.name = i18n.localized_attr(facility.properties, f"ent{i}_n")
+        super(Entrance, self).__init__(r=0, x=0, y=0, angle=45, floor=self.floor)
+        Object._register(self)
+
+    @property
+    def floor(self):
+        return self.node.floor
+
+    def update_anchor(self, anchor):
+        self.anchor = anchor
+
+    def reset(self):
+        self.reset_target()
+
+    def set_target(self, link):
+        gpoint = link.geometry.nearest_point_on_line(self.node.geometry)
+        lpoint = geoutil.global2local(gpoint, self.anchor)
+        self.update_pose(lpoint, link.pose.r + math.pi)
+
+    def approaching_statement(self):
+        return None
+
+    def approached_statement(self):
+        p1 = geoutil.q_from_points(self, self.node.local_geometry)
+        diff = geoutil.q_diff(self.quaternion, p1)
+        _, _, angle = euler_from_quaternion(diff)
+        CaBotRclpyUtil.debug(f"Entrance.approacehd_statement {diff} {angle}")
+        direction = "RIGHT_SIDE" if angle < 0 else "LEFT_SIDE"
+        i18n_direction = i18n.localized_string(direction)
+        return i18n.localized_string("APPROACEHD_TO_FACILITY").format(self.facility.name, i18n_direction)
+
+    def passed_statement(self):
+        return None
 
 
 class Facility(Object):
@@ -578,10 +643,21 @@ class Facility(Object):
             attr = F"ent{i}_node"
             if hasattr(self.properties, attr):
                 Facility._id_map[getattr(self.properties, attr)] = self
-                Object.get_object_by_id(getattr(self.properties, attr), self._add_facility)
+                Object.get_object_by_id(getattr(self.properties, attr), self._add_entrance(i))
+        if hasattr(self.properties, "hulop_tags"):
+            hulop_tags = getattr(self.properties, "hulop_tags")
+            self._is_read = ("read" in hulop_tags) if hulop_tags else False
 
-    def _add_facility(self, node):
-        self.entrances.append(node)
+    def _add_entrance(self, i):
+        def inner_func(node):
+            self.entrances.append(Entrance(self, i, node))
+        return inner_func
+
+    @property
+    def floor(self):
+        if self.entrances:
+            return self.entrances[0].floor  # assume all entrance is same floor
+        return 0
 
     @property
     def name(self):
@@ -594,6 +670,10 @@ class Facility(Object):
     @property
     def long_description(self):
         return i18n.localized_attr(self.properties, "hulop_long_description")
+
+    @property
+    def is_read(self):
+        return self._is_read
 
     _id_map = {}
 
@@ -642,13 +722,9 @@ class POI(Facility, geoutil.TargetPlace):
 
     def __init__(self, **dic):
         if 'properties' in dic:
-            prop = dic['properties']
-
-            def get_prop(prop, key):
-                return prop[key] if key in prop else Properties.DEFAULT_VALUES[key]
-            r = (-get_prop(prop, 'hulop_heading') + 90) / 180.0 * math.pi
-            angle = get_prop(prop, 'hulop_angle')
-            self.floor = get_prop(prop, 'hulop_height')
+            self.prop = dic['properties']
+            r = (-self._get_prop('hulop_heading') + 90) / 180.0 * math.pi
+            angle = self._get_prop('hulop_angle')
 
         super(POI, self).__init__(r=r, x=0, y=0, angle=angle, floor=self.floor, **dic)
 
@@ -659,6 +735,13 @@ class POI(Facility, geoutil.TargetPlace):
 
         # backward compatibility
         self.local_pose = self
+
+    def _get_prop(self, key):
+        return self.prop[key] if key in self.prop else Properties.DEFAULT_VALUES[key]
+
+    @property
+    def floor(self):
+        return self._get_prop('hulop_height')
 
     def approaching_statement(self):
         return None

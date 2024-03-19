@@ -325,9 +325,9 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         # TODO: This is a hulistic rule to deal with the last leaf link towards doorway in corridor
         # It needs to check if the last link has perpendicular turn
         # if the link is a leaf of the graph and short
-        # if isinstance(item, geojson.RouteLink):
-        #     if item.is_leaf and item.length < 3.0:
-        #         continue
+        if isinstance(item, geojson.RouteLink):
+            if item.is_leaf and item.length < 3.0:
+                continue
 
         if isinstance(item.geometry, geojson.Point):
             points.append(convert(item.geometry))
