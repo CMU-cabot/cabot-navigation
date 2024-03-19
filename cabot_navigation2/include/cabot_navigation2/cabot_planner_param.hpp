@@ -63,6 +63,7 @@ struct CaBotPlannerOptions
   int kdtree_max_results = 50;
   int min_iteration_count = 500;
   int max_iteration_count = 1000;
+  bool ignore_obstacles = false;
 
   // private params
   float iteration_scale_min = 0.0001;

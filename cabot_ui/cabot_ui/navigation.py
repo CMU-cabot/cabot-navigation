@@ -28,8 +28,10 @@ import traceback
 
 # ROS
 import rclpy
+from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.parameter import Parameter, ParameterType
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import tf2_ros
@@ -241,8 +243,7 @@ class ControlBase(object):
             ros_pose.orientation.w = transformStamped.transform.rotation.w
             return ros_pose
         except RuntimeError:
-            self._logger.error(F"{self._node.get_clock().now()}")
-            self._logger.error(traceback.format_exc(), throttle_duration_sec=1.0)
+            self._logger.debug("cannot get current_ros_pose")
         raise RuntimeError("no transformation")
 
     def current_local_pose(self, frame=None):
@@ -259,7 +260,7 @@ class ControlBase(object):
             current_pose = geoutil.Pose(x=translation.x, y=translation.y, r=euler[2])
             return current_pose
         except RuntimeError:
-            self._logger.error(traceback.format_exc(), throttle_duration_sec=1.0)
+            self._logger.debug("cannot get current_local_pose")
         raise RuntimeError("no transformation")
 
     def current_local_odom_pose(self):
@@ -273,7 +274,7 @@ class ControlBase(object):
             current_pose = geoutil.Pose(x=translation.x, y=translation.y, r=euler[2])
             return current_pose
         except RuntimeError:
-            self._logger.error(traceback.format_exc(), throttle_duration_sec=1.0)
+            self._logger.debug("cannot get current_local_odom_pose")
         raise RuntimeError("no transformation")
 
     def current_global_pose(self):
@@ -303,6 +304,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         super(Navigation, self).__init__(
             node, datautil_instance=datautil_instance, anchor_file=anchor_file)
+
+        self.param_manager = NavigationParamManager(node)
 
         self.info_pois = []
         self.queue_wait_pois = []
@@ -575,7 +578,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     })
 
         # for dashboad
-        (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
+        (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
         msg = nav_msgs.msg.Path()
         msg.header = gpath.header
         msg.header.frame_id = "map"
@@ -812,9 +815,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def _check_speed_limit(self, current_pose):
         # check speed limit
-        if not self.speed_pois:
-            return
-
         limit = self._max_speed
         for poi in self.speed_pois:
             dist = poi.distance_to(current_pose)
@@ -824,6 +824,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 else:
                     limit = min(limit, self._max_speed)
                 self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
+        if self._current_goal:
+            if self._current_goal.speed_limit is not None and self._current_goal.speed_limit < limit:
+                limit = self._current_goal.speed_limit
+
         msg = std_msgs.msg.Float32()
         msg.data = limit
         self.speed_limit_pub.publish(msg)
@@ -1198,3 +1202,42 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def please_return_position(self):
         self.delegate.please_return_position()
+
+    def change_parameters(self, params, callback):
+        self.param_manager.change_parameters(params, callback)
+
+
+class NavigationParamManager:
+    def __init__(self, node):
+        self.node = node
+        self.clients = {}
+
+    def get_client(self, node_name):
+        if node_name not in self.clients:
+            self.clients[node_name] = self.node.create_client(SetParameters, f'{node_name}/set_parameters')
+        while not self.clients[node_name].wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Waiting for the target node to become available...')
+        return self.clients[node_name]
+
+    def change_parameter(self, node_name, param_name, param_value, callback):
+        request = SetParameters.Request()
+        new_parameter = Parameter(param_name, value=param_value)
+        request.parameters.append(new_parameter.to_parameter_msg())
+        future = self.get_client(node_name).call_async(request)
+        future.add_done_callback(callback)
+
+    def change_parameters(self, params, callback):
+        self.count = 0
+
+        def sub_callback(future):
+            self.count += 1
+            self.node.get_logger().info(f"sub_callback {self.count} {future.result()}")
+            if self.count == len(params):
+                callback()
+        for param in params:
+            param['callback'] = sub_callback
+            self.node.get_logger().info(f"call change_parameter {param['node_name']}: {param['param_name']} = {param['param_value']}")
+            try:
+                self.change_parameter(**param)
+            except:
+                self.node.get_logger().error(traceback.format_exc())

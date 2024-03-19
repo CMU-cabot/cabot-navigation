@@ -28,6 +28,7 @@ Author: Daisuke Sato<daisukes@cmu.edu>
 # -*- coding: utf-8 -*-
 import sys
 import traceback
+import enum
 import copy
 import math
 import json
@@ -400,6 +401,20 @@ class Object(object):
         return copy.deepcopy(self)
 
 
+class NavigationMode(enum.Enum):
+    Standard = 0
+    Narrow = 1
+    Tight = 2
+
+    @classmethod
+    def get_mode(cls, width):
+        if width < 1.0:
+            return NavigationMode.Tight
+        if width < 1.2:
+            return NavigationMode.Narrow
+        return NavigationMode.Standard
+
+
 class Link(Object):
     """Link class"""
     ROUTE_TYPE_WALKWAY = 1
@@ -410,8 +425,6 @@ class Link(Object):
     ROUTE_TYPE_STAIRS = 6
     ROUTE_TYPE_SLOPE = 7
     ROUTE_TYPE_UNKNOWN = 99
-    ROUTE_NARROW_PATH_THRESHOLD = 1.2
-    ROUTE_NARROW_ANNOUNCE_THRESHOLD = 1.0
 
     @classmethod
     def marshal(cls, dic):
@@ -464,14 +477,8 @@ class Link(Object):
         return self.start_node.is_leaf or self.end_node.is_leaf
 
     @property
-    def is_narrow(self):
-        """wheather this links is narrow or not"""
-        return self.properties.hulop_road_width < Link.ROUTE_NARROW_PATH_THRESHOLD
-
-    @property
-    def need_narrow_announce(self):
-        """wheather this links is narrow or not"""
-        return self.properties.hulop_road_width < Link.ROUTE_NARROW_ANNOUNCE_THRESHOLD
+    def navigation_mode(self):
+        return NavigationMode.get_mode(self.properties.hulop_road_width)
 
     @property
     def length(self):

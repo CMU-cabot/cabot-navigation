@@ -174,6 +174,11 @@ void CaBotPlanner::configure(
     rclcpp::ParameterValue(defaultValue.max_iteration_count));
   node->get_parameter(name + ".max_iteration_count", options_.max_iteration_count);
 
+  declare_parameter_if_not_declared(
+    node, name + ".ignore_obstacles",
+    rclcpp::ParameterValue(defaultValue.ignore_obstacles));
+  node->get_parameter(name + ".ignore_obstacles", options_.ignore_obstacles);
+
   declare_parameter_if_not_declared(node, name + ".static_layer_name", rclcpp::ParameterValue("static_layer"));
   node->get_parameter(name + ".static_layer_name", static_layer_name_);
 
@@ -410,6 +415,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     if (param.get_name() == name_ + ".max_iteration_count") {
       options_.max_iteration_count = param.as_int();
     }
+    if (param.get_name() == name_ + ".ignore_obstacles") {
+      options_.ignore_obstacles = param.as_bool();
+    }
 
     // private
     if (param.get_name() == name_ + ".private.iteration_scale_min") {
@@ -532,8 +540,14 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
 
   int total_count = 0;
   DetourMode modes[3] = {DetourMode::RIGHT, DetourMode::LEFT, DetourMode::IGNORE};
+  int i = 0;
+  if (param.options.ignore_obstacles) {
+    plans[0].okay = false;
+    plans[1].okay = false;
+    i = 2;
+  }
   rclcpp::Rate r(1);
-  for (int i = 0; i < 3; i++) {
+  for (; i < 3; i++) {
     CaBotPlan & plan = plans[i];
     plan.detour_mode = modes[i];
 

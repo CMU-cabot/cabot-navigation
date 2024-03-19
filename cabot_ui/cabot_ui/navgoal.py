@@ -20,8 +20,10 @@
 
 import math
 import inspect
+from itertools import groupby
 import numpy
 import time
+import traceback
 
 from cabot_ui import geoutil, geojson
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
@@ -78,6 +80,9 @@ class GoalInterface(object):
     def please_return_position(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
+    def change_parameters(self, params):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
 
 def make_goals(delegate, groute, anchor, yaw=None):
     """
@@ -107,14 +112,13 @@ def make_goals(delegate, groute, anchor, yaw=None):
     goals = []
     route_objs = []
     index = 1
-    narrow = groute[1].is_narrow
 
     while index < len(groute):
         link_or_node = groute[index]
-        route_objs.append(link_or_node)
         index += 1
         if not isinstance(link_or_node, geojson.RouteLink):
             continue
+        route_objs.append(link_or_node)
         link = link_or_node
 
         # Handle Door POIs
@@ -271,23 +275,10 @@ def make_goals(delegate, groute, anchor, yaw=None):
             # CaBotRclPyUtil.info(goals[-1])
             route_objs = []
 
-        if link.is_narrow and not narrow:
-            narrow = True
-            goals.append(NavGoal(delegate, route_objs[:-1], anchor))
-            route_objs = [link]
-
-        if (not link.is_narrow) and narrow:
-            narrow = False
-            goals.append(NarrowGoal(delegate, route_objs[:-1], anchor))
-            route_objs = [link]
-
         # TODO: escalator
+
     if len(route_objs) > 0:
-        if narrow:
-            narrow = False
-            goals.append(NarrowGoal(delegate, route_objs, anchor, is_last=True))
-        else:
-            goals.append(NavGoal(delegate, route_objs, anchor, is_last=True))
+        goals.append(NavGoal(delegate, route_objs, anchor, is_last=True))
 
     if yaw is not None:
         goal_node = groute[-1]  # should be Node
@@ -389,7 +380,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
             path.poses[-1].pose.position.y = last_pose.position.y
 
     CaBotRclpyUtil.info(F"path {path}")
-    return (path, path.poses[-1] if len(path.poses) > 0 else None)
+    return (path, path.poses[-1] if len(path.poses) > 0 else None, navcog_route)
 
 
 def estimate_next_goal(goals, current_pose, current_floor):
@@ -419,6 +410,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
+        self._speed_limit = None
 
     def reset(self):
         self._is_completed = False
@@ -443,6 +435,10 @@ class Goal(geoutil.TargetPlace):
     @property
     def is_canceled(self):
         return self._is_canceled
+
+    @property
+    def speed_limit(self):
+        return self._speed_limit
 
     def exit(self):
         self.delegate.exit_goal(self)
@@ -513,7 +509,7 @@ class NavGoal(Goal):
     link and node:(R)     -----o-----
     link and node:(R)     -----o-----o
     """
-    DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/navigate_w_replanning_and_recovery.xml"
+    DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/cabot_navigate.xml"
     NEIGHBOR_THRESHOLD = 1.0
 
     def __init__(self, delegate, navcog_route, anchor, target_poi=None, set_back=(0, 0), **kwargs):
@@ -529,9 +525,17 @@ class NavGoal(Goal):
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
         self.anchor = anchor
-        (self.ros_path, last_pose) = create_ros_path(self.navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)
+        separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
+        self.navcog_routes = [create_ros_path(route,
+                                              self.anchor,
+                                              self.global_map_name,
+                                              target_poi=target_poi,
+                                              set_back=set_back) for route in separated_route]
+        last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
         self.handle = None
+        self.mode = None
+        self.route_index = 0
         super(NavGoal, self).__init__(delegate, angle=180, floor=navcog_route[-1].floor, pose_msg=last_pose, **kwargs)
 
     def _extract_pois(self):
@@ -545,8 +549,237 @@ class NavGoal(Goal):
                 temp.extend(item.pois)
         return temp
 
+    @util.setInterval(0.2, times=1)
+    def set_speed_limit(self, limit, func, timeout, interval):
+        CaBotRclpyUtil.info(f"set speed limit = {limit}, timeout = {timeout}")
+        self._speed_limit = limit
+        if limit > 0:
+            return self.set_speed_limit(limit-interval, func, timeout, interval)
+        if func:
+            func()
+        if timeout > 0:
+            return self.set_speed_limit(0.0, None, timeout-interval, interval)
+        self._speed_limit = None
+
+    def get_parameters_for(self, mode):
+        if mode == geojson.NavigationMode.Standard:
+            return [{
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_adjusted_center",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_adjusted_minimum_path_width",
+                "param_value": 0.5
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_min_width",
+                "param_value": 0.5
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_width",
+                "param_value": 2.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.min_iteration_count",
+                "param_value": 500
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.max_iteration_count",
+                "param_value": 1000
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.ignore_obstacles",
+                "param_value": False
+            }, {
+                "node_name": "/footprint_publisher",
+                "param_name": "footprint_mode",
+                "param_value": 0
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "FollowPath.max_vel_x",
+                "param_value": 1.0
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "FollowPath.sim_time",
+                "param_value": 1.7
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "cabot_goal_checker.xy_goal_tolerance",
+                "param_value": 0.5
+            }, {
+                "node_name": "/global_costmap/global_costmap",
+                "param_name": "people_obstacle_layer.people_enabled",
+                "param_value": True
+            }, {
+                "node_name": "/global_costmap/global_costmap",
+                "param_name": "inflation_layer.inflation_radius",
+                "param_value": 0.75
+            }, {
+                "node_name": "/local_costmap/local_costmap",
+                "param_name": "inflation_layer.inflation_radius",
+                "param_value": 0.75
+            }, {
+                "node_name": "/footprint_publisher",
+                "param_name": "footprint_mode",
+                "param_value": 0
+            }, {
+                "node_name": "/cabot/lidar_speed_control_node",
+                "param_name": "min_distance",
+                "param_value": 1.0
+            }]
+
+        if mode == geojson.NavigationMode.Narrow:
+            return [{
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_adjusted_center",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_adjusted_minimum_path_width",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_min_width",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_width",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.min_iteration_count",
+                "param_value": 5
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.max_iteration_count",
+                "param_value": 10
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.ignore_obstacles",
+                "param_value": True
+            }, {
+                "node_name": "/footprint_publisher",
+                "param_name": "footprint_mode",
+                "param_value": 0
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "FollowPath.max_vel_x",
+                "param_value": 0.5
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "FollowPath.sim_time",
+                "param_value": 0.5
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "cabot_goal_checker.xy_goal_tolerance",
+                "param_value": 0.1
+            }, {
+                "node_name": "/global_costmap/global_costmap",
+                "param_name": "people_obstacle_layer.people_enabled",
+                "param_value": False
+            }, {
+                "node_name": "/global_costmap/global_costmap",
+                "param_name": "inflation_layer.inflation_radius",
+                "param_value": 0.45
+            }, {
+                "node_name": "/local_costmap/local_costmap",
+                "param_name": "inflation_layer.inflation_radius",
+                "param_value": 0.45
+            }, {
+                "node_name": "/footprint_publisher",
+                "param_name": "footprint_mode",
+                "param_value": 3
+            }, {
+                "node_name": "/cabot/lidar_speed_control_node",
+                "param_name": "min_distance",
+                "param_value": 0.25
+            }]
+        if mode == geojson.NavigationMode.Tight:
+            return [{
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_adjusted_center",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_adjusted_minimum_path_width",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_min_width",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.path_width",
+                "param_value": 0.0
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.min_iteration_count",
+                "param_value": 5
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.max_iteration_count",
+                "param_value": 10
+            }, {
+                "node_name": "/planner_server",
+                "param_name": "CaBot.ignore_obstacles",
+                "param_value": True
+            }, {
+                "node_name": "/footprint_publisher",
+                "param_name": "footprint_mode",
+                "param_value": 0
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "FollowPath.max_vel_x",
+                "param_value": 0.5
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "FollowPath.sim_time",
+                "param_value": 0.5
+            }, {
+                "node_name": "/controller_server",
+                "param_name": "cabot_goal_checker.xy_goal_tolerance",
+                "param_value": 0.1
+            }, {
+                "node_name": "/global_costmap/global_costmap",
+                "param_name": "people_obstacle_layer.people_enabled",
+                "param_value": False
+            }, {
+                "node_name": "/global_costmap/global_costmap",
+                "param_name": "inflation_layer.inflation_radius",
+                "param_value": 0.25
+            }, {
+                "node_name": "/local_costmap/local_costmap",
+                "param_name": "inflation_layer.inflation_radius",
+                "param_value": 0.25
+            }, {
+                "node_name": "/footprint_publisher",
+                "param_name": "footprint_mode",
+                "param_value": 1
+            }, {
+                "node_name": "/cabot/lidar_speed_control_node",
+                "param_name": "min_distance",
+                "param_value": 0.25
+            }]
+
+    def check_mode(self):
+        new_mode = self.navcog_routes[self.route_index][2][0].navigation_mode
+        CaBotRclpyUtil.info(F"NavGoal.check_mode {self.mode}, {new_mode}")
+        if self.mode == new_mode:
+            return
+        if new_mode == geojson.NavigationMode.Tight:
+            self.set_speed_limit(1.0, self.delegate.please_follow_behind, 2.5, 0.1)
+        if self.mode == geojson.NavigationMode.Tight:
+            self.set_speed_limit(0.5, self.delegate.please_return_position, 2.5, 0.1)
+        self.mode = new_mode
+
+        def callback(*arguments):
+            CaBotRclpyUtil.info(f"change_parameters: {arguments}")
+        self.delegate.change_parameters(self.get_parameters_for(new_mode), callback)
+
     def enter(self):
         CaBotRclpyUtil.info("NavGoal enter")
+        self.check_mode()
         # reset social distance setting if necessary
         if self.delegate.initial_social_distance is not None and self.delegate.current_social_distance is not None \
             and (self.delegate.initial_social_distance.x != self.delegate.current_social_distance.x or
@@ -556,7 +789,7 @@ class NavGoal(Goal):
 
         CaBotRclpyUtil.info("NavGoal set social distance")
         # publish navcog path
-        path = self.ros_path
+        path = self.navcog_routes[self.route_index][0]
         path.header.stamp = CaBotRclpyUtil.now().to_msg()
         self.delegate.publish_path(path)
         CaBotRclpyUtil.info("NavGoal publish path")
@@ -566,17 +799,21 @@ class NavGoal(Goal):
         # bt_navigator will path only a pair of consecutive poses in the path to the plugin
         # so we use navigate_to_pose and planner will listen the published path
         # self.delegate.navigate_through_poses(self.ros_path.poses[1:], NavGoal.DEFAULT_BT_XML, self.done_callback)
-        self.delegate.navigate_to_pose(self.ros_path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
+        self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
         if self.prevent_callback:
             self.prevent_callback = False
             return
 
-        CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}")
-        status = future.result().status
-        self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
-        self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
+        CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
+        self.route_index += 1
+        if self.route_index == len(self.navcog_routes):
+            status = future.result().status
+            self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
+            self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
+        else:
+            self.enter()
 
     def update_goal(self, goal):
         CaBotRclpyUtil.info("Updated goal position")
@@ -886,74 +1123,6 @@ class ElevatorOutGoal(ElevatorGoal):
 
     def completed(self, pose, floor):
         return self.same_floor(floor) and self.distance_to(pose) > self.set_forward_distance
-
-
-class NarrowGoal(NavGoal):
-    NARROW_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_narrow.xml"
-    LITTLE_NARROW_BT_XML = "package://cabot_bt/behavior_trees/navigate_for_little_narrow.xml"
-
-    def __init__(self, delegate, navcog_route, anchor, **kwargs):
-        # if one of the link is very narrow, it needs to announce
-        self._need_narrow_announce = False
-        for link_or_node in navcog_route:
-            CaBotRclpyUtil.info(F"{link_or_node}")
-            if not isinstance(link_or_node, geojson.RouteLink):
-                continue
-            self._need_narrow_announce = self._need_narrow_announce or link_or_node.need_narrow_announce
-
-        super(NarrowGoal, self).__init__(delegate, navcog_route, anchor, **kwargs)
-
-    def enter(self):
-        CaBotRclpyUtil.info("NarrowGoal enter")
-        # reset social distance setting if necessary
-        if self.delegate.initial_social_distance is not None and self.delegate.current_social_distance is not None \
-            and (self.delegate.initial_social_distance.x != self.delegate.current_social_distance.x or
-                 self.delegate.initial_social_distance.y != self.delegate.current_social_distance.y):
-            msg = self.delegate.initial_social_distance
-            self.delegate.set_social_distance_pub.publish(msg)
-
-        CaBotRclpyUtil.info("NarrowGoal set social distance")
-        # publish navcog path
-        path = self.ros_path
-        path.header.stamp = CaBotRclpyUtil.now().to_msg()
-        self.delegate.publish_path(path)
-        CaBotRclpyUtil.info("NarrowGoal publish path")
-
-        if self._need_narrow_announce:
-            self.delegate.please_follow_behind()
-            self.wait_for_announce()
-        else:
-            self.narrow_enter(NarrowGoal.LITTLE_NARROW_BT_XML)
-
-    def done_callback(self, future):
-        CaBotRclpyUtil.info("NarrowGoal completed")
-        status = future.result().status
-        self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
-        if self._is_canceled:
-            return
-        if self._need_narrow_announce:
-            self.delegate.please_return_position()
-            self.wait_next_navi(future)
-        else:
-            self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
-
-    def narrow_enter(self, bt):
-        super(NavGoal, self).enter()
-        # wanted a path (not only a pose) in planner plugin, but it is not possible
-        # bt_navigator will path only a pair of consecutive poses in the path to the plugin
-        # so we use navigate_to_pose and planner will listen the published path
-        # basically the same as a NavGoal, use BT_XML that makes the footprint the same as an elevator to pass through narrow spaces
-        # self.delegate.navigate_through_poses(self.ros_path.poses[1:], NavGoal.DEFAULT_BT_XML, self.done_callback)
-        self.delegate.navigate_to_pose(self.ros_path.poses[-1], bt, self.goal_handle_callback, self.done_callback)
-
-    @util.setInterval(5, times=1)
-    def wait_for_announce(self):
-        self.narrow_enter(NarrowGoal.NARROW_BT_XML)
-
-    @util.setInterval(5, times=1)
-    def wait_next_navi(self, future):
-        status = future.result().status
-        self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
 
 
 """
