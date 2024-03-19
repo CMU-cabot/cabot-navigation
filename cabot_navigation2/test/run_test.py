@@ -928,7 +928,10 @@ def main():
 
 def exit_hook(*args):
     logger.info(F"Exiting the program. {args}")
-    rclpy.shutdown()
+    try:
+        rclpy.shutdown()
+    except:
+        pass
     original_exit(*args)
 
 
