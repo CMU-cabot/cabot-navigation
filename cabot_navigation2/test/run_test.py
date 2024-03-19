@@ -77,7 +77,7 @@ def wait_test(timeout=60):
             t = kwargs['seconds'] if 'seconds' in kwargs else timeout
             t = kwargs['timeout'] if 'timeout' in kwargs else t+5  # make sure not timeout if wait seconds is specified
             action_name = kwargs['action_name'] if 'action_name' in kwargs else function.__name__
-            case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': False, 'error': None}
+            case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': None, 'error': None}
             test_action = {'uuid': str(uuid.uuid4())}
 
             logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
@@ -94,7 +94,13 @@ def wait_test(timeout=60):
                 # logger.error("Timeout")
                 # continue other test
             else:
-                case['success'] = True
+                if case['success'] is None:
+                    case['success'] = True
+                else:
+                    if not case['success']:
+                        logger.error(F"{case}")
+                    else:
+                        logger.debug(F"{case}")
             logger.debug(f"finish: {case}")
             tester.register_action_result(case['target'], case)
             return result
@@ -279,6 +285,22 @@ class Tester:
         self.evaluator.stop()
 
     # shorthand functions
+    def check_position(self, **kwargs):
+        x = kwargs['x'] if 'x' in kwargs else 0
+        y = kwargs['y'] if 'y' in kwargs else 0
+        tolerance = kwargs['tolerance'] if 'tolerance' in kwargs else 0.5
+        floor = kwargs['floor'] if 'floor' in kwargs else 0
+        self.wait_topic(**dict(
+            dict(
+                action_name=f'check_position ({x}, {y})[f={floor}] < {tolerance}',
+                topic_type="cabot_msgs/msg/PoseLog",
+                topic="/cabot/pose_log",
+                condition=F"math.sqrt((msg.pose.position.x - {x})**2 + (msg.pose.position.y - {y})**2) < {tolerance} and msg.floor == {floor}",
+                once=True
+            ),
+            **kwargs)
+        )
+
     def check_collision(self, **kwargs):
         return self.check_topic_error(**dict(
             dict(
@@ -490,7 +512,7 @@ class Tester:
 
         def topic_callback(msg):
             try:
-                context = {'msg': msg}
+                context = {'msg': msg, 'math': math}
                 exec(f"result=({condition})", context)
                 if context['result']:
                     logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
@@ -505,6 +527,7 @@ class Tester:
         case['done'] = True
 
         def cancel_func():
+            logger.debug(F"cancel {case}")
             self.cancel_subscription(case)
         return cancel_func
 
@@ -518,7 +541,7 @@ class Tester:
 
         def topic_callback(msg):
             try:
-                context = {'msg': msg}
+                context = {'msg': msg, 'math': math}
                 exec(f"result=({condition})", context)
                 if context['result']:
                     logger.debug(f"success {condition}")
@@ -530,7 +553,7 @@ class Tester:
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
         case['done'] = True
-        case['success'] = False
+        case['success'] = None
 
     @wait_test()
     def reset_position(self, case, test_action):
@@ -570,7 +593,7 @@ class Tester:
                 # define callback to check localize status to be tracking
                 def topic_callback(msg):
                     try:
-                        context = {'msg': msg}
+                        context = {'msg': msg, 'math': math}
                         exec(f"result=({condition})", context)
                         if context['result']:
                             case['done'] = True
@@ -638,13 +661,19 @@ class Tester:
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         condition = test_action['condition']
+        once = test_action['once'] if 'once' in test_action else False
 
         def topic_callback(msg):
             try:
-                context = {'msg': msg}
+                context = {'msg': msg, 'math': math}
                 exec(f"result=({condition})", context)
                 if context['result']:
                     case['done'] = True
+                    self.cancel_subscription(case)
+                elif once:
+                    case['done'] = True
+                    case['success'] = False
+                    case['msg'] = msg
                     self.cancel_subscription(case)
             except:  # noqa: #722
                 logger.error(traceback.format_exc())
