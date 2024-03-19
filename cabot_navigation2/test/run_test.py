@@ -897,5 +897,15 @@ def main():
     tester.test(mod, func_pat, wait_ready=options.wait_ready)
 
 
+def exit_hook(*args):
+    logger.info(F"Exiting the program. {args}")
+    rclpy.shutdown()
+    original_exit(*args)
+
+
+original_exit = sys.exit
+sys.exit = exit_hook  # Set the exit hook
+
+
 if __name__ == "__main__":
     main()
