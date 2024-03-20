@@ -398,7 +398,7 @@ void CaBotPlannerParam::setCost()
   // ignore moving people/obstacles/queue people
   for (auto it = people_msg.people.begin(); it != people_msg.people.end(); it++) {
     bool stationary = (std::find(it->tags.begin(), it->tags.end(), "stationary") != it->tags.end());
-    if (!stationary) {
+    if (!stationary || options.ignore_people) {
       clearCostAround(*it);
     }
   }

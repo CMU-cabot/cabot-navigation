@@ -519,7 +519,7 @@ class Nav2Params:
     CaBot.path_width: 2.0
     CaBot.min_iteration_count: 500
     CaBot.max_iteration_count: 1000
-    CaBot.ignore_obstacles: False
+    CaBot.ignore_people: False
 /footprint_publisher:
     footprint_mode: 0
 /controller_server:
@@ -542,7 +542,7 @@ class Nav2Params:
     CaBot.path_width: 0.0
     CaBot.min_iteration_count: 5
     CaBot.max_iteration_count: 10
-    CaBot.ignore_obstacles: True
+    CaBot.ignore_people: True
 /footprint_publisher:
     footprint_mode: 3
 /controller_server:
@@ -565,7 +565,7 @@ class Nav2Params:
     CaBot.path_width: 0.0
     CaBot.min_iteration_count: 5
     CaBot.max_iteration_count: 10
-    CaBot.ignore_obstacles: True
+    CaBot.ignore_people: True
 /footprint_publisher:
     footprint_mode: 1
 /controller_server:

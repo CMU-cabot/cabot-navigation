@@ -902,8 +902,8 @@ def main():
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
 
-    ros2Handler = ROS2LogHandler(node)
-    logger.addHandler(ros2Handler)
+    # ros2Handler = ROS2LogHandler(node)
+    # logger.addHandler(ros2Handler)
 
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
