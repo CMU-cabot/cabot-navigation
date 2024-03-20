@@ -930,7 +930,7 @@ def exit_hook(status_code):
     logger.info(F"Exiting the program. {status_code}")
     try:
         rclpy.shutdown()
-    except:
+    except:  # noqa: 722
         logger.info(traceback.format_exc())
     original_exit(status_code)
 

@@ -32,7 +32,7 @@ from rcl_interfaces.srv import SetParameters, GetParameters
 import rcl_interfaces.msg
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from rclpy.parameter import Parameter, ParameterType
+from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import tf2_ros
@@ -983,7 +983,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._navigate_next_sub_goal()
 
     # GoalInterface
-    
+
     def activity_log(self, category="", text="", memo=""):
         self.delegate.activity_log(category, text, memo)
 
