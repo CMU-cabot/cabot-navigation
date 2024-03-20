@@ -82,7 +82,7 @@ class CaBotPlannerParam;
 class CaBotPlan
 {
 public:
-  explicit CaBotPlan(CaBotPlannerParam & param_);
+  explicit CaBotPlan(CaBotPlannerParam & param_, DetourMode detour_mode_);
   CaBotPlannerParam & param;
   std::vector<Node> nodes;
   std::vector<Node> nodes_backup;
@@ -100,7 +100,6 @@ public:
   nav_msgs::msg::Path getPlan(bool normalized, float normalize_length = 0.02);
   bool checkGoAround();
   bool checkPathIsOkay();
-  bool checkPointIsOkay(Point & point, DetourMode detour_mode);
 };
 
 class CaBotPlannerParam
@@ -143,8 +142,9 @@ public:
   void mapToWorld(float mx, float my, float & wx, float & wy) const;
   int getIndex(float x, float y) const;
   int getIndexByPoint(Point & p) const;
-  std::vector<Node> getNodes() const;
+  std::vector<Node> getNodes(DetourMode detour_mode) const;
   std::vector<Obstacle> getObstaclesNearPoint(const Point & node, bool collision) const;
+  bool checkPointIsOkay(Point & point, DetourMode detour_mode) const;
 
   // internal
   rclcpp::Logger logger{rclcpp::get_logger("CaBotPlannerParam")};

@@ -518,11 +518,15 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
 
   if (param.adjustPath() == false) {return nav_msgs::msg::Path();}
 
-  CaBotPlan plans[] = {CaBotPlan(param), CaBotPlan(param), CaBotPlan(param)};
+  CaBotPlan plans[] = {
+    CaBotPlan(param, DetourMode::RIGHT),
+    CaBotPlan(param, DetourMode::LEFT),
+    CaBotPlan(param, DetourMode::IGNORE)
+  };
   CaBotPlan * plan = &plans[0];
 
   // find obstacles near the path
-  param.findObstacles(plan->getTargetNodes());
+  param.findObstacles(plan->nodes);
 
   auto t1 = std::chrono::system_clock::now();
   auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
@@ -539,7 +543,6 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
     param.options.interim_plan_publish_interval);
 
   int total_count = 0;
-  DetourMode modes[3] = {DetourMode::RIGHT, DetourMode::LEFT, DetourMode::IGNORE};
   int i = 0;
   if (param.options.ignore_people) {
     plans[0].okay = false;
@@ -549,7 +552,6 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
   rclcpp::Rate r(1);
   for (; i < 3; i++) {
     CaBotPlan & plan = plans[i];
-    plan.detour_mode = modes[i];
 
     int count = 0;
     int reduce = 0;
