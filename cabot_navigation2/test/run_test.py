@@ -926,13 +926,13 @@ def main():
     tester.test(mod, func_pat, wait_ready=options.wait_ready)
 
 
-def exit_hook(*args):
-    logger.info(F"Exiting the program. {args}")
+def exit_hook(status_code):
+    logger.info(F"Exiting the program. {status_code}")
     try:
         rclpy.shutdown()
     except:
-        pass
-    original_exit(*args)
+        logger.info(traceback.format_exc())
+    original_exit(status_code)
 
 
 original_exit = sys.exit

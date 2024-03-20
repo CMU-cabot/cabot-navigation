@@ -28,7 +28,8 @@ import traceback
 
 # ROS
 import rclpy
-from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.srv import SetParameters, GetParameters
+import rcl_interfaces.msg
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.parameter import Parameter, ParameterType
@@ -824,9 +825,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 else:
                     limit = min(limit, self._max_speed)
                 self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
-        if self._current_goal:
-            if self._current_goal.speed_limit is not None and self._current_goal.speed_limit < limit:
-                limit = self._current_goal.speed_limit
 
         msg = std_msgs.msg.Float32()
         msg.data = limit
@@ -1209,24 +1207,30 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def change_parameters(self, params, callback):
         self.param_manager.change_parameters(params, callback)
 
+    def request_parameters(self, params, callback):
+        self.param_manager.request_parameters(params, callback)
+
 
 class NavigationParamManager:
     def __init__(self, node):
         self.node = node
         self.clients = {}
+        self.callback_group = MutuallyExclusiveCallbackGroup()
 
-    def get_client(self, node_name):
-        if node_name not in self.clients:
-            self.clients[node_name] = self.node.create_client(SetParameters, f'{node_name}/set_parameters')
-        while not self.clients[node_name].wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info('Waiting for the target node to become available...')
-        return self.clients[node_name]
+    def get_client(self, node_name, service_type, service_name):
+        key = f'{node_name}/{service_name}'
+        if key not in self.clients:
+            self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
+        while not self.clients[key].wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(f'Waiting for the {key} to become available...')
+        return self.clients[key]
 
-    def change_parameter(self, node_name, param_name, param_value, callback):
+    def change_parameter(self, node_name, param_dict, callback):
         request = SetParameters.Request()
-        new_parameter = Parameter(param_name, value=param_value)
-        request.parameters.append(new_parameter.to_parameter_msg())
-        future = self.get_client(node_name).call_async(request)
+        for param_name, param_value in param_dict.items():
+            new_parameter = Parameter(param_name, value=param_value)
+            request.parameters.append(new_parameter.to_parameter_msg())
+        future = self.get_client(node_name, SetParameters, "set_parameters").call_async(request)
         future.add_done_callback(callback)
 
     def change_parameters(self, params, callback):
@@ -1234,13 +1238,43 @@ class NavigationParamManager:
 
         def sub_callback(future):
             self.count += 1
-            self.node.get_logger().info(f"sub_callback {self.count} {future.result()}")
             if self.count == len(params):
+                self.node.get_logger().info(f"change_parameter sub_callback {self.count} {len(params)} {future.result()}")
                 callback()
-        for param in params:
-            param['callback'] = sub_callback
-            self.node.get_logger().info(f"call change_parameter {param['node_name']}: {param['param_name']} = {param['param_value']}")
+        for node_name, param_dict in params.items():
+            self.node.get_logger().info(f"call change_parameter {node_name}, {param_dict}")
             try:
-                self.change_parameter(**param)
-            except:
+                self.change_parameter(node_name, param_dict, sub_callback)
+            except:  # noqa: 722
+                self.node.get_logger().error(traceback.format_exc())
+
+    def request_parameter(self, node_name, param_list, callback):
+        def done_callback(future):
+            callback(node_name, param_list, future)
+        request = GetParameters.Request()
+        request.names = param_list
+        future = self.get_client(node_name, GetParameters, "get_parameters").call_async(request)
+        future.add_done_callback(done_callback)
+
+    def request_parameters(self, params, callback):
+        self.rcount = 0
+        self.result = {}
+
+        def sub_callback(node_name, param_list, future):
+            self.rcount += 1
+            self.result[node_name] = {}
+            for name, value in zip(param_list, future.result().values):
+                msg = rcl_interfaces.msg.Parameter()
+                msg.name = name
+                msg.value = value
+                param = Parameter.from_parameter_msg(msg)
+                self.result[node_name][name] = param.value
+            if self.rcount == len(params):
+                self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, {future.result()}")
+                callback(self.result)
+        for node_name, param_list in params.items():
+            self.node.get_logger().info(f"call request_parameter {node_name}, {param_list}")
+            try:
+                self.request_parameter(node_name, param_list, sub_callback)
+            except:  # noqa: 722
                 self.node.get_logger().error(traceback.format_exc())

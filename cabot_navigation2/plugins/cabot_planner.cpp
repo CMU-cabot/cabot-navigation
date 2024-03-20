@@ -415,9 +415,6 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     if (param.get_name() == name_ + ".max_iteration_count") {
       options_.max_iteration_count = param.as_int();
     }
-    if (param.get_name() == name_ + ".ignore_obstacles") {
-      options_.ignore_obstacles = param.as_bool();
-    }
 
     // private
     if (param.get_name() == name_ + ".private.iteration_scale_min") {
