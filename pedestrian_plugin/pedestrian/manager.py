@@ -48,13 +48,13 @@ class PedestrianManager():
         self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
         self.pedestrian_plugin_update_client = self.node.create_client(PluginUpdate, '/pedestrian_plugin_update')
-        self.timer = self.node.create_timer(0.5, self.check_service)
+        self.timer = self.node.create_timer(1, self.check_service)
         self.serviceReady = False
         self.actorMap = {}
         self.futures = {}
 
     def check_service(self):
-        if self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=0.5):
+        if self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=0):
             logging.debug("service available")
             self.serviceReady = True
             self.timer.cancel()
