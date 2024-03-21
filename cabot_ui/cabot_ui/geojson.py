@@ -768,6 +768,20 @@ class POI(Facility, geoutil.TargetPlace):
     def reset(self):
         self.reset_target()
 
+    # distance is adjusted to by the TargetPoint orientation
+    #                     <- T Target (orientation)
+    #                        |
+    #                        |
+    # robot R ---distance--- o
+    #
+    def distance_to(self, robot):
+        pose_TR = geoutil.Pose.pose_from_points(self, robot)
+        yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
+        dist_TR = super(POI, self).distance_to(robot)
+        adjusted = dist_TR * math.cos(yaw)
+        # CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+        return adjusted
+
 
 class DoorPOI(POI):
     """POI class"""

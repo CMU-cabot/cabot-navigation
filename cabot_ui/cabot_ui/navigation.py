@@ -800,16 +800,19 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.delegate.passed_poi(poi=entrance)
 
     def _check_speed_limit(self, current_pose):
+        def max_v(D, A, d):
+            return (-2 * A * d + math.sqrt(4 * A * A * d * d + 8 * A * D)) / 2
+
         # check speed limit
         limit = self._max_speed
         for poi in self.speed_pois:
             dist = poi.distance_to(current_pose)
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
-                    limit = min(limit, max(poi.limit, math.sqrt(2.0 * dist * self._max_acc)))
-                else:
-                    limit = min(limit, self._max_speed)
-                self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
+                    limit = min(limit, max(poi.limit, max_v(max(0, dist-0.5), 0.5, 0.5)))
+                if limit < self._max_speed:
+                    self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
+                    self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
 
         msg = std_msgs.msg.Float32()
         msg.data = limit
