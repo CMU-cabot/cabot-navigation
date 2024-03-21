@@ -263,6 +263,10 @@ private:
         speed_limit = std::min(speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
       }
 
+      if (speed_limit < min_speed_) {
+        speed_limit = 0;
+      }
+
       RCLCPP_INFO(
         get_logger(), "PeopleSpeedControl people_limit %s dist from path=%.2f x=%.2f y=%.2f vx=%.2f"
         " vy=%.2f pt=%.2f sdx=%.2f sdy=%.2f dist=%.2f limit=%.2f",
