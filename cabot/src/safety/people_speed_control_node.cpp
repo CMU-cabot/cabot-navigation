@@ -168,7 +168,6 @@ public:
 
   rcl_interfaces::msg::SetParametersResult param_set_callback(const std::vector<rclcpp::Parameter> params)
   {
-
     auto results = std::make_shared<rcl_interfaces::msg::SetParametersResult>();
     for (auto && param : params) {
       if (!has_parameter(param.get_name())) {
@@ -192,6 +191,8 @@ public:
         social_distance_y_ = param.as_double();
       }
     }
+    results->successful = true;
+    return *results;
   }
 
 private:

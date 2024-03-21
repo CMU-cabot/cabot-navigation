@@ -124,8 +124,13 @@ def make_goals(delegate, groute, anchor, yaw=None):
         index += 1
         if not isinstance(link_or_node, geojson.RouteLink):
             continue
-        route_objs.append(link_or_node)
+        # This is a hulistic rule to deal with the last leaf link towards doorway in corridor
+        # It needs to check if the last link has perpendicular turn
+        # if the link is a leaf of the graph and short
         link = link_or_node
+        if link.target_node.is_leaf and link.length < 3.0:
+            continue
+        route_objs.append(link)
 
         # Handle Door POIs
         #
@@ -320,13 +325,6 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
                 # if last item is Point (Node), it would be same as the previous link target node
                 continue
 
-        # TODO: This is a hulistic rule to deal with the last leaf link towards doorway in corridor
-        # It needs to check if the last link has perpendicular turn
-        # if the link is a leaf of the graph and short
-        if isinstance(item, geojson.RouteLink):
-            if item.target_node.is_leaf and item.length < 3.0:
-                continue
-
         if hasattr(item, "navigation_mode"):
             mode = item.navigation_mode
 
@@ -421,6 +419,7 @@ class Goal(geoutil.TargetPlace):
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
         self._saved_params = None
+        self._exiting = False
 
     def reset(self):
         self._is_completed = False
@@ -492,14 +491,22 @@ class Goal(geoutil.TargetPlace):
     def is_canceled(self):
         return self._is_canceled
 
+    @property
+    def is_exiting(self):
+        return self._exiting
+
     def exit(self, callback):
         def done_change_parameters_callback(resutl):
             self._saved_params = None
+            self._exiting = False
             callback()
+        CaBotRclpyUtil.info("Goal.exit is called")
+        self._exiting = True
         self.delegate.exit_goal(self)
         if self._saved_params:
             self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
         else:
+            self._exiting = False
             callback()
 
     @property
@@ -586,6 +593,9 @@ class Nav2Params:
     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
     min_distance: 1.0
+/cabot/people_speed_control_node:
+    social_distance_x: 2.0
+    social_distance_y: 0.5
 """
         if mode == geojson.NavigationMode.Narrow:
             params = """
@@ -609,6 +619,9 @@ class Nav2Params:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
     min_distance: 0.25
+/cabot/people_speed_control_node:
+    social_distance_x: 1.0
+    social_distance_y: 1.0
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -632,6 +645,9 @@ class Nav2Params:
     inflation_layer.inflation_radius: 0.25
 /cabot/lidar_speed_control_node:
     min_distance: 0.25
+/cabot/people_speed_control_node:
+    social_distance_x: 1.0
+    social_distance_y: 1.0
 """
         data = yaml.safe_load(params)
         return data
@@ -750,6 +766,7 @@ class NavGoal(Goal):
             super(NavGoal, self).enter()
 
     def _enter(self):
+        CaBotRclpyUtil.info("NavGoal._enter is called")
         # publish navcog path
         path = self.navcog_routes[self.route_index][0]
         path.header.stamp = CaBotRclpyUtil.now().to_msg()

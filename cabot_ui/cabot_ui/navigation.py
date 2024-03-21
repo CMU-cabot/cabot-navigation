@@ -956,6 +956,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if not goal.is_completed:
             return
 
+        if goal.is_exiting:
+            return
+
         def goal_exit_callback():
             self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
             self._current_goal = None
@@ -1210,27 +1213,30 @@ class NavigationParamManager:
         return self.clients[key]
 
     def change_parameter(self, node_name, param_dict, callback):
+        def done_callback(future):
+            callback(node_name, future)
         request = SetParameters.Request()
         for param_name, param_value in param_dict.items():
             new_parameter = Parameter(param_name, value=param_value)
             request.parameters.append(new_parameter.to_parameter_msg())
         future = self.get_client(node_name, SetParameters, "set_parameters").call_async(request)
-        future.add_done_callback(callback)
+        future.add_done_callback(done_callback)
 
     def change_parameters(self, params, callback):
-        self.count = 0
-
-        def sub_callback(future):
-            self.count += 1
-            if self.count == len(params):
-                self.node.get_logger().info(f"change_parameter sub_callback {self.count} {len(params)} {future.result()}")
+        def sub_callback(node_name, future):
+            del params[node_name]
+            self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result()}")
+            if len(params) == 0:
                 callback(future.result())
+            else:
+                self.change_parameters(params, callback)
         for node_name, param_dict in params.items():
             self.node.get_logger().info(f"call change_parameter {node_name}, {param_dict}")
             try:
                 self.change_parameter(node_name, param_dict, sub_callback)
             except:  # noqa: 722
                 self.node.get_logger().error(traceback.format_exc())
+            break
 
     def request_parameter(self, node_name, param_list, callback):
         def done_callback(future):
