@@ -79,6 +79,7 @@ public:
   tf2_ros::Buffer * tfBuffer;
   nav_msgs::msg::Odometry last_odom_;
   nav_msgs::msg::Path last_plan_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
 
   explicit PeopleSpeedControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("people_speed_control_node", options),
@@ -152,6 +153,9 @@ public:
     msg.y = social_distance_y_;
     get_social_distance_pub_->publish(msg);
 
+    callback_handler_ =
+      add_on_set_parameters_callback(std::bind(&PeopleSpeedControlNode::param_set_callback, this, std::placeholders::_1));
+
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
       max_speed_, social_distance_x_, social_distance_y_);
@@ -160,6 +164,34 @@ public:
   ~PeopleSpeedControlNode()
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Destructor");
+  }
+
+  rcl_interfaces::msg::SetParametersResult param_set_callback(const std::vector<rclcpp::Parameter> params)
+  {
+
+    auto results = std::make_shared<rcl_interfaces::msg::SetParametersResult>();
+    for (auto && param : params) {
+      if (!has_parameter(param.get_name())) {
+        continue;
+      }
+      RCLCPP_DEBUG(get_logger(), "change param %s", param.get_name().c_str());
+
+      if (param.get_name() == "max_speed_") {
+        max_speed_ = param.as_double();
+      }
+      if (param.get_name() == "min_speed_") {
+        min_speed_ = param.as_double();
+      }
+      if (param.get_name() == "max_acc_") {
+        max_acc_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_x") {
+        social_distance_x_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_y") {
+        social_distance_y_ = param.as_double();
+      }
+    }
   }
 
 private:
@@ -280,6 +312,7 @@ private:
     msg.y = social_distance_y_;
     get_social_distance_pub_->publish(msg);
 
+    RCLCPP_ERROR(get_logger(), "PeopleSpeedControl social distance with topic is deprecated");
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl setSocialDistanceCallback social_distance=(%.2f, %.2f)",
       social_distance_x_, social_distance_y_);

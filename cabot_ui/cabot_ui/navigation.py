@@ -383,14 +383,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
-        self.initial_social_distance = None
-        self.current_social_distance = None
-        get_social_distance_topic = node.declare_parameter("get_social_distance_topic", "/get_social_distance").value
-        self.get_social_distance_sub = node.create_subscription(geometry_msgs.msg.Point, get_social_distance_topic,
-                                                                self._get_social_distance_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        set_social_distance_topic = node.declare_parameter("set_social_distance_topic", "/set_social_distance").value
-        self.set_social_distance_pub = node.create_publisher(geometry_msgs.msg.Point, set_social_distance_topic, 10, callback_group=MutuallyExclusiveCallbackGroup())
-
         self._process_queue = []
         self._process_timer = node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
@@ -486,13 +478,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_msg = msg
         names = [person.name for person in self.current_queue_msg.people]
         self._logger.info(F"Current people in queue {names}", throttle_duration_sec=1)
-
-    def _get_social_distance_callback(self, msg):
-        self.current_social_distance = msg
-        if self.initial_social_distance is None:
-            self.initial_social_distance = self.current_social_distance
-        self._logger.info(F"Current social distance parameter is {self.current_social_distance}",
-                          throttle_duration_sec=3)
 
     def _get_queue_interval_callback(self, msg):
         self.current_queue_interval = msg.data
@@ -971,16 +956,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if not goal.is_completed:
             return
 
-        goal.exit()
-        self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
-
-        self._current_goal = None
-        if goal.is_last:
-            # keep this for test
-            self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
-            self.delegate.have_arrived(goal)
-
-        self._navigate_next_sub_goal()
+        def goal_exit_callback():
+            self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
+            self._current_goal = None
+            if goal.is_last:
+                # keep this for test
+                self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
+                self.delegate.have_arrived(goal)
+            self._navigate_next_sub_goal()
+        goal.exit(goal_exit_callback)
 
     # GoalInterface
 
@@ -1240,7 +1224,7 @@ class NavigationParamManager:
             self.count += 1
             if self.count == len(params):
                 self.node.get_logger().info(f"change_parameter sub_callback {self.count} {len(params)} {future.result()}")
-                callback()
+                callback(future.result())
         for node_name, param_dict in params.items():
             self.node.get_logger().info(f"call change_parameter {node_name}, {param_dict}")
             try:

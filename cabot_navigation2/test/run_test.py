@@ -929,6 +929,7 @@ def main():
 def exit_hook(status_code):
     logger.info(F"Exiting the program. {status_code}")
     try:
+        node.destroy_node()
         rclpy.shutdown()
     except:  # noqa: 722
         logger.info(traceback.format_exc())
