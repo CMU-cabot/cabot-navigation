@@ -806,7 +806,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # check speed limit
         limit = self._max_speed
         for poi in self.speed_pois:
-            dist = poi.distance_to(current_pose)
+            dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
                     limit = min(limit, max(poi.limit, max_v(max(0, dist-0.5), 0.5, 0.5)))
