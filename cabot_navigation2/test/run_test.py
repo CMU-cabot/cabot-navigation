@@ -655,6 +655,17 @@ class Tester:
             callback=done_callback)
 
     @wait_test()
+    def delete_actor(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        manager.delete(
+            name=test_action['name'],
+            callback=done_callback)
+
+    @wait_test()
     def wait_topic(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
         topic = test_action['topic']
