@@ -715,11 +715,16 @@ class NavGoal(Goal):
             self.navcog_routes = [create_ros_path(navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)]
         else:
             separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
-            self.navcog_routes = [create_ros_path(route,
-                                                  self.anchor,
-                                                  self.global_map_name,
-                                                  target_poi=target_poi,
-                                                  set_back=set_back) for route in separated_route]
+            self.navcog_routes = [
+                create_ros_path(
+                    route,
+                    self.anchor,
+                    self.global_map_name,
+                    target_poi=target_poi if index == len(separated_route) - 1 else None,
+                    set_back=set_back if index == len(separated_route) - 1 else None
+                ) for index, route in enumerate(separated_route)
+            ]
+
         last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
         self.handle = None
