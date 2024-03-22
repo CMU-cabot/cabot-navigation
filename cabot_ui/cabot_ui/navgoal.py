@@ -624,6 +624,10 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 1.0
+/cabot/speed_control_node_touch_true:
+    complete_stop: [false,false,true,false,true,false,true]
+/cabot/speed_control_node_touch_false:
+    complete_stop: [false,false,true,false,true,false,true]
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -650,6 +654,10 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 1.0
+/cabot/speed_control_node_touch_true:
+    complete_stop: [false,false,true,false,true,false,true]
+/cabot/speed_control_node_touch_false:
+    complete_stop: [false,false,true,false,true,false,true]
 """
         data = yaml.safe_load(params)
         return data

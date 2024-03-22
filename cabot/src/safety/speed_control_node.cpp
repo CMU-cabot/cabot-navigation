@@ -115,11 +115,34 @@ private:
         callbackTime_.push_back(get_clock()->now());
       }
 
+      callback_handler_ =
+        add_on_set_parameters_callback(std::bind(&SpeedControlNode::param_set_callback, this, std::placeholders::_1));
+
       RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
     }
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / targetRate_),
       std::bind(&SpeedControlNode::timerCallback, this));
+  }
+
+  rcl_interfaces::msg::SetParametersResult param_set_callback(const std::vector<rclcpp::Parameter> params)
+  {
+    auto results = std::make_shared<rcl_interfaces::msg::SetParametersResult>();
+    for (auto && param : params) {
+      if (!has_parameter(param.get_name())) {
+        continue;
+      }
+      RCLCPP_DEBUG(get_logger(), "change param %s", param.get_name().c_str());
+
+      if (param.get_name() == "complete_stop") {
+        std::vector<bool> doubleArray = param.as_bool_array();
+        for (int i = 0 ; i < doubleArray.size() && i < completeStop_.size(); i++) {
+          completeStop_[i] = doubleArray[i];
+        }
+      }
+    }
+    results->successful = true;
+    return *results;
   }
 
   void timerCallback()
@@ -223,6 +246,7 @@ private:
   std::vector<bool> configurable_;
   std::vector<rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr> configureServices_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
 
   double userSpeedLimit_;
   double mapSpeedLimit_;

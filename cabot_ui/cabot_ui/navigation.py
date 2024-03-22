@@ -1211,8 +1211,9 @@ class NavigationParamManager:
         key = f'{node_name}/{service_name}'
         if key not in self.clients:
             self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
-        while not self.clients[key].wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info(f'Waiting for the {key} to become available...')
+        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().error(f'{key} is not available...')
+            self.clients[key] = False
         return self.clients[key]
 
     def change_parameter(self, node_name, param_dict, callback):
@@ -1222,15 +1223,22 @@ class NavigationParamManager:
         for param_name, param_value in param_dict.items():
             new_parameter = Parameter(param_name, value=param_value)
             request.parameters.append(new_parameter.to_parameter_msg())
-        future = self.get_client(node_name, SetParameters, "set_parameters").call_async(request)
-        future.add_done_callback(done_callback)
+        client = self.get_client(node_name, SetParameters, "set_parameters")
+        if client:
+            future = client.call_async(request)
+            future.add_done_callback(done_callback)
+        else:
+            done_callback(None)
 
     def change_parameters(self, params, callback):
         def sub_callback(node_name, future):
             del params[node_name]
-            self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result()}")
+            self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")
             if len(params) == 0:
-                callback(future.result())
+                if future:
+                    callback(future.result())
+                else:
+                    callback(None)
             else:
                 self.change_parameters(params, callback)
         for node_name, param_dict in params.items():
@@ -1246,8 +1254,12 @@ class NavigationParamManager:
             callback(node_name, param_list, future)
         request = GetParameters.Request()
         request.names = param_list
-        future = self.get_client(node_name, GetParameters, "get_parameters").call_async(request)
-        future.add_done_callback(done_callback)
+        client = self.get_client(node_name, GetParameters, "get_parameters")
+        if client:
+            future = client.call_async(request)
+            future.add_done_callback(done_callback)
+        else:
+            done_callback(None)
 
     def request_parameters(self, params, callback):
         self.rcount = 0
@@ -1256,12 +1268,13 @@ class NavigationParamManager:
         def sub_callback(node_name, param_list, future):
             self.rcount += 1
             self.result[node_name] = {}
-            for name, value in zip(param_list, future.result().values):
-                msg = rcl_interfaces.msg.Parameter()
-                msg.name = name
-                msg.value = value
-                param = Parameter.from_parameter_msg(msg)
-                self.result[node_name][name] = param.value
+            if future:
+                for name, value in zip(param_list, future.result().values):
+                    msg = rcl_interfaces.msg.Parameter()
+                    msg.name = name
+                    msg.value = value
+                    param = Parameter.from_parameter_msg(msg)
+                    self.result[node_name][name] = param.value
             if self.rcount == len(params):
                 self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, {future.result()}")
                 callback(self.result)
