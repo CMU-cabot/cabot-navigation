@@ -877,7 +877,7 @@ class ElevatorCabPOI(POI):
         y = self.y + math.sin(self.r) * self.buttons[0] + math.cos(self.r) * self.buttons[1]
 
         b_pos = geoutil.Point(x=x, y=y)
-        b_pose = geoutil.Pose.pose_from_points(b_pos, pose)
+        b_pose = geoutil.Pose.pose_from_points(pose, b_pos)
         dir = angles.shortest_angular_distance(pose.r, b_pose.r)
 
         print(pose, b_pos, b_pose, dir)

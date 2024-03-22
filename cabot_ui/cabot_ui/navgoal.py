@@ -118,6 +118,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     goals = []
     route_objs = []
     index = 1
+    is_last = False
 
     while index < len(groute):
         link_or_node = groute[index]
@@ -131,6 +132,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
         if link.target_node.is_leaf and link.length < 3.0:
             continue
         route_objs.append(link)
+        is_last = (index == len(groute) - 1)
 
         # Handle Door POIs
         #
@@ -267,7 +269,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                 # turn towards door
                 goals.append(ElevatorWaitGoal(delegate, src_cabs[0]))
                 # wait cab and get on the cab
-                goals.append(ElevatorInGoal(delegate, src_cabs[0]))
+                goals.append(ElevatorInGoal(delegate, src_cabs[0], is_last=is_last))
                 route_objs = []
 
         if link.source_node.is_elevator:
@@ -282,7 +284,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
             goals.append(ElevatorFloorGoal(delegate, dest_cabs[0]))
             # CaBotRclPyUtil.info(goals[-1])
             # forward 3.0 meters (as default) without global mapping support
-            goals.append(ElevatorOutGoal(delegate, dest_cabs[0], set_forward=dest_cabs[0].set_forward))
+            goals.append(ElevatorOutGoal(delegate, dest_cabs[0], set_forward=dest_cabs[0].set_forward, is_last=is_last))
             # CaBotRclPyUtil.info(goals[-1])
             route_objs = []
 
