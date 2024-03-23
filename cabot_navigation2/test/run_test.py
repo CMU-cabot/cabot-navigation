@@ -907,7 +907,7 @@ def main():
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
         for f in functions:
             logger.info(f)
-        sys.exit()
+        sys.exit(0)
 
     rclpy.init()
     node = rclpy.node.Node("test_node")
@@ -940,8 +940,9 @@ def main():
 def exit_hook(status_code):
     logger.info(F"Exiting the program. {status_code}")
     try:
-        node.destroy_node()
-        rclpy.shutdown()
+        if node:
+            node.destroy_node()
+            rclpy.shutdown()
     except:  # noqa: 722
         logger.info(traceback.format_exc())
     original_exit(status_code)
