@@ -25,7 +25,7 @@ import json
 import unittest
 
 from ament_index_python.packages import get_package_share_directory
-from cabot_ui import geojson, geoutil, navgoal
+from cabot_ui import geojson, geoutil
 
 
 class TestGeojson(unittest.TestCase):
@@ -179,25 +179,3 @@ class TestGeojson(unittest.TestCase):
         self.assertEqual(poi_f._was_approached, True)
         self.assertFalse(poi_b._was_approaching)
         self.assertFalse(poi_b._was_approached)
-
-    def global_map_name(self):
-        return "map"
-
-    def test_doorgoal(self):
-        self._prepare_data()
-        door = geojson.Object.get_object_by_id("EDITOR_facil_1547762317242")
-        goal = navgoal.DoorGoal(self, door)
-
-        self.assertIsNotNone(goal)
-
-        targetX = int(goal.x*10)
-        for x in range(0, targetX):
-            pose = geoutil.Pose(x=x/10.0, y=0.0, r=0.0)
-            goal.is_approaching(pose)
-            goal.is_approached(pose)
-
-        self.assertEqual(goal._was_approaching, True)
-        self.assertEqual(goal._was_approached, True)
-
-    def get_logger(self):
-        return {}

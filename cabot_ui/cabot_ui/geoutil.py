@@ -165,7 +165,6 @@ def diff_angle(msg1, msg2):
     quat1 = q_from_msg(msg1)
     quat2 = q_from_msg(msg2)
     quat3 = quaternion_multiply(quat2, q_inverse(quat1))
-    print("diff {quat1} -> {quat2} = {quat3}")
     _, _, yaw1 = euler_from_quaternion(quat3)
     return yaw1
 

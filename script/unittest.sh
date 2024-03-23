@@ -43,5 +43,5 @@ if [[ $all -eq 1 ]]; then
 else
     ([[ -z $build ]] ||  colcon build --packages-up-to $package) && \
     colcon test --packages-select $package && \
-    colcon test-result --verbose --test-result-base build/$pacakge
+    colcon test-result --verbose --test-result-base build/$package
 fi
