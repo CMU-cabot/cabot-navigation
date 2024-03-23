@@ -168,6 +168,60 @@ class Properties(object):
         return json.dumps(self.__dict__, sort_keys=True, indent=2)
 
 
+class LinkKDTree:
+    def __init__(self):
+        self._link_index = []
+        self._link_points = []
+        self._link_kdtree = None
+
+    def reset(self):
+        self._link_index = []
+        self._link_points = []
+        self._link_kdtree = None
+
+    def build(self, links):
+        for obj in links:
+            if obj.start_node and obj.end_node:
+                sp = numpy.array([obj.start_node.local_geometry.x, obj.start_node.local_geometry.y])  # noqa E501
+                ep = numpy.array([obj.end_node.local_geometry.x, obj.end_node.local_geometry.y])
+                self._add_link_index(sp, ep, obj)
+        if self._link_points:
+            self._link_kdtree = scipy.spatial.KDTree(self._link_points)
+
+    def _add_link_index(self, sp, ep, obj):
+        mp = (sp+ep)/2.0
+        self._link_points.append(mp)
+        self._link_index.append(obj)
+        if numpy.linalg.norm(sp-ep) > 1:
+            self._add_link_index(sp, mp, obj)
+            self._add_link_index(mp, ep, obj)
+
+    def get_nearest_link(self, node, exclude=None):
+        point = node.local_geometry
+        latlng = node.geometry
+        _, index = self._link_kdtree.query([point.x, point.y], 50)
+
+        min_index = None
+        min_dist = 1000
+        for i in index:
+            link = self._link_index[i]
+            if exclude is not None and exclude(link):
+                continue
+
+            dist = link.geometry.distance_to(latlng)
+            if node.floor is not None:
+                if link.start_node.floor != node.floor and \
+                   link.end_node.floor != node.floor:
+                    dist += 1000
+            if dist < min_dist:
+                min_dist = dist
+                min_index = i
+
+        if min_index is None:
+            return None
+        return self._link_index[min_index]
+
+
 class Object(object):
     """Object class"""
 
@@ -281,68 +335,19 @@ class Object(object):
         if temp_node:
             Object._unregister(temp_node)
 
-    @staticmethod
-    def _reset_link_index():
-        Object._link_index = []
-        Object._link_points = []
-        Object._link_kdtree = None
-
-    _link_index = []
-    _link_points = []
-    _link_kdtree = None
-
-    @staticmethod
-    def _build_link_index():
-        for obj in Object.get_objects_by_type(Link):
-            if obj.start_node and obj.end_node:
-                sp = numpy.array([obj.start_node.local_geometry.x, obj.start_node.local_geometry.y])  # noqa E501
-                ep = numpy.array([obj.end_node.local_geometry.x, obj.end_node.local_geometry.y])
-                Object._add_link_index(sp, ep, obj)
-        if Object._link_points:
-            Object._link_kdtree = scipy.spatial.KDTree(Object._link_points)
-
-    @staticmethod
-    def _add_link_index(sp, ep, obj):
-        mp = (sp+ep)/2.0
-        Object._link_points.append(mp)
-        Object._link_index.append(obj)
-        if numpy.linalg.norm(sp-ep) > 1:
-            Object._add_link_index(sp, mp, obj)
-            Object._add_link_index(mp, ep, obj)
+    _kdtree = LinkKDTree()
 
     @staticmethod
     def get_nearest_link(node, exclude=None):
-        point = node.local_geometry
-        latlng = node.geometry
-        _, index = Object._link_kdtree.query([point.x, point.y], 50)
-
-        min_index = None
-        min_dist = 1000
-        for i in index:
-            link = Object._link_index[i]
-            if exclude is not None and exclude(link):
-                continue
-
-            dist = link.geometry.distance_to(latlng)
-            if node.floor is not None:
-                if link.start_node.floor != node.floor and \
-                   link.end_node.floor != node.floor:
-                    dist += 1000
-            if dist < min_dist:
-                min_dist = dist
-                min_index = i
-
-        if min_index is None:
-            return None
-        return Object._link_index[min_index]
+        return Object._kdtree.get_nearest_link(node, exclude)
 
     @staticmethod
     def update_anchor_all(anchor):
         """update anchor of all object"""
-        Object._reset_link_index()
+        Object._kdtree.reset()
         for obj in Object._all_objects:
             obj.update_anchor(anchor)
-        Object._build_link_index()
+        Object._kdtree.build(Object.get_objects_by_type(Link))
 
     def __init__(self, **dic):
         s = super(Object, self)
