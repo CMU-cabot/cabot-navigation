@@ -185,9 +185,9 @@ class Tester:
         else:
             logger.error(f"{key}: Failure")
         for aResult in tfResult:
-            success = aResult['success']
+            success2 = aResult['success']
             action = aResult['action']
-            if success:
+            if success2:
                 logger.info(f" - {action}: Success")
             else:
                 logger.error(f" - {action}: Failure")
