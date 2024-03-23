@@ -136,7 +136,7 @@ private:
 
       if (param.get_name() == "complete_stop") {
         std::vector<bool> doubleArray = param.as_bool_array();
-        for (int i = 0 ; i < doubleArray.size() && i < completeStop_.size(); i++) {
+        for (int i = 0; i < doubleArray.size() && i < completeStop_.size(); i++) {
           completeStop_[i] = doubleArray[i];
         }
       }
