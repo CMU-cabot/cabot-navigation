@@ -204,6 +204,8 @@ class LinkKDTree:
         min_index = None
         min_dist = 1000
         for i in index:
+            if i == len(self._link_index):
+                continue
             link = self._link_index[i]
             if exclude is not None and exclude(link):
                 continue
@@ -218,8 +220,8 @@ class LinkKDTree:
                 min_index = i
 
         if min_index is None:
-            return None
-        return self._link_index[min_index]
+            return (None, None)
+        return (self._link_index[min_index], min_dist)
 
 
 class Object(object):
@@ -525,7 +527,7 @@ class RouteLink(Link):
         # here is to work around to get POIs on the first temp link
         if self.is_temp:
             # the source_node should be updated with an anchor beforehand
-            link = Object.get_nearest_link(self.source_node)
+            link, _ = Object.get_nearest_link(self.source_node)
             self.pois = link.pois
 
     def _set_source_node(self, node):

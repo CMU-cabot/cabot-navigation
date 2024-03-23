@@ -531,37 +531,31 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         # check facilities
         self.nearby_facilities = []
-        facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
-        for facility in facilities:
-            self._logger.debug(f"facility {facility._id}: {facility.name}")
-            if not facility.name:
-                continue
-            if not facility.is_read:
-                continue
+        links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
+        if len(links) > 0:
+            kdtree = geojson.LinkKDTree()
+            kdtree.build(links)
 
-            for ent in facility.entrances:
-                min_dist = 5
-                min_link = None
-                for link in groute:
-                    if not isinstance(link, geojson.RouteLink):
-                        continue
-                    if link._id.startswith("_TEMP_LINK"):
-                        continue
-                    if facility.floor != link.floor:
-                        continue
-                    if not ent.node:
-                        continue
-                    dist = link.geometry.distance_to(ent.node.geometry)
-                    if dist < min_dist:
-                        min_dist = dist
-                        min_link = link
-                if min_link:
-                    self._logger.debug(f"Facility - Link ({min_dist:.2f}), {facility._id}, {facility.name}:{ent.name}, {min_link._id}")
-                    ent.set_target(min_link)
-                    self.nearby_facilities.append({
-                        "facility": facility,
-                        "entrance": ent
-                    })
+            start = time.time()
+            facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+            for facility in facilities:
+                # self._logger.debug(f"facility {facility._id}: {facility.name}")
+                if not facility.name:
+                    continue
+                if not facility.is_read:
+                    continue
+
+                for ent in facility.entrances:
+                    min_link, min_dist = kdtree.get_nearest_link(ent.node)
+                    if min_link and min_dist < 5.0:
+                        # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
+                        ent.set_target(min_link)
+                        self.nearby_facilities.append({
+                            "facility": facility,
+                            "entrance": ent
+                        })
+            end = time.time()
+            self._logger.info(F"Check Facilities {end - start:.3f}.sec")
 
         # for dashboad
         (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())

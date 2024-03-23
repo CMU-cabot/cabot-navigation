@@ -209,27 +209,24 @@ class DataUtil(object):
         speeds = geojson.Object.get_objects_by_type(geojson.SpeedPOI)
 
         for poi in doors+infos+speeds:
-            min_link = geojson.Object.get_nearest_link(poi)
+            min_link, min_dist = geojson.Object.get_nearest_link(poi)
             if min_link is None:
                 CaBotRclpyUtil.debug(F"poi {poi._id} ({poi.floor}) is not registered.")
                 continue
-            min_dist = min_link.geometry.distance_to(poi.geometry)
 
             if min_dist < 5:
                 min_link.register_poi(poi)
             else:
                 CaBotRclpyUtil.debug(
                     F"poi {poi._id} ({poi.floor}) is not registered. "
-                    F"min_link._id = {min_link._id}, min_link.floor = {min_link.floor}")
+                    F"min_link._id = {min_link._id}, min_link.floor = {min_link.floor}, min_dist={min_dist}")
 
         elevator_cabs = geojson.Object.get_objects_by_type(geojson.ElevatorCabPOI)
         for poi in elevator_cabs:
-            min_link = geojson.Object.get_nearest_link(poi, exclude=lambda x: x.is_elevator)
+            min_link, min_dist = geojson.Object.get_nearest_link(poi, exclude=lambda x: x.is_elevator)
             if min_link is None:
                 CaBotRclpyUtil.debug(F"poi {poi._id} ({poi.floor}) is not registered.")
                 continue
-
-            min_dist = min_link.geometry.distance_to(poi.geometry)
 
             if min_dist < 5:
                 min_link.register_poi(poi)
@@ -241,12 +238,11 @@ class DataUtil(object):
         queue_waits = geojson.Object.get_objects_by_type(geojson.QueueWaitPOI)
         queue_targets = geojson.Object.get_objects_by_type(geojson.QueueTargetPOI)
         for poi in queue_waits+queue_targets:
-            min_link = geojson.Object.get_nearest_link(poi)
+            min_link, min_dist = geojson.Object.get_nearest_link(poi)
             if min_link is None:
                 CaBotRclpyUtil.debug(
                     F"poi {poi._id} ({poi.floor}) is not registered. ")
                 continue
-            min_dist = min_link.geometry.distance_to(poi.geometry)
 
             if min_dist < 5:
                 min_link.register_poi(poi)

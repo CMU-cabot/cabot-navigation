@@ -188,7 +188,7 @@ class TestGeojson(unittest.TestCase):
     def test_nearest_link(self):
         self._prepare_data()
         poi = geojson.Object.get_object_by_id("EDITOR_facil_1554692285117")
-        link = geojson.Object.get_nearest_link(poi)
+        link, _ = geojson.Object.get_nearest_link(poi)
         self.assertEqual(link._id, "EDITOR_link_1490021931669")
 
     def test_nearest_link_on_route(self):
@@ -196,7 +196,7 @@ class TestGeojson(unittest.TestCase):
         ent_node = geojson.Object.get_object_by_id("EDITOR_node_1495220258080")
         kdtree = geojson.LinkKDTree()
         kdtree.build(list(filter(lambda x: isinstance(x, geojson.RouteLink), self.route2)))
-        link = kdtree.get_nearest_link(ent_node)
+        link, _ = kdtree.get_nearest_link(ent_node)
         self.assertEqual(link._id, "EDITOR_link_1495220220999")
 
     def test_build_kdtree_performance(self):
@@ -211,6 +211,6 @@ class TestGeojson(unittest.TestCase):
 
         start = time.time()
         for _ in range(0, 1000):
-            _ = kdtree.get_nearest_link(ent_node)
+            _, _ = kdtree.get_nearest_link(ent_node)
         end = time.time()
         self.assertLess((end - start) / 1000, 0.01)
