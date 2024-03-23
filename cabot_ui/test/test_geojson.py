@@ -23,6 +23,7 @@
 
 import json
 import unittest
+import time
 
 from ament_index_python.packages import get_package_share_directory
 from cabot_ui import geojson, geoutil
@@ -189,3 +190,27 @@ class TestGeojson(unittest.TestCase):
         poi = geojson.Object.get_object_by_id("EDITOR_facil_1554692285117")
         link = geojson.Object.get_nearest_link(poi)
         self.assertEqual(link._id, "EDITOR_link_1490021931669")
+
+    def test_nearest_link_on_route(self):
+        self._prepare_data()
+        ent_node = geojson.Object.get_object_by_id("EDITOR_node_1495220258080")
+        kdtree = geojson.LinkKDTree()
+        kdtree.build(list(filter(lambda x: isinstance(x, geojson.RouteLink), self.route2)))
+        link = kdtree.get_nearest_link(ent_node)
+        self.assertEqual(link._id, "EDITOR_link_1495220220999")
+
+    def test_build_kdtree_performance(self):
+        self._prepare_data()
+        ent_node = geojson.Object.get_object_by_id("EDITOR_node_1495220258080")
+        start = time.time()
+        for _ in range(0, 1000):
+            kdtree = geojson.LinkKDTree()
+            kdtree.build(list(filter(lambda x: isinstance(x, geojson.RouteLink), self.route2)))
+        end = time.time()
+        self.assertLess((end - start) / 1000, 0.1)
+
+        start = time.time()
+        for _ in range(0, 1000):
+            _ = kdtree.get_nearest_link(ent_node)
+        end = time.time()
+        self.assertLess((end - start) / 1000, 0.01)
