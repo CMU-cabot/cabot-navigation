@@ -426,6 +426,7 @@ class Goal(geoutil.TargetPlace):
     def reset(self):
         self._is_completed = False
         self._is_canceled = False
+        self._is_exiting = False
 
     def enter(self):
         """
@@ -498,17 +499,17 @@ class Goal(geoutil.TargetPlace):
         return self._exiting
 
     def exit(self, callback):
-        def done_change_parameters_callback(resutl):
+        def done_change_parameters_callback(result):
+            CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
             self._saved_params = None
-            self._exiting = False
             callback()
-        CaBotRclpyUtil.info("Goal.exit is called")
-        self._exiting = True
+        CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
+        CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
         self.delegate.exit_goal(self)
         if self._saved_params:
+            self._exiting = True
             self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
         else:
-            self._exiting = False
             callback()
 
     @property
@@ -961,7 +962,7 @@ class ElevatorWaitGoal(ElevatorGoal):
         super(ElevatorWaitGoal, self).__init__(delegate, cab_poi)
 
     def enter(self):
-        CaBotRclpyUtil.info("call turn_towards")
+        CaBotRclpyUtil.info("ElevatorWaitGoal call turn_towards")
         CaBotRclpyUtil.info(F"current pose {str(self.delegate.current_pose)}")
         CaBotRclpyUtil.info(F"cab poi      {str(self.cab_poi.local_geometry)}")
         pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)

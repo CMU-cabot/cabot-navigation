@@ -318,6 +318,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._goal_index = -1
         self._current_goal = None
         self._last_estimated_goal_check = None
+        self._last_estimated_goal = None
 
         # self.client = None
         self._loop_handle = None
@@ -612,6 +613,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         current_pose = self.current_local_pose()
         _, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
         self._goal_index = index-1
+        self._last_estimated_goal = None
 
         self._navigate_next_sub_goal()
 
@@ -939,8 +941,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         interval = rclpy.duration.Duration(seconds=1.0)
         if not self._last_estimated_goal_check or now - self._last_estimated_goal_check > interval:
             estimated_goal = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
-            self._logger.info(F"Estimated next goal = {estimated_goal}")
-            self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"{repr(estimated_goal)}")
+            if self._last_estimated_goal != estimated_goal:
+                self._logger.info(F"Estimated next goal = {estimated_goal}")
+                self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"{repr(estimated_goal)}")
+            self._last_estimated_goal = estimated_goal
             self._last_estimated_goal_check = now
 
         if goal.is_canceled:
