@@ -179,3 +179,13 @@ class TestGeojson(unittest.TestCase):
         self.assertEqual(poi_f._was_approached, True)
         self.assertFalse(poi_b._was_approaching)
         self.assertFalse(poi_b._was_approached)
+
+    def test_route1(self):
+        self._prepare_data()
+        self.assertGreater(len(self.route1), 0)
+
+    def test_nearest_link(self):
+        self._prepare_data()
+        poi = geojson.Object.get_object_by_id("EDITOR_facil_1554692285117")
+        link = geojson.Object.get_nearest_link(poi)
+        self.assertEqual(link._id, "EDITOR_link_1490021931669")
