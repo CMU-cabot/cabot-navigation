@@ -105,21 +105,21 @@ class TestGeojson(unittest.TestCase):
         import os
         dir_path = os.path.dirname(os.path.realpath(__file__))
 
-        node_map = open(dir_path+"/data/node_map1.json")
-        _ = geojson.Object.marshal_dict(json.load(node_map))
-        features = open(dir_path+"/data/features1.json")
-        _ = geojson.Object.marshal_list(json.load(features))
-
-        route = open(dir_path+"/data/route2.json")
-        self.route = geojson.Object.marshal_list(json.load(route))
+        with open(dir_path+"/data/node_map1.json") as node_map:
+            _ = geojson.Object.marshal_dict(json.load(node_map))
+        with open(dir_path+"/data/features1.json") as features:
+            _ = geojson.Object.marshal_list(json.load(features))
+        with open(dir_path+"/data/route1.json") as route1:
+            self.route1 = geojson.Object.marshal_list(json.load(route1))
+        with open(dir_path+"/data/route2.json") as route2:
+            self.route2 = geojson.Object.marshal_list(json.load(route2))
 
         self.anc = geoutil.Anchor(lat=40.443259,
                                   lng=-79.945874,
                                   rotate=15.1)
 
-        for obj in geojson.Object.get_all_objects():
-            obj.reset()
-            obj.update_anchor(self.anc)
+        geojson.Object.update_anchor_all(self.anc)
+        geojson.Object.reset_all_objects()
 
     def test_door_poi(self):
         """test door poi marshalling"""

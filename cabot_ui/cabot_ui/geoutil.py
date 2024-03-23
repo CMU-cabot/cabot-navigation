@@ -30,7 +30,7 @@ import numpy.linalg
 import yaml
 
 import geometry_msgs.msg
-from pyproj import Proj, Geod
+from pyproj import CRS, Geod
 from pyproj import Transformer
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
@@ -366,10 +366,13 @@ class Anchor(Latlng):
         return F"[{self.lat:.7f}, {self.lng:.7f}]({self.rotate:.2f})"
 
 
-EPSG4326 = Proj(init='epsg:4326')
-EPSG3857 = Proj(init='epsg:3857')
-transformer4326_3857 = Transformer.from_proj(EPSG4326, EPSG3857)
-transformer3857_4326 = Transformer.from_proj(EPSG3857, EPSG4326)
+# Define the CRS objects
+crs_4326 = CRS('epsg:4326')
+crs_3857 = CRS('epsg:3857')
+
+# Create transformers using the CRS objects
+transformer4326_3857 = Transformer.from_crs(crs_4326, crs_3857, always_xy=True)
+transformer3857_4326 = Transformer.from_crs(crs_3857, crs_4326, always_xy=True)
 
 
 def latlng2mercator(latlng):
