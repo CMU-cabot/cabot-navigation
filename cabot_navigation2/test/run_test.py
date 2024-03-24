@@ -36,6 +36,7 @@ import re
 from optparse import OptionParser
 import rclpy
 import rclpy.node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
 
@@ -151,6 +152,7 @@ class Tester:
             if not success:
                 sys.exit(1)
 
+        allSuccess = True
         for func in sorted(functions):
             if func.startswith("_"):
                 continue
@@ -163,12 +165,9 @@ class Tester:
             success = self.print_result(self.result, func)
             self.register_action_result(func, self.result)
             self.cancel_subscription(func)
+            allSuccess = allSuccess and success
 
         logger.info("Done all test")
-
-        allSuccess = True
-        for key in sorted(self.result.keys()):
-            allSuccess = allSuccess and success
 
         if allSuccess:
             sys.exit(0)
@@ -698,12 +697,13 @@ class Tester:
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         message = test_action['message']
+        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
 
         msg = topic_type()
         data = yaml.safe_load(message)
         set_message_fields(msg, data)
 
-        pub = self.node.create_publisher(topic_type, topic, 10)
+        pub = self.node.create_publisher(topic_type, topic, qos)
         pub.publish(msg)
         self.node.destroy_publisher(pub)
         case['done'] = True
@@ -913,8 +913,8 @@ def main():
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
 
-    # ros2Handler = ROS2LogHandler(node)
-    # logger.addHandler(ros2Handler)
+    ros2Handler = ROS2LogHandler(node)
+    logger.addHandler(ros2Handler)
 
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
