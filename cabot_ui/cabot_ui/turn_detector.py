@@ -27,6 +27,7 @@ import enum
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 smoothParam = 0.015
 lookAheadStepsA = int(2/0.02)
@@ -202,12 +203,12 @@ class TurnDetector:
                 i = j
                 # t_i+=1
 
-        print("*******")
-        print(TurnStarts)
-        print(TurnEnds)
-        print(Angles)
-        print(Types)
-        print(TurnB)
+        CaBotRclpyUtil.info("*******")
+        CaBotRclpyUtil.info(f"{TurnStarts}")
+        CaBotRclpyUtil.info(f"{TurnEnds}")
+        CaBotRclpyUtil.info(f"{Angles}")
+        CaBotRclpyUtil.info(f"{Types}")
+        CaBotRclpyUtil.info(f"{TurnB}")
 
         turns = []
         for i, j, angle, turn_type in zip(TurnStarts, TurnEnds, Angles, Types):
@@ -219,7 +220,7 @@ class TurnDetector:
             turns.append(Turn(sp, angle, turn_type, ep))
 
         for turn in turns:
-            print(turn.text)
+            CaBotRclpyUtil.info(turn.text)
 
         if visualize:
             TurnDetector._visualize(yaw, x, y, TurnStarts, TurnEnds, yawRaw, yawLP, dyaw, dyaw2)

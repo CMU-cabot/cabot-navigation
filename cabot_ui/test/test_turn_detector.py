@@ -27,13 +27,22 @@ from cabot_ui.geoutil import Pose
 from cabot_ui.turn_detector import TurnDetector
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+import rclpy
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 
 class TestEvent(unittest.TestCase):
     """Test class"""
 
     def setUp(self):
-        pass
+        rclpy.init()
+        self.node = rclpy.node.Node("test_node")
+        CaBotRclpyUtil.initialize(self.node)
+
+    def tearDown(self) -> None:
+        self.node.destroy_node()
+        rclpy.shutdown()
+        return super().tearDown()
 
     def test_basic(self):
         current_pose = Pose(x=0, y=0, r=0)
