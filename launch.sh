@@ -43,6 +43,7 @@ function ctrl_c() {
         else
             $dccom down > /dev/null 2>&1
         fi
+        kill -s 9 $dcpid
     fi
 
     for pid in ${pids[@]}; do
