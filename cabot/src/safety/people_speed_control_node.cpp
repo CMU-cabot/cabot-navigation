@@ -176,6 +176,18 @@ public:
   ~PeopleSpeedControlNode()
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Destructor");
+    people_sub_.reset();
+    odom_sub_.reset();
+    plan_sub_.reset();
+    vis_pub_.reset();
+    limit_pub_.reset();
+    event_pub_.reset();
+    set_social_distance_sub_.reset();
+    get_social_distance_pub_.reset();
+    delete tfListener;
+    delete tfBuffer;
+    callback_handler_.reset();
+    people_topic_check_timer_.reset();
   }
 
   // check if the last people message comes within one second

@@ -53,6 +53,8 @@ public:
   ~SpeedVisualizeNode()
   {
     RCLCPP_INFO(get_logger(), "NodeClass Destructor");
+    visPub.reset();
+    cmdVelSub.reset();
   }
 
 private:

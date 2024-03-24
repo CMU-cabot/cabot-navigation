@@ -53,6 +53,18 @@ public:
   ~SpeedControlNode()
   {
     RCLCPP_INFO(get_logger(), "SpeedControlNodeClass Destructor");
+    for (auto sub : speedSubs_) {
+      sub.reset();
+    }
+    for (auto srv : configureServices_) {
+      srv.reset();
+    }
+    timer_.reset();
+    callback_handler_.reset();
+    cmdVelPub.reset();
+    cmdVelSub.reset();
+    userSpeedSub.reset();
+    mapSpeedSub.reset();
   }
 
 private:

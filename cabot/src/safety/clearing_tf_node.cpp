@@ -57,6 +57,7 @@ public:
   ~ClearingTFNode()
   {
     RCLCPP_INFO(get_logger(), "NodeClass Destructor");
+    timer_.reset();
   }
 
 private:

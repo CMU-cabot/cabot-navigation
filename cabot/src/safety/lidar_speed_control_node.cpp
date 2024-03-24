@@ -93,6 +93,12 @@ public:
   ~LiDARSpeedControlNode()
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Destructor");
+    scan_sub_.reset();
+    vis_pub_.reset();
+    limit_pub_.reset();
+    callback_handler_.reset();
+    delete tfListener;
+    delete tfBuffer;
   }
 
 private:
