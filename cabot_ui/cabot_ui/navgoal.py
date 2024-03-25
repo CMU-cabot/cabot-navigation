@@ -843,7 +843,7 @@ class NavGoal(Goal):
                     except:  # noqa: #722
                         CaBotRclpyUtil.error(F"{node_or_link}")
             self.route_index = min_index
-        except:
+        except:  # noqa: #722
             CaBotRclpyUtil.error(traceback.format_exc())
 
     def match(self, pose, floor):
