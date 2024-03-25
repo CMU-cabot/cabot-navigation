@@ -35,6 +35,7 @@ Author: Daisuke Sato<daisuke@cmu.edu>
 
 import signal
 import sys
+import threading
 import traceback
 import yaml
 
@@ -42,6 +43,7 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
 import rclpy.client
 from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import std_msgs.msg
@@ -62,7 +64,7 @@ from diagnostic_msgs.msg import DiagnosticStatus
 
 
 class CabotUIManager(NavigationInterface, object):
-    def __init__(self, node):
+    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node):
         self._node = node
         self._logger = self._node.get_logger()
         CaBotRclpyUtil.initialize(self._node)
@@ -78,7 +80,7 @@ class CabotUIManager(NavigationInterface, object):
         self._status_manager.delegate = self
         self._interface = UserInterface(self._node)
         self._interface.delegate = self
-        self._navigation = Navigation(self._node)
+        self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
         # self._exploration = Exploration()
         # self._exploration.delegate = self
@@ -596,7 +598,8 @@ class EventMapper(object):
 def receiveSignal(signal_num, frame):
     print("Received:", signal_num)
     node.destroy_node()
-    rclpy.shutdown()
+    for t in threads:
+        t.join()
     sys.exit()
 
 
@@ -605,8 +608,53 @@ signal.signal(signal.SIGINT, receiveSignal)
 
 if __name__ == "__main__":
     rclpy.init()
-    node = Node('cabot_ui_manager')
-    manager = CabotUIManager(node)
-    executor = MultiThreadedExecutor()
-    rclpy.spin(node, executor)
-    # rclpy.spin(node)
+    node = Node('cabot_ui_manager', start_parameter_services=False)
+    nav_node = Node("cabot_ui_manager_navigation", start_parameter_services=False)
+    tf_node = Node("cabot_ui_manager_tf", start_parameter_services=False)
+    srv_node = Node("cabot_ui_manager_navigation_service", start_parameter_services=False)
+    act_node = Node("cabot_ui_manager_navigation_actions", start_parameter_services=False)
+    soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
+    nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node]
+    executors = [MultiThreadedExecutor(),
+                 MultiThreadedExecutor(),
+                 SingleThreadedExecutor(),
+                 SingleThreadedExecutor(),
+                 MultiThreadedExecutor(),
+                 SingleThreadedExecutor()]
+    names = ["node", "tf", "nav", "srv", "act", "soc"]
+    manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node)
+
+    threads = []
+    for tnode, executor, name in zip(nodes, executors, names):
+        def run_node(target_node, executor, name):
+            def _run_node():
+                # debug code to analyze the bottle neck of nodes
+                # high frequency spinning node should have smaller number of waits
+                #
+                # import time
+                # count = 0
+                # start = time.time()
+                executor.add_node(target_node)
+                try:
+                    while rclpy.ok():
+                        # count += 1
+                        # target_node.get_logger().info(f"spin rate {name} {count / (time.time()-start):.2f}Hz - \n"
+                        #                               f"  subscriptions {[sub.topic_name for sub in list(target_node.subscriptions)]}\n"
+                        #                               f"  timers {len(list(target_node.timers))}\n"
+                        #                               f"  clients {[cli.srv_name for cli in list(target_node.clients)]}\n"
+                        #                               f"  services {len(list(target_node.services))}\n"
+                        #                               f"  guards {len(list(target_node.guards))}\n"
+                        #                               f"  waitables {len(list(target_node.waitables))}\n",
+                        #                               throttle_duration_sec=1.0)
+                        executor.spin_once()
+                except:  # noqa: 722
+                    pass
+                target_node.destroy_node()
+            return _run_node
+
+        thread = threading.Thread(target=run_node(tnode, executor, name))
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()

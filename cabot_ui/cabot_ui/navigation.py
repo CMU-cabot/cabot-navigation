@@ -169,7 +169,34 @@ class BufferProxy():
         req.source_frame = source
         if not self.lookup_transform_service.wait_for_service(timeout_sec=1.0):
             raise RuntimeError("lookup transform service is not available")
-        result = self.lookup_transform_service.call(req)
+        # usage of call() can cause SIGSEGV at exit due to infinite wait
+        # however, call(req, timeout_sec=1.0) is implemented in J-turtle release not in humble
+        #
+        # result = self.lookup_transform_service.call(req)
+        #
+        # so implemented call with timeout from here
+        # reference implementation is
+        # https://github.com/ros2/rclpy/blob/7a7f23e0d7e51dd244001ef606b97f1153e5a97e/rclpy/rclpy/client.py#L72-L110
+        event = threading.Event()
+
+        def unblock(future):
+            nonlocal event
+            event.set()
+        future = self.lookup_transform_service.call_async(req)
+        future.add_done_callback(unblock)
+        # Check future.done() before waiting on the event.
+        # The callback might have been added after the future is completed,
+        # resulting in the event never being set.
+        if not future.done():
+            if not event.wait(1.0):
+                # Timed out. remove_pending_request() to free resources
+                self.remove_pending_request(future)
+                raise RuntimeError("timeout")
+        if future.exception() is not None:
+            raise future.exception()
+        result = future.result()
+        # sync call end here
+
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
         self.transformMap[key] = (result.transform, now)
@@ -188,13 +215,18 @@ class ControlBase(object):
     # _anchor = geoutil.Anchor(lat=40.443259, lng=-79.945874, rotate=-164.9) # 4fr-gazebo
     # _anchor = geoutil.Anchor(lat=40.443259, lng=-79.945874, rotate=16) # 4fr-gazebo
 
-    def __init__(self, node: Node, datautil_instance=None, anchor_file=''):
+    def __init__(self, node: Node, tf_node: Node, datautil_instance=None, anchor_file=''):
         self._node = node
         self._logger = node.get_logger()
         self.visualizer = visualizer.instance(node)
 
         self.delegate = NavigationInterface()
-        self.buffer = BufferProxy(node)
+        self.buffer = BufferProxy(tf_node)
+
+        # TF listening is at high frequency and increases the CPU usage substantially
+        # so the code is using a service to get TF transform
+        # self.buffer = tf2_ros.Buffer()
+        # self.listener = tf2_ros.TransformListener(self.buffer, tf_node)
 
         self.current_pose = None
         self.current_odom_pose = None
@@ -298,15 +330,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                "navigate_through_poses": nav2_msgs.action.NavigateThroughPoses}
     NS = ["", "/local"]
 
-    def __init__(self, node: Node, datautil_instance=None, anchor_file=None, wait_for_action=True):
+    def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
+                 datautil_instance=None, anchor_file=None, wait_for_action=True):
 
         self.current_floor = None
         self.current_frame = None
 
         super(Navigation, self).__init__(
-            node, datautil_instance=datautil_instance, anchor_file=anchor_file)
+            node, tf_node, datautil_instance=datautil_instance, anchor_file=anchor_file)
 
-        self.param_manager = NavigationParamManager(node)
+        self.param_manager = NavigationParamManager(srv_node)
 
         self.info_pois = []
         self.queue_wait_pois = []
@@ -333,7 +366,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._global_map_name = node.declare_parameter("global_map_name", "map_global").value
         self.visualizer.global_map_name = self._global_map_name
 
-        self.social_navigation = SocialNavigation(node, self.buffer)
+        self.social_navigation = SocialNavigation(soc_node, self.buffer)
 
         self._clients: dict[str, ActionClient] = {}
 
@@ -342,9 +375,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         for ns in Navigation.NS:
             for action in Navigation.ACTIONS:
                 name = "/".join([ns, action])
-                self._clients[name] = ActionClient(self._node, Navigation.ACTIONS[action], name, callback_group=self._main_callback_group)
+                self._clients[name] = ActionClient(act_node, Navigation.ACTIONS[action], name, callback_group=self._main_callback_group)
 
-        self._spin_client = ActionClient(self._node, nav2_msgs.action.Spin, "/spin", callback_group=self._main_callback_group)
+        self._spin_client = ActionClient(act_node, nav2_msgs.action.Spin, "/spin", callback_group=self._main_callback_group)
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
 
@@ -385,7 +418,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_interval = self.initial_queue_interval
 
         self._process_queue = []
-        self._process_timer = node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+        self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
     def _localize_status_callback(self, msg):
@@ -431,9 +464,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._stop_loop()
             if self._current_goal:
                 self._current_goal.prevent_callback = True
-            self.pause_navigation()
-            time.sleep(0.5)
-            self.resume_navigation()
+
+            def done_callback():
+                self.resume_navigation()
+            self.pause_navigation(done_callback)
 
     def _plan_callback(self, path):
         try:
