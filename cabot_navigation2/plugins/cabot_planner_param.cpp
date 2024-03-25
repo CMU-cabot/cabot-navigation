@@ -25,11 +25,12 @@
 namespace cabot_navigation2
 {
 
-CaBotPlan::CaBotPlan(CaBotPlannerParam & param_)
-: param(param_)
+CaBotPlan::CaBotPlan(CaBotPlannerParam & param_, DetourMode detour_mode_)
+: param(param_),
+  detour_mode(detour_mode_)
 {
-  nodes_backup = param.getNodes();
-  RCLCPP_INFO(logger_, "nodex_backup.size = %ld", nodes_backup.size());
+  nodes_backup = param.getNodes(detour_mode);
+  RCLCPP_INFO(logger_, "nodex_backup.size = %ld, detour_mode=%d", nodes_backup.size(), detour_mode);
   resetNodes();
   findIndex();
 }
@@ -141,7 +142,7 @@ void CaBotPlan::findIndex()
     // check optimized sitance and also the last node is okay to go through
     RCLCPP_DEBUG(logger_, "end_distance=%.2f, distance_from_start=%.2f", end_distance, distance_from_start);
     if (end_distance < distance_from_start) {
-      if (checkPointIsOkay(*n1, detour_mode)) {
+      if (param.checkPointIsOkay(*n1, detour_mode)) {
         break;
       } else {
         end_distance = distance_from_start + (2.0 / param.resolution);  // margin
@@ -269,34 +270,10 @@ bool CaBotPlan::checkPathIsOkay()
     for (int j = 0; j < 1; j++) {
       Point temp((n0.x * j + n1.x * (N - j)) / N, (n0.y * j + n1.y * (N - j)) / N);
 
-      if (!checkPointIsOkay(temp, detour_mode)) {
+      if (!param.checkPointIsOkay(temp, detour_mode)) {
         RCLCPP_ERROR(logger_, "something wrong (%.2f, %.2f), (%.2f, %.2f), %d", n0.x, n0.y, n1.x, n1.y, N);
         return false;
       }
-    }
-  }
-  return true;
-}
-
-bool CaBotPlan::checkPointIsOkay(Point & point, DetourMode detour_mode)
-{
-  int index = param.getIndexByPoint(point);
-
-  if (detour_mode == DetourMode::IGNORE) {
-    if (index >= 0 && param.static_cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
-      float mx, my;
-      param.mapToWorld(point.x, point.y, mx, my);
-      RCLCPP_WARN(
-        logger_, "ignore mode: path above threshold at (%.2f, %.2f)", mx, my);
-      return false;
-    }
-  } else {
-    if (index >= 0 && param.cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
-      float mx, my;
-      param.mapToWorld(point.x, point.y, mx, my);
-      RCLCPP_WARN(
-        logger_, "path above threshold at (%.2f, %.2f)", mx, my);
-      return false;
     }
   }
   return true;
@@ -398,7 +375,7 @@ void CaBotPlannerParam::setCost()
   // ignore moving people/obstacles/queue people
   for (auto it = people_msg.people.begin(); it != people_msg.people.end(); it++) {
     bool stationary = (std::find(it->tags.begin(), it->tags.end(), "stationary") != it->tags.end());
-    if (!stationary) {
+    if (!stationary || options.ignore_people) {
       clearCostAround(*it);
     }
   }
@@ -559,7 +536,7 @@ int CaBotPlannerParam::getIndexByPoint(Point & p) const
   return getIndex(p.x + 0.5, p.y + 0.5);
 }
 
-std::vector<Node> CaBotPlannerParam::getNodes() const
+std::vector<Node> CaBotPlannerParam::getNodes(DetourMode detour_mode) const
 {
   std::vector<Node> nodes;
   auto initial_node_interval = options.initial_node_interval;
@@ -598,8 +575,7 @@ std::vector<Node> CaBotPlannerParam::getNodes() const
   Node * prev = nullptr;
   double dist = 0;
   do {
-    auto index = getIndexByPoint(nodes.back());
-    if (index > 0 && cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+    if (!checkPointIsOkay(nodes.back(), detour_mode)) {
       if (prev) {
         dist += prev->distance(nodes.back()) * resolution;
       }
@@ -894,5 +870,29 @@ std::vector<Obstacle> CaBotPlannerParam::getObstaclesNearPoint(const Point & nod
     }
   }
   return list;
+}
+
+bool CaBotPlannerParam::checkPointIsOkay(Point & point, DetourMode detour_mode) const
+{
+  int index = getIndexByPoint(point);
+
+  if (detour_mode == DetourMode::IGNORE) {
+    if (index >= 0 && static_cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+      float mx, my;
+      mapToWorld(point.x, point.y, mx, my);
+      RCLCPP_WARN(
+        logger, "ignore mode: path above threshold at (%.2f, %.2f)", mx, my);
+      return false;
+    }
+  } else {
+    if (index >= 0 && cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+      float mx, my;
+      mapToWorld(point.x, point.y, mx, my);
+      RCLCPP_WARN(
+        logger, "path above threshold at (%.2f, %.2f)", mx, my);
+      return false;
+    }
+  }
+  return true;
 }
 }  // namespace cabot_navigation2

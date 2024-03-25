@@ -28,6 +28,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
+from launch.actions import TimerAction
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -191,20 +192,25 @@ def generate_launch_description():
             # arguments=['--ros-args', '--log-level', 'debug']
         ),
 
-        Node(
-            package='nav2_lifecycle_manager',
-            executable='lifecycle_manager',
-            name='lifecycle_manager_navigation',
-            output='log',
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': autostart},
-                        {'bond_timeout': 60.0},
-                        {'node_names': ['controller_server',
-                                        'planner_server',
-                                        'behavior_server',
-                                        'bt_navigator',
-                                        ]},
-                        ]
+        TimerAction(
+            period=3.0,
+            actions=[
+                Node(
+                    package='nav2_lifecycle_manager',
+                    executable='lifecycle_manager',
+                    name='lifecycle_manager_navigation',
+                    output='log',
+                    parameters=[{'use_sim_time': use_sim_time},
+                                {'autostart': autostart},
+                                {'bond_timeout': 60.0},
+                                {'node_names': ['controller_server',
+                                                'planner_server',
+                                                'behavior_server',
+                                                'bt_navigator',
+                                                ]},
+                                ]
+                ),
+            ]
         ),
 
         # local odom navigator
@@ -250,20 +256,25 @@ def generate_launch_description():
             #            arguments=['--ros-args', '--log-level', 'debug']
         ),
 
-        Node(
-            package='nav2_lifecycle_manager',
-            executable='lifecycle_manager',
-            name='lifecycle_manager_local_navigation',
-            output='log',
-            namespace='local',
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': autostart},
-                        {'bond_timeout': 60.0},
-                        {'node_names': ['controller_server',
-                                        'planner_server',
-                                        'behavior_server',
-                                        'bt_navigator',
-                                        ]}]),
+        TimerAction(
+            period=6.0,
+            actions=[
+                Node(
+                    package='nav2_lifecycle_manager',
+                    executable='lifecycle_manager',
+                    name='lifecycle_manager_local_navigation',
+                    output='log',
+                    namespace='local',
+                    parameters=[{'use_sim_time': use_sim_time},
+                                {'autostart': autostart},
+                                {'bond_timeout': 60.0},
+                                {'node_names': ['controller_server',
+                                                'planner_server',
+                                                'behavior_server',
+                                                'bt_navigator',
+                                                ]}]),
+            ]
+        ),
 
         # localization
         Node(

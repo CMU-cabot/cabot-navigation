@@ -23,9 +23,10 @@
 
 import json
 import unittest
+import time
 
 from ament_index_python.packages import get_package_share_directory
-from cabot_ui import geojson, geoutil, navgoal
+from cabot_ui import geojson, geoutil
 
 
 class TestGeojson(unittest.TestCase):
@@ -105,21 +106,21 @@ class TestGeojson(unittest.TestCase):
         import os
         dir_path = os.path.dirname(os.path.realpath(__file__))
 
-        node_map = open(dir_path+"/data/node_map1.json")
-        _ = geojson.Object.marshal_dict(json.load(node_map))
-        features = open(dir_path+"/data/features1.json")
-        _ = geojson.Object.marshal_list(json.load(features))
-
-        route = open(dir_path+"/data/route2.json")
-        self.route = geojson.Object.marshal_list(json.load(route))
+        with open(dir_path+"/data/node_map1.json") as node_map:
+            _ = geojson.Object.marshal_dict(json.load(node_map))
+        with open(dir_path+"/data/features1.json") as features:
+            _ = geojson.Object.marshal_list(json.load(features))
+        with open(dir_path+"/data/route1.json") as route1:
+            self.route1 = geojson.Object.marshal_list(json.load(route1))
+        with open(dir_path+"/data/route2.json") as route2:
+            self.route2 = geojson.Object.marshal_list(json.load(route2))
 
         self.anc = geoutil.Anchor(lat=40.443259,
                                   lng=-79.945874,
                                   rotate=15.1)
 
-        for obj in geojson.Object.get_all_objects():
-            obj.reset()
-            obj.update_anchor(self.anc)
+        geojson.Object.update_anchor_all(self.anc)
+        geojson.Object.reset_all_objects()
 
     def test_door_poi(self):
         """test door poi marshalling"""
@@ -180,24 +181,36 @@ class TestGeojson(unittest.TestCase):
         self.assertFalse(poi_b._was_approaching)
         self.assertFalse(poi_b._was_approached)
 
-    def global_map_name(self):
-        return "map"
-
-    def test_doorgoal(self):
+    def test_route1(self):
         self._prepare_data()
-        door = geojson.Object.get_object_by_id("EDITOR_facil_1547762317242")
-        goal = navgoal.DoorGoal(self, door)
+        self.assertGreater(len(self.route1), 0)
 
-        self.assertIsNotNone(goal)
+    def test_nearest_link(self):
+        self._prepare_data()
+        poi = geojson.Object.get_object_by_id("EDITOR_facil_1554692285117")
+        link, _ = geojson.Object.get_nearest_link(poi)
+        self.assertEqual(link._id, "EDITOR_link_1490021931669")
 
-        targetX = int(goal.x*10)
-        for x in range(0, targetX):
-            pose = geoutil.Pose(x=x/10.0, y=0.0, r=0.0)
-            goal.is_approaching(pose)
-            goal.is_approached(pose)
+    def test_nearest_link_on_route(self):
+        self._prepare_data()
+        ent_node = geojson.Object.get_object_by_id("EDITOR_node_1495220258080")
+        kdtree = geojson.LinkKDTree()
+        kdtree.build(list(filter(lambda x: isinstance(x, geojson.RouteLink), self.route2)))
+        link, _ = kdtree.get_nearest_link(ent_node)
+        self.assertEqual(link._id, "EDITOR_link_1495220220999")
 
-        self.assertEqual(goal._was_approaching, True)
-        self.assertEqual(goal._was_approached, True)
+    def test_build_kdtree_performance(self):
+        self._prepare_data()
+        ent_node = geojson.Object.get_object_by_id("EDITOR_node_1495220258080")
+        start = time.time()
+        for _ in range(0, 1000):
+            kdtree = geojson.LinkKDTree()
+            kdtree.build(list(filter(lambda x: isinstance(x, geojson.RouteLink), self.route2)))
+        end = time.time()
+        self.assertLess((end - start) / 1000, 0.1)
 
-    def get_logger(self):
-        return {}
+        start = time.time()
+        for _ in range(0, 1000):
+            _, _ = kdtree.get_nearest_link(ent_node)
+        end = time.time()
+        self.assertLess((end - start) / 1000, 0.01)

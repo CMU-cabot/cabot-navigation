@@ -50,6 +50,8 @@ if(BUILD_TESTING)
   ament_lint_cmake()
   ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
   ament_xmllint()
+
+  add_subdirectory(test)
 endif()
 
 # Install Python modules

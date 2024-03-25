@@ -174,6 +174,11 @@ void CaBotPlanner::configure(
     rclcpp::ParameterValue(defaultValue.max_iteration_count));
   node->get_parameter(name + ".max_iteration_count", options_.max_iteration_count);
 
+  declare_parameter_if_not_declared(
+    node, name + ".ignore_people",
+    rclcpp::ParameterValue(defaultValue.ignore_people));
+  node->get_parameter(name + ".ignore_people", options_.ignore_people);
+
   declare_parameter_if_not_declared(node, name + ".static_layer_name", rclcpp::ParameterValue("static_layer"));
   node->get_parameter(name + ".static_layer_name", static_layer_name_);
 
@@ -410,6 +415,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     if (param.get_name() == name_ + ".max_iteration_count") {
       options_.max_iteration_count = param.as_int();
     }
+    if (param.get_name() == name_ + ".ignore_people") {
+      options_.ignore_people = param.as_bool();
+    }
 
     // private
     if (param.get_name() == name_ + ".private.iteration_scale_min") {
@@ -510,11 +518,15 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
 
   if (param.adjustPath() == false) {return nav_msgs::msg::Path();}
 
-  CaBotPlan plans[] = {CaBotPlan(param), CaBotPlan(param), CaBotPlan(param)};
+  CaBotPlan plans[] = {
+    CaBotPlan(param, DetourMode::RIGHT),
+    CaBotPlan(param, DetourMode::LEFT),
+    CaBotPlan(param, DetourMode::IGNORE)
+  };
   CaBotPlan * plan = &plans[0];
 
   // find obstacles near the path
-  param.findObstacles(plan->getTargetNodes());
+  param.findObstacles(plan->nodes);
 
   auto t1 = std::chrono::system_clock::now();
   auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
@@ -531,11 +543,15 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
     param.options.interim_plan_publish_interval);
 
   int total_count = 0;
-  DetourMode modes[3] = {DetourMode::RIGHT, DetourMode::LEFT, DetourMode::IGNORE};
+  int i = 0;
+  if (param.options.ignore_people) {
+    plans[0].okay = false;
+    plans[1].okay = false;
+    i = 2;
+  }
   rclcpp::Rate r(1);
-  for (int i = 0; i < 3; i++) {
+  for (; i < 3; i++) {
     CaBotPlan & plan = plans[i];
-    plan.detour_mode = modes[i];
 
     int count = 0;
     int reduce = 0;

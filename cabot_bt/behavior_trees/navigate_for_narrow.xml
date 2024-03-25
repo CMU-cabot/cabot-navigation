@@ -21,108 +21,49 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 -->
-<!--
-    This Behavior Tree replans the global path periodically at 1 Hz and it also has
-    recovery actions.
--->
 
 <root main_tree_to_execute="NarrowTree">
+  <include ros_pkg="cabot_bt" path="behavior_trees/navigation.xml" />
   <BehaviorTree ID="NarrowTree">
     <RestoreConfig store="params">
-	<Sequence>
+      <Sequence>
         <!-- initialize blackboard -->
-        <SetBlackboard output_key="current_side" value="center"/>
-        <SetBlackboard output_key="config_changed" value="false"/>
+        <SetBlackboard output_key="current_side" value="center" />
+        <SetBlackboard output_key="config_changed" value="false" />
 
         <!-- use center for normal, 0.5 makes transition sudden, but small number cause issue
              passing close to obstacles -->
         <ChangeParam node_name="/global_costmap/global_costmap"
-                     param_name="navcog_path_layer.walk_weight"
-                     param_value="[0.1, 0.0, 0.1]" store="params" name="ChangeParamToCenter"/>
+          param_name="navcog_path_layer.walk_weight"
+          param_value="[0.1, 0.0, 0.1]" store="params" name="ChangeParamToCenter" />
 
         <ChangeParam node_name="/global_costmap/global_costmap"
-                     param_name="navcog_path_layer.path_adjusted_center"
-                     param_value="0.0" store="params"  name="ChangeParamPathAdjustedCenter1"/>
-        
+          param_name="navcog_path_layer.path_adjusted_center"
+          param_value="0.0" store="params" name="ChangeParamPathAdjustedCenter1" />
+
         <ChangeParam node_name="/planner_server"
-                     param_name="NavCog.path_adjusted_center"
-                     param_value="0.0" store="params"  name="ChangeParamPathAdjustedCenter2"/>
-        
+          param_name="NavCog.path_adjusted_center"
+          param_value="0.0" store="params" name="ChangeParamPathAdjustedCenter2" />
+
         <ChangeParam node_name="/planner_server"
-                     param_name="CaBot.path_adjusted_center"
-                     param_value="0.0" store="params"  name="ChangeParamPathAdjustedCenter3"/>
-        
+          param_name="CaBot.path_adjusted_center"
+          param_value="0.0" store="params" name="ChangeParamPathAdjustedCenter3" />
+
         <ChangeParam node_name="/controller_server"
-                     param_name="FollowPath.max_vel_x"
-                     param_value="0.5" store="params" name="ChangeParamSpeedDown"/>
+          param_name="FollowPath.max_vel_x"
+          param_value="0.5" store="params" name="ChangeParamSpeedDown" />
 
         <ChangeParam node_name="/global_costmap/global_costmap"
-                     param_name="people_obstacle_layer.people_enabled"
-                     param_value="false" store="params" name="DisablePeopleObstacle"/>
+          param_name="people_obstacle_layer.people_enabled"
+          param_value="false" store="params" name="DisablePeopleObstacle" />
 
         <ChangeParam node_name="/cabot/lidar_speed_control_node"
-                     param_name="min_distance"
-                     param_value="0.25" store="params" name="ChangeLidarSpeedControlMinDistance"/>
+          param_name="min_distance"
+          param_value="0.25" store="params" name="ChangeLidarSpeedControlMinDistance" />
 
-        <!-- clear global costmap -->
-        <RecoveryNode number_of_retries="999999999" name="InitialComputePathRepeat">
-          <Sequence name="ComputePathSequence">
-            <!-- clear costmap -->
-            <ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000"
-                                service_name="/global_costmap/clear_entirely_global_costmap"/>
-            <WaitFloat wait_duration_float="0.5"/>
-            <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
-            <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
-            <PublishTopicPath topic="plan" value="{path}"/>
-            <!-- front vibration -->
-            <PublishTopic topic="/cabot/event" value="navigation;event;navigation_start" />
-          </Sequence>
-          <AlwaysSuccess/>
-        </RecoveryNode>
+        <!-- shared navigation behavior, __shared_blackboard="true" is required -->
+        <SubTree ID="Navigation" __shared_blackboard="true" />
 
-        <!-- main loop -->
-        <RecoveryNode number_of_retries="999999999" name="NavigateRecovery">
-          <!-- navigation -->
-          <PipelineSequence name="NavigateWithReplanning">
-            <!-- Check people status frequently -->
-            <RateController hz="1" name="AvoidPeople">
-              <Fallback name="AvoidPersonFallback">
-                <Sequence>
-                  <NeedToReplan path="{path}" current_pose="{current_pose}" />
-                  <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
-                  <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
-                  <PublishTopicPath topic="plan" value="{path}"/>
-                </Sequence>
-                <AlwaysSuccess/>
-              </Fallback>
-            </RateController>
-
-            <!-- follow path -->
-            <ReactiveFallback>
-              <!-- if the goal is updated, abort following first, this will be recorvered by RecoveryComputePathRepeat -->
-              <GoalUpdated/>
-              <Sequence>
-                <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="cabot_goal_checker"/>
-              </Sequence>
-            </ReactiveFallback>
-          </PipelineSequence>
-
-          <!-- if follow path is aborted, compute path and try again -->
-          <RecoveryNode number_of_retries="999999999" name="RecoveryComputePathRepeat">
-            <Sequence name="ComputePathSequence">
-              <!-- clear costmap -->
-            <ClearEntireCostmap name="ClearGlobalCostmap-context-2" server_timeout="5000"
-                                service_name="/global_costmap/clear_entirely_global_costmap"/>
-              
-              <!-- wait long enough to include neighbor obstacles -->
-              <Wait wait_duration="1.0"/>
-              <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
-              <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
-              <PublishTopicPath topic="plan" value="{path}"/>
-            </Sequence>
-            <AlwaysSuccess/>
-          </RecoveryNode>
-        </RecoveryNode>
       </Sequence>
     </RestoreConfig>
   </BehaviorTree>

@@ -77,7 +77,7 @@ def wait_test(timeout=60):
             t = kwargs['seconds'] if 'seconds' in kwargs else timeout
             t = kwargs['timeout'] if 'timeout' in kwargs else t+5  # make sure not timeout if wait seconds is specified
             action_name = kwargs['action_name'] if 'action_name' in kwargs else function.__name__
-            case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': False, 'error': None}
+            case = {'target': tester.test_func_name, 'action': action_name, 'done': False, 'success': None, 'error': None}
             test_action = {'uuid': str(uuid.uuid4())}
 
             logger.debug(f"calling {function} {case} {test_action} - {args} {kwargs}")
@@ -94,7 +94,13 @@ def wait_test(timeout=60):
                 # logger.error("Timeout")
                 # continue other test
             else:
-                case['success'] = True
+                if case['success'] is None:
+                    case['success'] = True
+                else:
+                    if not case['success']:
+                        logger.error(F"{case}")
+                    else:
+                        logger.debug(F"{case}")
             logger.debug(f"finish: {case}")
             tester.register_action_result(case['target'], case)
             return result
@@ -179,9 +185,9 @@ class Tester:
         else:
             logger.error(f"{key}: Failure")
         for aResult in tfResult:
-            success = aResult['success']
+            success2 = aResult['success']
             action = aResult['action']
-            if success:
+            if success2:
                 logger.info(f" - {action}: Success")
             else:
                 logger.error(f" - {action}: Failure")
@@ -279,6 +285,22 @@ class Tester:
         self.evaluator.stop()
 
     # shorthand functions
+    def check_position(self, **kwargs):
+        x = kwargs['x'] if 'x' in kwargs else 0
+        y = kwargs['y'] if 'y' in kwargs else 0
+        tolerance = kwargs['tolerance'] if 'tolerance' in kwargs else 0.5
+        floor = kwargs['floor'] if 'floor' in kwargs else 0
+        self.wait_topic(**dict(
+            dict(
+                action_name=f'check_position ({x}, {y})[f={floor}] < {tolerance}',
+                topic_type="cabot_msgs/msg/PoseLog",
+                topic="/cabot/pose_log",
+                condition=F"math.sqrt((msg.pose.position.x - {x})**2 + (msg.pose.position.y - {y})**2) < {tolerance} and msg.floor == {floor}",
+                once=True
+            ),
+            **kwargs)
+        )
+
     def check_collision(self, **kwargs):
         return self.check_topic_error(**dict(
             dict(
@@ -490,7 +512,7 @@ class Tester:
 
         def topic_callback(msg):
             try:
-                context = {'msg': msg}
+                context = {'msg': msg, 'math': math}
                 exec(f"result=({condition})", context)
                 if context['result']:
                     logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
@@ -505,6 +527,7 @@ class Tester:
         case['done'] = True
 
         def cancel_func():
+            logger.debug(F"cancel {case}")
             self.cancel_subscription(case)
         return cancel_func
 
@@ -518,7 +541,7 @@ class Tester:
 
         def topic_callback(msg):
             try:
-                context = {'msg': msg}
+                context = {'msg': msg, 'math': math}
                 exec(f"result=({condition})", context)
                 if context['result']:
                     logger.debug(f"success {condition}")
@@ -530,7 +553,7 @@ class Tester:
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
         case['done'] = True
-        case['success'] = False
+        case['success'] = None
 
     @wait_test()
     def reset_position(self, case, test_action):
@@ -570,7 +593,7 @@ class Tester:
                 # define callback to check localize status to be tracking
                 def topic_callback(msg):
                     try:
-                        context = {'msg': msg}
+                        context = {'msg': msg, 'math': math}
                         exec(f"result=({condition})", context)
                         if context['result']:
                             case['done'] = True
@@ -632,19 +655,36 @@ class Tester:
             callback=done_callback)
 
     @wait_test()
+    def delete_actor(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        manager.delete(
+            name=test_action['name'],
+            callback=done_callback)
+
+    @wait_test()
     def wait_topic(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
         condition = test_action['condition']
+        once = test_action['once'] if 'once' in test_action else False
 
         def topic_callback(msg):
             try:
-                context = {'msg': msg}
+                context = {'msg': msg, 'math': math}
                 exec(f"result=({condition})", context)
                 if context['result']:
                     case['done'] = True
+                    self.cancel_subscription(case)
+                elif once:
+                    case['done'] = True
+                    case['success'] = False
+                    case['msg'] = msg
                     self.cancel_subscription(case)
             except:  # noqa: #722
                 logger.error(traceback.format_exc())
@@ -842,22 +882,19 @@ class ROS2LogHandler(logging.Handler):
 
 def main():
     global node, manager, logger
-    parser = OptionParser(usage="""
-    Example
-    {0} -m <module name>    # run test module
-    {0} -f <func name pat>  # run only func that mataches the pattern
-    """.format(sys.argv[0]))
+    parser = OptionParser()
 
     parser.add_option('-m', '--module', type=str, help='test module name')
-    parser.add_option('-f', '--func', type=str, help='test func name')
-    parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
     parser.add_option('-d', '--debug', action='store_true', help='debug print')
+    parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
+    parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
 
     (options, args) = parser.parse_args()
 
     if not options.module:
         parser.print_help()
-        sys.exit(0)
+        sys.exit(1)
 
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG if options.debug else logging.INFO)
@@ -865,19 +902,30 @@ def main():
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
 
+    if options.list_functions:
+        module = importlib.import_module(options.module)
+        functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
+        for f in functions:
+            logger.info(f)
+        sys.exit(0)
+
     rclpy.init()
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
 
-    ros2Handler = ROS2LogHandler(node)
-    logger.addHandler(ros2Handler)
+    # ros2Handler = ROS2LogHandler(node)
+    # logger.addHandler(ros2Handler)
 
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
 
     tester = Tester(node)
     tester.set_evaluator(evaluator)
-    mod = importlib.import_module(options.module)
+    try:
+        mod = importlib.import_module(options.module)
+    except ModuleNotFoundError:
+        logger.error(f"{options.module} is not found.")
+        sys.exit(1)
     func_pat = None
     if options.func:
         try:
@@ -887,6 +935,21 @@ def main():
             logger.error(error)
             return
     tester.test(mod, func_pat, wait_ready=options.wait_ready)
+
+
+def exit_hook(status_code):
+    logger.info(F"Exiting the program. {status_code}")
+    try:
+        if node:
+            node.destroy_node()
+            rclpy.shutdown()
+    except:  # noqa: 722
+        logger.info(traceback.format_exc())
+    original_exit(status_code)
+
+
+original_exit = sys.exit
+sys.exit = exit_hook  # Set the exit hook
 
 
 if __name__ == "__main__":

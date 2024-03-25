@@ -112,7 +112,6 @@ RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
     ipython==8.0.1 \
     odrive==0.6.5 \
-    numpy==1.24.4 \
     pyproj \
     pyserial \
     requests \
@@ -123,12 +122,12 @@ RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
 
 # for debug
-# RUN apt update && \
-#     apt install -y --no-install-recommends \
-#     gdb \
-#     vim \
-#     && \
-#     rm -rf /var/lib/apt/lists/*
+RUN apt update && \
+    apt install -y --no-install-recommends \
+    gdb \
+    vim \
+    && \
+    rm -rf /var/lib/apt/lists/*
 
 # set up venv for keeping compatibility
 RUN mkdir -p /opt/venv
