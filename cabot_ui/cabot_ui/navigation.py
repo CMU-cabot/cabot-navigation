@@ -645,7 +645,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.delegate.activity_log("cabot/navigation", "resume")
 
         current_pose = self.current_local_pose()
-        _, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+        goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+        goal.estimate_inner_goal(current_pose, self.current_floor)
         self._goal_index = index-1
         self._last_estimated_goal = None
 

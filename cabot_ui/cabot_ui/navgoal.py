@@ -23,6 +23,7 @@ import inspect
 from itertools import groupby
 import numpy
 import time
+import traceback
 import yaml
 
 from cabot_ui import geoutil, geojson
@@ -486,6 +487,9 @@ class Goal(geoutil.TargetPlace):
     def update_goal(self, goal):
         pass
 
+    def estimate_inner_goal(self, current_pose, current_floor):
+        pass
+
     @property
     def is_completed(self):
         return self._is_completed
@@ -542,7 +546,6 @@ class Goal(geoutil.TargetPlace):
         try:
             self._cancel(callback)
         except:  # noqa: #722
-            import traceback
             self._logger.error(traceback.format_exc())
 
     def _cancel(self, callback=None):
@@ -720,18 +723,18 @@ class NavGoal(Goal):
 
         # handle corner case (only a node is in the navcog_route)
         if len(navcog_route) == 1 and isinstance(navcog_route[0], geojson.Node):
-            separated_route = [navcog_route]
+            self.separated_route = [navcog_route]
             self.navcog_routes = [create_ros_path(navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)]
         else:
-            separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
+            self.separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
             self.navcog_routes = [
                 create_ros_path(
                     route,
                     self.anchor,
                     self.global_map_name,
-                    target_poi=target_poi if index == len(separated_route) - 1 else None,
-                    set_back=set_back if index == len(separated_route) - 1 else None
-                ) for index, route in enumerate(separated_route)
+                    target_poi=target_poi if index == len(self.separated_route) - 1 else None,
+                    set_back=set_back if index == len(self.separated_route) - 1 else None
+                ) for index, route in enumerate(self.separated_route)
             ]
 
         last_pose = self.navcog_routes[-1][1]
@@ -818,6 +821,30 @@ class NavGoal(Goal):
     def update_goal(self, goal):
         CaBotRclpyUtil.info("Updated goal position")
         # self.delegate.send_goal(goal, self.done_callback)
+
+    def estimate_inner_goal(self, current_pose, current_floor):
+        CaBotRclpyUtil.info("NavGoal.estimate_inner_goal is called")
+        try:
+            g = geoutil.local2global(current_pose, self.anchor)
+            min_dist = 100
+            min_index = 0
+            for index, navcog_route in enumerate(self.navcog_routes):
+                p = navcog_route[1].pose.position
+                if current_pose.distance_to(geoutil.Point(x=p.x, y=p.y)) < NavGoal.GOAL_XY_THRETHOLD:
+                    continue
+                route = self.separated_route[index]
+                for node_or_link in route:
+                    try:
+                        if node_or_link.floor == current_floor:
+                            dist = node_or_link.distance_to(g)
+                            if dist < min_dist:
+                                min_dist = dist
+                                min_index = index
+                    except:  # noqa: #722
+                        CaBotRclpyUtil.error(F"{node_or_link}")
+            self.route_index = min_index
+        except:
+            CaBotRclpyUtil.error(traceback.format_exc())
 
     def match(self, pose, floor):
         # work around, Link.distance_to is not implemented for local geometry
