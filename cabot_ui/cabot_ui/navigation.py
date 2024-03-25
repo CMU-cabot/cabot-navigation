@@ -1308,7 +1308,10 @@ class NavigationParamManager:
                     param = Parameter.from_parameter_msg(msg)
                     self.result[node_name][name] = param.value
             if self.rcount == len(params):
-                self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, {future.result()}")
+                if future:
+                    self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, {future.result()}")
+                else:
+                    self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, None")
                 callback(self.result)
         for node_name, param_list in params.items():
             self.node.get_logger().info(f"call request_parameter {node_name}, {param_list}")
