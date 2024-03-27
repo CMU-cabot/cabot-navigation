@@ -345,7 +345,8 @@ class UserInterface(object):
             # message = "PEOPLE_ARE_ON_MY_WAY"
             message = "PERSON_AHEAD"
         elif code == StopReason.AVOIDING_OBSTACLE:
-            message = "TRYING_TO_AVOID_OBSTACLE"
+            # message = "TRYING_TO_AVOID_OBSTACLE"
+            pass
         elif code == StopReason.UNKNOWN:
             message = "PLEASE_WAIT_FOR_A_SECOND"
         elif code == StopReason.NO_TOUCH:
