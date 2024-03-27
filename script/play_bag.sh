@@ -63,7 +63,7 @@ echo "play $bag"
 
 
 if (( $(echo "$start > 0.01" | bc -l) )); then
-    map=$(ros2 run cabot_debug print_topics.py -f $bag -d $start -1 -r -t /current_map_filename 2> /dev/null | tail -1)
+    map=$(ros2 run cabot_debug print_topics.py -f $bag -d $start -r -t /current_map_filename 2> /dev/null | tail -1)
     echo "last current_map_filename = $map"
     temp_str="${map#package://}"
     package="${temp_str%%/*}"
@@ -72,7 +72,7 @@ if (( $(echo "$start > 0.01" | bc -l) )); then
     path="${temp_str#*/}"
     map_path="map:=$prefix/share/$package/$path"
 
-    tf_frame="frame:=$(ros2 run cabot_debug print_topics.py -f $bag -d $start -1 -r -t /current_frame 2> /dev/null | tail -1)"
+    tf_frame="frame:=$(ros2 run cabot_debug print_topics.py -f $bag -d $start -r -t /current_frame 2> /dev/null | tail -1)"
     
     temp_file="$(mktemp)"
     ros2 run cabot_debug print_topics.py -f $bag -1 -r -t /robot_description > $temp_file
