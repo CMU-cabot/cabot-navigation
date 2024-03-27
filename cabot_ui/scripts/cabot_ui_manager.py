@@ -220,6 +220,9 @@ class CabotUIManager(NavigationInterface, object):
     def announce_social(self, message):
         self._interface.announce_social(message)
 
+    def speak_stop_reason(self, code):
+        self._interface.speak_stop_reason(code)
+
     def please_call_elevator(self, pos):
         self._interface.please_call_elevator(pos)
 
@@ -514,7 +517,7 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "stop-reason":
             if self._status_manager.state == State.in_action:
                 code = StopReason[event.param]
-                self._interface.speak_stop_reason(code)
+                self._navigation.process_stop_reason(code)
 
     def _process_exploration_event(self, event):
         if event.type != ExplorationEvent.TYPE:

@@ -102,9 +102,6 @@ class NavigationInterface(object):
     def could_not_get_current_location(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def announce_social(self, message):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
     def please_call_elevator(self, pos):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
@@ -955,13 +952,19 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         # do not provide social navigation messages while queue navigation
-        if isinstance(self._current_goal, navgoal.QueueNavGoal):
+        # do not provide social navigation messages while narrow/tight
+        if self._current_goal and not self._current_goal.is_social_navigation_enabled:
             return
 
         self.social_navigation.current_pose = current_pose
         message = self.social_navigation.get_message()
         if message is not None:
             self.delegate.announce_social(message)
+
+    def process_stop_reason(self, code):
+        if self._current_goal and not self._current_goal.is_stop_reason_enabled:
+            return
+        self.delegate.speak_stop_reason(code)
 
     def _check_goal(self, current_pose):
         self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
@@ -1018,9 +1021,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def exit_goal(self, goal):
         self.delegate.exit_goal(goal)
-
-    def announce_social(self, messages):
-        self.delegate.announce_social(messages)
 
     def navigate_to_pose(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
         self._logger.info(F"{namespace}/navigate_to_pose")

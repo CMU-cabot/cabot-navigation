@@ -520,6 +520,14 @@ class Goal(geoutil.TargetPlace):
     def current_statement(self):
         return self._current_statement
 
+    @property
+    def is_social_navigation_enabled(self):
+        return True
+
+    @property
+    def is_stop_reason_enabled(self):
+        return True
+
     def __str__(self):
         ret = F"{type(self)}, ({hex(id(self))})\n"
         for key in self.__dict__:
@@ -743,6 +751,10 @@ class NavGoal(Goal):
         self.mode = None
         self.route_index = 0
         super(NavGoal, self).__init__(delegate, angle=180, floor=navcog_route[-1].floor, pose_msg=last_pose, **kwargs)
+
+    @property
+    def is_social_navigation_enabled(self):
+        return self.navcog_routes[self.route_index][2] == geojson.NavigationMode.Standard
 
     def _extract_pois(self):
         """extract pois along the route"""
@@ -1244,6 +1256,14 @@ class QueueNavGoal(NavGoal):
                 "social_distance_y": QueueNavGoal.QUEUE_SOCIAL_DISTANCE_Y
             }
         }
+
+    @property
+    def is_social_navigation_enabled(self):
+        return False
+
+    @property
+    def is_stop_reason_enabled(self):
+        return False
 
     def _enter(self):
         # change queue_interval setting
