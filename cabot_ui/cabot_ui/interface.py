@@ -291,8 +291,8 @@ class UserInterface(object):
     def exit_goal(self, goal):
         pass
 
-    def announce_social(self, message):
-        self._activity_log("cabot/interface", "notify", "social")
+    def announce_social(self, message, type="social"):
+        self._activity_log("cabot/interface", type, message)
         if self.last_social_announce is None or \
            self._node.get_clock().now() - self.last_social_announce > UserInterface.SOCIAL_ANNOUNCE_INTERVAL:
             self.speak(i18n.localized_string(message))
@@ -339,17 +339,19 @@ class UserInterface(object):
     def speak_stop_reason(self, code):
         message = None
         if code == StopReason.AVOIDING_PEOPLE:
-            message = "TRYING_TO_AVOID_PEOPLE"
+            # message = "TRYING_TO_AVOID_PEOPLE"
+            message = "PERSON_AHEAD"
+        elif code == StopReason.THERE_ARE_PEOPLE_ON_THE_PATH:
+            # message = "PEOPLE_ARE_ON_MY_WAY"
+            message = "PERSON_AHEAD"
         elif code == StopReason.AVOIDING_OBSTACLE:
             message = "TRYING_TO_AVOID_OBSTACLE"
-        elif code == StopReason.THERE_ARE_PEOPLE_ON_THE_PATH:
-            message = "PEOPLE_ARE_ON_MY_WAY"
         elif code == StopReason.UNKNOWN:
             message = "PLEASE_WAIT_FOR_A_SECOND"
         elif code == StopReason.NO_TOUCH:
             message = "NOT_DETECT_TOUCH"
         if message:
-            self.announce_social(message)
+            self.announce_social(message, type="stop-reason")
 
     def please_follow_behind(self):
         self._activity_log("cabot/interface", "navigation", "please_follow_behind")
