@@ -218,10 +218,26 @@ class CabotUIManager(NavigationInterface, object):
         self._interface.exit_goal(goal)
 
     def announce_social(self, message):
-        self._interface.announce_social(message)
+        self._logger.info(f"cabot_ui_manager.announce_social is called: {str(message)}")
+        sound_only = ["AVOIDING_AN_OBSTACLE", "AVOIDING_OBSTACLES"]
+        if message in sound_only:
+            e = NavigationEvent("sound", str(message))
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+        else:
+            self._interface.announce_social(message)
 
     def speak_stop_reason(self, code):
-        self._interface.speak_stop_reason(code)
+        self._logger.info(f"cabot_ui_manager.speak_stop_reason is called: {str(code)}")
+        sound_only = [StopReason.AVOIDING_OBSTACLE]
+        if code in sound_only:
+            e = NavigationEvent("sound", str(code))
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+        else:
+            self._interface.speak_stop_reason(code)
 
     def please_call_elevator(self, pos):
         self._interface.please_call_elevator(pos)

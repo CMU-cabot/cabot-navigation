@@ -113,10 +113,10 @@ class SocialNavigation(object):
                 self._set_message("AVOIDING_A_PERSON", "AVOID", 10)
             elif self._people_count > 1:
                 self._set_message("AVOIDING_PEOPLE", "AVOID", 10)
-            # elif self._obstacles_count == 1:
-            #     self._set_message("AVOIDING_AN_OBSTACLE", "AVOID", 10)
-            # elif self._obstacles_count > 1:
-            #     self._set_message("AVOIDING_OBSTACLES", "AVOID", 10)
+            elif self._obstacles_count == 1:
+                self._set_message("AVOIDING_AN_OBSTACLE", "AVOID", 10)
+            elif self._obstacles_count > 1:
+                self._set_message("AVOIDING_OBSTACLES", "AVOID", 10)
             self._turn = None
 
         # check event

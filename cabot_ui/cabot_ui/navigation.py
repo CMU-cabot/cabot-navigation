@@ -964,6 +964,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def process_stop_reason(self, code):
         if self._current_goal and not self._current_goal.is_stop_reason_enabled:
             return
+        self._logger.info(f"process_stop_reason is callded: {code}")
         self.delegate.speak_stop_reason(code)
 
     def _check_goal(self, current_pose):
