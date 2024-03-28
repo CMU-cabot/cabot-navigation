@@ -41,30 +41,38 @@
 
 ```
 ./build-docker.sh -p -i -w              # run prebuild, image build, and workspace build
+./build-docker.sh -p -i -w -d           # run prebuild, image build, and workspace debug build (symlink-install)
 ```
 
-### Run test cases
+### Run simulator and run test cases
 
-- set .env file
+- set .env file (example)
 
 ```
 CABOT_MODEL=cabot2-gt1
 CABOT_SITE=cabot_site_cmu_3d
+RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ```
 
-- run the test
+- run simulator
 
 ```
-./launch.sh -s -y                 # simulation, yes to launch a map server
-./launch.sh -s -y -t              # simulation, yes to launch a map server, run test
+./launch.sh -s                 # simulation, yes to launch a map server
 ```
+
+- run test cases
+
+```
+./launch.sh -s -t              # simulation, yes to launch a map server, run test
+./launch.sh -s -t -H           # simulation, yes to launch a map server, run test, headless
+```
+
 ### .env file
 
 - **Required settings**
   ```
   CABOT_MODEL          # robot model (default=) to determine which launch/urdf to use
   CABOT_SITE           # package name for cabot site (default=)
-  CABOT_TOUCH_PARAMS   # touch sensor parameter for cabot-arduino handle (default=[128,48,24])
   RMW_IMPLEMENTATION=rmw_cyclonedds_cpp   # need to use cyclone dds due to performance issue
   ```
 - Optional settings
