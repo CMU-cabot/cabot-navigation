@@ -73,6 +73,9 @@ class Turn:
     def __repr__(self):
         return self.__str__()
 
+    def distance_to(self, other):
+        return np.sqrt((self.start.x - other.start.x) ** 2 + (self.start.y - other.start.y) ** 2)
+
 
 class TurnDetector:
     def __init__(self):

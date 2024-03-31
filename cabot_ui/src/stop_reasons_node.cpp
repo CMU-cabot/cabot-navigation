@@ -59,7 +59,6 @@ public:
     prev_code_(cabot_ui::StopReason::NONE)
   {
     stop_reason_pub_ = this->create_publisher<cabot_msgs::msg::StopReason>("/stop_reason", 10);
-    event_pub_ = this->create_publisher<std_msgs::msg::String>("/cabot/event", 10);
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(ODOM_TOPIC, 10, std::bind(&StopReasonsNode::odom_callback, this, _1));
     event_sub_ = this->create_subscription<std_msgs::msg::String>(EVENT_TOPIC, 10, std::bind(&StopReasonsNode::event_callback, this, _1));
     cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(CMD_VEL_TOPIC, 10, std::bind(&StopReasonsNode::cmd_vel_callback, this, _1));
@@ -160,20 +159,22 @@ public:
     auto [duration, code] = reasoner_->update();
     stop_reason_filter_->update(duration, code);
     std::tie(duration, code) = stop_reason_filter_->event();
-
     if (code != cabot_ui::StopReason::NONE) {
       cabot_msgs::msg::StopReason msg;
       msg.header.stamp = this->get_clock()->now();
       msg.reason = cabot_ui::StopReasonUtil::toStr(code);
       msg.duration = duration;
+      msg.summary = false;
       stop_reason_pub_->publish(msg);
     }
     std::tie(duration, code) = stop_reason_filter_->summary();
     if (code != cabot_ui::StopReason::NONE) {
-      std_msgs::msg::String msg;
-      msg.data = "navigation;stop-reason;" + cabot_ui::StopReasonUtil::toStr(code);
-      event_pub_->publish(msg);
-      RCLCPP_INFO(this->get_logger(), "%.2f, %s, %.2f", this->get_clock()->now().nanoseconds() / 1e9f, cabot_ui::StopReasonUtil::toStr(code).c_str(), duration);
+      cabot_msgs::msg::StopReason msg;
+      msg.header.stamp = this->get_clock()->now();
+      msg.reason = cabot_ui::StopReasonUtil::toStr(code);
+      msg.duration = duration;
+      msg.summary = true;
+      stop_reason_pub_->publish(msg);
     }
     stop_reason_filter_->conclude();
   }
@@ -183,7 +184,6 @@ private:
   std::shared_ptr<cabot_ui::StopReasonFilter> stop_reason_filter_;
   cabot_ui::StopReason prev_code_;
   rclcpp::Publisher<cabot_msgs::msg::StopReason>::SharedPtr stop_reason_pub_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr event_pub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr event_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;

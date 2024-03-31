@@ -146,7 +146,7 @@ class CabotUIManager(NavigationInterface, object):
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
-    # navigation delegate
+    # region NavigationInterface
     def activity_log(self, category="", text="", memo=""):
         self._interface.activity_log(category, text, memo)
 
@@ -211,36 +211,14 @@ class CabotUIManager(NavigationInterface, object):
     def could_not_get_current_location(self):
         self._interface.could_not_get_current_location()
 
+    def please_call_elevator(self, pos):
+        self._interface.please_call_elevator(pos)
+
     def enter_goal(self, goal):
         self._interface.enter_goal(goal)
 
     def exit_goal(self, goal):
         self._interface.exit_goal(goal)
-
-    def announce_social(self, message):
-        self._logger.info(f"cabot_ui_manager.announce_social is called: {str(message)}")
-        sound_only = ["AVOIDING_AN_OBSTACLE", "AVOIDING_OBSTACLES"]
-        if message in sound_only:
-            e = NavigationEvent("sound", str(message))
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
-        else:
-            self._interface.announce_social(message)
-
-    def speak_stop_reason(self, code):
-        self._logger.info(f"cabot_ui_manager.speak_stop_reason is called: {str(code)}")
-        sound_only = [StopReason.AVOIDING_OBSTACLE]
-        if code in sound_only:
-            e = NavigationEvent("sound", str(code))
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
-        else:
-            self._interface.speak_stop_reason(code)
-
-    def please_call_elevator(self, pos):
-        self._interface.please_call_elevator(pos)
 
     def elevator_opening(self):
         self._interface.elevator_opening()
@@ -269,7 +247,13 @@ class CabotUIManager(NavigationInterface, object):
     def please_return_position(self):
         self._interface.please_return_position()
 
-    ###
+    def announce_social(self, message):
+        self._interface.announce_social(message)
+
+    def request_sound(self, sound):
+        self._interface.request_sound(sound)
+    # endregion NavigationInterface
+
     def _event_callback(self, msg):
         event = BaseEvent.parse(msg.data)
         if event is None:
@@ -529,11 +513,6 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info("NavigationState: Pause control = False")
             self._interface.set_pause_control(False)
             self._navigation.set_pause_control(False)
-
-        if event.subtype == "stop-reason":
-            if self._status_manager.state == State.in_action:
-                code = StopReason[event.param]
-                self._navigation.process_stop_reason(code)
 
     def _process_exploration_event(self, event):
         if event.type != ExplorationEvent.TYPE:
