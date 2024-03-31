@@ -28,6 +28,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui import geoutil
 
 smoothParam = 0.015
 lookAheadStepsA = int(2/0.02)
@@ -74,7 +75,18 @@ class Turn:
         return self.__str__()
 
     def distance_to(self, other):
-        return np.sqrt((self.start.x - other.start.x) ** 2 + (self.start.y - other.start.y) ** 2)
+        if isinstance(other, Turn):
+            return np.sqrt((self.start.x - other.start.x) ** 2 + (self.start.y - other.start.y) ** 2)
+        elif isinstance(other, geoutil.Pose):
+            pose = geoutil.Pose(pose_msg=self.pose)
+            pose.r = pose.r + math.pi
+            dist_TR = other.distance_to(pose)
+            pose_TR = geoutil.Pose.pose_from_points(pose, other)
+            yaw = geoutil.diff_angle(pose.orientation, pose_TR.orientation)
+            adjusted = dist_TR * math.cos(yaw)
+            CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+            return adjusted
+
 
 
 class TurnDetector:

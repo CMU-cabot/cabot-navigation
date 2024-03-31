@@ -867,10 +867,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
+                if turn.passed:
+                    continue
                 try:
-                    turn_pose = self.buffer.transform(turn.pose, self._global_map_name)
-                    dist = current_pose.distance_to(geoutil.Point(xy=turn_pose.pose.position))
-                    if dist < 0.25 and not turn.passed:
+                    dist = turn.distance_to(current_pose)
+                    if dist < 0.25:
                         turn.passed = True
                         self._logger.info(F"notify turn {turn}")
 
@@ -978,8 +979,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # do not provide social navigation messages while queue navigation
         # do not provide social navigation messages while narrow/tight
         if self._current_goal and not self._current_goal.is_social_navigation_enabled:
+            self._logger.info("social navigation is disabled")
             return
         if self._current_goal and not self._current_goal.is_stop_reason_enabled:
+            self._logger.info("stop reason is disabled")
             return
 
         self.social_navigation.current_pose = current_pose
