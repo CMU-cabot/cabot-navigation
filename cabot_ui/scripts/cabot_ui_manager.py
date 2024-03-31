@@ -56,7 +56,6 @@ from cabot_ui.menu import Menu
 from cabot_ui.status import State, StatusManager
 from cabot_ui.interface import UserInterface
 from cabot_ui.navigation import Navigation, NavigationInterface
-from cabot_ui.stop_reasoner import StopReason
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask

@@ -35,6 +35,7 @@ from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
 
+
 class UserInterface(object):
     SOCIAL_ANNOUNCE_INTERVAL = Duration(seconds=15.0)
     NOTIFY_TURN_INTERVAL = Duration(seconds=5.0)

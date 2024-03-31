@@ -88,7 +88,6 @@ class Turn:
             return adjusted
 
 
-
 class TurnDetector:
     def __init__(self):
         pass

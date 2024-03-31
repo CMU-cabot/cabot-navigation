@@ -32,6 +32,7 @@ from cabot_msgs.msg import StopReason
 from dataclasses import dataclass
 import enum
 
+
 @dataclass
 class SNMessage:
     class Type(enum.Enum):
