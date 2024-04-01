@@ -110,6 +110,7 @@ RETURN_TO_POSITION_PLEASE: "細い道を抜けました。元の位置に戻っ�
 NOT_DETECT_TOUCH: "ハンドルのタッチを検出できません。"
 
 ## Facility
+IN_FRONT: "正面"
 RIGHT_SIDE: "右側"
 LEFT_SIDE: "左側"
 APPROACEHD_TO_FACILITY: "{1}に{0}があります"

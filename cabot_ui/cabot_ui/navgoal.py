@@ -21,7 +21,6 @@
 from typing import List
 import math
 import inspect
-from itertools import groupby
 import numpy
 import time
 import traceback
@@ -762,7 +761,7 @@ class NavGoal(Goal):
             previous_link = route[i - 1]
             orientation_diff = math.fabs(geoutil.diff_angle(current_link.pose.orientation, previous_link.pose.orientation))
             if current_link.navigation_mode != previous_link.navigation_mode or \
-            (previous_link.navigation_mode != geojson.NavigationMode.Standard and orientation_diff > 80.0 / 180.0 * math.pi):
+               (previous_link.navigation_mode != geojson.NavigationMode.Standard and orientation_diff > 80.0 / 180.0 * math.pi):
                 separated_routes.append(current_group)
                 current_group = [current_link]
             else:

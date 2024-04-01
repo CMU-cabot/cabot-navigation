@@ -600,7 +600,7 @@ class Entrance(geoutil.TargetPlace):
         self.node_id = node._id
         self._id = f"{facility._id}_ent{i}"
         self.name = i18n.localized_attr(facility.properties, f"ent{i}_n")
-        super(Entrance, self).__init__(r=0, x=0, y=0, angle=45, floor=self.floor)
+        super(Entrance, self).__init__(r=0, x=0, y=0, angle=60, floor=self.floor)
         Object._register(self)
 
     @property
@@ -626,12 +626,30 @@ class Entrance(geoutil.TargetPlace):
         diff = geoutil.q_diff(self.quaternion, p1)
         _, _, angle = euler_from_quaternion(diff)
         CaBotRclpyUtil.debug(f"Entrance.approacehd_statement {diff} {angle}")
-        direction = "RIGHT_SIDE" if angle < 0 else "LEFT_SIDE"
+        if math.fabs(angle) < math.pi / 4:
+            direction = "IN_FRONT"
+        else:
+            direction = "RIGHT_SIDE" if angle < 0 else "LEFT_SIDE"
         i18n_direction = i18n.localized_string(direction)
         return i18n.localized_string("APPROACEHD_TO_FACILITY").format(self.facility.name, i18n_direction)
 
     def passed_statement(self):
         return None
+
+    # distance is adjusted to by the TargetPoint orientation
+    #                     <- T Target (orientation)
+    #                        |
+    #                        |
+    # robot R ---distance--- o
+    #
+    # adjusted = True
+    def distance_to(self, robot):
+        dist_TR = robot.distance_to(self)
+        pose_TR = geoutil.Pose.pose_from_points(self, robot)
+        yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
+        adjusted = dist_TR * math.cos(yaw)
+        CaBotRclpyUtil.info(f"Entrance.distance_to dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+        return adjusted
 
 
 class Facility(Object):
