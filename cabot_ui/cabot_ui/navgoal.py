@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from typing import List
 import math
 import inspect
 from itertools import groupby
@@ -734,7 +735,8 @@ class NavGoal(Goal):
             self.separated_route = [navcog_route]
             self.navcog_routes = [create_ros_path(navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)]
         else:
-            self.separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
+            self.separated_route = self.separate_route(navcog_route)
+            # self.separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
             self.navcog_routes = [
                 create_ros_path(
                     route,
@@ -751,6 +753,22 @@ class NavGoal(Goal):
         self.mode = None
         self.route_index = 0
         super(NavGoal, self).__init__(delegate, angle=180, floor=navcog_route[-1].floor, pose_msg=last_pose, **kwargs)
+
+    def separate_route(self, route: List[geojson.RouteLink]) -> List[List[geojson.RouteLink]]:
+        separated_routes = []
+        current_group = [route[0]]
+        for i in range(1, len(route)):
+            current_link = route[i]
+            previous_link = route[i - 1]
+            orientation_diff = math.fabs(geoutil.diff_angle(current_link.pose.orientation, previous_link.pose.orientation))
+            if current_link.navigation_mode != previous_link.navigation_mode or \
+            (previous_link.navigation_mode != geojson.NavigationMode.Standard and orientation_diff > 80.0 / 180.0 * math.pi):
+                separated_routes.append(current_group)
+                current_group = [current_link]
+            else:
+                current_group.append(current_link)
+        separated_routes.append(current_group)  # Add the last group
+        return separated_routes
 
     @property
     def is_social_navigation_enabled(self):

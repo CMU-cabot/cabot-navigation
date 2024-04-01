@@ -742,7 +742,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _process_queue_func(self):
         if len(self._process_queue) > 0:
             process = self._process_queue.pop(0)
-            process[0](*process[1:])
+            try:
+                process[0](*process[1:])
+            except:
+                self._logger.error(traceback.format_exc())
 
     # Main loop of navigation
     GOAL_POSITION_TORELANCE = 1
