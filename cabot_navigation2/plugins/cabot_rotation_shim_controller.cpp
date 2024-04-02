@@ -48,7 +48,9 @@ geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCom
 
       double angular_distance_to_heading =
         std::atan2(sampled_pt_base.position.y, sampled_pt_base.position.x);
-      if (fabs(angular_distance_to_heading) > angular_dist_threshold_ && velocity.linear.x < 0.1) {
+      double distance_to_heading = hypot(sampled_pt_base.position.x, sampled_pt_base.position.y);
+      if (distance_to_heading >= forward_sampling_distance_ &&
+          fabs(angular_distance_to_heading) > angular_dist_threshold_ && velocity.linear.x < 0.1) {
         RCLCPP_DEBUG(
           logger_,
           "Robot is not within the new path's rough heading, rotating to heading...");
