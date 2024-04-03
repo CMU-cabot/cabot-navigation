@@ -585,13 +585,15 @@ class Tester:
             # change gazebo model position
             request = SetEntityState.Request()
             request.state.name = 'mobile_base'
+            origin_x = test_action['origin_x'] if 'origin_x' in test_action else self.config['origin_x'] if 'origin_x' in self.config else 0
+            origin_y = test_action['origin_y'] if 'origin_y' in test_action else self.config['origin_y'] if 'origin_y' in self.config else 0
             init_x = test_action['x'] if 'x' in test_action else self.config['init_x']
             init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
             init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
             init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
             init_yaw = init_a / 180.0 * math.pi
-            request.state.pose.position.x = float(init_x)
-            request.state.pose.position.y = float(init_y)
+            request.state.pose.position.x = float(init_x + origin_x)
+            request.state.pose.position.y = float(init_y + origin_y)
             request.state.pose.position.z = float(init_z)
             q = quaternion_from_euler(0, 0, init_yaw)
             request.state.pose.orientation.x = q[0]
