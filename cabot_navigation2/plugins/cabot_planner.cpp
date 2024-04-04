@@ -1,24 +1,22 @@
-/*******************************************************************************
- * Copyright (c) 2022  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2022  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include <tf2/utils.h>
 
@@ -175,6 +173,11 @@ void CaBotPlanner::configure(
     node, name + ".max_iteration_count",
     rclcpp::ParameterValue(defaultValue.max_iteration_count));
   node->get_parameter(name + ".max_iteration_count", options_.max_iteration_count);
+
+  declare_parameter_if_not_declared(
+    node, name + ".ignore_people",
+    rclcpp::ParameterValue(defaultValue.ignore_people));
+  node->get_parameter(name + ".ignore_people", options_.ignore_people);
 
   declare_parameter_if_not_declared(node, name + ".static_layer_name", rclcpp::ParameterValue("static_layer"));
   node->get_parameter(name + ".static_layer_name", static_layer_name_);
@@ -344,7 +347,7 @@ void CaBotPlanner::configure(
   node->get_parameter(name + ".people_topic", people_topic_);
   declare_parameter_if_not_declared(node, name + ".obstacles_topic", rclcpp::ParameterValue("/obstacles"));
   node->get_parameter(name + ".obstacles_topic", obstacles_topic_);
-  declare_parameter_if_not_declared(node, name + ".queue_topic", rclcpp::ParameterValue("/queue_people_py/queue"));
+  declare_parameter_if_not_declared(node, name + ".queue_topic", rclcpp::ParameterValue("/queue"));
   node->get_parameter(name + ".queue_topic", queue_topic_);
   rclcpp::QoS people_qos(10);
   people_sub_ = node->create_subscription<people_msgs::msg::People>(
@@ -411,6 +414,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     }
     if (param.get_name() == name_ + ".max_iteration_count") {
       options_.max_iteration_count = param.as_int();
+    }
+    if (param.get_name() == name_ + ".ignore_people") {
+      options_.ignore_people = param.as_bool();
     }
 
     // private
@@ -512,11 +518,15 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
 
   if (param.adjustPath() == false) {return nav_msgs::msg::Path();}
 
-  CaBotPlan plans[] = {CaBotPlan(param), CaBotPlan(param), CaBotPlan(param)};
+  CaBotPlan plans[] = {
+    CaBotPlan(param, DetourMode::RIGHT),
+    CaBotPlan(param, DetourMode::LEFT),
+    CaBotPlan(param, DetourMode::IGNORE)
+  };
   CaBotPlan * plan = &plans[0];
 
   // find obstacles near the path
-  param.findObstacles(plan->getTargetNodes());
+  param.findObstacles(plan->nodes);
 
   auto t1 = std::chrono::system_clock::now();
   auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
@@ -533,11 +543,15 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
     param.options.interim_plan_publish_interval);
 
   int total_count = 0;
-  DetourMode modes[3] = {DetourMode::RIGHT, DetourMode::LEFT, DetourMode::IGNORE};
+  int i = 0;
+  if (param.options.ignore_people) {
+    plans[0].okay = false;
+    plans[1].okay = false;
+    i = 2;
+  }
   rclcpp::Rate r(1);
-  for (int i = 0; i < 3; i++) {
+  for (; i < 3; i++) {
     CaBotPlan & plan = plans[i];
-    plan.detour_mode = modes[i];
 
     int count = 0;
     int reduce = 0;
@@ -585,7 +599,7 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
     // if converged path collides with obstacle, change detoure mode
     RCLCPP_INFO(
       logger_, "total_diff=%.3f, %ld, %.4f <> %.4f count=%d", total_diff, plan.nodes.size(),
-       total_diff / plan.nodes.size(), complete_threshold, count);
+      total_diff / plan.nodes.size(), complete_threshold, count);
 
     plan.okay = plan.checkPathIsOkay();
     if (i == 1) {

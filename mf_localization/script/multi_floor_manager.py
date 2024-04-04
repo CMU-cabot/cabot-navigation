@@ -73,7 +73,7 @@ from cartographer_ros_msgs.srv import ReadMetrics
 import mf_localization.geoutil as geoutil
 import mf_localization.resource_utils as resource_utils
 
-from mf_localization.wireless_utils import extract_samples
+# from mf_localization.wireless_utils import extract_samples
 from wireless_rss_localizer import create_wireless_rss_localizer
 
 from mf_localization_msgs.msg import MFGlobalPosition
@@ -86,10 +86,13 @@ from mf_localization_msgs.srv import RestartLocalization
 from mf_localization_msgs.srv import StartLocalization
 from mf_localization_msgs.srv import StopLocalization
 
-from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters, AltitudeFloorEstimatorResult
+from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
+
+import std_msgs.msg
+from cabot_msgs.srv import LookupTransform
 
 
 def json2anchor(jobj):
@@ -128,6 +131,31 @@ class RSSType(Enum):
     WiFi = 1
 
 
+def extract_samples_ble_wifi_other(samples):
+    import copy
+    samples_ble = []
+    samples_wifi = []
+    samples_other = []
+
+    for s in samples:
+        s2_ble = [b for b in s["data"]["beacons"] if b["type"] == "iBeacon"]
+        s2_wifi = [b for b in s["data"]["beacons"] if b["type"] == "WiFi"]
+
+        if 0 < len(s2_ble):
+            s2 = copy.copy(s)
+            s2["data"]["beacons"] = s2_ble
+            samples_ble.append(s2)
+        if 0 < len(s2_wifi):
+            s2 = copy.copy(s)
+            s2["data"]["beacons"] = s2_wifi
+            samples_wifi.append(s2)
+        if len(s2_ble) == 0 and len(s2_wifi):
+            s2 = copy.copy(s)
+            samples_other.append(s2)
+
+    return samples_ble, samples_wifi, samples_other
+
+
 def convert_samples_coordinate_slow(samples, from_anchor, to_anchor, floor):
     samples2 = []
     for s in samples:
@@ -145,6 +173,10 @@ def convert_samples_coordinate_slow(samples, from_anchor, to_anchor, floor):
 
 
 def convert_samples_coordinate(samples, from_anchor, to_anchor, floor):
+    # check empty list
+    if len(samples) == 0:
+        return []
+
     # convert from_anchor point to to_anchor coordinate
     xy = geoutil.Point(x=0.0, y=0.0)
     latlng = geoutil.local2global(xy, from_anchor)
@@ -485,18 +517,22 @@ class MultiFloorManager:
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
 
-        self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode = LocalizationMode.TRACK)
+        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
 
-    def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode = None):
+        # set is_active to True if succeeded to start trajectory
+        if status_code == 0:
+            self.is_active = True
+
+    def initialize_with_global_pose(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped, mode=None):
 
         # set target mode
-        if mode is not None: # update the target mode
+        if mode is not None:  # update the target mode
             target_mode = mode
         else:
             if self.mode is None:
                 target_mode = LocalizationMode.INIT
             else:
-                target_mode = self.mode # keep the current mode
+                target_mode = self.mode  # keep the current mode
 
         if self.floor is None:
             self.logger.info("floor is unknown. Set floor by calling /set_current_floor service before publishing the 2D pose estimate.")
@@ -524,7 +560,7 @@ class MultiFloorManager:
             try:
                 # this assumes frame_id of pose_stamped_msg is correctly set.
                 local_pose_stamped = tfBuffer.transform(pose_stamped_msg, frame_id, timeout=Duration(seconds=1.0))  # timeout 1.0 s
-            except RuntimeError as e:
+            except RuntimeError:
                 # when the frame_id of pose_stamped_msg is not correctly set (e.g. frame_id = map), assume the initial pose is published on the target frame.
                 # this workaround behaves intuitively in typical cases.
                 self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. Assuming initial pose is published on the target frame ({frame_id}).")
@@ -542,8 +578,8 @@ class MultiFloorManager:
 
             self.mode = target_mode
             self.area = target_area
-            
-            self.start_trajectory_with_pose(local_pose)
+
+            status_code = self.start_trajectory_with_pose(local_pose)
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
 
             # reset altitude_floor_estimator in floor initialization process
@@ -559,6 +595,8 @@ class MultiFloorManager:
                 self.localize_status = MFLocalizeStatus.LOCATING
             elif self.mode == LocalizationMode.TRACK:
                 self.localize_status = MFLocalizeStatus.TRACKING
+
+            return status_code  # result of start_trajectory_with_pose
 
     def restart_floor(self, local_pose: Pose):
         # set z = 0 to ensure 2D position on the local map
@@ -580,7 +618,7 @@ class MultiFloorManager:
         self.resetpose_pub.publish(pose_cov_stamped)  # publish local_pose for visualization
         status_code_start_trajectory = self.start_trajectory_with_pose(local_pose)
         self.logger.info(F"called /{floor_manager.node_id}/{self.mode}/start_trajectory, code={status_code_start_trajectory}")
-            
+
         # set current_frame and publish it in the setter
         self.current_frame = frame_id
 
@@ -657,6 +695,8 @@ class MultiFloorManager:
 
                 # reject if the candidate area may be unreachable.
                 if self.area_distance_threshold < neigh_dist:
+                    if self.verbose:
+                        self.logger.info(F"pressure_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({target_floor}, {area})")
                     return
 
                 # set temporal variables
@@ -670,7 +710,7 @@ class MultiFloorManager:
                 try:
                     # tf from the origin of the target floor to the robot pose
                     local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
+                except RuntimeError:
                     self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
 
                 # update the trajectory only when local_transform is available
@@ -808,8 +848,28 @@ class MultiFloorManager:
                 or (self.mode == LocalizationMode.INIT and self.optimization_detected):
             if self.floor != floor:
                 self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
+
+                # check if the candidate pose is reachable
+                # get robot pose
+                try:
+                    robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                except RuntimeError as e:
+                    self.logger.warn(F"{e}")
+                    return
+                # detect area in target_floor
+                x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(floor) * self.area_floor_const]]  # [x,y,floor]
+                # find area candidates
+                neigh_dists, neigh_indices = self.area_localizer.kneighbors(x_area, n_neighbors=1)
+                area_candidates = self.Y_area[neigh_indices]
+                neigh_dist = neigh_dists[0][0]
+                area = area_candidates[0][0]
+                # reject if the candidate area may be unreachable.
+                if self.area_distance_threshold < neigh_dist:
+                    if self.verbose:
+                        self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
+                    return
             else:
-                self.logger.info(F"optimization_detected. change localization mode init->track")
+                self.logger.info("optimization_detected. change localization mode init->track")
 
             # set temporal variables
             target_floor = floor
@@ -823,7 +883,7 @@ class MultiFloorManager:
             try:
                 # tf from the origin of the target floor to the robot pose
                 local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type), no_cache=True)
-            except RuntimeError as e:
+            except RuntimeError:
                 self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
 
             # update the trajectory only when local_transform is available
@@ -860,7 +920,7 @@ class MultiFloorManager:
                 if failure_detected and self.auto_relocalization:
                     self.restart_localization()
                     self.logger.error("Auto-relocalization. (localization failure detected)")
-            except RuntimeError as e:
+            except RuntimeError:
                 self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.base_link_frame}")
 
     # periodically check and update internal state variables (area and mode)
@@ -908,7 +968,7 @@ class MultiFloorManager:
                 if self.area != area:
                     self.logger.info(F"area change detected ({self.area} -> {area}).")
                 elif (self.mode == LocalizationMode.INIT and self.optimization_detected):
-                    self.logger.info(F"optimization_detected. change localization mode init->track")
+                    self.logger.info("optimization_detected. change localization mode init->track")
                 elif (self.mode == LocalizationMode.INIT and self.init_timeout_detected):
                     self.logger.info("optimization timeout detected. change localization mode init->track")
 
@@ -922,7 +982,7 @@ class MultiFloorManager:
                 try:
                     # tf from the origin of the target floor to the robot pose
                     local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
+                except RuntimeError:
                     self.logger.error('LookupTransform Error from ' + frame_id + " to " + self.base_link_frame)
 
                 # update the trajectory only when local_transform is available
@@ -996,7 +1056,7 @@ class MultiFloorManager:
         if not self.is_active:
             response.status.code = 1
             response.status.message = "Stop localization failed. (localization is aleady stopped.)"
-            return resp
+            return response
         try:
             self.is_active = False
             self.finish_trajectory()
@@ -1763,6 +1823,7 @@ class CurrentPublisher:
                 self.logger.info("try to publish")
 '''
 
+
 class CartographerParameterConverter:
     # yaml parameter structure
     #
@@ -1864,13 +1925,14 @@ def extend_node_parameter_dictionary(all_params: dict) -> dict:
     all_params_new["map_list"] = map_list
     return all_params_new
 
-#import yappi
-#yappi.start()
+
+# import yappi
+# yappi.start()
 def receiveSignal(signal_num, frame):
     print("Received:", signal_num)
     print("shutting down launch service")
-    #yappi.stop()
-    #yappi.get_func_stats().save('mf-callgrind.out', type='callgrind')
+    # yappi.stop()
+    # yappi.get_func_stats().save('mf-callgrind.out', type='callgrind')
     loop.create_task(launch_service.shutdown())
     thread.join()
     # debug
@@ -1879,8 +1941,7 @@ def receiveSignal(signal_num, frame):
     print(F"exit 0 {threading.get_ident()}")
     sys.exit(0)
 
-import std_msgs.msg
-from cabot_msgs.srv import LookupTransform
+
 class BufferProxy():
     def __init__(self, node):
         self._clock = node.get_clock()
@@ -1943,7 +2004,6 @@ class BufferProxy():
         return do_transform(pose_stamped, transform)
 
 
-
 signal.signal(signal.SIGINT, receiveSignal)
 
 if __name__ == "__main__":
@@ -1986,10 +2046,24 @@ if __name__ == "__main__":
     multi_floor_manager.initial_pose_variance = node.declare_parameter("initial_pose_variance", [3.0, 3.0, 0.1, 0.0, 0.0, 100.0]).value
     n_neighbors_floor = node.declare_parameter("n_neighbors_floor", 3).value
     n_neighbors_local = node.declare_parameter("n_neighbors_local", 3).value
+    n_strongest_floor = node.declare_parameter("n_strongest_floor", 10).value
+    n_strongest_local = node.declare_parameter("n_strongest_local", 10).value
     min_beacons_floor = node.declare_parameter("min_beacons_floor", 3).value
     min_beacons_local = node.declare_parameter("min_beacons_local", 3).value
     floor_localizer_type = node.declare_parameter("floor_localizer", "SimpleRSSLocalizer").value
     local_localizer_type = node.declare_parameter("local_localizer", "SimpleRSSLocalizer").value
+
+    # update localizer parameters by map_config
+    floor_localizer_type = map_config.get("floor_localizer", floor_localizer_type)
+    local_localizer_type = map_config.get("local_localizer", local_localizer_type)
+
+    # load use_ble and use_wifi
+    multi_floor_manager.use_ble = node.declare_parameter("use_ble", True).value
+    multi_floor_manager.use_wifi = node.declare_parameter("use_wifi", True).value
+
+    # update use_ble and use_wifi by map_config
+    multi_floor_manager.use_ble = map_config.get("use_ble", multi_floor_manager.use_ble)
+    multi_floor_manager.use_wifi = map_config.get("use_wifi", multi_floor_manager.use_wifi)
 
     # external localizer parameters
     use_gnss = node.declare_parameter("use_gnss", False).value
@@ -2019,7 +2093,7 @@ if __name__ == "__main__":
     cartographer_qos_overrides_default = {"imu": {"subscription": {"depth": 100}}}  # imu QoS depth is increased to reduce the effect of dropping imu messages
     cartographer_qos_overrides = map_config["cartographer_qos_overrides"] if "cartographer_qos_overrides" in map_config else cartographer_qos_overrides_default
 
-    #current_publisher = CurrentPublisher(node, verbose=verbose)
+    # current_publisher = CurrentPublisher(node, verbose=verbose)
 
     # configuration file check
     configuration_directory = configuration_directory_raw  # resource_utils.get_filename(configuration_directory_raw)
@@ -2078,11 +2152,9 @@ if __name__ == "__main__":
     multi_floor_manager.global_anchor = global_anchor
 
     samples_global_all = []
+    samples_ble_global_all = []
+    samples_wifi_global_all = []
     floor_set = set()
-
-    # load use_ble and use_wifi
-    multi_floor_manager.use_ble = node.declare_parameter("use_ble", True).value
-    multi_floor_manager.use_wifi = node.declare_parameter("use_wifi", True).value
 
     # load cartographer parameters
     cartographer_parameter_converter = CartographerParameterConverter(map_config)
@@ -2115,6 +2187,10 @@ if __name__ == "__main__":
                                 )
         load_state_filename = resource_utils.get_filename(map_dict["load_state_filename"])
         samples_filename = resource_utils.get_filename(map_dict["samples_filename"])
+        # rssi gain config
+        rssi_gain = map_dict.get("rssi_gain", 0.0)
+        rssi_gain_ble = map_dict.get("ble", {}).get("rssi_gain", rssi_gain)
+        rssi_gain_wifi = map_dict.get("wifi", {}).get("rssi_gain", rssi_gain)
         # keep the original string without resource resolving. if not found in map_dict, use "".
         map_filename = map_dict["map_filename"] if "map_filename" in map_dict else ""
         environment = map_dict["environment"] if "environment" in map_dict else "indoor"
@@ -2131,27 +2207,35 @@ if __name__ == "__main__":
         with open(samples_filename, "rb") as f:
             samples = orjson.loads(f.read())
 
-        # append area information to the samples
+        # append additional information to the samples
         for s in samples:
             s["information"]["area"] = area
+
+        # extract iBeacon, WiFi, and other samples
+        samples_ble, samples_wifi, samples_other = extract_samples_ble_wifi_other(samples)
+        # assign rssi gain
+        for s in samples_ble:
+            s["information"]["rssi_gain"] = rssi_gain_ble
+        for s in samples_wifi:
+            s["information"]["rssi_gain"] = rssi_gain_wifi
 
         # BLE beacon localizer
         ble_localizer_floor = None
         if multi_floor_manager.use_ble:
-            # extract iBeacon samples
-            samples_extracted = extract_samples(samples, key="iBeacon")
             # fit localizer for the floor
-            ble_localizer_floor = create_wireless_rss_localizer(local_localizer_type, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, rssi_offset=rssi_offset)
-            ble_localizer_floor.fit(samples_extracted)
+            ble_localizer_floor = create_wireless_rss_localizer(local_localizer_type, logger, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, rssi_offset=rssi_offset, n_strongest=n_strongest_local)
+            ble_localizer_floor.fit(samples_ble)
+        else:
+            samples_ble = []
 
         # WiFi localizer
         wifi_localizer_floor = None
         if multi_floor_manager.use_wifi:
-            # extract wifi samples
-            samples_wifi = extract_samples(samples, key="WiFi")
             # fit wifi localizer for the floor
-            wifi_localizer_floor = create_wireless_rss_localizer(local_localizer_type, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local)
+            wifi_localizer_floor = create_wireless_rss_localizer(local_localizer_type, logger, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, n_strongest=n_strongest_local)
             wifi_localizer_floor.fit(samples_wifi)
+        else:
+            samples_wifi = []
 
         if floor not in multi_floor_manager.ble_localizer_dict:
             multi_floor_manager.ble_localizer_dict[floor] = {}
@@ -2252,8 +2336,15 @@ if __name__ == "__main__":
             multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
 
         # convert samples to the coordinate of global_anchor
-        samples_global = convert_samples_coordinate(samples, anchor, global_anchor, floor)
-        samples_global_all.extend(samples_global)
+        samples_ble_global = convert_samples_coordinate(samples_ble, anchor, global_anchor, floor)
+        samples_wifi_global = convert_samples_coordinate(samples_wifi, anchor, global_anchor, floor)
+        samples_other_global = convert_samples_coordinate(samples_other, anchor, global_anchor, floor)
+
+        samples_ble_global_all.extend(samples_ble_global)
+        samples_wifi_global_all.extend(samples_wifi_global)
+        samples_global_all.extend(samples_ble_global)
+        samples_global_all.extend(samples_wifi_global_all)
+        samples_global_all.extend(samples_other_global)
 
         # calculate static transform
         xy = geoutil.global2local(anchor, global_anchor)
@@ -2285,24 +2376,24 @@ if __name__ == "__main__":
         for mode in modes:
             floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
             # rospy service
-            floor_manager.get_trajectory_states = node.create_client(GetTrajectoryStates, node_id+"/"+str(mode)+'/get_trajectory_states', callback_group=MutuallyExclusiveCallbackGroup())
-            floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=MutuallyExclusiveCallbackGroup())
-            floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=MutuallyExclusiveCallbackGroup())
-            floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=MutuallyExclusiveCallbackGroup())
+            # define callback group accessing the same ros node
+            node_service_callback_group = MutuallyExclusiveCallbackGroup()
+            floor_manager.get_trajectory_states = node.create_client(GetTrajectoryStates, node_id+"/"+str(mode)+'/get_trajectory_states', callback_group=node_service_callback_group)
+            floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=node_service_callback_group)
+            floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=node_service_callback_group)
+            floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=node_service_callback_group)
 
     multi_floor_manager.floor_list = list(floor_set)
 
     # a localizer to estimate floor
     # ble floor localizer
     if multi_floor_manager.use_ble:
-        samples_global_all_extracted = extract_samples(samples_global_all, key="iBeacon")
-        multi_floor_manager.ble_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, rssi_offset=rssi_offset)
-        multi_floor_manager.ble_floor_localizer.fit(samples_global_all_extracted)
+        multi_floor_manager.ble_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, logger, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, rssi_offset=rssi_offset, n_strongest=n_strongest_floor)
+        multi_floor_manager.ble_floor_localizer.fit(samples_ble_global_all)
     # wifi floor localizer
     if multi_floor_manager.use_wifi:
-        samples_global_all_wifi = extract_samples(samples_global_all, key="WiFi")
-        multi_floor_manager.wifi_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor)
-        multi_floor_manager.wifi_floor_localizer.fit(samples_global_all_wifi)
+        multi_floor_manager.wifi_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, logger, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, n_strongest=n_strongest_floor)
+        multi_floor_manager.wifi_floor_localizer.fit(samples_wifi_global_all)
 
     # altitude manager and altitude floor estimator
     multi_floor_manager.altitude_manager = AltitudeManager(node)
@@ -2330,22 +2421,24 @@ if __name__ == "__main__":
     multi_floor_manager.Y_area = np.array(Y_area)
     multi_floor_manager.area_localizer = area_classifier
 
+    # define callback group accessing the state variables
+    state_update_callback_group = MutuallyExclusiveCallbackGroup()
+
     # global subscribers
     sensor_qos = qos_profile_sensor_data
-    beacons_sub = node.create_subscription(String, "beacons", multi_floor_manager.beacons_callback, 1, callback_group=MutuallyExclusiveCallbackGroup())
-    wifi_sub = node.create_subscription(String, "wifi", multi_floor_manager.wifi_callback, 1, callback_group=MutuallyExclusiveCallbackGroup())
-    initialpose_sub = node.create_subscription(PoseWithCovarianceStamped, "initialpose", multi_floor_manager.initialpose_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
-    pressure_sub = node.create_subscription(FluidPressure, "pressure", multi_floor_manager.pressure_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
-    # global subscribers for redirect
+    beacons_sub = node.create_subscription(String, "beacons", multi_floor_manager.beacons_callback, 1, callback_group=state_update_callback_group)
+    wifi_sub = node.create_subscription(String, "wifi", multi_floor_manager.wifi_callback, 1, callback_group=state_update_callback_group)
+    initialpose_sub = node.create_subscription(PoseWithCovarianceStamped, "initialpose", multi_floor_manager.initialpose_callback, 10, callback_group=state_update_callback_group)
+    pressure_sub = node.create_subscription(FluidPressure, "pressure", multi_floor_manager.pressure_callback, 10, callback_group=state_update_callback_group)
 
     # services
-    stop_localization_service = node.create_service(StopLocalization, "stop_localization", multi_floor_manager.stop_localization_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    start_localization_service = node.create_service(StartLocalization, "start_localization", multi_floor_manager.start_localization_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    restart_localization_service = node.create_service(RestartLocalization, "restart_localization", multi_floor_manager.restart_localization_callback, callback_group=MutuallyExclusiveCallbackGroup())
+    stop_localization_service = node.create_service(StopLocalization, "stop_localization", multi_floor_manager.stop_localization_callback, callback_group=state_update_callback_group)
+    start_localization_service = node.create_service(StartLocalization, "start_localization", multi_floor_manager.start_localization_callback, callback_group=state_update_callback_group)
+    restart_localization_service = node.create_service(RestartLocalization, "restart_localization", multi_floor_manager.restart_localization_callback, callback_group=state_update_callback_group)
     enable_relocalization_service = node.create_service(MFTrigger, "enable_auto_relocalization", multi_floor_manager.enable_relocalization_callback, callback_group=MutuallyExclusiveCallbackGroup())
     disable_relocalization_service = node.create_service(MFTrigger, "disable_auto_relocalization", multi_floor_manager.disable_relocalization_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    set_current_floor_service = node.create_service(MFSetInt, "set_current_floor", multi_floor_manager.set_current_floor_callback, callback_group=MutuallyExclusiveCallbackGroup())
-    convert_local_to_global_service = node.create_service(ConvertLocalToGlobal, "convert_local_to_global", multi_floor_manager.convert_local_to_global_callback, callback_group=MutuallyExclusiveCallbackGroup())
+    set_current_floor_service = node.create_service(MFSetInt, "set_current_floor", multi_floor_manager.set_current_floor_callback, callback_group=state_update_callback_group)
+    convert_local_to_global_service = node.create_service(ConvertLocalToGlobal, "convert_local_to_global", multi_floor_manager.convert_local_to_global_callback, callback_group=state_update_callback_group)
 
     # external localizer
     if gnss_config is not None:
@@ -2354,8 +2447,8 @@ if __name__ == "__main__":
     if use_gnss:
         multi_floor_manager.gnss_is_active = True
         multi_floor_manager.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
-        gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix")
-        gnss_fix_velocity_sub = message_filters.Subscriber(node, TwistWithCovarianceStamped, "gnss_fix_velocity")
+        gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix", callback_group=state_update_callback_group)
+        gnss_fix_velocity_sub = message_filters.Subscriber(node, TwistWithCovarianceStamped, "gnss_fix_velocity", callback_group=state_update_callback_group)
         time_synchronizer = message_filters.TimeSynchronizer([gnss_fix_sub, gnss_fix_velocity_sub], 10)
         time_synchronizer.registerCallback(multi_floor_manager.gnss_fix_callback)
         mf_navsat_sub = node.create_subscription(MFNavSAT, "mf_navsat", multi_floor_manager.mf_navsat_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -2365,7 +2458,7 @@ if __name__ == "__main__":
 
     if use_global_localizer:
         multi_floor_manager.is_active = False  # deactivate multi_floor_manager
-        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
         # call external global localization service
         logger.info("wait for service /global_localizer/request_localization")
         global_localizer_request_localization = node.create_client(MFSetInt, '/global_localizer/request_localization', callback_group=MutuallyExclusiveCallbackGroup())
@@ -2378,7 +2471,7 @@ if __name__ == "__main__":
     multi_floor_manager.send_static_transforms()
 
     # global position
-    global_position_timer = node.create_timer(global_position_interval, multi_floor_manager.global_position_callback, callback_group=MutuallyExclusiveCallbackGroup())
+    global_position_timer = node.create_timer(global_position_interval, multi_floor_manager.global_position_callback, callback_group=state_update_callback_group)
 
     # detect optimization
     multi_floor_manager.map2odom = None
@@ -2394,7 +2487,7 @@ if __name__ == "__main__":
     def main_loop():
         # detect optimization
         if multi_floor_manager.is_optimized():
-            tfBuffer.clear() # clear outdated tf before optimization
+            tfBuffer.clear()  # clear outdated tf before optimization
             multi_floor_manager.optimization_detected = True
 
         # detect area and mode switching
@@ -2404,7 +2497,7 @@ if __name__ == "__main__":
         if use_gnss:
             multi_floor_manager.publish_map_frame_adjust_tf()
 
-    main_timer = node.create_timer(1.0 / spin_rate, main_loop, callback_group=MutuallyExclusiveCallbackGroup())
+    main_timer = node.create_timer(1.0 / spin_rate, main_loop, callback_group=state_update_callback_group)
 
     def run():
         executor = MultiThreadedExecutor()

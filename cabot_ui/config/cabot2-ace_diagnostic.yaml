@@ -13,6 +13,7 @@ diagnostic_aggregator:
       path: discard
       contains:
         - "Push Button 5"
+        - "PeoplePredict"
         - "realsense2_camera_manager_aligned_depth_to_color: Frequency Status"
 
     soft_cabot_ui:
@@ -43,9 +44,8 @@ diagnostic_aggregator:
       type: diagnostic_aggregator/GenericAnalyzer
       path: "Soft: People_and_Obstacle"
       contains:
-        - "People"
+        - "PeopleTrack"
         - "Obstacle"
-        - "CameraInput"
         - "Queue"
       remove_prefix:
         - "camera detect_darknet_opencv_node: "
@@ -55,6 +55,34 @@ diagnostic_aggregator:
         - "detect_queue_people_py: "
         - "track_obstacle: "
         - "predict_obstacle: "
+
+    soft_rs:
+      type: diagnostic_aggregator/AnalyzerGroup
+      path: "Camera"
+      analyzers:
+        front:
+          type: diagnostic_aggregator/GenericAnalyzer
+          path: "Front"
+          contains:
+            - "rs1"
+          remove_prefix:
+            - "detect_darknet_people_cpp: "
+        soft_rs2:
+          type: cabot_diagnostics/CabotAnalyzer
+          path: "Right"
+          contains:
+            - "rs2"
+          remove_prefix:
+            - "detect_darknet_people_cpp: "
+          treat_as_warning: true
+        soft_rs3:
+          type: cabot_diagnostics/CabotAnalyzer
+          path: "Left"
+          contains:
+            - "rs3"
+          remove_prefix:
+            - "detect_darknet_people_cpp: "
+          treat_as_warning: true
 
     soft_ros2:
       type: diagnostic_aggregator/GenericAnalyzer

@@ -23,6 +23,8 @@
 
 import json
 import argparse
+import logging
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -41,7 +43,8 @@ def convert_samples_XY(samples):
             tid = b["id"].lower()
             idset.add(tid)
 
-    keys = np.array(list(idset))
+    # convert ID set to sorted array
+    keys = np.array(sorted(list(idset)))
 
     # convert samples data to numpy array
     X = np.zeros((len(samples), 4))
@@ -53,6 +56,7 @@ def convert_samples_XY(samples):
 
     for i, s in enumerate(samples):
         info = s["information"]
+        rssi_gain = info.get("rssi_gain", 0.0)
         if "floor_num" in info:
             # for samples data converted on the Map Server
             floor = info["floor_num"]
@@ -69,6 +73,7 @@ def convert_samples_XY(samples):
         for b in beacons:
             key = b["id"].lower()
             rssi = float(b["rssi"])
+            rssi = rssi - rssi_gain
             if -100 < rssi < -1:
                 index = key_to_index[key]
                 Y[i, index] = rssi
@@ -76,7 +81,7 @@ def convert_samples_XY(samples):
     return X, Y, keys, key_to_index
 
 
-def create_wireless_rss_localizer(localizer_class, n_neighbors=1, max_rssi_threshold=-100, min_beacons=3, rssi_offset=0.0):
+def create_wireless_rss_localizer(localizer_class, logger=None, n_neighbors=1, max_rssi_threshold=-100, min_beacons=3, rssi_offset=0.0, n_strongest=10):
     if localizer_class in globals():
         class_floor_localizer = globals()[localizer_class]
     else:
@@ -86,7 +91,8 @@ def create_wireless_rss_localizer(localizer_class, n_neighbors=1, max_rssi_thres
 
     if issubclass(class_floor_localizer, RSSLocalizer):
         localizer = class_floor_localizer(
-            n_neighbors=n_neighbors, max_rssi_threshold=max_rssi_threshold, min_beacons=min_beacons, rssi_offset=rssi_offset)
+                        logger=logger,
+                        n_neighbors=n_neighbors, max_rssi_threshold=max_rssi_threshold, min_beacons=min_beacons, rssi_offset=rssi_offset, n_strongest=n_strongest)
         return localizer
     else:
         error_str = "unknown floor localizer class (floor_localizer: "+str(
@@ -100,11 +106,25 @@ class RSSLocalizer:
 
 class SimpleRSSLocalizer(RSSLocalizer):
 
-    def __init__(self, n_neighbors=1, max_rssi_threshold=-100, min_beacons=3, rssi_offset=0.0):
+    def __init__(self, logger=None,
+                 n_neighbors=1, max_rssi_threshold=-100, min_beacons=3, rssi_offset=0.0,
+                 n_strongest=10):
+        if logger is None:
+            self._logger = logging.getLogger(__name__)
+        else:
+            self._logger = logger
         self._n_neighbors = n_neighbors
         self._max_rssi_threshold = max_rssi_threshold
         self._min_beacons = min_beacons
         self._rssi_offset = rssi_offset
+        self._n_strongest = n_strongest
+
+        self._logger.debug(f"{self.__class__.__name__}")
+        self._logger.debug(f"    n_neighbors = {self._n_neighbors}")
+        self._logger.debug(f"    max_rssi_threshold = {self._max_rssi_threshold}")
+        self._logger.debug(f"    min_beacons = {self._min_beacons}")
+        self._logger.debug(f"    rssi_offset = {self._rssi_offset}")
+        self._logger.debug(f"    n_strongest = {self._n_strongest}")
 
     def fit(self, samples):
         self._samples = samples
@@ -125,7 +145,13 @@ class SimpleRSSLocalizer(RSSLocalizer):
         max_rssi = -100
         c_match = 0
         indices_active = []
-        for b in beacons:
+
+        # filter beacons
+        beacons_filtered = [b for b in beacons if b["id"].lower() in keys and -100 < b["rssi"] <= -1]  # known and valid rssi beacons
+        beacons_sorted = sorted(beacons_filtered, key=lambda b: b["rssi"], reverse=True)  # [strongest, 2nd-strongest, ...]
+        beacons_strongest = beacons_sorted[: self._n_strongest]
+
+        for b in beacons_strongest:
             key = b["id"].lower()
             rssi = float(b["rssi"])
             if -100 < rssi < -1:  # check if raw rssi is in the range
@@ -153,7 +179,12 @@ class SimpleRSSLocalizer(RSSLocalizer):
         knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)
         Y_active = self._Y[:, indices_active]
         knnr.fit(Y_active, self._X)
-        x = knnr.predict(y[:, indices_active])
+        _, neigh_ind = knnr.kneighbors(y[:, indices_active])
+        x = np.mean(self._X[neigh_ind], axis=1)
+
+        self._logger.debug(f"y_query={y[:, indices_active]}")
+        self._logger.debug(f"Y_knn={Y_active[neigh_ind]}")
+        self._logger.debug(f"x_knn={self._X[neigh_ind]}")
 
         return x
 
@@ -161,8 +192,8 @@ class SimpleRSSLocalizer(RSSLocalizer):
         if x is None:
             return None
 
-        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)
-        X = self._X
+        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)  # noqa
+        X = self._X  # noqa
 
         nn = NearestNeighbors(n_neighbors=1)
         nn.fit(self._X)
@@ -173,13 +204,25 @@ class SimpleRSSLocalizer(RSSLocalizer):
 
 class SimpleFloorLocalizer(RSSLocalizer):
 
-    def __init__(self, n_neighbors=1, max_rssi_threshold=-100, min_beacons=3, rssi_offset=0.0,
+    def __init__(self, logger=None,
+                 n_neighbors=1, max_rssi_threshold=-100, min_beacons=3, rssi_offset=0.0,
                  n_strongest=10):
+        if logger is None:
+            self._logger = logging.getLogger(__name__)
+        else:
+            self._logger = logger
         self._n_neighbors = n_neighbors
         self._max_rssi_threshold = max_rssi_threshold
         self._min_beacons = min_beacons
         self._rssi_offset = rssi_offset
         self._n_strongest = n_strongest
+
+        self._logger.debug(f"{self.__class__.__name__}")
+        self._logger.debug(f"    n_neighbors = {self._n_neighbors}")
+        self._logger.debug(f"    max_rssi_threshold = {self._max_rssi_threshold}")
+        self._logger.debug(f"    min_beacons = {self._min_beacons}")
+        self._logger.debug(f"    rssi_offset = {self._rssi_offset}")
+        self._logger.debug(f"    n_strongest = {self._n_strongest}")
 
     def fit(self, samples):
         self._samples = samples
@@ -195,9 +238,12 @@ class SimpleFloorLocalizer(RSSLocalizer):
         top_n = self._n_neighbors
         index_to_rep_position = []
         for index, key in enumerate(keys):
-            indices_largest = np.argsort(Y[:, index])[-top_n:]  # top 5
+            indices_largest = np.argsort(Y[:, index])[-top_n:]  # top n
             rep_position = np.mean(X[indices_largest, :], axis=0)
             index_to_rep_position.append(rep_position)
+            self._logger.debug(f"key={key},rep_position={rep_position}")
+            self._logger.debug(f"    Y={sorted(Y[:, index])[-top_n:]}")
+            self._logger.debug(f"    X={X[indices_largest, :]}")
         index_to_rep_position = np.array(index_to_rep_position)
 
         self._index_to_rep_position = index_to_rep_position
@@ -208,17 +254,14 @@ class SimpleFloorLocalizer(RSSLocalizer):
 
         max_rssi = -100
         c_match = 0
-        for b in beacons:
+
+        # filter beacons
+        beacons_filtered = [b for b in beacons if b["id"].lower() in keys and -100 < b["rssi"] <= -1]  # known and valid rssi beacons
+
+        for b in beacons_filtered:
             key = b["id"].lower()
             rssi = float(b["rssi"])
-            if not -100 < rssi < -1:  # check if raw rssi is in the range
-                continue
-
-            if key not in keys:
-                continue
-
             rssi = rssi - self._rssi_offset  # apply rssi offset
-
             c_match += 1
             max_rssi = np.max([max_rssi, rssi])
 
@@ -233,10 +276,12 @@ class SimpleFloorLocalizer(RSSLocalizer):
             return None
 
         # calculate weighted mean of rep positions
+        key_list = []
+        rssi_list = []
         rep_positions = []
         weights = []
 
-        beacons_strongest = sorted(beacons, key=lambda b: -b["rssi"])
+        beacons_strongest = sorted(beacons_filtered, key=lambda b: -b["rssi"])
 
         count = 0
         n_max_strongest = self._n_strongest
@@ -246,11 +291,13 @@ class SimpleFloorLocalizer(RSSLocalizer):
             if key not in keys:
                 continue
 
+            key_list.append(key)
             idx = self._key_to_index[key]
             rep_position = self._index_to_rep_position[idx]
             rep_positions.append(rep_position)
 
             weight = 1.0/np.power(10, b["rssi"]/-20.0)
+            rssi_list.append(b["rssi"])
             weights.append(weight)
 
             count += 1
@@ -261,6 +308,8 @@ class SimpleFloorLocalizer(RSSLocalizer):
         weights = np.array(weights)
         weights = weights/np.sum(weights)  # normalize weight
 
+        self._logger.debug(f"keys={key_list}\nrssi_list={rssi_list}\nrep_positions={rep_positions}\nweights={weights}")
+
         loc = np.array([np.dot(weights, rep_positions)])
 
         return loc
@@ -269,8 +318,8 @@ class SimpleFloorLocalizer(RSSLocalizer):
         if x is None:
             return None
 
-        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)
-        X = self._X
+        knnr = KNeighborsRegressor(n_neighbors=self._n_neighbors)  # noqa
+        X = self._X  # noqa
 
         nn = NearestNeighbors(n_neighbors=1)
         nn.fit(self._X)
@@ -279,20 +328,25 @@ class SimpleFloorLocalizer(RSSLocalizer):
         return self._X[ret][0]
 
 
-def main(samples_file, queries_file):
+def main(samples_file, queries_file, localizer_class):
+    logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG if 'DEBUG' in os.environ else logging.INFO)
+
     with open(samples_file) as f:
         samples = json.load(f)
 
     beacons_samples = extract_samples(samples, key="iBeacon")
     wifi_samples = extract_samples(samples, key="WiFi")
 
-    print("#beacons="+str(len(beacons_samples)))
-    print("#wifi="+str(len(wifi_samples)))
+    logger.info(f"localizer = {localizer_class}")
+    logger.info("#beacons="+str(len(beacons_samples)))
+    logger.info("#wifi="+str(len(wifi_samples)))
 
-    wifi_localizer = SimpleRSSLocalizer(n_neighbors=3)
+    wifi_localizer = create_wireless_rss_localizer(localizer_class, logger, n_neighbors=3)
     wifi_localizer.fit(wifi_samples)
 
-    ble_localizer = SimpleRSSLocalizer(n_neighbors=3)
+    ble_localizer = create_wireless_rss_localizer(localizer_class, logger, n_neighbors=3)
     ble_localizer.fit(beacons_samples)
 
     if queries_file is not None:
@@ -359,9 +413,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--samples", required=True)
     parser.add_argument("-q", "--queries", default=None)
+    parser.add_argument("--localizer", default="SimpleRSSLocalizer")
     args = parser.parse_args()
 
     samples_file = args.samples
     queries_file = args.queries
+    localizer_class = args.localizer
 
-    main(samples_file, queries_file)
+    main(samples_file, queries_file, localizer_class)

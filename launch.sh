@@ -43,6 +43,7 @@ function ctrl_c() {
         else
             $dccom down > /dev/null 2>&1
         fi
+        kill -s 9 $dcpid
     fi
 
     for pid in ${pids[@]}; do
@@ -101,30 +102,39 @@ function snore()
 function help()
 {
     echo "Usage:"
+    echo "-A          find all test module under cabot_sites"
     echo "-h          show this help"
-    echo "-D          debug"
-    echo "-s          simulation mode"
-    echo "-n <name>   set log name prefix"
-    echo "-v          verbose option"
-    echo "-M          log dmesg output"
-    echo "-y          do not confirm"
-    echo "-t          run test"
-    echo "-T <module> run test CABOT_SITE.<module>"
-    echo "-f <test>   run test CABOT_SITE.<module>.<test>"
     echo "-H          headless"
+    echo "-M          log dmesg output"
+    echo "-n <name>   set log name prefix"
+    echo "-r          retry test when segmentation fault"
+    echo "-s          simulation mode"
+    echo "-S <site>   override CABOT_SITE"
+    echo "-t          run test"
+    echo "-y          do not confirm (deprecated - always launch server if there is no server)"
+    echo "-u <options> unittest"
+    echo "-v          verbose option"
+    echo ""
+    echo "run test (-t) options"
+    echo "  -D          debug"
+    echo "  -f <test>   run test CABOT_SITE.<module>.<test>"
+    echo "  -l          list test functions"
+    echo "  -T <module> run test CABOT_SITE.<module>"
 }
 
 
 simulation=0
 log_prefix=cabot
 verbose=0
-local_map_server=0
 debug=0
 log_dmesg=0
 yes=0
 run_test=0
 module=tests
 test_func=
+unittest=
+retryoption=
+list_functions=0
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -136,35 +146,14 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hsn:vDMSytHT:f:" arg; do
+while getopts "hDf:HlMn:rsS:tT:uvy" arg; do
     case $arg in
-        s)
-            simulation=1
-            ;;
         h)
             help
             exit
             ;;
-        n)
-            log_prefix=$OPTARG
-            ;;
-        v)
-            verbose=1
-            ;;
         D)
             debug=1
-            ;;
-        M)
-            log_dmesg=1
-            ;;
-        y)
-            yes=1
-            ;;
-        t)
-            run_test=1
-            ;;
-        T)
-            module=$OPTARG
             ;;
         f)
             test_func=$OPTARG
@@ -172,14 +161,59 @@ while getopts "hsn:vDMSytHT:f:" arg; do
         H)
             export CABOT_HEADLESS=1
             ;;
+	l)
+	    list_functions=1
+	    ;;
+        M)
+            log_dmesg=1
+            ;;
+        n)
+            log_prefix=$OPTARG
+            ;;
+        r)
+            retryoption="-r"
+            ;;
+        s)
+            simulation=1
+            ;;
+        S)
+            export CABOT_SITE=$OPTARG  # override the default
+            ;;
+        t)
+            run_test=1
+            ;;
+        T)
+            module=$OPTARG
+            ;;
+        u)
+            unittest=1
+            ;;
+        v)
+            verbose=1
+            ;;
+        y)
+            yes=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
 
-
 ## private variables
 pids=()
 termpids=()
+
+if [[ $unittest -eq 1 ]]; then
+    code=0
+    docker compose run --rm navigation ./script/unittest.sh $@
+    if [[ $? -ne 0 ]]; then
+	code=1
+    fi
+    docker compose run --rm localization ./script/unittest.sh $@
+    if [[ $? -ne 0 ]]; then
+	code=1
+    fi
+    exit $code
+fi
 
 ## check required environment variables
 error=0
@@ -196,11 +230,11 @@ if [ $error -eq 1 ]; then
    exit 1
 fi
 
-cabot_site_dir=$(find $scriptdir/cabot_sites -name $CABOT_SITE | head -1)
-if [[ -e $cabot_site_dir/server_data ]]; then
-    blue "found $CABOT_SITE/server_data"
-    local_map_server=1
+if [[ $list_functions -eq 1 ]]; then
+    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -l $module
+    exit
 fi
+
 
 log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
 export ROS_LOG_DIR="/home/developer/.ros/log/${log_name}"
@@ -239,7 +273,8 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
-if [ $simulation -eq 0 ]; then dcfile="${dcfile}-production"; fi
+if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
+if [[ $CABOT_HEADLESS -eq 1 ]]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
@@ -249,35 +284,8 @@ fi
 
 dccom="docker compose -f $dcfile"
 
-if [ $local_map_server -eq 1 ]; then
-    blue "Checking the map server is available $( echo "$(date +%s.%N) - $start" | bc -l )"
-    curl http://localhost:9090/map/map/floormaps.json --fail > /dev/null 2>&1
-    test=$?
-    launching_server=0
-    while [[ $test -ne 0 ]]; do
-        if [[ $launching_server -eq 1 ]]; then
-            snore 5
-            blue "waiting the map server is ready..."
-            curl http://localhost:9090/map/map/floormaps.json --fail > /dev/null 2>&1
-            test=$?
-        else
-            if [[ $yes -eq 0 ]]; then
-                red "Note: launch.sh no longer launch server in the script"
-                red -n "You need to run local web server for $CABOT_SITE, do you want to launch the server [Y/N]: "
-                read -r ans
-            else
-                ans=y
-            fi
-            if [[ $ans = 'y' ]] || [[ $ans = 'Y' ]]; then
-                launching_server=1
-                gnome-terminal -- bash -c "./server-launch.sh -d $cabot_site_dir/server_data; exit"
-            else
-                echo ""
-                exit 1
-            fi
-        fi
-    done
-fi
+## launch server
+./server-launch.sh -c -p $CABOT_SITE
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
@@ -305,15 +313,13 @@ done
 blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
-    blue "Running test"
+    blue "Running test $module $test_func"
     if [[ $debug -eq 1 ]]; then
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func  # debug
+        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func $retryoption # debug
     else
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func
+        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func $retryoption
     fi
-    pids+=($!)
-    runtest_pid=$!
-    snore 3
+    ctrl_c $?
 fi
 
 while [ 1 -eq 1 ];
@@ -323,13 +329,6 @@ do
         red "docker compose may have some issues. Check errors in the log or run with '-v' option."
         ctrl_c 1
         exit
-    fi
-    if [[ $run_test -eq 1 ]]; then
-        kill -0 $runtest_pid
-        if [[ $? -eq 1 ]]; then
-            ctrl_c 1
-            exit
-        fi
     fi
     snore 1
 done

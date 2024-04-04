@@ -1,24 +1,22 @@
-/*******************************************************************************
- * Copyright (c) 2022  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2022  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #ifndef CABOT_NAVIGATION2__CABOT_PLANNER_PARAM_HPP_
 #define CABOT_NAVIGATION2__CABOT_PLANNER_PARAM_HPP_
@@ -65,6 +63,7 @@ struct CaBotPlannerOptions
   int kdtree_max_results = 50;
   int min_iteration_count = 500;
   int max_iteration_count = 1000;
+  bool ignore_people = false;
 
   // private params
   float iteration_scale_min = 0.0001;
@@ -83,7 +82,7 @@ class CaBotPlannerParam;
 class CaBotPlan
 {
 public:
-  explicit CaBotPlan(CaBotPlannerParam & param_);
+  explicit CaBotPlan(CaBotPlannerParam & param_, DetourMode detour_mode_);
   CaBotPlannerParam & param;
   std::vector<Node> nodes;
   std::vector<Node> nodes_backup;
@@ -101,7 +100,6 @@ public:
   nav_msgs::msg::Path getPlan(bool normalized, float normalize_length = 0.02);
   bool checkGoAround();
   bool checkPathIsOkay();
-  bool checkPointIsOkay(Point &point, DetourMode detour_mode);
 };
 
 class CaBotPlannerParam
@@ -144,8 +142,9 @@ public:
   void mapToWorld(float mx, float my, float & wx, float & wy) const;
   int getIndex(float x, float y) const;
   int getIndexByPoint(Point & p) const;
-  std::vector<Node> getNodes() const;
+  std::vector<Node> getNodes(DetourMode detour_mode) const;
   std::vector<Obstacle> getObstaclesNearPoint(const Point & node, bool collision) const;
+  bool checkPointIsOkay(Point & point, DetourMode detour_mode) const;
 
   // internal
   rclcpp::Logger logger{rclcpp::get_logger("CaBotPlannerParam")};

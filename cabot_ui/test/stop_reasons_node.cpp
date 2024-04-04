@@ -39,8 +39,6 @@
 
 #include "../src/stop_reasoner.hpp"
 
-using namespace cabot_ui;
-
 #define ODOM_TOPIC "/cabot/odom_raw"
 #define EVENT_TOPIC "/cabot/event"
 #define RECEIVED_GLOBAL_PLAN "/received_global_plan"
@@ -52,6 +50,10 @@ using namespace cabot_ui;
 #define REPLAN_REASON_TOPIC "/replan_reason"
 #define CURRENT_FRAME_TOPIC "/current_frame"
 
+using cabot_ui::StopReason;
+using cabot_ui::StopReasonUtil;
+using cabot_ui::StopReasoner;
+using cabot_ui::StopReasonFilter;
 
 int main(int argc, char ** argv)
 {

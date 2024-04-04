@@ -39,7 +39,8 @@ using namespace std::chrono_literals;
 namespace cabot_bt
 {
 
-enum Status {
+enum Status
+{
   Initial,
   Saving,
   Setting,
@@ -110,7 +111,7 @@ public:
         if (parameters_.get().size() > 0) {
           auto param = parameters_.get().at(0);
 
-          if (store_->find(remote_node_name_) == store_->end())  {
+          if (store_->find(remote_node_name_) == store_->end()) {
             store_->insert(std::pair<std::string, std::vector<rclcpp::Parameter>>(remote_node_name_, std::vector<rclcpp::Parameter>()));
           }
           store_->at(remote_node_name_).push_back(param);
@@ -154,9 +155,9 @@ public:
 
     if (state_ == Status::Waiting) {
       if (future_.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
-          RCLCPP_INFO(node_->get_logger(), "Success to set parameters");
-          state_ = Status::Done;
-          return BT::NodeStatus::SUCCESS;
+        RCLCPP_INFO(node_->get_logger(), "Success to set parameters");
+        state_ = Status::Done;
+        return BT::NodeStatus::SUCCESS;
       }
       return BT::NodeStatus::RUNNING;
     }
@@ -193,7 +194,7 @@ private:
   // The node that will be used for any ROS operations
   rclcpp::Node::SharedPtr node_;
   rclcpp::AsyncParametersClient::SharedPtr parameters_client_;
-  rclcpp::ParameterMap* map_;
+  rclcpp::ParameterMap * map_;
   std::string remote_node_name_;
   Status state_;
   BT::NodeStatus result_;

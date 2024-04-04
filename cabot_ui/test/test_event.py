@@ -37,7 +37,7 @@ class TestEvent(unittest.TestCase):
         """test events"""
         e1 = cabot_ui.event.MenuEvent("next")
         e2 = cabot_common.event.ButtonEvent(1, False)
-        e3 = cabot_common.event.ButtonEvent(1, False)
+        e3 = cabot_common.event.ButtonEvent(1, True)
         print(e1)
         print(e2)
         print(e1 == e2)

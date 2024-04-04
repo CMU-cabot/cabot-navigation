@@ -30,7 +30,7 @@ import numpy.linalg
 import yaml
 
 import geometry_msgs.msg
-from pyproj import Proj, Geod
+from pyproj import CRS, Geod
 from pyproj import Transformer
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
@@ -81,20 +81,21 @@ def p_from_msg(msg):
 
 
 def q_from_points(msg1, msg2):
-    """get quaternion array from two points"""
-    point1 = p_from_msg(msg1)
-    point2 = p_from_msg(msg2)
+    # Convert points to numpy arrays
+    p1 = p_from_msg(msg1)
+    p2 = p_from_msg(msg2)
 
-    org = numpy.array([1, 0, 0])  # robot default orientation
-    diff = numpy.subtract(point2, point1)  # get difference
-    diff = diff / numpy.linalg.norm(diff)  # normalize
+    # Calculate angles relative to the x-axis
+    delta_theta = numpy.arctan2(p2[1]-p1[1], p2[0]-p1[0])
 
-    cross = numpy.cross(org, diff)
-    dot = numpy.dot(org, diff)
-    org_len = numpy.linalg.norm(org)
-    diff_len = numpy.linalg.norm(diff)
+    # Construct the quaternion
+    q_w = numpy.cos(delta_theta / 2)  # real part
+    q_z = numpy.sin(delta_theta / 2)  # z-axis part, since rotation is around z-axis in 2D
 
-    return numpy.append(cross, [org_len * diff_len + dot])
+    # Since we're rotating in 2D, the quaternion's x and y components are 0
+    q_x, q_y = 0, 0
+
+    return (q_x, q_y, q_z, q_w)
 
 
 def q_inverse(q):
@@ -141,6 +142,7 @@ def in_angle(pose1, pose2, margin_in_degree):
     return abs(yaw1) <= margin and abs(yaw2) <= margin
 
 
+# quat1 and quat2 is supporsed to be facing
 def diff_in_angle(quat1, quat2, margin_in_degree):
     """
     margin_in_degree: angle margin in degree
@@ -163,7 +165,6 @@ def diff_angle(msg1, msg2):
     quat1 = q_from_msg(msg1)
     quat2 = q_from_msg(msg2)
     quat3 = quaternion_multiply(quat2, q_inverse(quat1))
-    print("diff {quat1} -> {quat2} = {quat3}")
     _, _, yaw1 = euler_from_quaternion(quat3)
     return yaw1
 
@@ -173,6 +174,14 @@ def get_rotation(src, target):
     q2 = q_from_msg(target)
     _, _, yaw = euler_from_quaternion(quaternion_multiply(q2, q_inverse(q1)))
     return yaw
+
+
+def normalize_angle(ang):
+    while (ang <= -math.pi):
+        ang += 2 * math.pi
+    while (ang > math.pi):
+        ang -= 2 * math.pi
+    return ang
 
 
 def get_projected_point_to_line(point, line_point, line_orientation):
@@ -263,10 +272,14 @@ class Pose(Point):
         return F"{type(self)}({self.x:#8.2f}, {self.y:#8.2f})[{self.r/math.pi*180:#8.2f} deg]"
 
     @staticmethod
-    def pose_from_points(p1, p2):
+    def pose_from_points(p1, p2, backward=False):
         p1_p2 = q_from_points(p1, p2)
-        _, _, yaw = euler_from_quaternion(q_diff([0, 0, 0, 1], p1_p2))
-        return Pose(x=p1.x, y=p1.y, r=yaw)
+        if backward:
+            _, _, yaw = euler_from_quaternion(q_diff([0, 0, 0, 1], p1_p2))
+            return Pose(x=p1.x, y=p1.y, r=yaw)
+        else:
+            _, _, yaw = euler_from_quaternion(p1_p2)
+            return Pose(x=p1.x, y=p1.y, r=yaw)
 
     @property
     def orientation(self):
@@ -277,6 +290,10 @@ class Pose(Point):
         orientation.z = q[2]
         orientation.w = q[3]
         return orientation
+
+    @property
+    def quaternion(self):
+        return quaternion_from_euler(0.0, 0.0, self.r)
 
     @classmethod
     def from_pose_msg(cls, msg):
@@ -349,10 +366,13 @@ class Anchor(Latlng):
         return F"[{self.lat:.7f}, {self.lng:.7f}]({self.rotate:.2f})"
 
 
-EPSG4326 = Proj(init='epsg:4326')
-EPSG3857 = Proj(init='epsg:3857')
-transformer4326_3857 = Transformer.from_proj(EPSG4326, EPSG3857)
-transformer3857_4326 = Transformer.from_proj(EPSG3857, EPSG4326)
+# Define the CRS objects
+crs_4326 = CRS('epsg:4326')
+crs_3857 = CRS('epsg:3857')
+
+# Create transformers using the CRS objects
+transformer4326_3857 = Transformer.from_crs(crs_4326, crs_3857, always_xy=True)
+transformer3857_4326 = Transformer.from_crs(crs_3857, crs_4326, always_xy=True)
 
 
 def latlng2mercator(latlng):
@@ -455,6 +475,12 @@ class TargetPlace(Pose):
 
         self.reset_target()
 
+    def same_floor(self, floor, tollerance=0.1):
+        return abs(self._floor - floor) < tollerance
+
+    def same_direction(self, orientation, tollerance=0.1):
+        return abs(diff_angle(self.orientation, orientation)) < tollerance
+
     def reset_target(self):
         self._was_approaching = False
         self._pose_approaching = None
@@ -468,7 +494,7 @@ class TargetPlace(Pose):
     def update_pose(self, point, rotate):
         self.x = point.x
         self.y = point.y
-        self.r = rotate
+        self.r = normalize_angle(rotate)
 
     APPROACHING_THRETHOLD = 5.0
     APPROACHED_THRETHOLD = 1.0

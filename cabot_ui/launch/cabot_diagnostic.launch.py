@@ -27,16 +27,14 @@ from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import PythonExpression
-from launch.conditions import IfCondition
 from ament_index_python import get_package_share_directory
 
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_ui')
-    show_robot_monitor = LaunchConfiguration('show_robot_monitor')
     config_file = LaunchConfiguration('config_file')
     model_name = LaunchConfiguration('model')
-    
+
     def check_config_file(context):
         import os
         config_file = context.launch_configurations['config_file']
@@ -53,13 +51,6 @@ def generate_launch_description():
         DeclareLaunchArgument('config_file', default_value=PathJoinSubstitution([pkg_dir, 'config', PythonExpression(['"', model_name, '_diagnostic.yaml"'])])),
         OpaqueFunction(function=check_config_file),
 
-        Node(
-            package="rqt_robot_monitor",
-            executable="rqt_robot_monitor",
-            name="rqt_robot_monitor",
-            condition=IfCondition(show_robot_monitor),
-            parameters=[{'use_sim_time': True}]
-        ),
         Node(
             package="diagnostic_aggregator",
             executable="aggregator_node",

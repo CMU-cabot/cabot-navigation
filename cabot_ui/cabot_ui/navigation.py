@@ -28,9 +28,11 @@ import traceback
 
 # ROS
 import rclpy
-from rclpy.time import Duration
+from rcl_interfaces.srv import SetParameters, GetParameters
+import rcl_interfaces.msg
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import tf2_ros
@@ -40,7 +42,6 @@ import nav2_msgs.action
 import std_msgs.msg
 import nav_msgs.msg
 import geometry_msgs.msg
-from actionlib_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
 
 # Other
@@ -157,16 +158,45 @@ class BufferProxy():
         if key in self.transformMap:
             (transform, last_time) = self.transformMap[key]
             if now - last_time < self.min_interval:
-                self._logger.info(f"found old lookup_transform({target}, {source}, {(now - last_time).nanoseconds/1000000000:.2f}sec)")
+                self._logger.debug(f"found old lookup_transform({target}, {source}, {(now - last_time).nanoseconds/1000000000:.2f}sec)")
                 return transform
 
         if __debug__:
             self.debug()
-        self._logger.info(f"lookup_transform({target}, {source})")
+        self._logger.debug(f"lookup_transform({target}, {source})")
         req = LookupTransform.Request()
         req.target_frame = target
         req.source_frame = source
-        result = self.lookup_transform_service.call(req)
+        if not self.lookup_transform_service.wait_for_service(timeout_sec=1.0):
+            raise RuntimeError("lookup transform service is not available")
+        # usage of call() can cause SIGSEGV at exit due to infinite wait
+        # however, call(req, timeout_sec=1.0) is implemented in J-turtle release not in humble
+        #
+        # result = self.lookup_transform_service.call(req)
+        #
+        # so implemented call with timeout from here
+        # reference implementation is
+        # https://github.com/ros2/rclpy/blob/7a7f23e0d7e51dd244001ef606b97f1153e5a97e/rclpy/rclpy/client.py#L72-L110
+        event = threading.Event()
+
+        def unblock(future):
+            nonlocal event
+            event.set()
+        future = self.lookup_transform_service.call_async(req)
+        future.add_done_callback(unblock)
+        # Check future.done() before waiting on the event.
+        # The callback might have been added after the future is completed,
+        # resulting in the event never being set.
+        if not future.done():
+            if not event.wait(1.0):
+                # Timed out. remove_pending_request() to free resources
+                self.remove_pending_request(future)
+                raise RuntimeError("timeout")
+        if future.exception() is not None:
+            raise future.exception()
+        result = future.result()
+        # sync call end here
+
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
         self.transformMap[key] = (result.transform, now)
@@ -185,13 +215,18 @@ class ControlBase(object):
     # _anchor = geoutil.Anchor(lat=40.443259, lng=-79.945874, rotate=-164.9) # 4fr-gazebo
     # _anchor = geoutil.Anchor(lat=40.443259, lng=-79.945874, rotate=16) # 4fr-gazebo
 
-    def __init__(self, node: Node, datautil_instance=None, anchor_file=''):
+    def __init__(self, node: Node, tf_node: Node, datautil_instance=None, anchor_file=''):
         self._node = node
         self._logger = node.get_logger()
         self.visualizer = visualizer.instance(node)
 
         self.delegate = NavigationInterface()
-        self.buffer = BufferProxy(node)
+        self.buffer = BufferProxy(tf_node)
+
+        # TF listening is at high frequency and increases the CPU usage substantially
+        # so the code is using a service to get TF transform
+        # self.buffer = tf2_ros.Buffer()
+        # self.listener = tf2_ros.TransformListener(self.buffer, tf_node)
 
         self.current_pose = None
         self.current_odom_pose = None
@@ -241,8 +276,7 @@ class ControlBase(object):
             ros_pose.orientation.w = transformStamped.transform.rotation.w
             return ros_pose
         except RuntimeError:
-            self._logger.error(F"{self._node.get_clock().now()}")
-            self._logger.error(traceback.format_exc(), throttle_duration_sec=1.0)
+            self._logger.debug("cannot get current_ros_pose")
         raise RuntimeError("no transformation")
 
     def current_local_pose(self, frame=None):
@@ -259,7 +293,7 @@ class ControlBase(object):
             current_pose = geoutil.Pose(x=translation.x, y=translation.y, r=euler[2])
             return current_pose
         except RuntimeError:
-            self._logger.error(traceback.format_exc(), throttle_duration_sec=1.0)
+            self._logger.debug("cannot get current_local_pose")
         raise RuntimeError("no transformation")
 
     def current_local_odom_pose(self):
@@ -273,7 +307,7 @@ class ControlBase(object):
             current_pose = geoutil.Pose(x=translation.x, y=translation.y, r=euler[2])
             return current_pose
         except RuntimeError:
-            self._logger.error(traceback.format_exc(), throttle_duration_sec=1.0)
+            self._logger.debug("cannot get current_local_odom_pose")
         raise RuntimeError("no transformation")
 
     def current_global_pose(self):
@@ -296,13 +330,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                "navigate_through_poses": nav2_msgs.action.NavigateThroughPoses}
     NS = ["", "/local"]
 
-    def __init__(self, node: Node, datautil_instance=None, anchor_file=None, wait_for_action=True):
+    def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
+                 datautil_instance=None, anchor_file=None, wait_for_action=True):
 
         self.current_floor = None
         self.current_frame = None
 
         super(Navigation, self).__init__(
-            node, datautil_instance=datautil_instance, anchor_file=anchor_file)
+            node, tf_node, datautil_instance=datautil_instance, anchor_file=anchor_file)
+
+        self.param_manager = NavigationParamManager(srv_node)
 
         self.info_pois = []
         self.queue_wait_pois = []
@@ -311,7 +348,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self.i_am_ready = False
         self._sub_goals = None
+        self._goal_index = -1
         self._current_goal = None
+        self._last_estimated_goal_check = None
+        self._last_estimated_goal = None
 
         # self.client = None
         self._loop_handle = None
@@ -326,7 +366,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._global_map_name = node.declare_parameter("global_map_name", "map_global").value
         self.visualizer.global_map_name = self._global_map_name
 
-        self.social_navigation = SocialNavigation(node, self.buffer)
+        self.social_navigation = SocialNavigation(soc_node, self.buffer)
 
         self._clients: dict[str, ActionClient] = {}
 
@@ -335,9 +375,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         for ns in Navigation.NS:
             for action in Navigation.ACTIONS:
                 name = "/".join([ns, action])
-                self._clients[name] = ActionClient(self._node, Navigation.ACTIONS[action], name, callback_group=self._main_callback_group)
+                self._clients[name] = ActionClient(act_node, Navigation.ACTIONS[action], name, callback_group=self._main_callback_group)
 
-        self._spin_client = ActionClient(self._node, nav2_msgs.action.Spin, "/spin", callback_group=self._main_callback_group)
+        self._spin_client = ActionClient(act_node, nav2_msgs.action.Spin, "/spin", callback_group=self._main_callback_group)
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
 
@@ -365,7 +405,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_msg = None
         self.need_queue_start_arrived_info = False
         self.need_queue_proceed_info = False
-        queue_input = node.declare_parameter("queue_topic", "/queue_people_py/queue").value
+        queue_input = node.declare_parameter("queue_topic", "/queue").value
         self.queue_sub = node.create_subscription(queue_msgs.msg.Queue, queue_input, self._queue_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         queue_speed_output = node.declare_parameter("queue_speed_topic", "/cabot/queue_speed").value
         self.queue_speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, queue_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -377,15 +417,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
-        self.initial_social_distance = None
-        self.current_social_distance = None
-        get_social_distance_topic = node.declare_parameter("get_social_distance_topic", "/get_social_distance").value
-        self.get_social_distance_sub = node.create_subscription(geometry_msgs.msg.Point, get_social_distance_topic, self._get_social_distance_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        set_social_distance_topic = node.declare_parameter("set_social_distance_topic", "/set_social_distance").value
-        self.set_social_distance_pub = node.create_publisher(geometry_msgs.msg.Point, set_social_distance_topic, 10, callback_group=MutuallyExclusiveCallbackGroup())
-
         self._process_queue = []
-        self._process_timer = node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+        self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
     def _localize_status_callback(self, msg):
@@ -431,9 +464,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._stop_loop()
             if self._current_goal:
                 self._current_goal.prevent_callback = True
-            self.pause_navigation()
-            time.sleep(0.5)
-            self.resume_navigation()
+
+            def done_callback():
+                self.resume_navigation()
+            self.pause_navigation(done_callback)
 
     def _plan_callback(self, path):
         try:
@@ -479,13 +513,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_msg = msg
         names = [person.name for person in self.current_queue_msg.people]
         self._logger.info(F"Current people in queue {names}", throttle_duration_sec=1)
-
-    def _get_social_distance_callback(self, msg):
-        self.current_social_distance = msg
-        if self.initial_social_distance is None:
-            self.initial_social_distance = self.current_social_distance
-        self._logger.info(F"Current social distance parameter is {self.current_social_distance}",
-                          throttle_duration_sec=3)
 
     def _get_queue_interval_callback(self, msg):
         self.current_queue_interval = msg.data
@@ -535,9 +562,38 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
+        self._goal_index = -1
 
-        # for dashboad        
-        (gpath, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
+        # check facilities
+        self.nearby_facilities = []
+        links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
+        if len(links) > 0:
+            kdtree = geojson.LinkKDTree()
+            kdtree.build(links)
+
+            start = time.time()
+            facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+            for facility in facilities:
+                # self._logger.debug(f"facility {facility._id}: {facility.name}")
+                if not facility.name:
+                    continue
+                if not facility.is_read:
+                    continue
+
+                for ent in facility.entrances:
+                    min_link, min_dist = kdtree.get_nearest_link(ent.node)
+                    if min_link and min_dist < 5.0:
+                        # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
+                        ent.set_target(min_link)
+                        self.nearby_facilities.append({
+                            "facility": facility,
+                            "entrance": ent
+                        })
+            end = time.time()
+            self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+
+        # for dashboad
+        (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
         msg = nav_msgs.msg.Path()
         msg.header = gpath.header
         msg.header.frame_id = "map"
@@ -559,7 +615,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
 
         if self._current_goal:
-            self._sub_goals.insert(0, self._current_goal)
+            self._goal_index -= 1
             self._navigate_next_sub_goal()
 
     # wrap execution by a queue
@@ -578,7 +634,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
 
         if self._current_goal:
-            self._sub_goals.insert(0, self._current_goal)
+            self._goal_index -= 1
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
@@ -587,6 +643,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "resume")
+
+        current_pose = self.current_local_pose()
+        goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+        goal.estimate_inner_goal(current_pose, self.current_floor)
+        self._goal_index = index-1
+        self._last_estimated_goal = None
+
         self._navigate_next_sub_goal()
 
     # wrap execution by a queue
@@ -598,6 +661,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "cancel")
         self._sub_goals = None
+        self._goal_index = -1
         self._stop_loop()
         if self._current_goal:
             self._current_goal.cancel(callback)
@@ -612,9 +676,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("navigation is canceled")
             return
 
-        if self._sub_goals:
+        if self._sub_goals and self._goal_index+1 < len(self._sub_goals):
             self.delegate.activity_log("cabot/navigation", "next_sub_goal")
-            self._current_goal = self._sub_goals.pop(0)
+            self._goal_index += 1
+            self._current_goal = self._sub_goals[self._goal_index]
             self._current_goal.reset()
             self._navigate_sub_goal(self._current_goal)
             return
@@ -717,6 +782,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         try:
             self._check_info_poi(self.current_pose)
+            self._check_nearby_facility(self.current_pose)
             self._check_speed_limit(self.current_pose)
             self._check_turn(self.current_pose)
             self._check_queue_wait(self.current_pose)
@@ -744,20 +810,41 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
 
-    def _check_speed_limit(self, current_pose):
-        # check speed limit
-        if not self.speed_pois:
+    def _check_nearby_facility(self, current_pose):
+        if not self.nearby_facilities:
             return
+        entry = min(self.nearby_facilities, key=lambda p, c=current_pose: p["entrance"].distance_to(c))
+        if entry is None:
+            return
+        entrance = entry["entrance"]
 
+        if entrance is not None and entrance.distance_to(current_pose) < 8:
+            # self._logger.info(F"_check_nearby_facility: {entrance._id}, {entrance}, {current_pose}")
+            if entrance.is_approaching(current_pose):
+                self._logger.info(F"_check_nearby_facility approaching {entrance._id}")
+                self.delegate.approaching_to_poi(poi=entrance)
+            elif entrance.is_approached(current_pose):
+                self._logger.info(F"_check_nearby_facility approached {entrance._id}")
+                self.delegate.approached_to_poi(poi=entrance)
+            elif entrance.is_passed(current_pose):
+                self._logger.info(F"_check_nearby_facility passed {entrance._id}")
+                self.delegate.passed_poi(poi=entrance)
+
+    def _check_speed_limit(self, current_pose):
+        def max_v(D, A, d):
+            return (-2 * A * d + math.sqrt(4 * A * A * d * d + 8 * A * D)) / 2
+
+        # check speed limit
         limit = self._max_speed
         for poi in self.speed_pois:
-            dist = poi.distance_to(current_pose)
+            dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
-                    limit = min(limit, max(poi.limit, math.sqrt(2.0 * dist * self._max_acc)))
-                else:
-                    limit = min(limit, self._max_speed)
-                self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
+                    limit = min(limit, max(poi.limit, max_v(max(0, dist-0.5), 0.5, 0.5)))
+                if limit < self._max_speed:
+                    self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
+                    self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
+
         msg = std_msgs.msg.Float32()
         msg.data = limit
         self.speed_limit_pub.publish(msg)
@@ -809,7 +896,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             current_position = numpy.array([current_pose.x, current_pose.y])
             current_position_on_queue_path = geoutil.get_projected_point_to_line(current_position, poi_position, poi.link_orientation)
 
-            if len(self.current_queue_msg.people) > 0:
+            if self.current_queue_msg and len(self.current_queue_msg.people) > 0:
                 tail_pose = geometry_msgs.msg.PoseStamped()
                 tail_pose.header = self.current_queue_msg.header
                 tail_pose.pose.position = self.current_queue_msg.people[-1].position
@@ -821,7 +908,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     if dist_robot_to_tail <= self.current_queue_interval:
                         # if distance to queue tail is smaller than queue wait interval, stop immediately
                         limit = 0.0
-                        self._logger.info(F"Stop at current position, tail is closer than next queue wait POI, Set speed limit={limit}, dist_robot_to_tail={dist_robot_to_tail}", throttle_duration_sec=1)
+                        self._logger.info(F"Stop at current position, tail is closer than next queue wait POI, Set speed limit={limit}, dist_robot_to_tail={dist_robot_to_tail}",
+                                          throttle_duration_sec=1)
                     else:
                         # adjust Queue POI position by moving closer to link target node
                         poi_orientation = tf_transformations.euler_from_quaternion([poi.link_orientation.x, poi.link_orientation.y, poi.link_orientation.z, poi.link_orientation.w])
@@ -830,7 +918,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                         if dist_tail_to_queue_wait > max(2.0*self.current_queue_interval - self._queue_tail_dist_error_tolerance, self.current_queue_interval):
                             # If distance from next queue wait point to queue tail is larger than twice of queue wait interval,
                             # there should be another queue wait point. Skip next queue wait point.
-                            self._logger.info(F"Skip next queue wait POI, POI is far from robot. dist_tail_to_queue_wait={dist_tail_to_queue_wait}, dist_robot_to_tail={dist_robot_to_tail}", throttle_duration_sec=1)
+                            self._logger.info(F"Skip next queue wait POI, POI is far from robot. dist_tail_to_queue_wait={dist_tail_to_queue_wait}, dist_robot_to_tail={dist_robot_to_tail}",
+                                              throttle_duration_sec=1)
                         else:
                             dist_tail_to_queue_path = numpy.linalg.norm(tail_global_position_on_queue_path - tail_global_position)
                             if (dist_tail_to_queue_path > self._queue_tail_ignore_path_dist):
@@ -882,23 +971,44 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         goal.check(current_pose)
 
+        # estimate next goal
+        now = self._node.get_clock().now()
+        interval = rclpy.duration.Duration(seconds=1.0)
+        if not self._last_estimated_goal_check or now - self._last_estimated_goal_check > interval:
+            estimated_goal = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+            if self._last_estimated_goal != estimated_goal:
+                self._logger.info(F"Estimated next goal = {estimated_goal}")
+                self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"{repr(estimated_goal)}")
+            self._last_estimated_goal = estimated_goal
+            self._last_estimated_goal_check = now
+
         if goal.is_canceled:
             self.delegate.goal_canceled(goal)
+            self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             self._stop_loop()
+            self._current_goal = None
             return
 
         if not goal.is_completed:
             return
 
-        goal.exit()
-        self._current_goal = None
-        if goal.need_to_announce_arrival:
-            self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
-            self.delegate.have_arrived(goal)
+        if goal.is_exiting:
+            return
 
-        self._navigate_next_sub_goal()
+        def goal_exit_callback():
+            self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
+            self._current_goal = None
+            if goal.is_last:
+                # keep this for test
+                self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
+                self.delegate.have_arrived(goal)
+            self._navigate_next_sub_goal()
+        goal.exit(goal_exit_callback)
 
     # GoalInterface
+
+    def activity_log(self, category="", text="", memo=""):
+        self.delegate.activity_log(category, text, memo)
 
     def get_logger(self):
         return self._logger
@@ -945,7 +1055,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.visualizer.visualize()
 
         self._logger.info("sending goal")
-        self._logger.info("".join(traceback.format_stack()))
         future = client.send_goal_async(goal)
         self._logger.info("add done callback")
         future.add_done_callback(lambda future: self._navigate_to_pose_sent_goal(goal, future, gh_cb, done_cb))
@@ -1012,33 +1121,72 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.notify_turn(turn=Turn(self.current_pose.to_pose_stamped_msg(self._global_map_name), angle))
         self._logger.info(F"notify turn {turn_yaw}")
 
-    def goto_floor(self, floor, callback):
+    def goto_floor(self, floor, gh_callback, callback):
+        try:
+            self._goto_floor(floor, gh_callback, callback)
+        except:  # noqa: #722
+            self._logger.error(traceback.format_exc())
+
+    def _goto_floor(self, floor, gh_callback, callback):
         self._logger.info(F"go to floor {floor}")
         self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
-        rate = self._node.create_rate(2)
-        while self.current_floor != floor:
-            rate.sleep()
 
-        self._logger.info("floor is changed")
-        self.delegate.floor_changed(self.current_floor)
-        while rclpy.ok():
-            self._logger.info(F"trying to find tf from map to {self.current_frame}")
-            try:
-                rate.sleep()
-                self.buffer.lookup_transform("map", self.current_frame, CaBotRclpyUtil.time_zero())
-                break
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
-                    tf2_ros.ExtrapolationException):
-                self._logger.warn(F"Could not find tf from map to {self.current_frame}")
-                continue
+        class GotoFloorTask():
+            def __init__(self, nav):
+                self._nav = nav
+                self._node = nav._node
+                self._logger = nav._logger
+                self.buffer = nav.buffer
+                self.delegate = nav.delegate
+                self.future = self._node.executor.create_task(self.handler)
+                self.future.add_done_callback(lambda x: callback(True))
+                self.rate = self._nav._node.create_rate(2)
+                self.cancelled = False
 
-        self._logger.info("tf is changed")
-        rate.sleep()
+            def cancel_goal_async(self):
+                def dummy():
+                    self._logger.info("cancel goal async wait")
+                    self.rate.sleep()
+                    self._logger.info("cancel goal async done")
+                    self.cancel_future.done()
+                self.cancel_future = self._node.executor.create_task(dummy)
+                self.cancelled = True
+                return self.cancel_future
 
-        callback(True)
+            def handler(self):
+                try:
+                    self._handle()
+                except:  # noqa: #722
+                    self._logger.error(traceback.format_exc())
+
+            def _handle(self):
+                first = True
+                while rclpy.ok():
+                    self.rate.sleep()
+                    self._logger.info(F"GotoFloorTask loop cancelled={self.cancelled}")
+                    if self.cancelled:
+                        self._logger.info("GotoFloorTask cancelled")
+                        break
+                    if self._nav.current_floor != floor:
+                        continue
+                    if first:
+                        first = False
+                        self.delegate.floor_changed(self._nav.current_floor)
+
+                    self._logger.info(F"trying to find tf from map to {self._nav.current_frame}")
+                    try:
+                        self.buffer.lookup_transform("map", self._nav.current_frame, CaBotRclpyUtil.time_zero())
+                        break
+                    except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
+                            tf2_ros.ExtrapolationException):
+                        self._logger.warn(F"Could not find tf from map to {self._nav.current_frame}")
+                self.future.done()
+
+        task = GotoFloorTask(self)
+        gh_callback(task)
 
     def set_pause_control(self, flag):
-        self._logger.info(F"set_pause_control")
+        self._logger.info("set_pause_control")
         self.delegate.activity_log("cabot/navigation", "pause_control", str(flag))
         self.pause_control_msg.data = flag
         self.pause_control_pub.publish(self.pause_control_msg)
@@ -1078,3 +1226,97 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def please_return_position(self):
         self.delegate.please_return_position()
+
+    def change_parameters(self, params, callback):
+        self.param_manager.change_parameters(params, callback)
+
+    def request_parameters(self, params, callback):
+        self.param_manager.request_parameters(params, callback)
+
+
+class NavigationParamManager:
+    def __init__(self, node):
+        self.node = node
+        self.clients = {}
+        self.callback_group = MutuallyExclusiveCallbackGroup()
+
+    def get_client(self, node_name, service_type, service_name):
+        key = f'{node_name}/{service_name}'
+        if key not in self.clients:
+            self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
+        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().error(f'{key} is not available...')
+            self.clients[key] = False
+        return self.clients[key]
+
+    def change_parameter(self, node_name, param_dict, callback):
+        def done_callback(future):
+            callback(node_name, future)
+        request = SetParameters.Request()
+        for param_name, param_value in param_dict.items():
+            new_parameter = Parameter(param_name, value=param_value)
+            request.parameters.append(new_parameter.to_parameter_msg())
+        client = self.get_client(node_name, SetParameters, "set_parameters")
+        if client:
+            future = client.call_async(request)
+            future.add_done_callback(done_callback)
+        else:
+            done_callback(None)
+
+    def change_parameters(self, params, callback):
+        def sub_callback(node_name, future):
+            del params[node_name]
+            self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")
+            if len(params) == 0:
+                if future:
+                    callback(future.result())
+                else:
+                    callback(None)
+            else:
+                self.change_parameters(params, callback)
+        for node_name, param_dict in params.items():
+            self.node.get_logger().info(f"call change_parameter {node_name}, {param_dict}")
+            try:
+                self.change_parameter(node_name, param_dict, sub_callback)
+            except:  # noqa: 722
+                self.node.get_logger().error(traceback.format_exc())
+            break
+
+    def request_parameter(self, node_name, param_list, callback):
+        def done_callback(future):
+            callback(node_name, param_list, future)
+        request = GetParameters.Request()
+        request.names = param_list
+        client = self.get_client(node_name, GetParameters, "get_parameters")
+        if client:
+            future = client.call_async(request)
+            future.add_done_callback(done_callback)
+        else:
+            done_callback(None)
+
+    def request_parameters(self, params, callback):
+        self.rcount = 0
+        self.result = {}
+
+        def sub_callback(node_name, param_list, future):
+            self.rcount += 1
+            self.result[node_name] = {}
+            if future:
+                for name, value in zip(param_list, future.result().values):
+                    msg = rcl_interfaces.msg.Parameter()
+                    msg.name = name
+                    msg.value = value
+                    param = Parameter.from_parameter_msg(msg)
+                    self.result[node_name][name] = param.value
+            if self.rcount == len(params):
+                if future:
+                    self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, {future.result()}")
+                else:
+                    self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, None")
+                callback(self.result)
+        for node_name, param_list in params.items():
+            self.node.get_logger().info(f"call request_parameter {node_name}, {param_list}")
+            try:
+                self.request_parameter(node_name, param_list, sub_callback)
+            except:  # noqa: 722
+                self.node.get_logger().error(traceback.format_exc())

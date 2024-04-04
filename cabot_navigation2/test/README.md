@@ -42,11 +42,12 @@ func test_name(tester: Tester)
     - `topic` : topic name
     - `topic_type` : topic type
     - `condition` : pyton snipet to check if the `msg` matches the condition
-- `check_collision`
-    - alias to to `check_topic_error` with
-      - `topic=/collision`
-      - `topic_type=pedestrian_plugin_msgs/msg/Collision`
-      - `condition=True`
+      - if matches, the result will be `False`
+- `check_topic`
+    - `topic` : topic name
+    - `topic_type` : topic type
+    - `condition` : pyton snipet to check if the `msg` matches the condition
+      - if matches, the result will be `True`
 - `wait_ready`
     - wait until the system is ready. It is equivalent to the following `wait_topic` action
         ```
@@ -77,39 +78,35 @@ func test_name(tester: Tester)
     - `condition` : pyton snipet to check if the `msg` matches the condition
 - `wait` : wait for seconds
     - `seconds` : wait time in seconds
+- `set_evaluation_parameters(metrics=[], robot_radius=None)` : set parameters used for computing metrics
+    - `metrics : Optional[list], default=[]` : list of metric functions to be computed. The callable functions are defined in [evaluation_metrics.py](evaluation_metrics.py).
+        - Example
+            ```
+            metrics=[
+                "total_time",
+                "robot_path_length",
+                "time_not_moving",
+                "avg_robot_linear_speed",
+                "cumulative_heading_changes"
+            ]
+            ```
+        - Note: The implementation of the metric functions is not stable as it is under development.
+    - `robot_radius : Optional[float], default=None` : robot radius used to detect collisions in metric computation. If not defined, the default value (0.45) defined in the pedestrian plugin will be used.
+- `start_evaluation` : start computing the metrics. This method should be called when ready to start the navigation.
+- `stop_evaluation` : stop computing the metrics. It is usually not necessary to call this method because it is automatically called when the test ends.
 
----
-**old one with run_test_yaml.py**
+### Short hand for test
 
-### Test case file location
-
-- <CABOT_SITE>/test/tests.yaml
-
-### Test case spec
-
-```
-config:
-  init_x: <robot initial location>
-  init_y: <robot initial location>
-
-# specify check condition which should not happens all the time
-checks: 
-- name: <name of check>
-  action:
-    type: check_topic_error
-    topic: <topic>
-    topic_type: <topic_msgs/msg/MsgType>
-    condition: "python snipet to check the msg content (variable msg is given)"
-
-# test actions that will be executed
-tests:
-- comment: <comment message>
-- name: <name of the action>
-  action:
-    type: <test_action>
-    timeout: <timeout seconds> (default=60)
-    <other parameters>
-```
+- `check_collision`
+- `goto_node`
+- `cancel_navigation`
+- `button_down`
+- `wait_navigation_completed`
+- `wait_navigation_arrived`
+- `wait_turn_towards`
+- `check_navigation_arrived`
+- `check_turn_towards`
+- `wait_for`
 
 ### Test action types and params
 - `wait_ready`

@@ -171,7 +171,7 @@ void StopReasoner::input_global_plan(nav_msgs::msg::Path & /* msg */)
 {
   RCLCPP_INFO(logger_, "set_is_navigating(true)");
   set_is_navigating(true);
-  navigation_timeout_ = get_current_time() + rclcpp::Duration(0.5, 0);
+  navigation_timeout_ = get_current_time() + rclcpp::Duration(0, 500000000);
 }
 
 void StopReasoner::input_cmd_vel(geometry_msgs::msg::Twist & msg)

@@ -21,9 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""
-Launch file for hesai lidar
-"""
+# Launch file for hesai lidar
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription

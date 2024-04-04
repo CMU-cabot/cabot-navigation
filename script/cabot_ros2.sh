@@ -135,7 +135,6 @@ if [ $CABOT_GAZEBO -eq 1 ]; then use_sim_time=true; fi
 gazebo=$CABOT_GAZEBO   # read by config script
 
 wait_sec=0
-queue_detector=1
 
 
 function usage {
@@ -263,14 +262,14 @@ if [ $use_ble -ne 0 ]; then
 fi
 
 ### launch queue detect
-if [ $queue_detector -eq 1 ]; then
+if [[ -e $sitedir/queue ]]; then
     if [ $gazebo -eq 1 ]; then
         queue_det_config_file=$sitedir/queue/gazebo/detector/config.yaml
     else
         queue_det_config_file=$sitedir/queue/detector/config.yaml
     fi
 
-    if [ $queue_det_config_file != "" ]; then
+    if [[ -e $queue_det_config_file ]]; then
         launch_file="queue_people_py detect_queue_people.launch"
         echo "launch $launch_file"
         eval "$command ros2 launch $launch_file \

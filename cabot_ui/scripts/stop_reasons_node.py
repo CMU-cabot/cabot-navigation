@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
 
+# Copyright (c) 2022  Carnegie Mellon University
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import rclpy
 from rclpy.time import Duration
 from rclpy.node import Node
@@ -7,8 +27,6 @@ import tf2_ros
 import nav_msgs.msg
 import std_msgs.msg
 import geometry_msgs.msg
-import nav2_msgs.msg
-import nav2_msgs.action
 import cabot_msgs.msg
 import people_msgs.msg
 import threading
@@ -40,7 +58,7 @@ def main():
     node = Node("stop_reason_node")
     CaBotRclpyUtil.initialize(node)
     tf_buffer = tf2_ros.Buffer(Duration(seconds=10), node)
-    tf_listener = tf2_ros.TransformListener(tf_buffer, node)
+    tf_listener = tf2_ros.TransformListener(tf_buffer, node)  # noqa: #841
     reasoner = StopReasoner(tf_buffer)
 
     stop_reason_pub = node.create_publisher(cabot_msgs.msg.StopReason, "/stop_reason", 10)
@@ -70,6 +88,7 @@ def main():
 
 def timer_callback():
     update()
+
 
 lock = threading.Lock()
 

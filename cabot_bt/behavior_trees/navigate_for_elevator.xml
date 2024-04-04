@@ -48,32 +48,32 @@
         <RecoveryNode number_of_retries="99999999" name="NavigateRecovery">
           <PipelineSequence name="NavigateWithReplanning">
             <!-- Not using RateController, so that the robot can keep trying to find the initial/updated path -->
-            <RecoveryNode number_of_retries="99999999" name="UpdatePathRecovery">
+            <Fallback>
               <Sequence>
                 <WaitFloat wait_duration_float="0.5"/>
                 <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" />
-                <BlackboardCheckString value_A="{first_time}" value_B="true">
-                  <Sequence>
-                    <PublishTopic topic="/cabot/event" value="navigation;event;elevator_door_may_be_ready"/>
-                    <SetBlackboard value="false" output_key="first_time" />
-                  </Sequence>
-                </BlackboardCheckString>
+                <Fallback>
+                  <BlackboardCheckString value_A="{first_time}" value_B="true">
+                    <Sequence>
+                      <PublishTopic topic="/cabot/event" value="navigation;event;elevator_door_may_be_ready"/>
+                      <SetBlackboard value="false" output_key="first_time" />
+                    </Sequence>
+                  </BlackboardCheckString>
+                  <AlwaysSuccess/>
+                </Fallback>
               </Sequence>
               <AlwaysSuccess/>
-            </RecoveryNode>
-            <RecoveryNode number_of_retries="1" name="FollowPathRecovery">
-              <FollowPath path="{path}" controller_id="FollowPath" />
-              <AlwaysSuccess/>
-            </RecoveryNode>
+            </Fallback>
+            <FollowPath path="{path}" controller_id="FollowPath" />
           </PipelineSequence>
-          <RecoveryNode>
-            <SequenceStar name="RecoveryActions">
+          <RecoveryNode number_of_retries="99999999" name="ClearCostMapRecovery">
+            <Sequence name="RecoveryActions">
               <ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000"
                                   service_name="/global_costmap/clear_entirely_global_costmap"/>
               <ClearEntireCostmap name="ClearLocalCostmap-Context" server_timeout="5000"
                                   service_name="/local_costmap/clear_entirely_local_costmap"/>
               <Wait wait_duration="1.0"/>
-            </SequenceStar>
+            </Sequence>
             <AlwaysSuccess/>
           </RecoveryNode>
         </RecoveryNode>

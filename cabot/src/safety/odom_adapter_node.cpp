@@ -112,6 +112,17 @@ public:
   ~OdomAdapterNode()
   {
     RCLCPP_INFO(get_logger(), "OdomAdapterNodeClass Destructor");
+    odomPub.reset();
+    cmdVelPub.reset();
+    odomSub.reset();
+    cmdVelSub.reset();
+    tfTimer.reset();
+    odom_callback_group.reset();
+    cmdVel_callback_group.reset();
+    tf_callback_group.reset();
+    delete tfListener;
+    delete tfBuffer;
+    broadcaster_.reset();
   }
 
 private:

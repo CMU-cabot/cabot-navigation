@@ -1,24 +1,22 @@
-/*******************************************************************************
- * Copyright (c) 2022  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2022  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "cabot_navigation2/cabot_planner_param.hpp"
 
@@ -27,10 +25,12 @@
 namespace cabot_navigation2
 {
 
-CaBotPlan::CaBotPlan(CaBotPlannerParam & param_)
-: param(param_)
+CaBotPlan::CaBotPlan(CaBotPlannerParam & param_, DetourMode detour_mode_)
+: param(param_),
+  detour_mode(detour_mode_)
 {
-  nodes_backup = param.getNodes();
+  nodes_backup = param.getNodes(detour_mode);
+  RCLCPP_INFO(logger_, "nodex_backup.size = %ld, detour_mode=%d", nodes_backup.size(), detour_mode);
   resetNodes();
   findIndex();
 }
@@ -65,7 +65,7 @@ nav_msgs::msg::Path CaBotPlan::getPlan(bool normalized, float normalize_length)
       q.setRPY(0, 0, yaw);
 
       float mx, my;
-      param.mapToWorld(mp0.x+0.5, mp0.y+0.5, mx, my);
+      param.mapToWorld(mp0.x + 0.5, mp0.y + 0.5, mx, my);
 
       geometry_msgs::msg::PoseStamped wp;
       wp.pose.position.x = mx;
@@ -90,7 +90,7 @@ nav_msgs::msg::Path CaBotPlan::getPlan(bool normalized, float normalize_length)
       q.setRPY(0, 0, yaw);
 
       float mx, my;
-      param.mapToWorld(mp0.x+0.5, mp0.y+0.5, mx, my);
+      param.mapToWorld(mp0.x + 0.5, mp0.y + 0.5, mx, my);
 
       geometry_msgs::msg::PoseStamped wp;
       wp.pose.position.x = mx;
@@ -142,12 +142,15 @@ void CaBotPlan::findIndex()
     // check optimized sitance and also the last node is okay to go through
     RCLCPP_DEBUG(logger_, "end_distance=%.2f, distance_from_start=%.2f", end_distance, distance_from_start);
     if (end_distance < distance_from_start) {
-      if (checkPointIsOkay(*n1, detour_mode)) {
+      if (param.checkPointIsOkay(*n1, detour_mode)) {
         break;
       } else {
-        end_distance = distance_from_start + (2.0 / param.resolution); // margin
+        end_distance = distance_from_start + (2.0 / param.resolution);  // margin
       }
     }
+  }
+  if (nodes.size() < end_index) {
+    end_index = nodes.size();
   }
   /*
   if (start_index < (uint64_t)(5.0/options_.initial_node_interval)) {
@@ -164,7 +167,7 @@ void CaBotPlan::adjustNodeInterval()
   bool changed = false;
   int devide_link_cell_interval_threshold = param.options.initial_node_interval * 2.0 / param.resolution;
   int shrink_link_cell_interval_threshold = param.options.initial_node_interval / 2.0 / param.resolution;
-  for (uint64_t i = 0; i < nodes.size() - 1; i++) {
+  for (uint64_t i = 0; i < nodes.size() - 2; i++) {
     if (nodes_backup.size() * 2 < nodes.size()) {
       break;
     }
@@ -267,34 +270,10 @@ bool CaBotPlan::checkPathIsOkay()
     for (int j = 0; j < 1; j++) {
       Point temp((n0.x * j + n1.x * (N - j)) / N, (n0.y * j + n1.y * (N - j)) / N);
 
-      if (!checkPointIsOkay(temp, detour_mode)) {
+      if (!param.checkPointIsOkay(temp, detour_mode)) {
         RCLCPP_ERROR(logger_, "something wrong (%.2f, %.2f), (%.2f, %.2f), %d", n0.x, n0.y, n1.x, n1.y, N);
         return false;
       }
-    }
-  }
-  return true;
-}
-
-bool CaBotPlan::checkPointIsOkay(Point & point, DetourMode detour_mode)
-{
-  int index = param.getIndexByPoint(point);
-
-  if (detour_mode == DetourMode::IGNORE) {
-    if (index >= 0 && param.static_cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
-      float mx, my;
-      param.mapToWorld(point.x, point.y, mx, my);
-        RCLCPP_WARN(
-          logger_, "ignore mode: path above threshold at (%.2f, %.2f)", mx, my);
-      return false;
-    }
-  } else {
-    if (index >= 0 && param.cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
-      float mx, my;
-      param.mapToWorld(point.x, point.y, mx, my);
-        RCLCPP_WARN(
-          logger_, "path above threshold at (%.2f, %.2f)", mx, my);
-      return false;
     }
   }
   return true;
@@ -396,7 +375,7 @@ void CaBotPlannerParam::setCost()
   // ignore moving people/obstacles/queue people
   for (auto it = people_msg.people.begin(); it != people_msg.people.end(); it++) {
     bool stationary = (std::find(it->tags.begin(), it->tags.end(), "stationary") != it->tags.end());
-    if (!stationary) {
+    if (!stationary || options.ignore_people) {
       clearCostAround(*it);
     }
   }
@@ -423,10 +402,13 @@ bool CaBotPlannerParam::adjustPath()
 {
   path = normalizedPath(navcog_path);
   if (path.poses.empty()) {return false;}
+  RCLCPP_INFO(logger, "adjustPath, path.sposes.ize() = %ld", path.poses.size());
 
   estimatePathWidthAndAdjust(path, costmap, pe_options);
   if (options.adjust_start) {
+    RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld, start = (%.2f, %.2f)", path.poses.size(), start.pose.position.x, start.pose.position.y);
     path = adjustedPathByStart(path, start);
+    RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld", path.poses.size());
   }
 
   // path.poses.push_back(goal);
@@ -551,10 +533,10 @@ int CaBotPlannerParam::getIndex(float x, float y) const
 
 int CaBotPlannerParam::getIndexByPoint(Point & p) const
 {
-  return getIndex(p.x+0.5, p.y+0.5);
+  return getIndex(p.x + 0.5, p.y + 0.5);
 }
 
-std::vector<Node> CaBotPlannerParam::getNodes() const
+std::vector<Node> CaBotPlannerParam::getNodes(DetourMode detour_mode) const
 {
   std::vector<Node> nodes;
   auto initial_node_interval = options.initial_node_interval;
@@ -564,13 +546,15 @@ std::vector<Node> CaBotPlannerParam::getNodes() const
   auto p1 = path.poses[0].pose.position;
   float mx = 0, my = 0;
   for (uint64_t i = 1; i < path.poses.size(); i++) {
+    worldToMap(p0.x, p0.y, mx, my);
+    nodes.push_back(Node(mx, my));
     p1 = path.poses[i].pose.position;
 
     auto dist = std::hypot(p0.x - p1.x, p0.y - p1.y);
     int N = std::round(dist / initial_node_interval);
     if (N == 0) {continue;}
 
-    for (int j = 0; j <= N; j++) {
+    for (int j = 1; j <= N; j++) {
       // deal with the last pose
       if (j == N && i < path.poses.size() - 1) {
         continue;
@@ -591,8 +575,7 @@ std::vector<Node> CaBotPlannerParam::getNodes() const
   Node * prev = nullptr;
   double dist = 0;
   do {
-    auto index = getIndexByPoint(nodes.back());
-    if (index > 0 && cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+    if (!checkPointIsOkay(nodes.back(), detour_mode)) {
       if (prev) {
         dist += prev->distance(nodes.back()) * resolution;
       }
@@ -887,5 +870,29 @@ std::vector<Obstacle> CaBotPlannerParam::getObstaclesNearPoint(const Point & nod
     }
   }
   return list;
+}
+
+bool CaBotPlannerParam::checkPointIsOkay(Point & point, DetourMode detour_mode) const
+{
+  int index = getIndexByPoint(point);
+
+  if (detour_mode == DetourMode::IGNORE) {
+    if (index >= 0 && static_cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+      float mx, my;
+      mapToWorld(point.x, point.y, mx, my);
+      RCLCPP_WARN(
+        logger, "ignore mode: path above threshold at (%.2f, %.2f)", mx, my);
+      return false;
+    }
+  } else {
+    if (index >= 0 && cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+      float mx, my;
+      mapToWorld(point.x, point.y, mx, my);
+      RCLCPP_WARN(
+        logger, "path above threshold at (%.2f, %.2f)", mx, my);
+      return false;
+    }
+  }
+  return true;
 }
 }  // namespace cabot_navigation2

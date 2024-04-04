@@ -21,10 +21,9 @@
 // People speed control
 // Author: Daisuke Sato <daisukes@cmu.edu>
 
-#include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <tf2_ros/buffer.h>
 #include <tf2/utils.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <cmath>
 #include <limits>
@@ -39,6 +38,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace CaBotSafety
 {
@@ -65,6 +65,8 @@ public:
   double delay_;
   double social_distance_x_;
   double social_distance_y_;
+  double no_people_topic_max_speed_;
+  bool no_people_flag_;
 
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -79,6 +81,9 @@ public:
   tf2_ros::Buffer * tfBuffer;
   nav_msgs::msg::Odometry last_odom_;
   nav_msgs::msg::Path last_plan_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
+  rclcpp::TimerBase::SharedPtr people_topic_check_timer_;
+  rclcpp::Time last_people_message_time_;
 
   explicit PeopleSpeedControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("people_speed_control_node", options),
@@ -97,7 +102,9 @@ public:
     max_acc_(0.5),
     delay_(0.5),
     social_distance_x_(2.0),
-    social_distance_y_(1.0)
+    social_distance_y_(1.0),
+    no_people_topic_max_speed_(0.5),
+    no_people_flag_(false)
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -106,13 +113,20 @@ public:
     RCLCPP_INFO(get_logger(), "People speed control - %s", __FUNCTION__);
 
     people_topic_ = declare_parameter("people_topic", people_topic_);
-    people_sub_ = create_subscription<people_msgs::msg::People>(people_topic_, 10, std::bind(&PeopleSpeedControlNode::peopleCallback, this, std::placeholders::_1));
+    people_sub_ =
+      create_subscription<people_msgs::msg::People>(
+      people_topic_, 10,
+      std::bind(&PeopleSpeedControlNode::peopleCallback, this, std::placeholders::_1));
 
     odom_topic_ = declare_parameter("odom_topic", odom_topic_);
-    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(odom_topic_, 10, std::bind(&PeopleSpeedControlNode::odomCallback, this, std::placeholders::_1));
+    odom_sub_ =
+      create_subscription<nav_msgs::msg::Odometry>(odom_topic_, 10, std::bind(&PeopleSpeedControlNode::odomCallback, this, std::placeholders::_1));
 
     plan_topic_ = declare_parameter("plan_topic", plan_topic_);
-    plan_sub_ = create_subscription<nav_msgs::msg::Path>(plan_topic_, 10, std::bind(&PeopleSpeedControlNode::planCallback, this, std::placeholders::_1));
+    plan_sub_ = create_subscription<nav_msgs::msg::Path>(
+      plan_topic_, 10, std::bind(
+        &PeopleSpeedControlNode::planCallback, this,
+        std::placeholders::_1));
 
     vis_topic_ = declare_parameter("visualize_topic", vis_topic_);
     vis_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(vis_topic_, 100);
@@ -128,6 +142,7 @@ public:
     max_acc_ = declare_parameter("max_acc_", max_acc_);
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
+    no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -145,6 +160,14 @@ public:
     msg.y = social_distance_y_;
     get_social_distance_pub_->publish(msg);
 
+    callback_handler_ =
+      add_on_set_parameters_callback(std::bind(&PeopleSpeedControlNode::param_set_callback, this, std::placeholders::_1));
+
+    last_people_message_time_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
+    people_topic_check_timer_ = this->create_wall_timer(
+      std::chrono::seconds(1),
+      std::bind(&PeopleSpeedControlNode::timer_callback, this));
+
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
       max_speed_, social_distance_x_, social_distance_y_);
@@ -153,13 +176,84 @@ public:
   ~PeopleSpeedControlNode()
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Destructor");
+    people_sub_.reset();
+    odom_sub_.reset();
+    plan_sub_.reset();
+    vis_pub_.reset();
+    limit_pub_.reset();
+    event_pub_.reset();
+    set_social_distance_sub_.reset();
+    get_social_distance_pub_.reset();
+    delete tfListener;
+    delete tfBuffer;
+    callback_handler_.reset();
+    people_topic_check_timer_.reset();
+  }
+
+  // check if the last people message comes within one second
+  void timer_callback()
+  {
+    // ignore if there is no people message from the beginning (simulation without people)
+    if (last_people_message_time_.nanoseconds() == 0) {
+      return;
+    }
+    rclcpp::Time now = this->get_clock()->now();
+    int64_t nseconds_since_last_message = (now - last_people_message_time_).nanoseconds();
+
+    if (no_people_flag_) {
+      if (nseconds_since_last_message < 1000000000) {
+        // restored to OK
+        no_people_flag_ = false;
+      } else {
+        // keep NO_PEOPLE
+        std_msgs::msg::Float32 msg;
+        msg.data = no_people_topic_max_speed_;
+        limit_pub_->publish(msg);
+      }
+    } else {
+      if (nseconds_since_last_message > 1000000000) {
+        // OK -> NO_PEOPLE
+        no_people_flag_ = true;
+      }
+      // else keep OK
+    }
+  }
+
+  rcl_interfaces::msg::SetParametersResult param_set_callback(const std::vector<rclcpp::Parameter> params)
+  {
+    auto results = std::make_shared<rcl_interfaces::msg::SetParametersResult>();
+    for (auto && param : params) {
+      if (!has_parameter(param.get_name())) {
+        continue;
+      }
+      RCLCPP_DEBUG(get_logger(), "change param %s", param.get_name().c_str());
+
+      if (param.get_name() == "max_speed_") {
+        max_speed_ = param.as_double();
+      }
+      if (param.get_name() == "min_speed_") {
+        min_speed_ = param.as_double();
+      }
+      if (param.get_name() == "max_acc_") {
+        max_acc_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_x") {
+        social_distance_x_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_y") {
+        social_distance_y_ = param.as_double();
+      }
+    }
+    results->successful = true;
+    return *results;
   }
 
 private:
   void peopleCallback(const people_msgs::msg::People::SharedPtr input)
   {
+    last_people_message_time_ = this->get_clock()->now();
     if (last_plan_.poses.size() == 0) {
-      auto& clk = *this->get_clock();
+      auto & clk = *this->get_clock();
       RCLCPP_INFO_THROTTLE(get_logger(), clk, 1000, "PeopleSpeedControl no plan");
       return;
     }
@@ -223,6 +317,10 @@ private:
         speed_limit = std::min(speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
       }
 
+      if (speed_limit < min_speed_) {
+        speed_limit = 0;
+      }
+
       RCLCPP_INFO(
         get_logger(), "PeopleSpeedControl people_limit %s dist from path=%.2f x=%.2f y=%.2f vx=%.2f"
         " vy=%.2f pt=%.2f sdx=%.2f sdy=%.2f dist=%.2f limit=%.2f",
@@ -273,6 +371,7 @@ private:
     msg.y = social_distance_y_;
     get_social_distance_pub_->publish(msg);
 
+    RCLCPP_ERROR(get_logger(), "PeopleSpeedControl social distance with topic is deprecated");
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl setSocialDistanceCallback social_distance=(%.2f, %.2f)",
       social_distance_x_, social_distance_y_);

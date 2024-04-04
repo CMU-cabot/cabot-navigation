@@ -1,24 +1,24 @@
-/*******************************************************************************
- * Copyright (c) 2023  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2023  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+#include <yaml-cpp/yaml.h>
 
 #include <chrono>
 #include <functional>
@@ -26,8 +26,6 @@
 #include <string>
 #include <iostream>
 #include <fstream>
-#include <yaml-cpp/yaml.h>
-
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/int64.hpp"
@@ -40,9 +38,10 @@ using namespace std::chrono_literals;
 using std::placeholders::_1;
 
 #define NUM_MODES (2)
-std::string MODE_NAMES[2] = {"init", "track"};
+std::string MODE_NAMES[2] = {"init", "track"};  // NOLINT
 
-typedef struct FloorData {
+typedef struct FloorData
+{
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr points_pub;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub;
@@ -51,12 +50,12 @@ typedef struct FloorData {
 
 class MultiFloorTopicProxy : public rclcpp::Node
 {
- public:
+public:
   MultiFloorTopicProxy()
-      : Node("multi_floor_topic_proxy"),
-        current_floor(0),
-        current_area(0),
-        current_mode(0)
+  : Node("multi_floor_topic_proxy"),
+    current_floor(0),
+    current_area(0),
+    current_mode(0)
   {
     std::string map_config_file = this->declare_parameter("map_config_file", "");
     bool verbose = this->declare_parameter("verbose", false);
@@ -74,28 +73,29 @@ class MultiFloorTopicProxy : public rclcpp::Node
     auto map_list = config["map_list"];
     for (YAML::const_iterator it = map_list.begin(); it != map_list.end(); ++it) {
       YAML::Node map_dict = *it;
-      
+
       std::string node_id = map_dict["node_id"].as<std::string>();
-      
+
       int floor = map_dict["floor"].as<int>();
       int area = map_dict["area"].as<int>();
-      for (int mode = 0; mode < NUM_MODES; mode ++) {
+      for (int mode = 0; mode < NUM_MODES; mode++) {
         auto mode_str = MODE_NAMES[mode];
 
         std::string key = getKey(floor, area, mode);
-        
+
         FloorData floordata = {nullptr, nullptr, nullptr};
         RCLCPP_INFO(this->get_logger(), "floor = %d, area = %d, mode=%d, key=%s", floor, area, mode, key.c_str());
-        
-        floordata.imu_pub = this->create_publisher<sensor_msgs::msg::Imu>(node_id+"/"+mode_str+imu_topic_name, 1000);
-        floordata.points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>(node_id+"/"+mode_str+points2_topic_name, 100);
-        floordata.odom_pub = this->create_publisher<nav_msgs::msg::Odometry>(node_id+"/"+mode_str+odom_topic_name, 100);
-        floordata.scan_matched_points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>(node_id+"/"+mode_str+"/scan_matched_points2", 10,
-                                                                                                     std::bind(&MultiFloorTopicProxy::scan_matched_points2_callback, this, _1));
+
+        floordata.imu_pub = this->create_publisher<sensor_msgs::msg::Imu>(node_id + "/" + mode_str + imu_topic_name, 1000);
+        floordata.points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>(node_id + "/" + mode_str + points2_topic_name, 100);
+        floordata.odom_pub = this->create_publisher<nav_msgs::msg::Odometry>(node_id + "/" + mode_str + odom_topic_name, 100);
+        floordata.scan_matched_points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+          node_id + "/" + mode_str + "/scan_matched_points2", 10,
+          std::bind(&MultiFloorTopicProxy::scan_matched_points2_callback, this, _1));
         floor_map[key] = floordata;
       }
     }
-    
+
     auto latched_qos = rclcpp::QoS(10).transient_local();
     current_floor_sub = this->create_subscription<std_msgs::msg::Int64>("current_floor", latched_qos, std::bind(&MultiFloorTopicProxy::current_floor_callback, this, _1));
     current_area_sub = this->create_subscription<std_msgs::msg::Int64>("current_area", latched_qos, std::bind(&MultiFloorTopicProxy::current_area_callback, this, _1));
@@ -108,11 +108,13 @@ class MultiFloorTopicProxy : public rclcpp::Node
     scan_matched_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("scan_matched_points2", 10);
   }
 
-  std::string getKey(const int & floor, const int & area, const int & mode) const {
+  std::string getKey(const int & floor, const int & area, const int & mode) const
+  {
     return std::to_string(floor) + "-" + std::to_string(area) + "-" + std::to_string(mode);
   }
 
-  void scan_matched_points2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+  void scan_matched_points2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+  {
     scan_matched_points_pub->publish(*msg);
   }
 
@@ -133,7 +135,7 @@ class MultiFloorTopicProxy : public rclcpp::Node
     this->current_mode = msg->data;
     RCLCPP_INFO(this->get_logger(), "floor=%d, area=%d, mode=%d", current_floor, current_area, current_mode);
   }
-  
+
 
   void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
   {
@@ -149,12 +151,13 @@ class MultiFloorTopicProxy : public rclcpp::Node
 
     auto acc = msg->linear_acceleration;
     auto q = msg->orientation;
-    auto norm_acc = sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
-    auto norm_q = sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
-    if (norm_acc_threshold > norm_acc || std::abs(norm_q-1.0) > norm_q_tolerance) {
-      RCLCPP_INFO(this->get_logger(),
-                  "imu input is invalid. (linear_acceleration=(%.5f,%.5f,%.5f), orientation=(%.5f,%.5f,%.5f,%.5f))",
-                  acc.x, acc.y, acc.z, q.x, q.y, q.z, q.w);
+    auto norm_acc = sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+    auto norm_q = sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (norm_acc_threshold > norm_acc || std::abs(norm_q - 1.0) > norm_q_tolerance) {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "imu input is invalid. (linear_acceleration=(%.5f,%.5f,%.5f), orientation=(%.5f,%.5f,%.5f,%.5f))",
+        acc.x, acc.y, acc.z, q.x, q.y, q.z, q.w);
       return;
     }
     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "imu publish");
@@ -184,14 +187,14 @@ class MultiFloorTopicProxy : public rclcpp::Node
     RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "odom publish");
     search->second.odom_pub->publish(*msg);
   }
-  
- private:
+
+private:
   std::unordered_map<std::string, FloorData> floor_map;
 
   int current_floor;
   int current_area;
   int current_mode;
-  
+
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr current_floor_sub;
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr current_area_sub;
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr current_mode_sub;

@@ -118,7 +118,7 @@ def generate_launch_description():
                 'menu_file': menu_file,
             }, NamespaceParameterFile('cabot_ui_manager', config_path)],
             ros_arguments=[
-                '--log-level', 'cabot_ui_manager:=debug'
+                # '--log-level', 'cabot_ui_manager:=debug'
             ],
             # prefix='python3 -m cProfile -o cabot_ui_manager.profile',
         ),

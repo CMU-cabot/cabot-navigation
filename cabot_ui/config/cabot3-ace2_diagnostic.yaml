@@ -133,12 +133,11 @@ diagnostic_aggregator:
         - "cabot odriver_node: "
 
     # TODO Create diagnostic_updater for hesai
-    # hard_velodyne:
-    #   type: diagnostic_aggregator/GenericAnalyzer
-    #   path: "Hard: Velodyne"
-    #   contains:
-    #     - "velodyne_"
-    #   remove_prefix:
-    #     - "velodyne_drive_node: "
-    #     - "velodyne_transform_node: "
+    hard_hesailidar:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: HesaiLidar"
+      contains:
+        - "hesai"
+      remove_prefix:
+        - "hesai_lidar: "
 

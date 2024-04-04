@@ -31,8 +31,8 @@ RUN apt update && \
 	apt install -y \
 	wget \
 	curl \
-	openjdk-8-jre \
-	openjdk-8-jdk \
+	openjdk-11-jre \
+	openjdk-11-jdk \
 	zip \
 	maven \
 	git \
@@ -42,9 +42,16 @@ RUN apt update && \
 
 ENV USERNAME runner_user
 
+ARG UID=1001
 RUN useradd -m $USERNAME && \
         echo "$USERNAME:$USERNAME" | chpasswd && \
-        usermod --shell /bin/bash $USERNAME
+        usermod --shell /bin/bash $USERNAME && \
+        usermod -aG sudo $USERNAME && \
+        mkdir -p /etc/sudoers.d/ && \
+        echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && \
+        chmod 0440 /etc/sudoers.d/$USERNAME && \
+        usermod  --uid $UID $USERNAME && \
+        groupmod --gid $UID $USERNAME
 
 USER $USERNAME
 
@@ -63,7 +70,8 @@ RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtim
 #        ./server create defaultServer
 #
 
-RUN git clone https://github.com/daisukes/MapService -b hokoukukan_2018-docker && \
+#RUN git clone https://github.com/daisukes/MapService -b hokoukukan_2018-docker && \
+RUN git clone https://github.com/CMU-cabot/MapService -b daisukes/cabot-hokoukukan_2018 && \
 	cd MapService && \
 	sh download-lib.sh
 

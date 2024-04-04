@@ -28,6 +28,7 @@ Author: Daisuke Sato<daisukes@cmu.edu>
 # -*- coding: utf-8 -*-
 import sys
 import traceback
+import enum
 import copy
 import math
 import json
@@ -35,7 +36,7 @@ import scipy
 import scipy.spatial
 import numpy
 import numpy.linalg
-from tf_transformations import quaternion_from_euler
+from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
@@ -96,7 +97,7 @@ class LineString(Geometry):
         self.end = geoutil.Latlng(lat=self.coordinates[1][1], lng=self.coordinates[1][0])
 
     def distance_to(self, point):
-        if isinstance(point, Point):
+        if isinstance(point, geoutil.Latlng):
             return self.nearest_point_on_line(point).distance_to(point)
         raise RuntimeError(F"Need to pass a Point object ({type(point)})")
 
@@ -167,6 +168,62 @@ class Properties(object):
         return json.dumps(self.__dict__, sort_keys=True, indent=2)
 
 
+class LinkKDTree:
+    def __init__(self):
+        self._link_index = []
+        self._link_points = []
+        self._link_kdtree = None
+
+    def reset(self):
+        self._link_index = []
+        self._link_points = []
+        self._link_kdtree = None
+
+    def build(self, links):
+        for obj in links:
+            if obj.start_node and obj.end_node:
+                sp = numpy.array([obj.start_node.local_geometry.x, obj.start_node.local_geometry.y])  # noqa E501
+                ep = numpy.array([obj.end_node.local_geometry.x, obj.end_node.local_geometry.y])
+                self._add_link_index(sp, ep, obj)
+        if self._link_points:
+            self._link_kdtree = scipy.spatial.KDTree(self._link_points)
+
+    def _add_link_index(self, sp, ep, obj):
+        mp = (sp+ep)/2.0
+        self._link_points.append(mp)
+        self._link_index.append(obj)
+        if numpy.linalg.norm(sp-ep) > 1:
+            self._add_link_index(sp, mp, obj)
+            self._add_link_index(mp, ep, obj)
+
+    def get_nearest_link(self, node, exclude=None):
+        point = node.local_geometry
+        latlng = node.geometry
+        _, index = self._link_kdtree.query([point.x, point.y], 50)
+
+        min_index = None
+        min_dist = 1000
+        for i in index:
+            if i == len(self._link_index):
+                continue
+            link = self._link_index[i]
+            if exclude is not None and exclude(link):
+                continue
+
+            dist = link.geometry.distance_to(latlng)
+            if node.floor is not None:
+                if link.start_node.floor != node.floor and \
+                   link.end_node.floor != node.floor:
+                    dist += 1000
+            if dist < min_dist:
+                min_dist = dist
+                min_index = i
+
+        if min_index is None:
+            return (None, None)
+        return (self._link_index[min_index], min_dist)
+
+
 class Object(object):
     """Object class"""
 
@@ -233,8 +290,23 @@ class Object(object):
         return temp
 
     @staticmethod
+    def get_objects_by_exact_type(_type):
+        """get objects of specified type"""
+        temp = []
+        for obj in Object._all_objects:
+            if type(obj) is _type:
+                temp.append(obj)
+        return temp
+
+    @staticmethod
     def get_all_objects():
         return Object._all_objects
+
+    @staticmethod
+    def _unregister(obj):
+        _id = obj._id
+        if _id in Object._id_map:
+            del Object._id_map[_id]
 
     @staticmethod
     def _register(obj):
@@ -260,69 +332,24 @@ class Object(object):
         """reset all state in the objects"""
         for obj in Object._all_objects:
             obj.reset()
+        # dirty hack to deal with _TEMP_NODE_
+        temp_node = Object.get_object_by_id("_TEMP_NODE_")
+        if temp_node:
+            Object._unregister(temp_node)
 
-    @staticmethod
-    def _reset_link_index():
-        Object._link_index = []
-        Object._link_points = []
-        Object._link_kdtree = None
-
-    _link_index = []
-    _link_points = []
-    _link_kdtree = None
-
-    @staticmethod
-    def _build_link_index():
-        for obj in Object.get_objects_by_type(Link):
-            if obj.start_node and obj.end_node:
-                sp = numpy.array([obj.start_node.local_geometry.x, obj.start_node.local_geometry.y])  # noqa E501
-                ep = numpy.array([obj.end_node.local_geometry.x, obj.end_node.local_geometry.y])
-                Object._add_link_index(sp, ep, obj)
-        if Object._link_points:
-            Object._link_kdtree = scipy.spatial.KDTree(Object._link_points)
-
-    @staticmethod
-    def _add_link_index(sp, ep, obj):
-        mp = (sp+ep)/2.0
-        Object._link_points.append(mp)
-        Object._link_index.append(obj)
-        if numpy.linalg.norm(sp-ep) > 1:
-            Object._add_link_index(sp, mp, obj)
-            Object._add_link_index(mp, ep, obj)
+    _kdtree = LinkKDTree()
 
     @staticmethod
     def get_nearest_link(node, exclude=None):
-        point = node.local_geometry
-        latlng = node.geometry
-        _, index = Object._link_kdtree.query([point.x, point.y], 50)
-
-        min_index = None
-        min_dist = 1000
-        for i in index:
-            link = Object._link_index[i]
-            if exclude is not None and exclude(link):
-                continue
-
-            dist = link.geometry.distance_to(latlng)
-            if node.floor is not None:
-                if link.start_node.floor != node.floor and \
-                   link.end_node.floor != node.floor:
-                    dist += 1000
-            if dist < min_dist:
-                min_dist = dist
-                min_index = i
-
-        if min_index is None:
-            return None
-        return Object._link_index[min_index]
+        return Object._kdtree.get_nearest_link(node, exclude)
 
     @staticmethod
     def update_anchor_all(anchor):
         """update anchor of all object"""
-        Object._reset_link_index()
+        Object._kdtree.reset()
         for obj in Object._all_objects:
             obj.update_anchor(anchor)
-        Object._build_link_index()
+        Object._kdtree.build(Object.get_objects_by_type(Link))
 
     def __init__(self, **dic):
         s = super(Object, self)
@@ -377,6 +404,23 @@ class Object(object):
     def reset(self):
         pass
 
+    def copy(self):
+        return copy.deepcopy(self)
+
+
+class NavigationMode(enum.Enum):
+    Standard = 0
+    Narrow = 1
+    Tight = 2
+
+    @classmethod
+    def get_mode(cls, width):
+        if width < 1.0:
+            return NavigationMode.Tight
+        if width < 1.2:
+            return NavigationMode.Narrow
+        return NavigationMode.Standard
+
 
 class Link(Object):
     """Link class"""
@@ -388,8 +432,6 @@ class Link(Object):
     ROUTE_TYPE_STAIRS = 6
     ROUTE_TYPE_SLOPE = 7
     ROUTE_TYPE_UNKNOWN = 99
-    ROUTE_NARROW_PATH_THRESHOLD = 1.2
-    ROUTE_NARROW_ANNOUNCE_THRESHOLD = 1.0
 
     @classmethod
     def marshal(cls, dic):
@@ -442,14 +484,8 @@ class Link(Object):
         return self.start_node.is_leaf or self.end_node.is_leaf
 
     @property
-    def is_narrow(self):
-        """wheather this links is narrow or not"""
-        return self.properties.hulop_road_width < Link.ROUTE_NARROW_PATH_THRESHOLD
-
-    @property
-    def need_narrow_announce(self):
-        """wheather this links is narrow or not"""
-        return self.properties.hulop_road_width < Link.ROUTE_NARROW_ANNOUNCE_THRESHOLD
+    def navigation_mode(self):
+        return NavigationMode.get_mode(self.properties.hulop_road_width)
 
     @property
     def length(self):
@@ -457,6 +493,10 @@ class Link(Object):
         if self.start_node is None or self.end_node is None:
             return float('nan')
         return self.start_node.geometry.distance_to(self.end_node.geometry)
+
+    @property
+    def pose(self):
+        return geoutil.Pose.pose_from_points(self.start_node.local_geometry, self.end_node.local_geometry)
 
     def register_poi(self, poi):
         self.pois.append(poi)
@@ -487,7 +527,7 @@ class RouteLink(Link):
         # here is to work around to get POIs on the first temp link
         if self.is_temp:
             # the source_node should be updated with an anchor beforehand
-            link = Object.get_nearest_link(self.source_node)
+            link, _ = Object.get_nearest_link(self.source_node)
             self.pois = link.pois
 
     def _set_source_node(self, node):
@@ -502,6 +542,10 @@ class RouteLink(Link):
     @property
     def is_temp(self):
         return self._id.startswith("_TEMP_LINK")
+
+    @property
+    def pose(self):
+        return geoutil.Pose.pose_from_points(self.source_node.local_geometry, self.target_node.local_geometry)
 
 
 class Node(Object):
@@ -520,11 +564,6 @@ class Node(Object):
             if hasattr(self.properties, attr):
                 Object.get_object_by_id(getattr(self.properties, attr), self._add_link)
 
-        if hasattr(self.properties, 'floor'):
-            self.floor = self.properties.floor
-        else:
-            self.floor = 0
-
         self.facility = None
         Facility.get_facility_by_id(self._id, self._set_facility)
 
@@ -533,6 +572,12 @@ class Node(Object):
 
     def _set_facility(self, facility):
         self.facility = facility
+
+    @property
+    def floor(self):
+        if hasattr(self.properties, 'floor'):
+            return self.properties.floor
+        return 0
 
     @property
     def is_leaf(self):
@@ -546,6 +591,47 @@ class Node(Object):
         for link in self.links:
             res = res or link.is_elevator
         return res
+
+
+class Entrance(geoutil.TargetPlace):
+    def __init__(self, facility, i, node):
+        self.facility = facility
+        self.node = node
+        self.node_id = node._id
+        self._id = f"{facility._id}_ent{i}"
+        self.name = i18n.localized_attr(facility.properties, f"ent{i}_n")
+        super(Entrance, self).__init__(r=0, x=0, y=0, angle=45, floor=self.floor)
+        Object._register(self)
+
+    @property
+    def floor(self):
+        return self.node.floor
+
+    def update_anchor(self, anchor):
+        self.anchor = anchor
+
+    def reset(self):
+        self.reset_target()
+
+    def set_target(self, link):
+        gpoint = link.geometry.nearest_point_on_line(self.node.geometry)
+        lpoint = geoutil.global2local(gpoint, self.anchor)
+        self.update_pose(lpoint, link.pose.r + math.pi)
+
+    def approaching_statement(self):
+        return None
+
+    def approached_statement(self):
+        p1 = geoutil.q_from_points(self, self.node.local_geometry)
+        diff = geoutil.q_diff(self.quaternion, p1)
+        _, _, angle = euler_from_quaternion(diff)
+        CaBotRclpyUtil.debug(f"Entrance.approacehd_statement {diff} {angle}")
+        direction = "RIGHT_SIDE" if angle < 0 else "LEFT_SIDE"
+        i18n_direction = i18n.localized_string(direction)
+        return i18n.localized_string("APPROACEHD_TO_FACILITY").format(self.facility.name, i18n_direction)
+
+    def passed_statement(self):
+        return None
 
 
 class Facility(Object):
@@ -571,10 +657,21 @@ class Facility(Object):
             attr = F"ent{i}_node"
             if hasattr(self.properties, attr):
                 Facility._id_map[getattr(self.properties, attr)] = self
-                Object.get_object_by_id(getattr(self.properties, attr), self._add_facility)
+                Object.get_object_by_id(getattr(self.properties, attr), self._add_entrance(i))
+        if hasattr(self.properties, "hulop_tags"):
+            hulop_tags = getattr(self.properties, "hulop_tags")
+            self._is_read = ("read" in hulop_tags) if hulop_tags else False
 
-    def _add_facility(self, node):
-        self.entrances.append(node)
+    def _add_entrance(self, i):
+        def inner_func(node):
+            self.entrances.append(Entrance(self, i, node))
+        return inner_func
+
+    @property
+    def floor(self):
+        if self.entrances:
+            return self.entrances[0].floor  # assume all entrance is same floor
+        return 0
 
     @property
     def name(self):
@@ -587,6 +684,10 @@ class Facility(Object):
     @property
     def long_description(self):
         return i18n.localized_attr(self.properties, "hulop_long_description")
+
+    @property
+    def is_read(self):
+        return self._is_read
 
     _id_map = {}
 
@@ -635,13 +736,9 @@ class POI(Facility, geoutil.TargetPlace):
 
     def __init__(self, **dic):
         if 'properties' in dic:
-            prop = dic['properties']
-
-            def get_prop(prop, key):
-                return prop[key] if key in prop else Properties.DEFAULT_VALUES[key]
-            r = (-get_prop(prop, 'hulop_heading') + 90) / 180.0 * math.pi
-            angle = get_prop(prop, 'hulop_angle')
-            self.floor = get_prop(prop, 'hulop_height')
+            self.prop = dic['properties']
+            r = (-self._get_prop('hulop_heading') + 90) / 180.0 * math.pi
+            angle = self._get_prop('hulop_angle')
 
         super(POI, self).__init__(r=r, x=0, y=0, angle=angle, floor=self.floor, **dic)
 
@@ -652,6 +749,13 @@ class POI(Facility, geoutil.TargetPlace):
 
         # backward compatibility
         self.local_pose = self
+
+    def _get_prop(self, key):
+        return self.prop[key] if key in self.prop else Properties.DEFAULT_VALUES[key]
+
+    @property
+    def floor(self):
+        return self._get_prop('hulop_height')
 
     def approaching_statement(self):
         return None
@@ -670,6 +774,22 @@ class POI(Facility, geoutil.TargetPlace):
 
     def reset(self):
         self.reset_target()
+
+    # distance is adjusted to by the TargetPoint orientation
+    #                     <- T Target (orientation)
+    #                        |
+    #                        |
+    # robot R ---distance--- o
+    #
+    def distance_to(self, robot, adjusted=False):
+        dist_TR = super(POI, self).distance_to(robot)
+        if not adjusted:
+            return dist_TR
+        pose_TR = geoutil.Pose.pose_from_points(self, robot)
+        yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
+        adjusted = dist_TR * math.cos(yaw)
+        # CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+        return adjusted
 
 
 class DoorPOI(POI):
@@ -766,7 +886,7 @@ class ElevatorCabPOI(POI):
         y = self.y + math.sin(self.r) * self.buttons[0] + math.cos(self.r) * self.buttons[1]
 
         b_pos = geoutil.Point(x=x, y=y)
-        b_pose = geoutil.Pose.pose_from_points(b_pos, pose)
+        b_pose = geoutil.Pose.pose_from_points(pose, b_pos)
         dir = angles.shortest_angular_distance(pose.r, b_pose.r)
 
         print(pose, b_pos, b_pose, dir)

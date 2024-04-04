@@ -4,6 +4,24 @@ project(cabot_gazebo)
 # find dependencies
 find_package(ament_cmake REQUIRED)
 
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_copyright REQUIRED)
+  # find_package(ament_cmake_cpplint REQUIRED)
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_lint_cmake REQUIRED)
+  # find_package(ament_cmake_uncrustify REQUIRED)
+  find_package(ament_cmake_xmllint REQUIRED)
+
+  set(MAX_LINE_LENGTH 200)
+  ament_copyright()
+  # ament_cpplint(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_flake8(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_lint_cmake()
+  # ament_uncrustify(MAX_LINE_LENGTH ${MAX_LINE_LENGTH})
+  ament_xmllint()
+endif()
+
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 install(DIRECTORY params/ DESTINATION share/${PROJECT_NAME}/params)
 install(DIRECTORY script/ DESTINATION lib/${PROJECT_NAME})

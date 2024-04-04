@@ -61,6 +61,10 @@ public:
   ~TFSpeedControlNode()
   {
     RCLCPP_INFO(get_logger(), "TFSpeedControlNodeClass Destructor");
+    limit_pub_.reset();
+    delete tfListener;
+    delete tfBuffer;
+    timer_.reset();
   }
 
 private:

@@ -1,24 +1,22 @@
-/*******************************************************************************
- * Copyright (c) 2022  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2022  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "cabot_navigation2/cabot_planner.hpp"
 
@@ -261,7 +259,7 @@ void Test::run_test()
 }
 
 void Test::run_test_bag()
-{ 
+{
   rosbag2_compression::SequentialCompressionReader reader;
   rosbag2_storage::StorageOptions storage_options{};
 
@@ -365,7 +363,7 @@ void Test::run_test_bag()
         RCLCPP_INFO(get_logger(), "do test");
         // do test
       }
-    } catch (std::exception &e) {
+    } catch (std::exception & e) {
       RCLCPP_ERROR(get_logger(), "%s", e.what());
     }
   }
@@ -464,7 +462,7 @@ void Test::run_test_local()
         goal.pose.position = path_.poses.back().pose.position;
         auto t0 = std::chrono::system_clock::now();
         auto path = planner_->createPlan(start, goal);
-        plan_count ++;
+        plan_count++;
         auto t1 = std::chrono::system_clock::now();
         total += (t1 - t0);
 
@@ -472,7 +470,7 @@ void Test::run_test_local()
         plan_publisher_->publish(path);
 
         if (path.poses.size() > 0) {
-          success_count ++;
+          success_count++;
         }
 
         r2.sleep();
@@ -508,6 +506,8 @@ void Test::run_test_local()
       max_duration = ms.count();
     }
   }
-  RCLCPP_INFO(get_logger(), "Completed test %d/%d = %.2f max duration=%dms", success_count, plan_count, ((double)success_count)/plan_count, max_duration);
+  RCLCPP_INFO(
+    get_logger(), "Completed test %d/%d = %.2f max duration=%dms",
+    success_count, plan_count, (static_cast<double>(success_count)) / plan_count, max_duration);
 }
 }  // namespace cabot_navigation2

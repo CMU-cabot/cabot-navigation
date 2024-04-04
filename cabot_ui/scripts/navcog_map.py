@@ -21,8 +21,6 @@
 # SOFTWARE.
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from cabot_ui import geoutil, geojson, datautil

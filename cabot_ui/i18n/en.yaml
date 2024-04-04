@@ -107,3 +107,8 @@ RETURN_TO_POSITION_PLEASE: "Passed through a narrow road. return to first positi
 
 ## Touch
 NOT_DETECT_TOUCH: "Touch on the handle is not detected"
+
+## Facility
+RIGHT_SIDE: "right"
+LEFT_SIDE: "left"
+APPROACEHD_TO_FACILITY: "{0} is on your {1}"

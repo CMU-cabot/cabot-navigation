@@ -73,7 +73,7 @@ class SocialNavigation(object):
                    abs(point_stamped.point.y) < point_stamped.point.x and \
                    0 < point_stamped.point.x and point_stamped.point.x < 5:
                     count += 1
-        except:
+        except:  # noqa: #722
             pass
 
         self._people_count = count
@@ -97,7 +97,7 @@ class SocialNavigation(object):
                    abs(point_stamped.point.y) < point_stamped.point.x and \
                    0 < point_stamped.point.x and point_stamped.point.x < 5:
                     count += 1
-        except:
+        except:  # noqa: #722
             pass
 
         self._obstacles_count = count

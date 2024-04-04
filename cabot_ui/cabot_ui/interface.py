@@ -19,7 +19,6 @@
 # SOFTWARE.
 
 import os
-import math
 
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -243,15 +242,16 @@ class UserInterface(object):
         self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
-        vibration = vibration.RIGHT_DEV
+        vib = vibration.RIGHT_DEV
         if angle > 0:
-            vibration = vibration.LEFT_DEV
+            vib = vibration.LEFT_DEV
 
         self._activity_log("cabot/interface", "human")
-        self.vibrate(pattern=vibration)
+        self.vibrate(pattern=vib)
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"))
 
     def have_arrived(self, goal):
+        raise RuntimeError("Should no use this func")
         name = goal.goal_name_pron
         desc = goal.goal_description
 
@@ -352,7 +352,9 @@ class UserInterface(object):
             self.announce_social(message)
 
     def please_follow_behind(self):
+        self._activity_log("cabot/interface", "navigation", "please_follow_behind")
         self.speak(i18n.localized_string("FOLLOW_BEHIND_PLEASE_NARROW"))
 
     def please_return_position(self):
+        self._activity_log("cabot/interface", "navigation", "please_return_position")
         self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))

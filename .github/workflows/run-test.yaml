@@ -1,0 +1,31 @@
+name: Run Unittest
+
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+jobs:
+  run_unittest:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install vcs
+      run: pip3 install vcstool
+
+    - name: Prepare thirdparty repos
+      run: ./setup-dependency.sh
+
+    - name: Pull images and build workspace
+      shell: bash
+      run: ./manage-docker-image.sh -a pull -i "ros2 localization" -o cmucal -t ros2-dev-latest
+
+    - name: Run unittest
+      shell: bash
+      run: ./launch.sh -u -- -b -a

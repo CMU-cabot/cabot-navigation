@@ -15,6 +15,17 @@ jobs:
   test_build:
     runs-on: ubuntu-20.04
     steps:
+    # run test
+    - name: Trigger Workflow in Sandbox
+      run: |
+        curl -X POST \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Authorization: token ${{ secrets.TOKEN }}" \
+        https://api.github.com/repos/cmu-cabot/sandbox/dispatches \
+        -d '{"event_type": "build-and-test"}'
+      env:
+        PAT: ${{ secrets.TOKEN }}
+
     - name: Maximize build space
       run:  |
             sudo rm -rf /usr/local/lib/android # will release about 10 GB if you don't need Android
@@ -23,7 +34,7 @@ jobs:
             echo "Available storage:"
             df -h
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install vcs
       run: pip3 install vcstool

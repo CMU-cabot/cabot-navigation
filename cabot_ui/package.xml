@@ -34,6 +34,7 @@
 
   <depend>rclpy</depend>
   <depend>cabot</depend>
+  <depend>cabot_common</depend>
   <depend>cabot_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>

@@ -1,24 +1,22 @@
-/*******************************************************************************
- * Copyright (c) 2024  Carnegie Mellon University
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *******************************************************************************/
+// Copyright (c) 2024  Carnegie Mellon University
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 #include <functional>
 
@@ -33,7 +31,7 @@
 #include "pedestrian_plugin/python_module_loader.hpp"
 #include "pedestrian_plugin/python_utils.hpp"
 
-using namespace gazebo;
+using namespace gazebo;  // NOLINT
 
 GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 
@@ -44,7 +42,6 @@ GZ_REGISTER_MODEL_PLUGIN(PedestrianPlugin)
 PedestrianPlugin::PedestrianPlugin()
 : manager(PedestrianPluginManager::getInstance())
 {
-  
 }
 
 PedestrianPlugin::~PedestrianPlugin()
@@ -59,8 +56,9 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   this->name = this->actor->GetName();
   this->world = this->actor->GetWorld();
 
-  this->connections.push_back(event::Events::ConnectWorldUpdateBegin(
-    std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
+  this->connections.push_back(
+    event::Events::ConnectWorldUpdateBegin(
+      std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
   actor_id = manager.addPlugin(this->name, this);
   RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
@@ -75,7 +73,8 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
       type = typeAttr->GetAsString();
     }
     std::string value = child->Get<std::string>();
-    RCLCPP_INFO(manager.get_logger(), "plugin param %s (type=%s) value=%s",
+    RCLCPP_INFO(
+      manager.get_logger(), "plugin param %s (type=%s) value=%s",
       key.c_str(), type.c_str(), value.c_str());
 
     if (key == "robot") {
@@ -91,11 +90,12 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   this->Reset();
 }
 
-void PedestrianPlugin::apply_parameters() {
+void PedestrianPlugin::apply_parameters()
+{
   RCLCPP_INFO(manager.get_logger(), "apply_parameters");
   needs_to_apply_params = false;
 
-  for (const auto &it : plugin_params) {
+  for (const auto & it : plugin_params) {
     RCLCPP_INFO(manager.get_logger(), "param %s", it.first.c_str());
     if (it.first == "module") {
       this->module_name = it.second.get<std::string>();
@@ -113,12 +113,13 @@ void PedestrianPlugin::apply_parameters() {
       this->z = it.second.get<double>();
     }
     if (it.first == "init_a") {
-      this->yaw = it.second.get<double>() /180.0 * M_PI;
+      this->yaw = it.second.get<double>() / 180.0 * M_PI;
     }
   }
 }
 
-void PedestrianPlugin::update_parameters(PedestrianPluginParams params) {
+void PedestrianPlugin::update_parameters(PedestrianPluginParams params)
+{
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   plugin_params = params;
   needs_to_apply_params = true;
@@ -155,8 +156,7 @@ void PedestrianPlugin::Reset()
 }
 
 
-
-void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
+void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
 {
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   IGN_PROFILE("PedestrianPlugin::Update");
@@ -174,27 +174,48 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
   if (dt < 0.05) {  // 20hz
     return;
   }
+  auto stamp = gazebo_ros::Convert<builtin_interfaces::msg::Time>(_info.simTime);
+  manager.updateStamp(stamp);
   manager.publishPeopleIfReady();
-  
+
   this->lastUpdate = _info.simTime;
 
-  PyObject* pFunc = global_python_loader->getFunc(this->module_name, "onUpdate");
+  PyObject * pFunc = global_python_loader->getFunc(this->module_name, "onUpdate");
 
   if (pFunc != NULL) {
-    PyObject* pArgs = PyTuple_New(0);
-    PyObject* pDict = PyDict_New();
+    PyObject * pArgs = PyTuple_New(0);
+    PyObject * pDict = PyDict_New();
 
+    // add plugin parameters to the arguments
+    for (const auto & pair : this->plugin_params) {
+      auto value = pair.second;
+      PyObject * temp = value.python_object();
+      PyDict_SetItemString(pDict, pair.first.c_str(), temp);
+      Py_DECREF(temp);
+    }
+
+    // set robot values to pDict
     if (robotModel) {
-      PyObject* pRobotPose = PyDict_New();
+      auto robot_radius = PythonUtils::getDictItemAsDouble(pDict, "robot_radius", 0.45);
+
+      PyObject * pRobotPose = PyDict_New();
       ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
       ignition::math::Quaterniond rRot = robotModel->WorldPose().Rot();
       ignition::math::Vector3d rRpy = rRot.Euler();
+      ignition::math::Vector3d linearVel = robotModel->WorldLinearVel();
+      auto vel_x = linearVel.X();
+      auto vel_y = linearVel.Y();
+      auto vel_linear = linearVel.Length();
+      ignition::math::Vector3d angularVel = robotModel->WorldAngularVel();
+      auto vel_theta = angularVel.Z();
       PythonUtils::setDictItemAsFloat(pRobotPose, "x", rPos.X());
       PythonUtils::setDictItemAsFloat(pRobotPose, "y", rPos.Y());
       PythonUtils::setDictItemAsFloat(pRobotPose, "z", rPos.Z());
       PythonUtils::setDictItemAsFloat(pRobotPose, "roll", rRpy.X());
-      PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.X());
-      PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.X());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "pitch", rRpy.Y());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "yaw", rRpy.Z());
+      PythonUtils::setDictItemAsFloat(pRobotPose, "vel_linear", vel_linear);
+      PythonUtils::setDictItemAsFloat(pRobotPose, "vel_theta", vel_theta);
       geometry_msgs::msg::Pose robot_pose;
       robot_pose.position.x = rPos.X();
       robot_pose.position.y = rPos.Y();
@@ -204,9 +225,28 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       robot_pose.orientation.z = rRot.Z();
       robot_pose.orientation.w = rRot.W();
       manager.updateRobotPose(robot_pose);
+
+      // update robot agent
+      pedestrian_plugin_msgs::msg::Agent robotAgent;
+      robotAgent.type = pedestrian_plugin_msgs::msg::Agent::ROBOT;
+      robotAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+      robotAgent.name = robotModel->GetName();
+      robotAgent.position = robot_pose;
+      robotAgent.yaw = rRpy.Z();
+      robotAgent.velocity.linear.x = vel_x;
+      robotAgent.velocity.linear.y = vel_y;
+      robotAgent.velocity.angular.z = vel_theta;
+      robotAgent.linear_vel = vel_linear;
+      robotAgent.angular_vel = vel_theta;
+      robotAgent.radius = robot_radius;  // default robot raduis
+      manager.updateRobotAgent(robotAgent);
+
       PyDict_SetItemString(pDict, "robot", pRobotPose);
       Py_DECREF(pRobotPose);
     }
+
+    // set actor values to pDict
+    PythonUtils::setDictItemAsFloat(pDict, "time", _info.simTime.Float());
     PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
     PythonUtils::setDictItemAsFloat(pDict, "x", this->x);
     PythonUtils::setDictItemAsFloat(pDict, "y", this->y);
@@ -215,19 +255,13 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
     PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
     PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
 
-    // add parameter to the arguments
-    for (const auto& pair : this->plugin_params) {
-      auto value = pair.second;
-      PyObject *temp = value.python_object();
-      PyDict_SetItemString(pDict, pair.first.c_str(), temp);
-      Py_DECREF(temp);
-    }
-    
-    PyObject *aname = PyUnicode_DecodeFSDefault(this->actor->GetName().c_str());
+    PyObject * aname = PyUnicode_DecodeFSDefault(this->actor->GetName().c_str());
     PyDict_SetItemString(pDict, "name", aname);
     Py_DECREF(aname);
 
+    // call onUpdate in the python module
     auto pRet = PyObject_Call(pFunc, pArgs, pDict);
+
     if (pRet != NULL && PyDict_Check(pRet)) {
       auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
       auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
@@ -235,18 +269,25 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
       auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
       auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
       auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+      // variables only get from the module
+      auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
+      auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
+
       auto dx = newX - this->x;
       auto dy = newY - this->y;
       auto dz = newZ - this->z;
       auto dd = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (progress == 0.0) {
+        dd = 0.0;
+      }
       auto newDist = this->dist + dd;
-      double *wPose = get_walking_pose(newDist);
+      double * wPose = get_walking_pose(newDist);
 
       ignition::math::Pose3d pose;
       pose.Pos().X(newX);
-      pose.Pos().Y(newY+wPose[1]);
-      pose.Pos().Z(newZ+wPose[2]);
-      pose.Rot() = ignition::math::Quaterniond(newRoll+wPose[3], newPitch+wPose[4], newYaw+wPose[5]);
+      pose.Pos().Y(newY + wPose[1]);
+      pose.Pos().Z(newZ + wPose[2]);
+      pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
       this->actor->SetWorldPose(pose, false, false);
 
       double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
@@ -273,6 +314,27 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo &_info)
         person.tags.push_back("stationary");
       }
       manager.updatePersonMessage(this->actor->GetName(), person);
+
+      // update human agent
+      double vel_linear = dd / dt;
+      pedestrian_plugin_msgs::msg::Agent humanAgent;
+      humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
+      if (this->module_name == "pedestrian.pool") {
+        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
+      } else {
+        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+      }
+      humanAgent.name = person.name;
+      humanAgent.position.position = person.position;
+      humanAgent.yaw = newYaw;
+      humanAgent.velocity.linear.x = person.velocity.x;
+      humanAgent.velocity.linear.y = person.velocity.y;
+      humanAgent.velocity.linear.z = person.velocity.z;
+      humanAgent.linear_vel = vel_linear;
+      // humanAgent.velocity.angular.z // undefined
+      // humanAgent.angular_vel // undefined
+      humanAgent.radius = radius;
+      manager.updateHumanAgent(person.name, humanAgent);
 
       Py_DECREF(pRet);
     } else {
