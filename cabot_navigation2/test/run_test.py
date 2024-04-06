@@ -23,6 +23,7 @@
 ###############################################################################
 
 import importlib
+import pkgutil
 import inspect
 import sys
 import math
@@ -980,6 +981,7 @@ def main():
     parser.add_option('-m', '--module', type=str, help='test module name')
     parser.add_option('-d', '--debug', action='store_true', help='debug print')
     parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-L', '--list-modules', action='store_true', help='list test modules')
     parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
     parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
 
@@ -994,6 +996,13 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
+
+    if options.list_modules:
+        module = __import__(options.module)
+        modules = [name for _, name, _ in pkgutil.iter_modules(module.__path__)]
+        for m in modules:
+            logger.info(m)
+        sys.exit(0)
 
     if options.list_functions:
         module = importlib.import_module(options.module)

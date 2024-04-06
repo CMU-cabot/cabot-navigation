@@ -46,10 +46,11 @@ scriptdir=`pwd`
 
 wait_ready_option=
 debug=
+list_modules=0
 list_functions=0
 retry=0
 
-while getopts "hdlrw" arg; do
+while getopts "hdLlrw" arg; do
     case $arg in
         h)
             help
@@ -58,6 +59,9 @@ while getopts "hdlrw" arg; do
         d)
             debug="-d"
             ;;
+	L)
+	    list_modules=1
+	    ;;
 	l)
 	    list_functions=1
 	    ;;
@@ -82,6 +86,11 @@ blue "testing with $CABOT_SITE"
 source $scriptdir/../install/setup.bash
 
 while [[ 1 -eq 1 ]]; do
+    if [[ $list_modules -eq 1 ]]; then
+	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE} -L
+	exit
+    fi
+
     if [[ $list_functions -eq 1 ]]; then
 	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module -l
 	exit
