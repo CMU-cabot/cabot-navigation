@@ -663,6 +663,24 @@ void CaBotPlanner::peopleCallback(people_msgs::msg::People::SharedPtr people)
   std::unique_lock<std::recursive_mutex> lock(mutex_);
   RCLCPP_DEBUG_THROTTLE(logger_, *clock_, 200, "received people %ld", people->people.size());
   last_people_ = people;
+
+  geometry_msgs::msg::TransformStamped transform;
+  try {
+    RCLCPP_INFO(logger_, "lookupTransform %s->%s", last_people_->header.frame_id.c_str(), "map");
+    transform = tf_->lookupTransform("map", last_people_->header.frame_id, rclcpp::Time(0));
+  } catch (tf2::TransformException & ex) {
+    RCLCPP_ERROR(logger_, "%s", ex.what());
+    return;
+  }
+  tf2::Transform tf2_transform;
+  tf2::convert(transform.transform, tf2_transform);
+
+  for (auto it = last_people_->people.begin(); it != last_people_->people.end(); it++) {
+    tf2::Vector3 p(it->position.x, it->position.y, 0);
+    p = tf2_transform * p;
+    it->position.x = p.x();
+    it->position.y = p.y();
+  }
 }
 
 void CaBotPlanner::obstaclesCallback(people_msgs::msg::People::SharedPtr obstacles)

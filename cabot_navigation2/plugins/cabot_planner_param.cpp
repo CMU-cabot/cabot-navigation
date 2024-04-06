@@ -377,6 +377,9 @@ void CaBotPlannerParam::setCost()
     bool stationary = (std::find(it->tags.begin(), it->tags.end(), "stationary") != it->tags.end());
     if (!stationary || options.ignore_people) {
       clearCostAround(*it);
+      RCLCPP_INFO(logger, "setCost: ignore a person %s in frame %s", it->name.c_str(), people_msg.header.frame_id.c_str());
+    } else {
+      RCLCPP_INFO(logger, "setCost: consider a person %s in frame %s", it->name.c_str(), people_msg.header.frame_id.c_str());
     }
   }
   for (auto it = obstacles_msg.people.begin(); it != obstacles_msg.people.end(); it++) {
@@ -421,6 +424,7 @@ void CaBotPlannerParam::clearCostAround(people_msgs::msg::Person & person)
 
   float mx, my;
   if (!worldToMap(person.position.x, person.position.y, mx, my)) {
+    RCLCPP_INFO(logger, "person position is out of map (%.2f, %.2f)", person.position.x, person.position.y);
     return;
   }
   RCLCPP_INFO(logger, "clearCostAround %.2f %.2f \n %s", mx, my, rosidl_generator_traits::to_yaml(person).c_str());
@@ -428,6 +432,7 @@ void CaBotPlannerParam::clearCostAround(people_msgs::msg::Person & person)
   ObstacleGroup group;
   scanObstacleAt(group, mx, my, nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE, max_obstacle_scan_distance_cell);
 
+  RCLCPP_INFO(logger, "found obstacles %ld", group.obstacles_.size());
   for (auto obstacle = group.obstacles_.begin(); obstacle != group.obstacles_.end(); obstacle++) {
     cost[obstacle->index] = 0;
   }
@@ -445,8 +450,8 @@ void CaBotPlannerParam::scanObstacleAt(ObstacleGroup & group, float mx, float my
     auto entry = queue.front();
     auto temp = entry.first;
     queue.pop();
-    // RCLCPP_INFO(logger, "queue.size=%ld, cost=%d, mark=%d, (%.2f %.2f) [%d], %d",
-    //             queue.size(), cost_[temp.index], mark_[temp.index], temp.x, temp.y, temp.index, entry.second);
+    // RCLCPP_INFO(logger, "queue.size=%ld, cost=%d, static_cost=%d, mark=%d, (%.2f %.2f) [%d], %d",
+    //             queue.size(), cost[temp.index], static_cost[temp.index], mark[temp.index], temp.x, temp.y, temp.index, entry.second);
     if (entry.second > max_dist) {
       continue;
     }
@@ -508,6 +513,7 @@ bool CaBotPlannerParam::worldToMap(float wx, float wy, float & mx, float & my) c
   if (0 <= mx && mx < width && 0 <= my && my < height) {
     return true;
   }
+  RCLCPP_ERROR(logger, "worldToMap out of bound origin (%.2f, %.2f) resolution=%.2f (%d, %d) - (%.2f, %.2f)", origin_x, origin_y, resolution, width, height, mx, my);
   return false;
 }
 
