@@ -261,7 +261,7 @@ private:
     geometry_msgs::msg::TransformStamped transform_msg;
     try {
       transform_msg = tfBuffer->lookupTransform(
-        "base_footprint", "map",
+        "base_footprint", input->header.frame_id,
         rclcpp::Time(0), rclcpp::Duration(std::chrono::duration<double>(1.0)));
     } catch (tf2::TransformException & ex) {
       RCLCPP_WARN(get_logger(), "%s", ex.what());
@@ -286,14 +286,51 @@ private:
       double y = p_local.y();
       double vx = v_local.x();
       double vy = v_local.y();
-      double dist = sqrt(x * x + y * y);
+      double vr = last_odom_.twist.twist.linear.x;
 
-      double pt = atan2(y, x);
-      double sdx = abs(social_distance_x_ * cos(pt));
-      double sdy = abs(social_distance_y_ * sin(pt));
+      // velocity obstacle
+      double RPy = atan2(y, x);
+      double dist = hypot(x, y);
+      if (vx > 0 || vy > 0) {
+        double pr = 1.0;
+        double s = atan2(pr, dist) + M_PI_2;
+        double Px1 = x + cos(RPy+s) * pr;
+        double Py1 = y + sin(RPy+s) * pr;
+        double Px2 = x + cos(RPy-s) * pr;
+        double Py2 = y + sin(RPy-s) * pr;
+        double v1 = vy / -(Py1 / Px1);
+        double t1 = -Py1 / vy;
+        double v2 = vy / -(Py2 / Px2);
+        double t2 = -Py2 / vy;
+        bool swapped = false;
+        if ((0 < t1 && t1 < 5) || (0 < t2 && t2 < 5)) {
+          v1 -= vx;
+          v2 -= vx;
+          if (t1 < t2) {
+            double temp = v1;
+            v1 = v2;
+            v2 = temp;
+            temp = t1;
+            t1 = t2;
+            t2 = temp;
+            swapped = true;
+          }
+          speed_limit = std::max(0.0, v1);
+          if (v1 < v2 && v2 < 1.0) {
+            speed_limit = max_speed_;
+          }
+          RCLCPP_INFO(get_logger(), "PeopleSpeedControl collision cone (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) - %.2f - %.2f, (%d), %.2f, %.2f",
+                      x, y, vx, vy, Px1, Py1, Px2, Py2, t1, t2, v1, v2, vr, speed_limit, swapped, RPy, s);
+        }
+      }
+
+      // social distance
+      double sdx = abs(social_distance_x_ * cos(RPy));
+      double sdy = abs(social_distance_y_ * sin(RPy));
       double min_path_dist = 100;
 
-      if (abs(pt) > M_PI_2) {
+      if (abs(RPy) > M_PI_2) {
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl person is back %.2f", RPy);
         continue;
       }
       auto max_v = [](double D, double A, double d)
@@ -322,9 +359,8 @@ private:
       }
 
       RCLCPP_INFO(
-        get_logger(), "PeopleSpeedControl people_limit %s dist from path=%.2f x=%.2f y=%.2f vx=%.2f"
-        " vy=%.2f pt=%.2f sdx=%.2f sdy=%.2f dist=%.2f limit=%.2f",
-        it->name.c_str(), min_path_dist, x, y, vx, vy, pt, sdx, sdy, dist, speed_limit);
+          get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
+          it->name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, speed_limit, max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
 
       if (speed_limit < max_speed_) {
         std_msgs::msg::String msg;
