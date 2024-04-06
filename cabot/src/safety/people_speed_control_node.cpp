@@ -294,10 +294,10 @@ private:
       if (vx > 0 || vy > 0) {
         double pr = 1.0;
         double s = atan2(pr, dist) + M_PI_2;
-        double Px1 = x + cos(RPy+s) * pr;
-        double Py1 = y + sin(RPy+s) * pr;
-        double Px2 = x + cos(RPy-s) * pr;
-        double Py2 = y + sin(RPy-s) * pr;
+        double Px1 = x + cos(RPy + s) * pr;
+        double Py1 = y + sin(RPy + s) * pr;
+        double Px2 = x + cos(RPy - s) * pr;
+        double Py2 = y + sin(RPy - s) * pr;
         double v1 = vy / -(Py1 / Px1);
         double t1 = -Py1 / vy;
         double v2 = vy / -(Py2 / Px2);
@@ -319,8 +319,11 @@ private:
           if (v1 < v2 && v2 < 1.0) {
             speed_limit = max_speed_;
           }
-          RCLCPP_INFO(get_logger(), "PeopleSpeedControl collision cone (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) - %.2f - %.2f, (%d), %.2f, %.2f",
-                      x, y, vx, vy, Px1, Py1, Px2, Py2, t1, t2, v1, v2, vr, speed_limit, swapped, RPy, s);
+          RCLCPP_INFO(
+            get_logger(),
+            "PeopleSpeedControl collision cone (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f)"
+            " - %.2f - %.2f, (%d), %.2f, %.2f",
+            x, y, vx, vy, Px1, Py1, Px2, Py2, t1, t2, v1, v2, vr, speed_limit, swapped, RPy, s);
         }
       }
 
@@ -359,8 +362,9 @@ private:
       }
 
       RCLCPP_INFO(
-          get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
-          it->name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, speed_limit, max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
+        get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
+        it->name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, speed_limit,
+        max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
 
       if (speed_limit < max_speed_) {
         std_msgs::msg::String msg;
