@@ -653,7 +653,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         current_pose = self.current_local_pose()
         goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
-        goal.estimate_inner_goal(current_pose, self.current_floor)
+        if goal:
+            goal.estimate_inner_goal(current_pose, self.current_floor)
         self._goal_index = index-1
         self._last_estimated_goal = None
 

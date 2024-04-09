@@ -401,7 +401,7 @@ def estimate_next_goal(goals, current_pose, current_floor):
             continue
         if goal.match(pose=current_pose, floor=current_floor):
             return (goal, i-1)
-    return (None, -1)  # might be reached the goal
+    return (None, 0)  # might be reached the goal
 
 
 class Goal(geoutil.TargetPlace):
