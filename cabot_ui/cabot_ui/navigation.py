@@ -423,6 +423,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_interval = self.initial_queue_interval
 
         self._process_queue = []
+        self._process_queue_lock = threading.Lock()
         self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
@@ -535,7 +536,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     # wrap execution by a queue
     def set_destination(self, destination):
         self.social_navigation.set_active(True)
-        self._process_queue.append((self._set_destination, destination))
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_destination, destination))
 
     def _set_destination(self, destination):
         """
@@ -613,7 +615,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def retry_navigation(self):
-        self._process_queue.append((self._retry_navigation,))
+        with self._process_queue_lock:
+            self._process_queue.append((self._retry_navigation,))
 
     def _retry_navigation(self):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -626,7 +629,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def pause_navigation(self, callback):
-        self._process_queue.append((self._pause_navigation, callback))
+        with self._process_queue_lock:
+            self._process_queue.append((self._pause_navigation, callback))
 
     def _pause_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -645,7 +649,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
-        self._process_queue.append((self._resume_navigation, callback))
+        with self._process_queue_lock:
+            self._process_queue.append((self._resume_navigation, callback))
 
     def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -663,7 +668,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def cancel_navigation(self, callback=None):
-        self._process_queue.append((self._cancel_navigation, callback))
+        with self._process_queue_lock:
+            self._process_queue.append((self._cancel_navigation, callback))
         self.social_navigation.set_active(False)
 
     def _cancel_navigation(self, callback):
@@ -742,12 +748,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.lock.release()
 
     def _process_queue_func(self):
-        if len(self._process_queue) > 0:
-            process = self._process_queue.pop(0)
-            try:
-                process[0](*process[1:])
-            except:  # noqa: 722
-                self._logger.error(traceback.format_exc())
+        with self._process_queue_lock:
+            if len(self._process_queue) > 0:
+                process = self._process_queue.pop(0)
+        try:
+            process[0](*process[1:])
+        except:  # noqa: 722
+            self._logger.error(traceback.format_exc())
 
     # Main loop of navigation
     GOAL_POSITION_TORELANCE = 1
