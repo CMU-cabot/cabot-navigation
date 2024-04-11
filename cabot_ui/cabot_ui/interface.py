@@ -1,4 +1,5 @@
 # Copyright (c) 2020, 2022  Carnegie Mellon University
+# Copyright (c) 2024  ALPS ALPINE CO., LTD.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -46,6 +47,8 @@ class UserInterface(object):
         self.note_pub = node.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.activity_log_pub = node.create_publisher(cabot_msgs.msg.Log, "/cabot/activity_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.pose_log_pub = node.create_publisher(cabot_msgs.msg.PoseLog, "/cabot/pose_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_angle", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.turn_type_pub = node.create_publisher(std_msgs.msg.String, "/cabot/turn_type", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.lang = node.declare_parameter("language", "en").value
         self.site = node.declare_parameter("site", '').value
@@ -214,6 +217,7 @@ class UserInterface(object):
             return
         pattern = vibration.UNKNOWN
         text = ""
+        msgs = [std_msgs.msg.String(), std_msgs.msg.Float32()]
         if turn.turn_type == Turn.Type.Normal:
             if turn.angle <= -180/4*3:
                 pattern = vibration.RIGHT_ABOUT_TURN
@@ -227,6 +231,8 @@ class UserInterface(object):
             elif turn.angle >= 180/3:
                 pattern = vibration.LEFT_TURN
                 text = "left turn"
+            msgs[0].data = str(Turn.Type.Normal)
+            self._activity_log("cabot/turn_type", "Type.Normal")
         elif turn.turn_type == Turn.Type.Avoiding:
             if turn.angle <= 0:
                 pattern = vibration.RIGHT_DEV
@@ -234,7 +240,11 @@ class UserInterface(object):
             if turn.angle >= 0:
                 pattern = vibration.LEFT_DEV
                 text = "slight left"
-
+            msgs[0].data = str(Turn.Type.Avoiding)
+            self._activity_log("cabot/turn_type", "Type.Avoiding")
+        msgs[1].data = turn.angle
+        self.turn_type_pub.publish(msgs[0])
+        self.turn_angle_pub.publish(msgs[1])
         self.last_notify_turn = self._node.get_clock().now()
         self._activity_log("cabot/interface", "turn angle", str(turn.angle))
         self._activity_log("cabot/interface", "notify", text)
