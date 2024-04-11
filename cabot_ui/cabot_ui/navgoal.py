@@ -395,7 +395,9 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
 
 
 def estimate_next_goal(goals, current_pose, current_floor):
+    CaBotRclpyUtil.info(F"estimate_next_goal is called: len(goals)={len(goals)}, {current_pose}, {current_floor}")
     for i in range(len(goals), 0, -1):
+        CaBotRclpyUtil.info(F"checking goal[{i-1}]")
         goal = goals[i-1]
         if goal.completed(pose=current_pose, floor=current_floor):
             continue
@@ -874,6 +876,7 @@ class NavGoal(Goal):
             self.route_index = min_index
         except:  # noqa: #722
             CaBotRclpyUtil.error(traceback.format_exc())
+            self.route_index = 0
 
     def match(self, pose, floor):
         # work around, Link.distance_to is not implemented for local geometry
