@@ -989,12 +989,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
 
         # do not provide social navigation messages while queue navigation
-        # do not provide social navigation messages while narrow/tight
         if self._current_goal and not self._current_goal.is_social_navigation_enabled:
             self._logger.info("social navigation is disabled")
-            return
-        if self._current_goal and not self._current_goal.is_stop_reason_enabled:
-            self._logger.info("stop reason is disabled")
             return
 
         self.social_navigation.current_pose = current_pose

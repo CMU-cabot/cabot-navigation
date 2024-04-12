@@ -526,10 +526,6 @@ class Goal(geoutil.TargetPlace):
     def is_social_navigation_enabled(self):
         return True
 
-    @property
-    def is_stop_reason_enabled(self):
-        return True
-
     def __str__(self):
         ret = F"{type(self)}, ({hex(id(self))})\n"
         for key in self.__dict__:
@@ -770,10 +766,6 @@ class NavGoal(Goal):
                 current_group.append(current_link)
         separated_routes.append(current_group)  # Add the last group
         return separated_routes
-
-    @property
-    def is_social_navigation_enabled(self):
-        return self.navcog_routes[self.route_index][2] == geojson.NavigationMode.Standard
 
     def _extract_pois(self):
         """extract pois along the route"""
@@ -1279,10 +1271,6 @@ class QueueNavGoal(NavGoal):
 
     @property
     def is_social_navigation_enabled(self):
-        return False
-
-    @property
-    def is_stop_reason_enabled(self):
         return False
 
     def _enter(self):
