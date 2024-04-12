@@ -634,10 +634,10 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
-    min_distance: 0.25
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 1.0
+    social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
@@ -664,10 +664,10 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.25
 /cabot/lidar_speed_control_node:
-    min_distance: 0.25
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 1.0
+    social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
