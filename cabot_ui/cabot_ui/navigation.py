@@ -748,11 +748,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.lock.release()
 
     def _process_queue_func(self):
+        process = None
         with self._process_queue_lock:
             if len(self._process_queue) > 0:
                 process = self._process_queue.pop(0)
         try:
-            process[0](*process[1:])
+            if process:
+                process[0](*process[1:])
         except:  # noqa: 722
             self._logger.error(traceback.format_exc())
 
