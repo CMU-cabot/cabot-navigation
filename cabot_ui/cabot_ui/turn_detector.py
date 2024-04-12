@@ -191,7 +191,7 @@ class TurnDetector:
                 # smaller than minimum turn
                 if abs(yaw[TurnEnds[-1]]-yaw[TurnStarts[-1]]) < thtMinimumTurn:
                     # smaller than minimum deviation
-                    if max(dyaw2[TurnStarts[-1]:TurnEnds[-1]]) < thtMinimumDev / 180 * math.pi:
+                    if dyaw2[TurnStarts[-1]:TurnEnds[-1]] and max(dyaw2[TurnStarts[-1]:TurnEnds[-1]]) < thtMinimumDev / 180 * math.pi:
                         del TurnStarts[-1]
                         del TurnEnds[-1]
                     else:

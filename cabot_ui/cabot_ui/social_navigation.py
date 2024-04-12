@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import traceback
 import rclpy.node
 import rclpy.time
 import rclpy.clock
@@ -170,9 +171,13 @@ class SocialNavigation(object):
         self._update()
 
     def _stop_reason_callback(self, msg: StopReason):
-        if msg.summary:
-            self._stop_reason = StopReason[msg.reason]
-            self._update()
+        try:
+            if msg.summary:
+                self._stop_reason = msg.reason
+                self._logger.info("_stop_reason_callback summary is True and calling _update()")
+                self._update()
+        except:  # noqa: 722
+            self._logger.error(traceback.format_exc())
 
     def _update(self):
         '''
@@ -204,19 +209,19 @@ class SocialNavigation(object):
         if self._stop_reason is not None:
             self._logger.info(F"social navigation stop_reason {self._stop_reason}")
             code = self._stop_reason
-            if code == StopReason.AVOIDING_PEOPLE:
-                self._set_message(SNMessage.Code.PERSON_AHEAD, SNMessage.STOP, 7)
+            if code == "AVOIDING_PEOPLE":
+                self._set_message(SNMessage.Code.PERSON_AHEAD, SNMessage.Category.AVOID, 7)
                 # self._set_message(SNMessage.Code.TRYING_TO_AVOID_PEOPLE, SNMessage.STOP, 7)
-            elif code == StopReason.THERE_ARE_PEOPLE_IN_THE_PATH:
-                self._set_message(SNMessage.Code.PERSON_AHEAD, SNMessage.STOP, 7)
+            elif code == "THERE_ARE_PEOPLE_IN_THE_PATH":
+                self._set_message(SNMessage.Code.PERSON_AHEAD, SNMessage.Category.STOP, 7)
                 # self._set_message(SNMessage.Code.PEOPLE_ARE_IN_MY_WAY, SNMessage.STOP, 7)
-            elif code == StopReason.AVOIDING_OBSTACLE:
+            elif code == "AVOIDING_OBSTACLE":
                 self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID)
                 # self._set_sound(SNMessage.Code.TRYING_TO_AVOID_OBSTACLE, SNMessage.STOP, 7)
-            elif code == StopReason.UNKNOWN:
-                self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.STOP, 7)
-            elif code == StopReason.NO_TOUCH:
-                self._set_message(SNMessage.Code.NOT_DETECT_TOUCH, SNMessage.STOP, 7)
+            elif code == "UNKNOWN":
+                self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.Category.STOP, 7)
+            elif code == "NO_TOUCH":
+                self._set_message(SNMessage.Code.NOT_DETECT_TOUCH, SNMessage.Category.STOP, 7)
             self._stop_reason = None
 
         # check event
@@ -236,41 +241,39 @@ class SocialNavigation(object):
             # following people
             if param == "people_speed_following":
                 if self._people_count == 1:
-                    self._set_message(SNMessage.Code.FOLLOWING_A_PERSON, SNMessage.Category.FOLLWING, 1)
+                    self._set_message(SNMessage.Code.FOLLOWING_A_PERSON, SNMessage.Category.FOLLOWING, 1)
                 elif self._people_count > 1:
-                    self._set_message(SNMessage.Code.FOLLOWING_PEOPLE, SNMessage.Category.FOLLWING, 1)
+                    self._set_message(SNMessage.Code.FOLLOWING_PEOPLE, SNMessage.Category.FOLLOWING, 1)
 
             # delete event after check
             self._event = None
 
     def _set_message(self, code, category, priority):
-        self._logger.info(F"set_message {code} {category} {priority}")
         now = self._node.get_clock().now()
-        if self._last_message.priority < priority and \
-           (self._last_message.category != category or
-                (now - self._last_message.time) > Duration(seconds=15.0)):
-            self._priority = priority
+        self._logger.info(F"set_message {code} {category} {priority} {self._last_message} {now - self._last_message.time}")
+        if (self._last_message.priority < priority and self._last_message.category != category) or \
+           (now - self._last_message.time) > Duration(seconds=25.0):
             self._message.code = code
             self._message.category = category
             self._message.priority = priority
+            self._message.time = now
 
     def _set_sound(self, code, category, priority):
         self._logger.info(F"set_sound {code} {category} {priority}")
         now = self._node.get_clock().now()
-        if self._last_sound.priority < priority and \
-           (self._last_sound.category != category or
-                (now - self._last_sound.time) > Duration(seconds=15.0)):
-            self._priority = priority
+        if (self._last_sound.priority < priority and self._last_sound.category != category) or \
+           (now - self._last_sound.time) > Duration(seconds=25.0):
             self._sound.code = code
             self._sound.category = category
             self._sound.priority = priority
+            self._sound.time = now
 
     def get_message(self) -> SNMessage:
         if not self._is_active:
             return
         now = self._node.get_clock().now()
-
         if self._message.code is not None and (now - self._last_message.time) > Duration(seconds=5.0):
+            self._logger.info(f"get_message {self._message}")
             self._last_message = self._message
             self._message = SNMessage.empty_message(self._node.get_clock())
             return self._last_message
