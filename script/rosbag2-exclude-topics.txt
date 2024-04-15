@@ -2,7 +2,6 @@
 ^/clock$
 ^/local/bond$
 ^/carto.*$
-^.*image_rect_raw.*$
 ^.*aligned_depth_to_color.*$
 ^.*costmap_raw$
 ^/diagnostics$

@@ -51,16 +51,21 @@ shift $((OPTIND-1))
 backend=${CABOT_ROSBAG_BACKEND:=sqlite3}
 compression=${CABOT_ROSBAG_COMPRESSION:=message}
 record_cam=${CABOT_ROSBAG_RECORD_CAMERA:=0}
-
+record_depth=${CABOT_ROSBAG_RECORD_DEPTH:=0}
 
 exclude_topics_file="rosbag2-exclude-topics.txt"
 exclude_camera_topics="/.*/image_raw.*"
 if [[ $record_cam -eq 1 ]]; then
     exclude_camera_topics='/.*/image_raw$'  # record compressed images
 fi
+exclude_depth_topics="^.*image_rect_raw.*$"
+if [[ $record_depth -eq 1 ]]; then
+    exclude_depth_topics='^.*/image_rect_raw/compressed$'  # record compressed images
+fi
+
 lines=$(cat $scriptdir/${exclude_topics_file})
 exclude_topics=$(echo -n "${lines}" | tr '\n' '|')
-exclude_topics="${exclude_topics}|${exclude_camera_topics}"
+exclude_topics="${exclude_topics}|${exclude_camera_topics}|${exclude_depth_topics}"
 #hidden_topics="--include-hidden-topics"
 hidden_topics="" # workaround - if this is specified with '-s mcap', only a few topics can be recorded
 qos_option="--qos-profile-overrides-path $scriptdir/rosbag2-qos-profile-overrides.yaml"
