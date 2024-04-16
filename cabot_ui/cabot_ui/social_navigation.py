@@ -216,7 +216,7 @@ class SocialNavigation(object):
                 self._set_message(SNMessage.Code.PERSON_AHEAD, SNMessage.Category.STOP, 7)
                 # self._set_message(SNMessage.Code.PEOPLE_ARE_IN_MY_WAY, SNMessage.STOP, 7)
             elif code == "AVOIDING_OBSTACLE":
-                self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID)
+                self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID, 7)
                 # self._set_sound(SNMessage.Code.TRYING_TO_AVOID_OBSTACLE, SNMessage.STOP, 7)
             elif code == "UNKNOWN":
                 self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.Category.STOP, 7)
