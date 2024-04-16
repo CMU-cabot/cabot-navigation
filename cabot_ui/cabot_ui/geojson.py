@@ -648,7 +648,7 @@ class Entrance(geoutil.TargetPlace):
         pose_TR = geoutil.Pose.pose_from_points(self, robot)
         yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
         adjusted = dist_TR * math.cos(yaw)
-        CaBotRclpyUtil.info(f"Entrance.distance_to dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+        CaBotRclpyUtil.debug(f"Entrance.distance_to dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
         return adjusted
 
 
