@@ -804,16 +804,34 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # cabot is active now
         self._logger.debug("cabot is active", throttle_duration_sec=1)
 
+        # isolate error handling
         try:
             self._check_info_poi(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_nearby_facility(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_speed_limit(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_turn(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_queue_wait(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_social(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_goal(self.current_pose)
         except Exception:
-            import traceback
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
 
     def _check_info_poi(self, current_pose):
