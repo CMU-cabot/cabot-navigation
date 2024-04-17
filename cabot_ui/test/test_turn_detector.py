@@ -34,6 +34,7 @@ from builtin_interfaces.msg import Time
 import rclpy
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
+
 def parsePath(path_data):
     path_msg = Path()
     # Populate header
@@ -69,7 +70,6 @@ def parsePath(path_data):
         ) for pose in path_data['poses']
     ]
     return path_msg
-
 
 
 class TestEvent(unittest.TestCase):
