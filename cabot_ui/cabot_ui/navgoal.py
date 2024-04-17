@@ -798,7 +798,7 @@ class NavGoal(Goal):
         if new_mode == geojson.NavigationMode.Tight:
             self.delegate.please_follow_behind()
             delay = True
-        if self.mode == geojson.NavigationMode.Tight:
+        if self.mode == geojson.NavigationMode.Tight and new_mode != geojson.NavigationMode.Tight:
             self.delegate.please_return_position()
             delay = True
         self.mode = new_mode
