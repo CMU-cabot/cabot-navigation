@@ -37,6 +37,7 @@ function help {
     echo "-n                    no cache option to build docker image"
     echo "-t <time_zone>        set time zone"
     echo "-u <uid>              replace uid"
+    echo "-a <arch> target architecture (default=$arch, your architecture)"
     echo "-p                    prebuild images"
     echo "-P <prefix>           prebuild with prefix"
     echo "-i                    build images"
@@ -57,6 +58,7 @@ build_dir=$scriptdir/cabot-common/docker
 option="--progress=auto"
 time_zone=$(cat /etc/timezone)
 uid=$UID
+arch=$(uname -m)
 prebuild=0
 build_image=0
 build_workspace=0
@@ -65,7 +67,7 @@ debug_build=0
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
-while getopts "hno:t:u:pP:iwd" arg; do
+while getopts "hno:t:u:a:pP:iwd" arg; do
     case $arg in
 	h)
 	    help
@@ -82,6 +84,12 @@ while getopts "hno:t:u:pP:iwd" arg; do
 	    ;;
     u)
         uid=$OPTARG
+        ;;
+    a)
+        if [ $OPTARG != $arch ]; then
+            export DOCKER_DEFAULT_PLATFORM=linux/$OPTARG
+        fi
+        arch=$OPTARG
         ;;
     p)
         prebuild=1
@@ -104,8 +112,13 @@ done
 shift $((OPTIND-1))
 targets=$@
 
+if [ $arch != "x86_64" ] && [ $arch != "aarch64" ]; then
+    red "Unknown architecture: $arch"
+    exit 1
+fi
+
 if [[ $prebuild -eq 1 ]]; then
-    ./cabot-common/prebuild_docker.sh -P $prefix -o "$option"
+    ./cabot-common/prebuild_docker.sh -P $prefix -o "$option" -a $arch
     if [ $? != 0 ]; then exit 1; fi
 fi
 
