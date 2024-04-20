@@ -184,7 +184,13 @@ controller_server:
       stateful: True
     # DWB parameters
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
+      plugin: "cabot_navigation2::CaBotRotationShimController"
+      primary_controller: "dwb_core::DWBLocalPlanner"
+      angular_dist_threshold: 0.3
+      forward_sampling_distance: 1.0
+      rotate_to_heading_angular_vel: 0.5
+      max_angular_accel: 1.6
+      simulate_ahead_time: 0.5
       #trajectory_generator_name: "dwb_plugins::LimitedAccelGenerator" # default: dwb_plugins::StandardTrajectoryGenerator
       trajectory_generator_name: "dwb_plugins::StandardTrajectoryGenerator"
       debug_trajectory_details: True

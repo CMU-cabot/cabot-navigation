@@ -58,6 +58,8 @@ public:
   double limit_factor_;
   double min_distance_;
   double front_angle_in_degree_;
+  double front_min_range_;
+  double blind_spot_min_range_;
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_pub_;
@@ -82,7 +84,9 @@ public:
     max_acc_(0.6),
     limit_factor_(3.0),
     min_distance_(0.5),
-    front_angle_in_degree_(60)
+    front_angle_in_degree_(60),
+    front_min_range_(0.25),
+    blind_spot_min_range_(0.25)
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -149,6 +153,8 @@ private:
     limit_factor_ = declare_parameter("limit_factor", limit_factor_);
     min_distance_ = declare_parameter("min_distance", min_distance_);
     front_angle_in_degree_ = declare_parameter("front_angle_in_degree", front_angle_in_degree_);
+    front_min_range_ = declare_parameter("front_min_range", front_min_range_);
+    blind_spot_min_range_ = declare_parameter("blind_spot_min_range", blind_spot_min_range_);
 
     RCLCPP_INFO(
       get_logger(), "LiDARSpeedControl with check_blind_space=%s, check_front_obstacle=%s, max_speed=%.2f",
@@ -230,9 +236,12 @@ private:
         curr.transform(map_to_robot_tf2 * robot_to_lidar_tf2);
 
         CaBotSafety::Line line(robotp, curr);
-        double dot = robot.dot(line) / robot.length() / line.length();
-        RCLCPP_DEBUG(get_logger(), "%.2f,%.2f,%.2f,%.2f,%.2f", line.s.x, line.s.y, line.e.x, line.e.y, dot);
+        if (line.length() < front_min_range_) {
+          continue;
+        }
 
+        double dot = robot.dot(line) / robot.length() / line.length();
+        RCLCPP_DEBUG(get_logger(), "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f", line.s.x, line.s.y, line.e.x, line.e.y, dot, line.length());
         if (dot < cos(front_angle_in_degree_ / 180.0 * M_PI_2)) {
           continue;
         }
@@ -243,6 +252,9 @@ private:
       }
       // calculate the speed
       speed_limit = std::min(max_speed_, std::max(min_speed_, (min_range - min_distance_) / limit_factor_));
+      if (speed_limit < max_speed_) {
+        RCLCPP_INFO(get_logger(), "limit by front obstacle (%.2f), min_range=%.2f", speed_limit, min_range);
+      }
     }
 
     if (check_blind_space_) {  // Check blind space
@@ -250,6 +262,9 @@ private:
       for (uint64_t i = 0; i < input->ranges.size(); i++) {
         double angle = input->angle_min + input->angle_increment * i;
         double range = input->ranges[i];
+        if (range < blind_spot_min_range_) {
+          continue;
+        }
         if (range == inf) {
           range = input->range_max;
         }
@@ -332,6 +347,9 @@ private:
         // update speed limit
         if (limit < speed_limit) {
           speed_limit = limit;
+          if (speed_limit < max_speed_) {
+            RCLCPP_INFO(get_logger(), "limit by blind spot (%.2f), critical_distance=%.2f", speed_limit, critical_distance);
+          }
         }
       }
 

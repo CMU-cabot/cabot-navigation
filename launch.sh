@@ -118,6 +118,7 @@ function help()
     echo "run test (-t) options"
     echo "  -D          debug"
     echo "  -f <test>   run test CABOT_SITE.<module>.<test>"
+    echo "  -L          list test modules"
     echo "  -l          list test functions"
     echo "  -T <module> run test CABOT_SITE.<module>"
 }
@@ -134,6 +135,7 @@ module=tests
 test_func=
 unittest=
 retryoption=
+list_modules=0
 list_functions=0
 
 pwd=`pwd`
@@ -146,7 +148,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDf:HlMn:rsS:tT:uvy" arg; do
+while getopts "hDf:HlLMn:rsS:tT:uvy" arg; do
     case $arg in
         h)
             help
@@ -163,6 +165,9 @@ while getopts "hDf:HlMn:rsS:tT:uvy" arg; do
             ;;
 	l)
 	    list_functions=1
+	    ;;
+	L)
+	    list_modules=1
 	    ;;
         M)
             log_dmesg=1
@@ -228,6 +233,11 @@ fi
 
 if [ $error -eq 1 ]; then
    exit 1
+fi
+
+if [[ $list_modules -eq 1 ]]; then
+    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -L
+    exit
 fi
 
 if [[ $list_functions -eq 1 ]]; then

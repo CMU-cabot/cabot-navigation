@@ -32,14 +32,21 @@ YOU_HAVE_ARRIVED_WITH_NAME: "you have arrived at {0}"
 YOU_HAVE_ARRIVED: "you have arrived"
 
 ## Social
+PERSON_AHEAD: "person ahead"
 AVOIDING_A_PERSON: "avoiding a person"
 AVOIDING_PEOPLE: "avoiding people"
 AVOIDING_AN_OBSTACLE: "avoiding an obstacle"
 AVOIDING_OBSTACLES: "avoiding obstacles"
+TRYING_TO_AVOID_PEOPLE: "trying to avoid people"
+TRYING_TO_AVOID_OBSTACLE: "trying to avoid obstacle"
+PLEASE_WAIT_FOR_A_SECOND: "please wait for a second"
 A_PERSON_IN_THE_WAY: "a person is in the way"
-PEOPLE_IN_THE_WAY: "people are in the way"
+PEOPLE_ARE_IN_MY_WAY: "people are in the way"
+PEOPLE_IN_THE_WAY: "people in the way"
 FOLLOWING_A_PERSON: "following a person"
 FOLLOWING_PEOPLE: "following some people"
+
+## queue
 GOING_TO_GET_IN_LINE: "We are going to get in line"
 
 
@@ -95,12 +102,6 @@ HANDLE_LEFT_ABOUT_TURN: "Left about turn"
 HANDLE_LEFT_TURN: "Left turn"
 HANDLE_LEFT_DEV: "Left deviation"
 
-## Stop Reason
-TRYING_TO_AVOID_PEOPLE: "trying to avoid people"
-TRYING_TO_AVOID_OBSTACLE: "trying to avoid obstacle"
-PEOPLE_ARE_ON_MY_WAY: "people are on my way"
-PLEASE_WAIT_FOR_A_SECOND: "please wait for a second"
-
 ## Narrow
 FOLLOW_BEHIND_PLEASE_NARROW: "Pass through a narrow road. follow behind suitcase."
 RETURN_TO_POSITION_PLEASE: "Passed through a narrow road. return to first position."
@@ -109,6 +110,7 @@ RETURN_TO_POSITION_PLEASE: "Passed through a narrow road. return to first positi
 NOT_DETECT_TOUCH: "Touch on the handle is not detected"
 
 ## Facility
-RIGHT_SIDE: "right"
-LEFT_SIDE: "left"
-APPROACEHD_TO_FACILITY: "{0} is on your {1}"
+IN_FRONT: "in front of you"
+RIGHT_SIDE: "on your right"
+LEFT_SIDE: "on your left"
+APPROACEHD_TO_FACILITY: "{0} is {1}"

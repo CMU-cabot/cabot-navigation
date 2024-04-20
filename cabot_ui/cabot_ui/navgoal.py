@@ -18,9 +18,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from typing import List
 import math
 import inspect
-from itertools import groupby
 import numpy
 import time
 import traceback
@@ -395,13 +395,15 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
 
 
 def estimate_next_goal(goals, current_pose, current_floor):
+    CaBotRclpyUtil.info(F"estimate_next_goal is called: len(goals)={len(goals)}, {current_pose}, {current_floor}")
     for i in range(len(goals), 0, -1):
+        CaBotRclpyUtil.info(F"checking goal[{i-1}]")
         goal = goals[i-1]
         if goal.completed(pose=current_pose, floor=current_floor):
             continue
         if goal.match(pose=current_pose, floor=current_floor):
             return (goal, i-1)
-    return (None, -1)  # might be reached the goal
+    return (None, 0)  # might be reached the goal
 
 
 class Goal(geoutil.TargetPlace):
@@ -520,6 +522,10 @@ class Goal(geoutil.TargetPlace):
     def current_statement(self):
         return self._current_statement
 
+    @property
+    def is_social_navigation_enabled(self):
+        return True
+
     def __str__(self):
         ret = F"{type(self)}, ({hex(id(self))})\n"
         for key in self.__dict__:
@@ -624,10 +630,10 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
-    min_distance: 0.25
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 1.0
+    social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
@@ -654,10 +660,10 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.25
 /cabot/lidar_speed_control_node:
-    min_distance: 0.25
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 1.0
+    social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
@@ -726,7 +732,8 @@ class NavGoal(Goal):
             self.separated_route = [navcog_route]
             self.navcog_routes = [create_ros_path(navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)]
         else:
-            self.separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
+            self.separated_route = self.separate_route(navcog_route)
+            # self.separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
             self.navcog_routes = [
                 create_ros_path(
                     route,
@@ -743,6 +750,22 @@ class NavGoal(Goal):
         self.mode = None
         self.route_index = 0
         super(NavGoal, self).__init__(delegate, angle=180, floor=navcog_route[-1].floor, pose_msg=last_pose, **kwargs)
+
+    def separate_route(self, route: List[geojson.RouteLink]) -> List[List[geojson.RouteLink]]:
+        separated_routes = []
+        current_group = [route[0]]
+        for i in range(1, len(route)):
+            current_link = route[i]
+            previous_link = route[i - 1]
+            orientation_diff = math.fabs(geoutil.diff_angle(current_link.pose.orientation, previous_link.pose.orientation))
+            if current_link.navigation_mode != previous_link.navigation_mode or \
+               (previous_link.navigation_mode != geojson.NavigationMode.Standard and orientation_diff > 80.0 / 180.0 * math.pi):
+                separated_routes.append(current_group)
+                current_group = [current_link]
+            else:
+                current_group.append(current_link)
+        separated_routes.append(current_group)  # Add the last group
+        return separated_routes
 
     def _extract_pois(self):
         """extract pois along the route"""
@@ -775,7 +798,7 @@ class NavGoal(Goal):
         if new_mode == geojson.NavigationMode.Tight:
             self.delegate.please_follow_behind()
             delay = True
-        if self.mode == geojson.NavigationMode.Tight:
+        if self.mode == geojson.NavigationMode.Tight and new_mode != geojson.NavigationMode.Tight:
             self.delegate.please_return_position()
             delay = True
         self.mode = new_mode
@@ -845,6 +868,7 @@ class NavGoal(Goal):
             self.route_index = min_index
         except:  # noqa: #722
             CaBotRclpyUtil.error(traceback.format_exc())
+            self.route_index = 0
 
     def match(self, pose, floor):
         # work around, Link.distance_to is not implemented for local geometry
@@ -1244,6 +1268,10 @@ class QueueNavGoal(NavGoal):
                 "social_distance_y": QueueNavGoal.QUEUE_SOCIAL_DISTANCE_Y
             }
         }
+
+    @property
+    def is_social_navigation_enabled(self):
+        return False
 
     def _enter(self):
         # change queue_interval setting

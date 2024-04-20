@@ -21,14 +21,55 @@
 # SOFTWARE.
 """Test cabot_ui.turn_detector module"""
 
+import os
 import unittest
+import yaml
 
-from cabot_ui.geoutil import Pose
+import cabot_ui.geoutil
 from cabot_ui.turn_detector import TurnDetector
 from nav_msgs.msg import Path
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped, Point, Quaternion
+from std_msgs.msg import Header
+from builtin_interfaces.msg import Time
 import rclpy
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+
+
+def parsePath(path_data):
+    path_msg = Path()
+    # Populate header
+    path_msg.header = Header(
+        stamp=Time(
+            sec=path_data['header']['stamp']['sec'],
+            nanosec=path_data['header']['stamp']['nanosec']
+        ),
+        frame_id=path_data['header']['frame_id']
+    )
+    path_msg.poses = [
+        PoseStamped(
+            header=Header(
+                stamp=Time(
+                    sec=pose['header']['stamp']['sec'],
+                    nanosec=pose['header']['stamp']['nanosec']
+                ),
+                frame_id=pose['header']['frame_id']
+            ),
+            pose=Pose(
+                position=Point(
+                    x=pose['pose']['position']['x'],
+                    y=pose['pose']['position']['y'],
+                    z=pose['pose']['position']['z']
+                ),
+                orientation=Quaternion(
+                    x=pose['pose']['orientation']['x'],
+                    y=pose['pose']['orientation']['y'],
+                    z=pose['pose']['orientation']['z'],
+                    w=pose['pose']['orientation']['w']
+                )
+            )
+        ) for pose in path_data['poses']
+    ]
+    return path_msg
 
 
 class TestEvent(unittest.TestCase):
@@ -45,7 +86,7 @@ class TestEvent(unittest.TestCase):
         return super().tearDown()
 
     def test_basic(self):
-        current_pose = Pose(x=0, y=0, r=0)
+        current_pose = cabot_ui.geoutil.Pose(x=0, y=0, r=0)
         for i in range(0, 20):
             path = Path()
             for j in range(0, i):
@@ -55,3 +96,13 @@ class TestEvent(unittest.TestCase):
                 pose.pose.orientation.w = 1.0
                 path.poses.append(pose)
             _ = TurnDetector.detects(path, current_pose=current_pose)
+
+    def test_plan_msg1(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+
+        with open(dir_path+"/data/plan_msg1.yaml") as plan_file:
+            path_data = yaml.safe_load(plan_file)
+            path = parsePath(path_data)
+            pose = path.poses[0]
+            current_pose = cabot_ui.geoutil.Pose(x=pose.pose.position.x, y=pose.pose.position.y, r=0)
+            TurnDetector.detects(path, current_pose=current_pose)

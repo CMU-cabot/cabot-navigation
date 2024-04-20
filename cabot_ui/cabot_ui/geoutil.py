@@ -539,7 +539,7 @@ class TargetPlace(Pose):
         if self._was_approached and \
            self._pose_approached is not None and \
            self._pose_approached.distance_to(pose) > TargetPlace.PASSED_THRETHOLD and \
-           self.distance_to(pose) > TargetPlace.PASSED_THRETHOLD:
+           math.fabs(self.distance_to(pose)) > TargetPlace.PASSED_THRETHOLD:
             self._was_passed = True
             self._pose_passed = pose
             return True

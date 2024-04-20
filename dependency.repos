@@ -37,3 +37,7 @@ repositories:
     url: https://github.com/CMU-cabot/cabot-description
     version: main
 
+  docker/home/ros2_ws/src/rosbridge_suite:
+    type: git
+    url: https://github.com/CMU-cabot/rosbridge_suite
+    version: ros2-dev

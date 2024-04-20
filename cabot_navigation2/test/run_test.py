@@ -23,16 +23,18 @@
 ###############################################################################
 
 import importlib
+import pkgutil
 import inspect
 import sys
 import math
+import numpy
 import time
 import traceback
 import uuid
 import yaml
 import logging
 import re
-
+from dataclasses import dataclass, fields
 from optparse import OptionParser
 import rclpy
 import rclpy.node
@@ -41,7 +43,8 @@ from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
 
 from cabot_common.util import callee_name
-
+from people_msgs.msg import People, Person
+from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
@@ -466,15 +469,25 @@ class Tester:
 
         def done_callback(future):
             case['done'] = True
-        future = ElevatorDoorSimulator.instance().clean(callback=done_callback)
+        future = ObstacleManager.instance().clean(callback=done_callback)
         if not future:
             return
         self.futures[uuid] = future
 
     @wait_test()
+    def spawn_obstacle(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().spawn_obstacle(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
     def spawn_door(self, case, test_action):
         uuid = test_action['uuid']
-        self.futures[uuid] = ElevatorDoorSimulator.instance().spawn_door(**test_action)
+        self.futures[uuid] = ObstacleManager.instance().spawn_door(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
@@ -484,7 +497,7 @@ class Tester:
     @wait_test()
     def delete_door(self, case, test_action):
         uuid = test_action['uuid']
-        self.futures[uuid] = ElevatorDoorSimulator.instance().delete_door(**test_action)
+        self.futures[uuid] = ObstacleManager.instance().delete_door(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
@@ -573,13 +586,15 @@ class Tester:
             # change gazebo model position
             request = SetEntityState.Request()
             request.state.name = 'mobile_base'
+            origin_x = test_action['origin_x'] if 'origin_x' in test_action else self.config['origin_x'] if 'origin_x' in self.config else 0
+            origin_y = test_action['origin_y'] if 'origin_y' in test_action else self.config['origin_y'] if 'origin_y' in self.config else 0
             init_x = test_action['x'] if 'x' in test_action else self.config['init_x']
             init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
             init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
             init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
             init_yaw = init_a / 180.0 * math.pi
-            request.state.pose.position.x = float(init_x)
-            request.state.pose.position.y = float(init_y)
+            request.state.pose.position.x = float(init_x + origin_x)
+            request.state.pose.position.y = float(init_y + origin_y)
             request.state.pose.position.z = float(init_z)
             q = quaternion_from_euler(0, 0, init_yaw)
             request.state.pose.orientation.x = q[0]
@@ -750,23 +765,87 @@ class Tester:
         sys.exit(0)
 
 
-class ElevatorDoorSimulator:
+@dataclass
+class Door:
+    name: str
+    x: float
+    y: float
+    z: float
+    yaw: float
+    width: float
+    height: float
+    depth: float
+
+    @staticmethod
+    def from_dict(**kwargs):
+        valid_fields = {field.name for field in fields(Door)}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
+        return Door(**filtered_kwargs)
+
+
+class ObstacleManager:
     _instance = None
 
     @classmethod
     def instance(cls):
-        if not ElevatorDoorSimulator._instance:
-            ElevatorDoorSimulator._instance = ElevatorDoorSimulator()
-        return ElevatorDoorSimulator._instance
+        if not ObstacleManager._instance:
+            ObstacleManager._instance = ObstacleManager()
+        return ObstacleManager._instance
 
     def __init__(self):
         self.spawn_entity_client = node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = node.create_client(DeleteEntity, '/delete_entity')
+        self.plan_sub = node.create_subscription(Path, '/plan', self.plan_callback, 10)
+        self.obstacle_pub = node.create_publisher(People, '/obstacles', 10)
+        self.timer = node.create_timer(0.2, self.timer_callback)
         self.remaining = []
+        self.last_plan = None
+
+    def plan_callback(self, msg):
+        self.last_plan = msg
+
+    def timer_callback(self):
+        if not self.last_plan:
+            return
+        obstacle_point = None
+        for pose in self.last_plan.poses:
+            for obstacle in self.remaining:
+                if self.is_point_in_rotated_rect(pose.pose.position, obstacle):
+                    obstacle_point = pose.pose.position
+                    break
+        if obstacle_point:
+            msg = Person()
+            msg.name = obstacle.name
+            msg.position.x = obstacle_point.x
+            msg.position.y = obstacle_point.y
+            msg.position.z = obstacle_point.z
+            msg.reliability = 1.0
+            msg.tags.append("stationary")
+            pmsg = People()
+            pmsg.people.append(msg)
+            pmsg.header.stamp = node.get_clock().now().to_msg()
+            pmsg.header.frame_id = "map_global"
+            self.obstacle_pub.publish(pmsg)
+
+    def is_point_in_rotated_rect(self, point, obstacle):
+        margin = 0.45
+        # Convert yaw to radians
+        yaw = obstacle.yaw
+        # Translate point to origin based on rect position
+        translated_point_x = point.x - obstacle.x
+        translated_point_y = point.y - obstacle.y
+        # Rotate point around origin (0,0) in the opposite direction of the rectangle's rotation
+        cos_yaw, sin_yaw = numpy.cos(-yaw), numpy.sin(-yaw)
+        rotated_point_x = translated_point_x * cos_yaw - translated_point_y * sin_yaw
+        rotated_point_y = translated_point_x * sin_yaw + translated_point_y * cos_yaw
+        # Check if the rotated point is within the rectangle bounds
+        return -margin-obstacle.width / 2 <= rotated_point_x <= obstacle.width / 2 + margin and \
+               -margin-obstacle.height / 2 <= rotated_point_y <= obstacle.height / 2 + margin
 
     def clean(self, callback):
+        self.last_path = None
         if self.remaining:
-            future = self.delete_door(name=self.ramaining[0])
+            future = self.delete_door(name=self.ramaining[0].name)
 
             def done_callback(future):
                 self.clean(callback)
@@ -781,16 +860,30 @@ class ElevatorDoorSimulator:
         future = self.delete_entity_client.call_async(request)
 
         def callback(future):
-            self.remaining.remove(name)
+            self.remaining = [door for door in self.remaining if door.name != name]
         future.add_done_callback(callback)
         return future
 
     def spawn_door(self, **kwargs):
-        name = kwargs['name']
-        x = kwargs['x']
-        y = kwargs['y']
-        z = kwargs['z']
-        yaw = kwargs['yaw']
+        return self.spawn_obstacle(**dict(
+            dict(
+                width=0.01,
+                height=2.0,
+                depth=2.0
+            ),
+            **kwargs)
+        )
+
+    def spawn_obstacle(self, **kwargs):
+        door = Door.from_dict(**kwargs)
+        name = door.name
+        x = door.x
+        y = door.y
+        z = door.z
+        yaw = door.yaw
+        width = door.width
+        height = door.height
+        depth = door.depth
 
         door_xml = f"""
 <?xml version="1.0" ?>
@@ -798,18 +891,18 @@ class ElevatorDoorSimulator:
     <model name="{name}">
         <static>true</static>
         <link name="{name}-link">
-            <pose>{x} {y} {z+1} 0 {math.pi/2} {yaw}</pose>
+            <pose>{x} {y} {z+depth/2.0} 0 0 {yaw}</pose>
             <visual name="{name}-visual">
                 <geometry>
                     <box>
-                        <size>2 2 0.01</size>
+                        <size>{width} {height} {depth}</size>
                     </box>
                 </geometry>
             </visual>
             <collision name="{name}-collision">
                 <geometry>
                     <box>
-                        <size>2 2 0.01</size>
+                        <size>{width} {height} {depth}</size>
                     </box>
                 </geometry>
             </collision>
@@ -825,7 +918,8 @@ class ElevatorDoorSimulator:
         future = self.spawn_entity_client.call_async(request)
 
         def callback(future):
-            self.remaining.append(name)
+            self.remaining.append(door)
+            logger.debug(F"spawn result = {future.result()}, {door}, {len(self.remaining)}")
         future.add_done_callback(callback)
         return future
 
@@ -887,6 +981,7 @@ def main():
     parser.add_option('-m', '--module', type=str, help='test module name')
     parser.add_option('-d', '--debug', action='store_true', help='debug print')
     parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-L', '--list-modules', action='store_true', help='list test modules')
     parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
     parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
 
@@ -902,6 +997,13 @@ def main():
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
 
+    if options.list_modules:
+        module = __import__(options.module)
+        modules = [name for _, name, _ in pkgutil.iter_modules(module.__path__)]
+        for m in modules:
+            logger.info(m)
+        sys.exit(0)
+
     if options.list_functions:
         module = importlib.import_module(options.module)
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -912,6 +1014,7 @@ def main():
     rclpy.init()
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
+    ObstacleManager.instance()
 
     ros2Handler = ROS2LogHandler(node)
     logger.addHandler(ros2Handler)

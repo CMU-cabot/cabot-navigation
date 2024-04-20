@@ -50,7 +50,7 @@ from cabot_ui import visualizer, geoutil, geojson, datautil
 from cabot_ui.turn_detector import TurnDetector, Turn
 from cabot_ui import navgoal
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
-from cabot_ui.social_navigation import SocialNavigation
+from cabot_ui.social_navigation import SocialNavigation, SNMessage
 from cabot_msgs.srv import LookupTransform
 import queue_msgs.msg
 from mf_localization_msgs.msg import MFLocalizeStatus
@@ -102,9 +102,6 @@ class NavigationInterface(object):
     def could_not_get_current_location(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def announce_social(self, message):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
     def please_call_elevator(self, pos):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
@@ -130,6 +127,12 @@ class NavigationInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def please_return_position(self):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def announce_social(self, message: SNMessage):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def request_sound(self, message: SNMessage):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
 
@@ -220,7 +223,7 @@ class ControlBase(object):
         self._logger = node.get_logger()
         self.visualizer = visualizer.instance(node)
 
-        self.delegate = NavigationInterface()
+        self.delegate: NavigationInterface = NavigationInterface()
         self.buffer = BufferProxy(tf_node)
 
         # TF listening is at high frequency and increases the CPU usage substantially
@@ -279,7 +282,7 @@ class ControlBase(object):
             self._logger.debug("cannot get current_ros_pose")
         raise RuntimeError("no transformation")
 
-    def current_local_pose(self, frame=None):
+    def current_local_pose(self, frame=None) -> geoutil.Pose:
         """get current local location"""
         if frame is None:
             frame = self._global_map_name
@@ -329,6 +332,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     ACTIONS = {"navigate_to_pose": nav2_msgs.action.NavigateToPose,
                "navigate_through_poses": nav2_msgs.action.NavigateThroughPoses}
     NS = ["", "/local"]
+    TURN_NEARBY_THRESHOLD = 2
 
     def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
                  datautil_instance=None, anchor_file=None, wait_for_action=True):
@@ -345,6 +349,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.queue_wait_pois = []
         self.speed_pois = []
         self.turns = []
+        self.notified_turns = []
 
         self.i_am_ready = False
         self._sub_goals = None
@@ -418,6 +423,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.current_queue_interval = self.initial_queue_interval
 
         self._process_queue = []
+        self._process_queue_lock = threading.Lock()
         self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
@@ -491,8 +497,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     if 0 < abs(t1.angle) and abs(t1.angle) < math.pi/3 and \
                        0 < abs(t2.angle) and abs(t2.angle) < math.pi/3:
                         self.turns.pop(i+1)
-        except ValueError:
-            pass
+        except:  # noqa: 722
+            self._logger.error(traceback.format_exc())
 
         self.visualizer.visualize()
 
@@ -529,7 +535,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def set_destination(self, destination):
-        self._process_queue.append((self._set_destination, destination))
+        self.social_navigation.set_active(True)
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_destination, destination))
 
     def _set_destination(self, destination):
         """
@@ -607,7 +615,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def retry_navigation(self):
-        self._process_queue.append((self._retry_navigation,))
+        with self._process_queue_lock:
+            self._process_queue.append((self._retry_navigation,))
 
     def _retry_navigation(self):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -620,7 +629,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def pause_navigation(self, callback):
-        self._process_queue.append((self._pause_navigation, callback))
+        with self._process_queue_lock:
+            self._process_queue.append((self._pause_navigation, callback))
 
     def _pause_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -632,13 +642,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             callback()
 
         self.turns = []
+        self.notified_turns = []
 
         if self._current_goal:
             self._goal_index -= 1
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
-        self._process_queue.append((self._resume_navigation, callback))
+        with self._process_queue_lock:
+            self._process_queue.append((self._resume_navigation, callback))
 
     def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -646,7 +658,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         current_pose = self.current_local_pose()
         goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
-        goal.estimate_inner_goal(current_pose, self.current_floor)
+        self._logger.info(F"navigation.{util.callee_name()} estimated next goal index={index}: {goal}")
+        if goal:
+            goal.estimate_inner_goal(current_pose, self.current_floor)
         self._goal_index = index-1
         self._last_estimated_goal = None
 
@@ -654,7 +668,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def cancel_navigation(self, callback=None):
-        self._process_queue.append((self._cancel_navigation, callback))
+        with self._process_queue_lock:
+            self._process_queue.append((self._cancel_navigation, callback))
+        self.social_navigation.set_active(False)
 
     def _cancel_navigation(self, callback):
         """callback for cancel topic"""
@@ -687,6 +703,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._current_goal = None
         self.delegate.have_completed()
         self.delegate.activity_log("cabot/navigation", "completed")
+        self.social_navigation.set_active(False)
 
     def _navigate_sub_goal(self, goal):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -704,6 +721,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.info_pois = []
             self.queue_wait_pois = []
         self.turns = []
+        self.notified_turns = []
 
         self._logger.info(F"goal: {goal}")
         try:
@@ -730,9 +748,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.lock.release()
 
     def _process_queue_func(self):
-        if len(self._process_queue) > 0:
-            process = self._process_queue.pop(0)
-            process[0](*process[1:])
+        process = None
+        with self._process_queue_lock:
+            if len(self._process_queue) > 0:
+                process = self._process_queue.pop(0)
+        try:
+            if process:
+                process[0](*process[1:])
+        except:  # noqa: 722
+            self._logger.error(traceback.format_exc())
 
     # Main loop of navigation
     GOAL_POSITION_TORELANCE = 1
@@ -780,16 +804,34 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # cabot is active now
         self._logger.debug("cabot is active", throttle_duration_sec=1)
 
+        # isolate error handling
         try:
             self._check_info_poi(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_nearby_facility(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_speed_limit(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_turn(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_queue_wait(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_social(self.current_pose)
+        except Exception:
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_goal(self.current_pose)
         except Exception:
-            import traceback
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
 
     def _check_info_poi(self, current_pose):
@@ -857,24 +899,35 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
+                if turn.passed:
+                    continue
                 try:
-                    turn_pose = self.buffer.transform(turn.pose, self._global_map_name)
-                    dist = current_pose.distance_to(geoutil.Point(xy=turn_pose.pose.position))
-                    if dist < 0.25 and not turn.passed:
+                    dist = turn.distance_to(current_pose)
+                    if dist < 0.25:
                         turn.passed = True
                         self._logger.info(F"notify turn {turn}")
-
-                        self.delegate.notify_turn(turn=turn)
 
                         if turn.turn_type == Turn.Type.Avoiding:
                             # give avoiding announce
                             self._logger.info("social_navigation avoiding turn")
                             self.social_navigation.turn = turn
+
+                        if self._check_already_notified_turn_nearby(turn):
+                            self.delegate.notify_turn(turn=turn)
                 except:  # noqa: E722
                     import traceback
                     self._logger.error(traceback.format_exc())
                     self._logger.error("could not convert pose for checking turn POI",
                                        throttle_duration_sec=3)
+
+    def _check_already_notified_turn_nearby(self, turn: Turn):
+        result = True
+        for other in self.notified_turns:
+            if other.distance_to(turn) < Navigation.TURN_NEARBY_THRESHOLD:
+                result = False
+        self.notified_turns.append(turn)
+        self._logger.info(f"_check_already_notified_turn_nearby, {result}, {turn}")
+        return result
 
     def _check_queue_wait(self, current_pose):
         if not isinstance(self._current_goal, navgoal.QueueNavGoal) or not self.queue_wait_pois:
@@ -953,15 +1006,20 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _check_social(self, current_pose):
         if self.social_navigation is None:
             return
+        self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
 
         # do not provide social navigation messages while queue navigation
-        if isinstance(self._current_goal, navgoal.QueueNavGoal):
+        if self._current_goal and not self._current_goal.is_social_navigation_enabled:
+            self._logger.info("social navigation is disabled")
             return
 
         self.social_navigation.current_pose = current_pose
         message = self.social_navigation.get_message()
         if message is not None:
             self.delegate.announce_social(message)
+        sound = self.social_navigation.get_sound()
+        if sound is not None:
+            self.delegate.request_sound(sound)
 
     def _check_goal(self, current_pose):
         self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
@@ -1018,9 +1076,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def exit_goal(self, goal):
         self.delegate.exit_goal(goal)
-
-    def announce_social(self, messages):
-        self.delegate.announce_social(messages)
 
     def navigate_to_pose(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
         self._logger.info(F"{namespace}/navigate_to_pose")
