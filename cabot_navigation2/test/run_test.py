@@ -320,6 +320,18 @@ class Tester:
             **kwargs)
         )
 
+    def check_navigation_arrived(self, **kwargs):
+        self.check_topic(**dict(
+            dict(
+                action_name='check_navigation_arrived',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+                timeout=60
+            ),
+            **kwargs)
+        )
+
     def check_position(self, **kwargs):
         x = kwargs['x'] if 'x' in kwargs else 0
         y = kwargs['y'] if 'y' in kwargs else 0
@@ -332,6 +344,18 @@ class Tester:
                 topic="/cabot/pose_log",
                 condition=F"math.sqrt((msg.pose.position.x - {x})**2 + (msg.pose.position.y - {y})**2) < {tolerance} and msg.floor == {floor}",
                 once=True
+            ),
+            **kwargs)
+        )
+
+    def check_turn_towards(self, **kwargs):
+        self.check_topic(**dict(
+            dict(
+                action_name='check_turn_towards',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
+                timeout=60
             ),
             **kwargs)
         )
@@ -354,6 +378,15 @@ class Tester:
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
                 message=f"data: 'navigation;destination;{node_id}'"
+            ),
+            **kwargs)
+        )
+
+    def wait_for(self, seconds, **kwargs):
+        self.wait(**dict(
+            dict(
+                action_name=f'wait_for({seconds})',
+                seconds=seconds
             ),
             **kwargs)
         )
@@ -382,6 +415,18 @@ class Tester:
             **kwargs)
         )
 
+    def wait_localization_started(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_localization_started',
+                topic='/localize_status',
+                topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
+                condition='msg.status==1',
+                timeout=60
+            ),
+            **kwargs)
+        )
+
     def wait_navigation_arrived(self, **kwargs):
         self.wait_topic(**dict(
             dict(
@@ -390,51 +435,6 @@ class Tester:
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
                 timeout=60
-            ),
-            **kwargs)
-        )
-
-    def wait_turn_towards(self, **kwargs):
-        self.wait_topic(**dict(
-            dict(
-                action_name='wait_turn_towards',
-                topic='/cabot/activity_log',
-                topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    def check_navigation_arrived(self, **kwargs):
-        self.check_topic(**dict(
-            dict(
-                action_name='check_navigation_arrived',
-                topic='/cabot/activity_log',
-                topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    def check_turn_towards(self, **kwargs):
-        self.check_topic(**dict(
-            dict(
-                action_name='check_turn_towards',
-                topic='/cabot/activity_log',
-                topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    def wait_for(self, seconds, **kwargs):
-        self.wait(**dict(
-            dict(
-                action_name=f'wait_for({seconds})',
-                seconds=seconds
             ),
             **kwargs)
         )
@@ -451,13 +451,13 @@ class Tester:
             **kwargs)
         )
 
-    def wait_localization_started(self, **kwargs):
+    def wait_turn_towards(self, **kwargs):
         self.wait_topic(**dict(
             dict(
-                action_name='wait_localization_started',
-                topic='/localize_status',
-                topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
-                condition='msg.status==1',
+                action_name='wait_turn_towards',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
                 timeout=60
             ),
             **kwargs)
