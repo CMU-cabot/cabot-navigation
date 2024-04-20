@@ -287,6 +287,39 @@ class Tester:
         self.evaluator.stop()
 
     # shorthand functions
+    def button_down(self, button, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'button_down({button})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'button_down_{button}'"
+            ),
+            **kwargs)
+        )
+
+    def cancel_navigation(self, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name='cancel_navigation',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message="data: 'navigation;cancel'"
+            ),
+            **kwargs)
+        )
+
+    def check_collision(self, **kwargs):
+        return self.check_topic_error(**dict(
+            dict(
+                action_name='check_collision',
+                topic="/collision",
+                topic_type="pedestrian_plugin_msgs/msg/Collision",
+                condition="True"
+            ),
+            **kwargs)
+        )
+
     def check_position(self, **kwargs):
         x = kwargs['x'] if 'x' in kwargs else 0
         y = kwargs['y'] if 'y' in kwargs else 0
@@ -303,28 +336,6 @@ class Tester:
             **kwargs)
         )
 
-    def check_collision(self, **kwargs):
-        return self.check_topic_error(**dict(
-            dict(
-                action_name='check_collision',
-                topic="/collision",
-                topic_type="pedestrian_plugin_msgs/msg/Collision",
-                condition="True"
-            ),
-            **kwargs)
-        )
-
-    def goto_node(self, node_id, **kwargs):
-        self.pub_topic(**dict(
-            dict(
-                action_name=f'goto_node({node_id})',
-                topic='/cabot/event',
-                topic_type='std_msgs/msg/String',
-                message=f"data: 'navigation;destination;{node_id}'"
-            ),
-            **kwargs)
-        )
-
     def floor_change(self, diff, **kwargs):
         self.call_service(**dict(
             dict(
@@ -336,24 +347,13 @@ class Tester:
             **kwargs)
         )
 
-    def cancel_navigation(self, **kwargs):
+    def goto_node(self, node_id, **kwargs):
         self.pub_topic(**dict(
             dict(
-                action_name='cancel_navigation',
+                action_name=f'goto_node({node_id})',
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
-                message="data: 'navigation;cancel'"
-            ),
-            **kwargs)
-        )
-
-    def button_down(self, button, **kwargs):
-        self.pub_topic(**dict(
-            dict(
-                action_name=f'button_down({button})',
-                topic='/cabot/event',
-                topic_type='std_msgs/msg/String',
-                message=f"data: 'button_down_{button}'"
+                message=f"data: 'navigation;destination;{node_id}'"
             ),
             **kwargs)
         )
@@ -463,56 +463,52 @@ class Tester:
             **kwargs)
         )
 
-    @wait_test()
-    def clean_door(self, case, test_action):
-        uuid = test_action['uuid']
-
-        def done_callback(future):
-            case['done'] = True
-        future = ObstacleManager.instance().clean(callback=done_callback)
-        if not future:
-            return
-        self.futures[uuid] = future
-
-    @wait_test()
-    def spawn_obstacle(self, case, test_action):
-        uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().spawn_obstacle(**test_action)
-
-        def done_callback(future):
-            logger.debug(future.result())
-            case['done'] = True
-        self.futures[uuid].add_done_callback(done_callback)
-
-    @wait_test()
-    def spawn_door(self, case, test_action):
-        uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().spawn_door(**test_action)
-
-        def done_callback(future):
-            logger.debug(future.result())
-            case['done'] = True
-        self.futures[uuid].add_done_callback(done_callback)
-
-    @wait_test()
-    def delete_door(self, case, test_action):
-        uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().delete_door(**test_action)
-
-        def done_callback(future):
-            logger.debug(future.result())
-            case['done'] = True
-        self.futures[uuid].add_done_callback(done_callback)
-
     # actual task needs to be waited
     @wait_test()
-    def init_manager(self, case, test_action):
+    def call_service(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
+        service = test_action['service']
+        service_type_str = test_action['service_type']
+        service_type = import_class(service_type_str)
+        request = test_action['request']
+        request_type = service_type.Request
+        uuid = test_action['uuid']
+
+        req = request_type()
+        data = yaml.safe_load(request)
+        set_message_fields(req, data)
+
+        srv = self.node.create_client(service_type, service)
+        self.futures[uuid] = srv.call_async(req)
 
         def done_callback(future):
-            logger.debug(future.result())
             case['done'] = True
-        manager.init(callback=done_callback)
+
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def check_topic(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        topic = test_action['topic']
+        topic_type = test_action['topic_type']
+        topic_type = import_class(topic_type)
+        condition = test_action['condition']
+
+        def topic_callback(msg):
+            try:
+                context = {'msg': msg, 'math': math}
+                exec(f"result=({condition})", context)
+                if context['result']:
+                    logger.debug(f"success {condition}")
+                    case['success'] = True
+                    self.cancel_subscription(case)
+            except:  # noqa: #722
+                logger.error(traceback.format_exc())
+
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        self.add_subscription(case, sub)
+        case['done'] = True
+        case['success'] = None
 
     @wait_test(1)
     def check_topic_error(self, case, test_action):
@@ -544,28 +540,63 @@ class Tester:
         return cancel_func
 
     @wait_test()
-    def check_topic(self, case, test_action):
+    def clean_door(self, case, test_action):
+        uuid = test_action['uuid']
+
+        def done_callback(future):
+            case['done'] = True
+        future = ObstacleManager.instance().clean(callback=done_callback)
+        if not future:
+            return
+        self.futures[uuid] = future
+
+    @wait_test()
+    def delete_actor(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        manager.delete(
+            name=test_action['name'],
+            callback=done_callback)
+
+    @wait_test()
+    def delete_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().delete_door(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def init_manager(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        manager.init(callback=done_callback)
+
+    @wait_test()
+    def pub_topic(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
         topic = test_action['topic']
         topic_type = test_action['topic_type']
         topic_type = import_class(topic_type)
-        condition = test_action['condition']
+        message = test_action['message']
+        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
 
-        def topic_callback(msg):
-            try:
-                context = {'msg': msg, 'math': math}
-                exec(f"result=({condition})", context)
-                if context['result']:
-                    logger.debug(f"success {condition}")
-                    case['success'] = True
-                    self.cancel_subscription(case)
-            except:  # noqa: #722
-                logger.error(traceback.format_exc())
+        msg = topic_type()
+        data = yaml.safe_load(message)
+        set_message_fields(msg, data)
 
-        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.add_subscription(case, sub)
+        pub = self.node.create_publisher(topic_type, topic, qos)
+        pub.publish(msg)
+        self.node.destroy_publisher(pub)
         case['done'] = True
-        case['success'] = None
 
     @wait_test()
     def reset_position(self, case, test_action):
@@ -669,15 +700,24 @@ class Tester:
             callback=done_callback)
 
     @wait_test()
-    def delete_actor(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
+    def spawn_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().spawn_door(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
-        manager.delete(
-            name=test_action['name'],
-            callback=done_callback)
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def spawn_obstacle(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().spawn_obstacle(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def wait_topic(self, case, test_action):
@@ -704,46 +744,6 @@ class Tester:
                 logger.error(traceback.format_exc())
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
-
-    @wait_test()
-    def pub_topic(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        topic = test_action['topic']
-        topic_type = test_action['topic_type']
-        topic_type = import_class(topic_type)
-        message = test_action['message']
-        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
-
-        msg = topic_type()
-        data = yaml.safe_load(message)
-        set_message_fields(msg, data)
-
-        pub = self.node.create_publisher(topic_type, topic, qos)
-        pub.publish(msg)
-        self.node.destroy_publisher(pub)
-        case['done'] = True
-
-    @wait_test()
-    def call_service(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        service = test_action['service']
-        service_type_str = test_action['service_type']
-        service_type = import_class(service_type_str)
-        request = test_action['request']
-        request_type = service_type.Request
-        uuid = test_action['uuid']
-
-        req = request_type()
-        data = yaml.safe_load(request)
-        set_message_fields(req, data)
-
-        srv = self.node.create_client(service_type, service)
-        self.futures[uuid] = srv.call_async(req)
-
-        def done_callback(future):
-            case['done'] = True
-
-        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def wait(self, case, test_action):

@@ -30,10 +30,13 @@ function snore()
 function help()
 {
     echo "Usage:"
+    echo "  $0 [<options>] <module> <test function name regex>"
+    echo ""
     echo "-h          show this help"
     echo "-d          debug print"
+    echo "-L          list test modules"
     echo "-l          list test functions"
-    echo "-r          retry"
+    echo "-r          retry until the test succeeds"
     echo "-w          wait ready"
 }
 
