@@ -550,7 +550,15 @@ class Goal(geoutil.TargetPlace):
 
     def cancel(self, callback=None):
         try:
-            self._cancel(callback)
+            def done_change_parameters_callback(result):
+                CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
+                self._saved_params = None
+                self._cancel(callback)
+            if self._saved_params:
+                self._exiting = True
+                self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
+            else:
+                self._cancel(callback)
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
