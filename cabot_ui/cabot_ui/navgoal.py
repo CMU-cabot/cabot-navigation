@@ -424,12 +424,12 @@ class Goal(geoutil.TargetPlace):
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
         self._saved_params = None
-        self._exiting = False
+        self._is_exiting_goal = False
 
     def reset(self):
         self._is_completed = False
         self._is_canceled = False
-        self._is_exiting = False
+        self._is_exiting_goal = False
 
     def enter(self):
         """
@@ -501,8 +501,8 @@ class Goal(geoutil.TargetPlace):
         return self._is_canceled
 
     @property
-    def is_exiting(self):
-        return self._exiting
+    def is_exiting_goal(self):
+        return self._is_exiting_goal
 
     def exit(self, callback):
         def done_change_parameters_callback(result):
@@ -513,7 +513,7 @@ class Goal(geoutil.TargetPlace):
         CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
         self.delegate.exit_goal(self)
         if self._saved_params:
-            self._exiting = True
+            self._is_exiting_goal = True
             self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
         else:
             callback()
@@ -556,7 +556,6 @@ class Goal(geoutil.TargetPlace):
                 self._saved_params = None
                 self._cancel(callback)
             if self._saved_params:
-                # self._exiting = True
                 self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
             else:
                 self._cancel(callback)
