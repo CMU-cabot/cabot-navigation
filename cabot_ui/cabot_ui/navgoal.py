@@ -506,7 +506,7 @@ class Goal(geoutil.TargetPlace):
 
     def exit(self, callback):
         def done_change_parameters_callback(result):
-            CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
+            CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
             self._saved_params = None
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
@@ -549,13 +549,14 @@ class Goal(geoutil.TargetPlace):
             self.cancel()
 
     def cancel(self, callback=None):
+        CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel is called")
         try:
             def done_change_parameters_callback(result):
-                CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
+                CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel done_change_parameters_callback is called")
                 self._saved_params = None
                 self._cancel(callback)
             if self._saved_params:
-                self._exiting = True
+                # self._exiting = True
                 self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
             else:
                 self._cancel(callback)
