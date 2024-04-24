@@ -1050,7 +1050,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if not goal.is_completed:
             return
 
-        if goal.is_exiting:
+        if goal.is_exiting_goal:
             return
 
         def goal_exit_callback():
