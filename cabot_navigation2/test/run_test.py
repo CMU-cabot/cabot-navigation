@@ -98,9 +98,7 @@ def wait_test(timeout=60):
                 # logger.error("Timeout")
                 # continue other test
             else:
-                if case['success'] is None:
-                    case['success'] = True
-                else:
+                if case['success'] is not None:
                     if not case['success']:
                         logger.error(F"{case}")
                     else:
@@ -181,6 +179,8 @@ class Tester:
         tfResult = result[key]
         success = True
         for aResult in tfResult:
+            if aResult['success'] is None:
+                aResult['success'] = False
             success = success and aResult['success']
         if success:
             logger.info(f"{key}: Success")
@@ -483,6 +483,7 @@ class Tester:
 
         def done_callback(future):
             case['done'] = True
+            case['success'] = True
 
         self.futures[uuid].add_done_callback(done_callback)
 
@@ -533,6 +534,7 @@ class Tester:
         sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
         self.add_subscription(case, sub)
         case['done'] = True
+        case['success'] = True
 
         def cancel_func():
             logger.debug(F"cancel {case}")
@@ -545,6 +547,7 @@ class Tester:
 
         def done_callback(future):
             case['done'] = True
+            case['success'] = True
         future = ObstacleManager.instance().clean(callback=done_callback)
         if not future:
             return
@@ -557,6 +560,7 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         manager.delete(
             name=test_action['name'],
             callback=done_callback)
@@ -578,6 +582,7 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         manager.init(callback=done_callback)
 
     @wait_test()
@@ -597,6 +602,7 @@ class Tester:
         pub.publish(msg)
         self.node.destroy_publisher(pub)
         case['done'] = True
+        case['success'] = True
 
     @wait_test()
     def reset_position(self, case, test_action):
@@ -642,6 +648,7 @@ class Tester:
                         exec(f"result=({condition})", context)
                         if context['result']:
                             case['done'] = True
+                            case['success'] = True
                             self.cancel_subscription(case)
                             time.sleep(2)
                     except:  # noqa: #722
@@ -695,6 +702,7 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         manager.update(
             actors=test_action['actors'],
             callback=done_callback)
@@ -707,6 +715,7 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
@@ -717,6 +726,7 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
@@ -734,6 +744,7 @@ class Tester:
                 exec(f"result=({condition})", context)
                 if context['result']:
                     case['done'] = True
+                    case['success'] = True
                     self.cancel_subscription(case)
                 elif once:
                     case['done'] = True
@@ -753,6 +764,7 @@ class Tester:
 
         def timer_callback():
             case['done'] = True
+            case['success'] = True
             timer = self.timers[uuid]
             timer.cancel()
             self.node.destroy_timer(timer)
