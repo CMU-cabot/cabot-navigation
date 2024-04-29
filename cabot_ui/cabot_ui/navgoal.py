@@ -803,7 +803,7 @@ class NavGoal(Goal):
         new_mode = self.navcog_routes[self.route_index][2]
         CaBotRclpyUtil.info(F"NavGoal.check_mode new_mode={new_mode}")
         delay = False
-        if new_mode == geojson.NavigationMode.Tight:
+        if self.mode != geojson.NavigationMode.Tight and new_mode == geojson.NavigationMode.Tight:
             self.delegate.please_follow_behind()
             delay = True
         if self.mode == geojson.NavigationMode.Tight and new_mode != geojson.NavigationMode.Tight:
@@ -846,8 +846,14 @@ class NavGoal(Goal):
             self.route_index += 1
             self.enter()
         else:
+            if self.mode == geojson.NavigationMode.Tight:
+                self.delegate.please_return_position()
             self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
             self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
+
+    def reset(self):
+        self.mode = None
+        super(NavGoal, self).reset()
 
     def update_goal(self, goal):
         CaBotRclpyUtil.info("Updated goal position")
