@@ -460,8 +460,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "cancel":
             self._logger.info("NavigationState: User Cancel requested")
-            if self._status_manager.state == State.in_action or \
-               self._status_manager.state == State.in_summons:
+            if self._status_manager.state != State.idle:
                 self._logger.info("NavigationState: canceling (user)")
                 self._interface.cancel_navigation()
 
