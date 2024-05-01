@@ -149,7 +149,7 @@ def extract_samples_ble_wifi_other(samples):
             s2 = copy.copy(s)
             s2["data"]["beacons"] = s2_wifi
             samples_wifi.append(s2)
-        if len(s2_ble) == 0 and len(s2_wifi):
+        if len(s2_ble) == 0 and len(s2_wifi) == 0:
             s2 = copy.copy(s)
             samples_other.append(s2)
 
