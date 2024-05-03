@@ -40,16 +40,15 @@ class DataUtil(object):
 
     def __init__(self, node: Node):
         self._node = node
-        self._protocol = node.declare_parameter("protocol", "http").value
-        self._hostname = node.declare_parameter("map_server_host", "").value
+        self._hosturi = node.declare_parameter("map_server_uri", "").value
         if not node.has_parameter("lang"):
             self._lang = node.declare_parameter("lang", "en").value
         else:
             self._lang = node.get_parameter("lang").value
         self._dist = node.declare_parameter("lookup_dist", 1000).value
 
-        if not self._hostname:
-            CaBotRclpyUtil.warn("'hostname' should be specified")
+        if not self._hosturi:
+            CaBotRclpyUtil.warn("'map_server_uri' should be specified")
 
         self._user = 'Cabot'
         self._anchor = None
@@ -79,7 +78,7 @@ class DataUtil(object):
 
     def get_search_url(self):
         """get the URL for search api"""
-        url = F"{self._protocol}://{self._hostname}/{self.SEARCH_API}"
+        url = F"{self._hosturi}/{self.SEARCH_API}"
         CaBotRclpyUtil.info(url)
         return url
 

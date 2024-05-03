@@ -219,7 +219,6 @@ com="$command_prefix ros2 launch cabot_ui cabot_ui.launch.py \
         anchor_file:='$map' \
         init_speed:='$CABOT_INIT_SPEED' \
         language:='$CABOT_LANG' \
-        site:='$CABOT_SITE' \
         show_topology:=true \
         $command_postfix"
 echo $com

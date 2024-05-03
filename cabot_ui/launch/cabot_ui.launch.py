@@ -30,7 +30,6 @@ from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 
-from cabot_common.launch import NamespaceParameterFile
 from cabot_common.launch import GetPackageShareDirectory
 from cabot_common.launch import AppendLogDirPrefix
 
@@ -39,20 +38,14 @@ def generate_launch_description():
     init_speed = LaunchConfiguration('init_speed')
     anchor_file = LaunchConfiguration('anchor_file')
     language = LaunchConfiguration('language')
-    site = LaunchConfiguration('site')
     global_map_name = LaunchConfiguration('global_map_name')
     plan_topic = LaunchConfiguration('plan_topic')
     show_topology = LaunchConfiguration('show_topology')
     announce_no_touch = LaunchConfiguration('announce_no_touch')
+    map_server_uri = LaunchConfiguration('map_server_uri')
 
     def hoge(text):
         return text
-
-    config_path = PathJoinSubstitution([
-        GetPackageShareDirectory(site),
-        'config',
-        'config.yaml'
-    ])
 
     menu_file = PathJoinSubstitution([
         GetPackageShareDirectory('cabot_ui'),
@@ -105,6 +98,11 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_ANNOUNCE_NO_TOUCH', default_value='false'),
             description='True if you want to announce detection of no touch'
         ),
+        DeclareLaunchArgument(
+            'map_server_uri',
+            default_value=EnvironmentVariable('CABOT_MAP_SERVER_URI', default_value='http://localhost:9090/map'),
+            description='URI to MapService server'
+        ),
         Node(
             package="cabot_ui",
             executable="cabot_ui_manager.py",
@@ -116,7 +114,8 @@ def generate_launch_description():
                 'global_map_name': global_map_name,
                 'plan_topic': plan_topic,
                 'menu_file': menu_file,
-            }, NamespaceParameterFile('cabot_ui_manager', config_path)],
+                'map_server_uri': map_server_uri,
+            }],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
             ],
@@ -129,7 +128,8 @@ def generate_launch_description():
             name='navcog_map',
             parameters=[{
                 'anchor_file': anchor_file,
-            }, NamespaceParameterFile('cabot/navcog_map', config_path)],
+                'map_server_uri': map_server_uri,
+            }],
             condition=IfCondition(show_topology),
         ),
         Node(
