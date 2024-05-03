@@ -77,6 +77,17 @@ verbose=0
 clean_server=0
 location_tools=0
 
+CABOT_MAP_SERVER_URI=${CABOT_MAP_SERVER_URI:=http://localhost:9090/map}
+project=$(basename $scriptdir)
+
+if [[ $CABOT_MAP_SERVER_URI != *"localhost"* ]]; then
+  blue "${CABOT_MAP_SERVER_URI} is not localhost, so the script will not launch a server"
+  exit 0
+else
+  MAP_SERVER_PORT=$(echo $CABOT_MAP_SERVER_URI | grep -oP '(?<=:)\d+(?=/)')
+  blue "MapService server port is ${MAP_SERVER_PORT}"
+fi
+
 while getopts "hd:p:fvcCl" arg; do
     case $arg in
         h)
@@ -124,24 +135,25 @@ if [[ $clean_server -eq 2 ]]; then
         services="location_tools mongodb_lt"
     fi
     for service in $services; do
-        if [[ ! -z $(docker ps -f "name=$service-" -q -a) ]]; then
-            blue "stopping $service"
-            docker ps -f "name=$service-"
-            docker ps -f "name=$service-" -q -a | xargs docker stop
-            docker ps -f "name=$service-" -q -a | xargs docker container rm
+        key="${project}-${service}"
+        if [[ ! -z $(docker ps -f "name=$key-" -q -a) ]]; then
+            blue "stopping $key"
+            docker ps -f "name=$key-"
+            docker ps -f "name=$key-" -q -a | xargs docker stop
+            docker ps -f "name=$key-" -q -a | xargs docker container rm
         fi
     done
     exit 0
 fi
 
-        if [[ $location_tools -eq 1 ]]; then
+if [[ $location_tools -eq 1 ]]; then
     docker compose -f docker-compose-location-tools.yaml up -d
     exit 0
 fi
 
 
 function check_server() {
-    server=http://localhost:9090/map
+    server=${CABOT_MAP_SERVER_URI}
 
     # check if the server data is same with the specified data
     curl $server/content-md5 --fail > ${temp_dir}/content-md5 2> /dev/null
@@ -182,9 +194,10 @@ if [[ $clean_server -eq 1 ]]; then
     else
         blue "Clean servers"
         for service in "map_server" "map_data" "mongodb"; do
-            if [[ ! -z $(docker ps -f "name=$service" -q -a) ]]; then
-                docker ps -f "name=$service" -q -a | xargs docker stop
-                docker ps -f "name=$service" -q -a | xargs docker container rm
+            key="${project}-${service}"
+            if [[ ! -z $(docker ps -f "name=$key" -q -a) ]]; then
+                docker ps -f "name=$key" -q -a | xargs docker stop
+                docker ps -f "name=$key" -q -a | xargs docker container rm
             fi
         done
     fi
@@ -195,8 +208,9 @@ else
     fi
 
     for service in "map_server" "map_data" "mongodb"; do
-        if [[ $(docker ps -f "name=$service" -q | wc -l) -ne 0 ]]; then
-            err "There is $service server running"
+        key="${project}-${service}"
+        if [[ $(docker ps -f "name=$key" -q | wc -l) -ne 0 ]]; then
+            err "There is $key server running"
             flag=1
         fi
     done
@@ -227,12 +241,14 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
 fi
 
 export CABOT_SERVER_DATA_MOUNT=$data_dir
+export MAP_SERVER_PORT=${MAP_SERVER_PORT}
 if [ -e $data_dir/server.env ]; then
+    ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
-        ENV_FILE=$data_dir/server.env docker compose --ansi never -f docker-compose-server.yaml logs -f
+        docker compose -f docker-compose-server.yaml up -d
+        docker compose --ansi never -f docker-compose-server.yaml logs -f
     else
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
+        docker compose -f docker-compose-server.yaml up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
