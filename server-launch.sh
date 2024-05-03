@@ -86,10 +86,10 @@ while getopts "hd:p:fvcCl" arg; do
         d)
             data_dir=$(realpath $OPTARG)
             ;;
-	p)
-	    cabot_site_dir=$(find $scriptdir/cabot_sites -name $OPTARG | head -1)
-	    data_dir=${cabot_site_dir}/server_data
-	    ;;
+        p)
+            cabot_site_dir=$(find $scriptdir/cabot_sites -name $OPTARG | head -1)
+            data_dir=${cabot_site_dir}/server_data
+            ;;
         f)
             ignore_error=1
             ;;
@@ -102,9 +102,9 @@ while getopts "hd:p:fvcCl" arg; do
         C)
             clean_server=2
             ;;
-	l)
-	    location_tools=1
-	    ;;
+        l)
+            location_tools=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -121,20 +121,20 @@ if [[ $clean_server -eq 2 ]]; then
 
     services="map_server map_data mongodb"
     if [[ $location_tools -eq 1 ]]; then
-	services="location_tools mongodb_lt"
+        services="location_tools mongodb_lt"
     fi
     for service in $services; do
         if [[ ! -z $(docker ps -f "name=$service-" -q -a) ]]; then
-	    blue "stopping $service"
-	    docker ps -f "name=$service-"
-	    docker ps -f "name=$service-" -q -a | xargs docker stop
-	    docker ps -f "name=$service-" -q -a | xargs docker container rm
+            blue "stopping $service"
+            docker ps -f "name=$service-"
+            docker ps -f "name=$service-" -q -a | xargs docker stop
+            docker ps -f "name=$service-" -q -a | xargs docker container rm
         fi
     done
     exit 0
 fi
 
-	if [[ $location_tools -eq 1 ]]; then
+        if [[ $location_tools -eq 1 ]]; then
     docker compose -f docker-compose-location-tools.yaml up -d
     exit 0
 fi
@@ -146,20 +146,20 @@ function check_server() {
     # check if the server data is same with the specified data
     curl $server/content-md5 --fail > ${temp_dir}/content-md5 2> /dev/null
     if [[ $? -ne 0 ]]; then
-	blue "There is no server or servers may be launched by the old script."
-	blue "Servers will be cleaned"
-	return 1
+        blue "There is no server or servers may be launched by the old script."
+        blue "Servers will be cleaned"
+        return 1
     else
-	cd $data_dir
-	pwd
-	md5sum=$(find . -type f ! -name 'content-md5' ! -name 'attachments.zip' -exec md5sum {} + | LC_COLLATE=C sort -k 2 | md5sum)
-	cd $scriptdir
-	blue "md5sum - $md5sum"
-	blue "server - $(cat ${temp_dir}/content-md5)"
-	if [[ $(cat ${temp_dir}/content-md5) == $md5sum ]]; then  ## match, so no clean
-	    blue "md5 matched, do not relaunch server"
-	    return 0
-	fi
+        cd $data_dir
+        pwd
+        md5sum=$(find . -type f ! -name 'content-md5' ! -name 'attachments.zip' -exec md5sum {} + | LC_COLLATE=C sort -k 2 | md5sum)
+        cd $scriptdir
+        blue "md5sum - $md5sum"
+        blue "server - $(cat ${temp_dir}/content-md5)"
+        if [[ $(cat ${temp_dir}/content-md5) == $md5sum ]]; then  ## match, so no clean
+            blue "md5 matched, do not relaunch server"
+            return 0
+        fi
     fi
     return 2
 }
@@ -172,26 +172,26 @@ fi
 
 if [[ $clean_server -eq 1 ]]; then
     if [ -z $data_dir ]; then
-	err "You should specify correct server data directory or cabot site package name"
-	help
-	exit 1
+        err "You should specify correct server data directory or cabot site package name"
+        help
+        exit 1
     fi
 
     if check_server; then
-	exit 0
+        exit 0
     else
-	blue "Clean servers"
-	for service in "map_server" "map_data" "mongodb"; do
+        blue "Clean servers"
+        for service in "map_server" "map_data" "mongodb"; do
             if [[ ! -z $(docker ps -f "name=$service" -q -a) ]]; then
-		docker ps -f "name=$service" -q -a | xargs docker stop
-		docker ps -f "name=$service" -q -a | xargs docker container rm
+                docker ps -f "name=$service" -q -a | xargs docker stop
+                docker ps -f "name=$service" -q -a | xargs docker container rm
             fi
-	done
+        done
     fi
 else
     flag=0
     if check_server; then
-	exit 0
+        exit 0
     fi
 
     for service in "map_server" "map_data" "mongodb"; do
