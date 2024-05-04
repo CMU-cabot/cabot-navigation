@@ -16,12 +16,12 @@ This folder includes both test files for `colcon test`, usual unittest for ROS2 
 ### other options (check `./launch.sh -h`)
 ```
 # run test (-t) options
-  -S <site>   override CABOT_SITE
-  -D          debug print
-  -f <test>   run test CABOT_SITE.<module>.<test>
-  -L          list test modules
-  -l          list test functions
-  -T <module> run test CABOT_SITE.<module>
+  -D                debug
+  -f <test_regex>   run test matched with <test_regex> in CABOT_SITE.<module>
+  -L                list test modules
+  -l                list test functions
+  -r                retry test when segmentation fault
+  -T <module>       specify test module CABOT_SITE.<module> (default=tests)
 
 # examples
 

@@ -107,7 +107,6 @@ function help()
     echo "-H          headless"
     echo "-M          log dmesg output"
     echo "-n <name>   set log name prefix"
-    echo "-r          retry test when segmentation fault"
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
@@ -116,11 +115,12 @@ function help()
     echo "-v          verbose option"
     echo ""
     echo "run test (-t) options"
-    echo "  -D          debug"
-    echo "  -f <test>   run test CABOT_SITE.<module>.<test>"
-    echo "  -L          list test modules"
-    echo "  -l          list test functions"
-    echo "  -T <module> run test CABOT_SITE.<module>"
+    echo "  -D                debug"
+    echo "  -f <test_regex>   run test matched with <test_regex> in CABOT_SITE.<module>"
+    echo "  -L                list test modules"
+    echo "  -l                list test functions"
+    echo "  -r                retry test when segmentation fault"
+    echo "  -T <module>       specify test module CABOT_SITE.<module> (default=tests)"
 }
 
 
@@ -132,7 +132,7 @@ log_dmesg=0
 yes=0
 run_test=0
 module=tests
-test_func=
+test_regex=
 unittest=
 retryoption=
 list_modules=0
@@ -158,7 +158,7 @@ while getopts "hDf:HlLMn:rsS:tT:uvy" arg; do
             debug=1
             ;;
         f)
-            test_func=$OPTARG
+            test_regex=$OPTARG
             ;;
         H)
             export CABOT_HEADLESS=1
@@ -323,11 +323,11 @@ done
 blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
-    blue "Running test $module $test_func"
+    blue "Running test $module $test_regex"
     if [[ $debug -eq 1 ]]; then
-        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_func $retryoption # debug
+        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
     else
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_func $retryoption
+        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
     fi
     ctrl_c $?
 fi
