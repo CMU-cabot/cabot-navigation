@@ -314,6 +314,15 @@ eval $com2
 dcpid=($!)
 blue "[$dcpid] $dccom up $( echo "$(date +%s.%N) - $start" | bc -l )"
 
+if [[ $run_test -eq 1 ]]; then
+    blue "Running test $module $test_regex"
+    if [[ $debug -eq 1 ]]; then
+        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
+    else
+        docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
+    fi
+    ctrl_c $?
+fi
 
 while [[ $launched -lt 5 ]]; do
     snore 1
@@ -321,16 +330,6 @@ while [[ $launched -lt 5 ]]; do
 done
 
 blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
-
-if [[ $run_test -eq 1 ]]; then
-    blue "Running test $module $test_regex"
-    if [[ $debug -eq 1 ]]; then
-        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
-    else
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
-    fi
-    ctrl_c $?
-fi
 
 while [ 1 -eq 1 ];
 do
