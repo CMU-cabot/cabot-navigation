@@ -421,7 +421,8 @@ class Tester:
                 action_name='wait_localization_started',
                 topic='/localize_status',
                 topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
-                condition='msg.status==1',
+                qos=QoSProfile(depth=10, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+                condition='msg.status==1 or msg.status==2',
                 timeout=60
             ),
             **kwargs)
@@ -737,6 +738,7 @@ class Tester:
         topic_type = import_class(topic_type)
         condition = test_action['condition']
         once = test_action['once'] if 'once' in test_action else False
+        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
 
         def topic_callback(msg):
             try:
@@ -753,7 +755,7 @@ class Tester:
                     self.cancel_subscription(case)
             except:  # noqa: #722
                 logger.error(traceback.format_exc())
-        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, qos)
         self.add_subscription(case, sub)
 
     @wait_test()
