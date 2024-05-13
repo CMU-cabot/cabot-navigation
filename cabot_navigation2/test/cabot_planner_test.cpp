@@ -371,14 +371,14 @@ void Test::run_test_bag()
         RCLCPP_INFO(get_logger(), "===========================do test===========================");
         RCLCPP_INFO(get_logger(), "start: (%.2f, %.2f)", start.pose.position.x, start.pose.position.y);
         RCLCPP_INFO(get_logger(), "goal : (%.2f, %.2f)", goal.pose.position.x, goal.pose.position.y);
-        for(unsigned int i = 0; i < navcog_path.poses.size(); i++) {
+        for (unsigned int i = 0; i < navcog_path.poses.size(); i++) {
           auto pose = navcog_path.poses[i];
           RCLCPP_INFO(get_logger(), "poses[%ld] : (%.2f, %.2f)", i, pose.pose.position.x, pose.pose.position.y);
         }
 
         path_publisher_->publish(navcog_path);
         map_obstacle_publisher_->publish(costmap);
-        //map_publisher_->publish(static_costmap);
+        // map_publisher_->publish(static_costmap);
         map_publisher_->publish(costmap);
         r.sleep();
 

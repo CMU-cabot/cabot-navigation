@@ -534,7 +534,7 @@ int CaBotPlannerParam::getIndex(float x, float y) const
   if (ix < 0 || iy < 0 || width <= ix || height <= iy) {
     return -(ix + iy * width);
   }
-  return std::max(0, std::min(ix + iy * width, width*height-1));
+  return std::max(0, std::min(ix + iy * width, width * height - 1));
 }
 
 int CaBotPlannerParam::getIndexByPoint(Point & p) const
@@ -885,7 +885,7 @@ bool CaBotPlannerParam::checkPointIsOkay(Point & point, DetourMode detour_mode) 
   if (width * height <= index) {
     RCLCPP_WARN(
       logger, "index is out of bound %ld, width=%ld, height=%ld, size=%ld, point=(%.2f, %.2f)",
-      index, width, height, width*height, point.x, point.y);
+      index, width, height, width * height, point.x, point.y);
     return false;
   }
 
