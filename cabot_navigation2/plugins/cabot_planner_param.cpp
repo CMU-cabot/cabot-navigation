@@ -30,7 +30,7 @@ CaBotPlan::CaBotPlan(CaBotPlannerParam & param_, DetourMode detour_mode_)
   detour_mode(detour_mode_)
 {
   nodes_backup = param.getNodes(detour_mode);
-  RCLCPP_INFO(logger_, "nodex_backup.size = %ld, detour_mode=%d", nodes_backup.size(), detour_mode);
+  RCLCPP_INFO(logger_, "nodes_backup.size = %ld, detour_mode=%d", nodes_backup.size(), detour_mode);
   resetNodes();
   findIndex();
 }
@@ -405,7 +405,7 @@ bool CaBotPlannerParam::adjustPath()
 {
   path = normalizedPath(navcog_path);
   if (path.poses.empty()) {return false;}
-  RCLCPP_INFO(logger, "adjustPath, path.sposes.ize() = %ld", path.poses.size());
+  RCLCPP_INFO(logger, "adjustPath, path.poses.size() = %ld", path.poses.size());
 
   estimatePathWidthAndAdjust(path, costmap, pe_options);
   if (options.adjust_start) {
@@ -534,7 +534,7 @@ int CaBotPlannerParam::getIndex(float x, float y) const
   if (ix < 0 || iy < 0 || width <= ix || height <= iy) {
     return -(ix + iy * width);
   }
-  return ix + iy * width;
+  return std::max(0, std::min(ix + iy * width, width*height-1));
 }
 
 int CaBotPlannerParam::getIndexByPoint(Point & p) const
@@ -581,13 +581,13 @@ std::vector<Node> CaBotPlannerParam::getNodes(DetourMode detour_mode) const
   Node * prev = nullptr;
   double dist = 0;
   do {
-    if (!checkPointIsOkay(nodes.back(), detour_mode)) {
+    if (!checkPointIsOkay(nodes.back(), detour_mode) && nodes.size() > 2) {
       if (prev) {
         dist += prev->distance(nodes.back()) * resolution;
       }
       prev = &nodes.back();
       nodes.pop_back();
-      RCLCPP_WARN(logger, "remove last node, dist=%.2f", dist);
+      RCLCPP_WARN(logger, "remove last node, dist=%.2f, size=%ld", dist, nodes.size());
     } else {
       break;
     }
@@ -881,6 +881,14 @@ std::vector<Obstacle> CaBotPlannerParam::getObstaclesNearPoint(const Point & nod
 bool CaBotPlannerParam::checkPointIsOkay(Point & point, DetourMode detour_mode) const
 {
   int index = getIndexByPoint(point);
+
+  if (width * height <= index) {
+    RCLCPP_WARN(
+      logger, "index is out of bound %ld, width=%ld, height=%ld, size=%ld, point=(%.2f, %.2f)",
+      index, width, height, width*height, point.x, point.y);
+    return false;
+  }
+
 
   if (detour_mode == DetourMode::IGNORE) {
     if (index >= 0 && static_cost[index] >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
