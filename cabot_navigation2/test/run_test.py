@@ -574,6 +574,7 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
