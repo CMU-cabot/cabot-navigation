@@ -1101,12 +1101,14 @@ class ElevatorTurnGoal(ElevatorGoal):
         CaBotRclpyUtil.info("call turn_towards")
         pose = geoutil.Pose(x=self.cab_poi.x, y=self.cab_poi.y, r=self.cab_poi.r)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
+        self._action_count = 0
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
 
     def done_callback(self, result):
-        if result:
-            CaBotRclpyUtil.info("ElevatorTurnGoal completed")
-            self._is_completed = result
+        self._action_count += 1
+        if result or self._action_count > 2:
+            CaBotRclpyUtil.info(F"ElevatorTurnGoal completed result={result}, action_count={self._action_count}")
+            self._is_completed = True
             return
         if self._is_canceled:
             CaBotRclpyUtil.info("ElevatorTurnGoal not completed but cancelled")
