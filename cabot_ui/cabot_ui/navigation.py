@@ -535,9 +535,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def set_destination(self, destination):
+        self.destination = destination
         self.social_navigation.set_active(True)
         with self._process_queue_lock:
             self._process_queue.append((self._set_destination, destination))
+
+    def reset_destination(self):
+        if self.destination:
+            self.set_destination(self.destination)
 
     def _set_destination(self, destination):
         """
@@ -661,10 +666,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} estimated next goal index={index}: {goal}")
         if goal:
             goal.estimate_inner_goal(current_pose, self.current_floor)
-        self._goal_index = index-1
-        self._last_estimated_goal = None
-
-        self._navigate_next_sub_goal()
+            self._goal_index = index-1
+            self._last_estimated_goal = None
+            self._navigate_next_sub_goal()
+        else:
+            self.reset_destination()
 
     # wrap execution by a queue
     def cancel_navigation(self, callback=None):
