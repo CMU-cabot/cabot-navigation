@@ -916,12 +916,14 @@ class TurnGoal(Goal):
     def _enter(self):
         CaBotRclpyUtil.info("call turn_towards")
         CaBotRclpyUtil.info(F"turn target {str(self.orientation)}")
+        self._action_count = 0
         self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, result):
-        if result:
-            CaBotRclpyUtil.info("TurnGoal completed")
-            self._is_completed = result
+        self._action_count += 1
+        if result or self._action_count > 2:
+            CaBotRclpyUtil.info(F"TurnGoal completed result={result}, action_count={self._action_count}")
+            self._is_completed = True
             return
         if self._is_canceled:
             CaBotRclpyUtil.info("TurnGoal not completed but cancelled")

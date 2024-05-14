@@ -1138,6 +1138,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         goal = nav2_msgs.action.Spin.Goal()
         diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
+        time_allowance = min(5.0, abs(diff)/0.3)
+        goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
 
         self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}")
 
