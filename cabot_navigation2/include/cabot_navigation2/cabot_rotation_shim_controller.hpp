@@ -34,6 +34,11 @@ public:
     nav2_core::GoalChecker * goal_checker) override;
 
 protected:
+  geometry_msgs::msg::TwistStamped
+  computeRotateToHeadingCommand(
+    const double & angular_distance_to_heading,
+    const geometry_msgs::msg::PoseStamped & pose,
+    const geometry_msgs::msg::Twist & velocity);
   geometry_msgs::msg::PoseStamped getNearestPathPt(const geometry_msgs::msg::PoseStamped & pose);
   geometry_msgs::msg::Pose transformPoseToBaseFrame(const geometry_msgs::msg::PoseStamped & pt);
 };

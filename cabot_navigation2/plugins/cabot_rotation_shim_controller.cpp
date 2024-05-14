@@ -31,6 +31,26 @@ CaBotRotationShimController::CaBotRotationShimController()
 {
 }
 
+geometry_msgs::msg::TwistStamped
+CaBotRotationShimController::computeRotateToHeadingCommand(
+  const double & angular_distance_to_heading,
+  const geometry_msgs::msg::PoseStamped & pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  geometry_msgs::msg::TwistStamped cmd_vel;
+  cmd_vel.header = pose.header;
+  const double sign = angular_distance_to_heading > 0.0 ? 1.0 : -1.0;
+  const double angular_vel = sign * rotate_to_heading_angular_vel_;
+  const double & dt = control_duration_;
+  const double min_feasible_angular_speed = std::min(angular_distance_to_heading, velocity.angular.z - max_angular_accel_ * dt);
+  const double max_feasible_angular_speed = std::min(angular_distance_to_heading, velocity.angular.z + max_angular_accel_ * dt);
+  cmd_vel.twist.angular.z =
+    std::clamp(angular_vel, min_feasible_angular_speed, max_feasible_angular_speed);
+
+  isCollisionFree(cmd_vel, angular_distance_to_heading, pose);
+  return cmd_vel;
+}
+
 geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & pose,
   const geometry_msgs::msg::Twist & velocity,
