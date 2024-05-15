@@ -1180,8 +1180,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # self.visualizer.visualize()
         # self._logger.info(F"visualize goal {goal}")
         angle = turn_yaw * 180 / math.pi
+        pose = self.current_pose.to_pose_stamped_msg(self._global_map_name)
         if abs(angle) >= 180/3:
-            self.delegate.notify_turn(turn=Turn(self.current_pose.to_pose_stamped_msg(self._global_map_name), angle))
+            self.delegate.notify_turn(turn=Turn(pose, angle, Turn.Type.Normal))
+        elif abs(angle) >= 180/6:
+            self.delegate.notify_turn(turn=Turn(pose, angle, Turn.Type.Avoiding))
         self._logger.info(F"notify turn {turn_yaw}")
 
     def goto_floor(self, floor, gh_callback, callback):
