@@ -302,7 +302,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
       this->dist = newDist;
 
       people_msgs::msg::Person person;
-      person.name = std::to_string(actor_id);
+      person.name = this->name;
       person.position.x = newX;
       person.position.y = newY;
       person.position.z = newZ;
