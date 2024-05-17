@@ -23,6 +23,7 @@ import uuid
 
 from gazebo_msgs.srv import DeleteEntity
 from gazebo_msgs.srv import SpawnEntity
+from pedestrian_plugin_msgs.msg import Agents
 from pedestrian_plugin_msgs.msg import Plugin
 from pedestrian_plugin_msgs.msg import PluginParam
 from pedestrian_plugin_msgs.srv import PluginUpdate
@@ -48,10 +49,17 @@ class PedestrianManager():
         self.spawn_entity_client = self.node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = self.node.create_client(DeleteEntity, '/delete_entity')
         self.pedestrian_plugin_update_client = self.node.create_client(PluginUpdate, '/pedestrian_plugin_update')
+        self.human_states_sub = self.node.create_subscription(Agents, '/human_states', self.human_states_callback, 10)
         self.timer = self.node.create_timer(1, self.check_service)
         self.serviceReady = False
         self.actorMap = {}
         self.futures = {}
+
+    def human_states_callback(self, msg):
+        if len(self.actorMap) < len(msg.agents):
+            for agent in msg.agents:
+                if agent.name not in self.actorMap:
+                    self.actorMap[agent.name] = {}
 
     def check_service(self):
         if self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=0):
