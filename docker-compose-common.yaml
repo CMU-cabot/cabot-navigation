@@ -51,6 +51,9 @@ services:
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
       - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-false}
+      - ROS_DOMAIN_ID
+      - __NV_PRIME_RENDER_OFFLOAD
+      - __GLX_VENDOR_LIBRARY_NAME
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
@@ -168,6 +171,7 @@ services:
       - CYCLONEDDS_URI
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
+      - ROS_DOMIN_ID
     volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
