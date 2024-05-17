@@ -171,7 +171,7 @@ services:
       - CYCLONEDDS_URI
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
-      - ROS_DOMIN_ID
+      - ROS_DOMAIN_ID
     volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
