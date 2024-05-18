@@ -66,7 +66,10 @@ void CabotSimpleGoalChecker::initialize(
 
   xy_goal_tolerance_sq_ = xy_goal_tolerance_ * xy_goal_tolerance_;
 
-  RCLCPP_INFO(nh->get_logger(), "CabotSimpleGoalChecker, parameter initialze, xy_goal_tolerance = %.2f", xy_goal_tolerance_);
+  RCLCPP_INFO(
+    nh->get_logger(),
+    "CabotSimpleGoalChecker, parameter initialze, xy_goal_tolerance = %.2f, xy_goal_tolerance_sq_ = %.2f", 
+    xy_goal_tolerance_, xy_goal_tolerance_sq_);
 
   plugin_name_ = plugin_name;
   param_change_callback_handle_ =
@@ -106,9 +109,14 @@ bool CabotSimpleGoalChecker::isGoalReached(
   double dist = dx * dx + dy * dy;
 
   auto nh = parent_.lock();
-  RCLCPP_INFO(nh->get_logger(), "dot=%.2f, xy=%.2f", dot, dist);
-
-  if ((dist < 0.5 && l1.dot(l2) < 0) || dist < xy_goal_tolerance_sq_) {
+  auto now = nh->get_clock()->now();
+  if (dist < 0.5) {
+    goal_factor_ += 0.04;
+  } else {
+    goal_factor_ = 1.0;
+  }
+  RCLCPP_INFO(nh->get_logger(), "dot=%.2f, dist=%.2f, goal_factor_=%.2f", dot, dist, goal_factor_);
+  if ((dist < xy_goal_tolerance_sq_ && l1.dot(l2) < 0) || dist < xy_goal_tolerance_sq_ * goal_factor_ * goal_factor_) {
     return true;
   }
   return false;

@@ -43,6 +43,7 @@ import std_msgs.msg
 import nav_msgs.msg
 import geometry_msgs.msg
 from ament_index_python.packages import get_package_share_directory
+from action_msgs.msg import GoalStatus
 
 # Other
 from cabot_common import util
@@ -1137,43 +1138,59 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
-    def turn_towards(self, orientation, gh_callback, callback, clockwise=0):
+    def turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
         self._logger.info("turn_towards")
         self.delegate.activity_log("cabot/navigation", "turn_towards",
                                    str(geoutil.get_yaw(geoutil.q_from_msg(orientation))))
+        self.turn_towards_count = 0
+        self.turn_towards_last_diff = None
+        self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
 
+    def _turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
         goal = nav2_msgs.action.Spin.Goal()
         diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
-        time_allowance = min(5.0, abs(diff)/0.3)
+        time_allowance = max(3.0, min(time_limit, abs(diff)/0.3))
         goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
 
         self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}")
+        if (clockwise < 0 and diff < - math.pi / 4) or \
+           (clockwise > 0 and diff > + math.pi / 4):
+            diff = diff - clockwise * math.pi * 2
+        turn_yaw = diff - (diff / abs(diff) * 0.05)
+        goal.target_yaw = turn_yaw
 
-        if abs(diff) > 0.05:
-            if (clockwise < 0 and diff < - math.pi / 4) or \
-               (clockwise > 0 and diff > + math.pi / 4):
-                diff = diff - clockwise * math.pi * 2
-            # use orientation.y for target spin angle
-            self._logger.info(F"send turn {diff:.2f}")
-            # only use y for yaw
-            turn_yaw = diff - (diff / abs(diff) * 0.05)
-            goal.target_yaw = turn_yaw
+        future = self._spin_client.send_goal_async(goal)
+        future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
+        return future
 
-            future = self._spin_client.send_goal_async(goal)
-            future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw))
-            return future
-        else:
-            self._logger.info(F"turn completed {diff}")
-            callback(True)
-            return None
-
-    def _turn_towards_sent_goal(self, goal, future, orientation, gh_callback, callback, clockwise, turn_yaw):
-        self._logger.info(F"sent goal: {goal}")
+    def _turn_towards_sent_goal(self, goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit):
+        self._logger.info(F"_turn_towards_sent_goal: {goal=}")
         goal_handle = future.result()
-        gh_callback(goal_handle)
+
+        def cancel_callback():
+            self._logger.info(F"_turn_towards_sent_goal cancel_callback: {goal=}")
+            self.turn_towards_count = 0
+            self.turn_towards_last_diff = None
+        gh_callback(goal_handle, cancel_callback)
         self._logger.info(F"get goal handle {goal_handle}")
         get_result_future = goal_handle.get_result_async()
-        get_result_future.add_done_callback(lambda f: callback(False))  # check in the next call
+
+        def done_callback(future):
+            self._logger.info(F"_turn_towards_sent_goal done_callback: {future.result().status=}, {self.turn_towards_last_diff=}")
+            if future.result().status == GoalStatus.STATUS_CANCELED:
+                return
+            diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
+            if self.turn_towards_last_diff and abs(self.turn_towards_last_diff - diff) < 0.1:
+                self.turn_towards_count += 1
+
+            if abs(diff) > 0.05 or self.turn_towards_count < 3:
+                self._logger.info(F"send turn {diff:.2f}")
+                self.turn_towards_last_diff = diff
+                self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
+            else:
+                self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
+                callback(True)
+        get_result_future.add_done_callback(done_callback)
 
         # add position and use quaternion to visualize
         # self.visualizer.goal = goal

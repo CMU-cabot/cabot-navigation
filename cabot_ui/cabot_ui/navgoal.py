@@ -543,8 +543,8 @@ class Goal(geoutil.TargetPlace):
     def __repr__(self):
         return F"{super(Goal, self).__repr__()}"
 
-    def goal_handle_callback(self, handle):
-        self._handles.append(handle)
+    def goal_handle_callback(self, handle, cancel_callback=None):
+        self._handles.append((handle, cancel_callback))
         if self._is_canceled:
             self.cancel()
 
@@ -566,10 +566,12 @@ class Goal(geoutil.TargetPlace):
         self._is_canceled = True
 
         if len(self._handles) > 0:
-            handle = self._handles.pop(0)
+            (handle, cancel_callback) = self._handles.pop(0)
             future = handle.cancel_goal_async()
 
             def done_callback(future):
+                if cancel_callback:
+                    cancel_callback()
                 self._logger.info(f"cancel future result = {future.result}")
                 self.delegate._process_queue.append((self.cancel, callback))
             future.add_done_callback(done_callback)
@@ -916,19 +918,16 @@ class TurnGoal(Goal):
     def _enter(self):
         CaBotRclpyUtil.info("call turn_towards")
         CaBotRclpyUtil.info(F"turn target {str(self.orientation)}")
-        self._action_count = 0
-        self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback)
+        self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback, 0, 3.0)
 
     def done_callback(self, result):
-        self._action_count += 1
-        if result or self._action_count > 2:
-            CaBotRclpyUtil.info(F"TurnGoal completed result={result}, action_count={self._action_count}")
+        if result:
+            CaBotRclpyUtil.info(F"TurnGoal completed {result=}")
             self._is_completed = True
             return
         if self._is_canceled:
             CaBotRclpyUtil.info("TurnGoal not completed but cancelled")
             return
-        self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback)
 
     def match(self, pose, floor):
         # CaBotRclpyUtil.info(F"TurnGoal.match distance_to ({pose}) = {self.distance_to(pose)}")
@@ -1101,21 +1100,16 @@ class ElevatorTurnGoal(ElevatorGoal):
         CaBotRclpyUtil.info("call turn_towards")
         pose = geoutil.Pose(x=self.cab_poi.x, y=self.cab_poi.y, r=self.cab_poi.r)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
-        self._action_count = 0
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
 
     def done_callback(self, result):
-        self._action_count += 1
-        if result or self._action_count > 2:
-            CaBotRclpyUtil.info(F"ElevatorTurnGoal completed result={result}, action_count={self._action_count}")
+        if result:
+            CaBotRclpyUtil.info(F"ElevatorTurnGoal completed {result=}")
             self._is_completed = True
             return
         if self._is_canceled:
             CaBotRclpyUtil.info("ElevatorTurnGoal not completed but cancelled")
             return
-        pose = geoutil.Pose(x=self.cab_poi.x, y=self.cab_poi.y, r=self.cab_poi.r)
-        CaBotRclpyUtil.info(F"turn target {str(pose)}")
-        self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
     def match(self, pose, floor):
         CaBotRclpyUtil.info(f"ElevatorTurnGoal match: self.r={self.r}, pose.r={pose.r}, distance={self.distance_to(pose)}")
