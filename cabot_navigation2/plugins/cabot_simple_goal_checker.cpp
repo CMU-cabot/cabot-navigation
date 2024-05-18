@@ -68,7 +68,7 @@ void CabotSimpleGoalChecker::initialize(
 
   RCLCPP_INFO(
     nh->get_logger(),
-    "CabotSimpleGoalChecker, parameter initialze, xy_goal_tolerance = %.2f, xy_goal_tolerance_sq_ = %.2f", 
+    "CabotSimpleGoalChecker, parameter initialze, xy_goal_tolerance = %.2f, xy_goal_tolerance_sq_ = %.2f",
     xy_goal_tolerance_, xy_goal_tolerance_sq_);
 
   plugin_name_ = plugin_name;
