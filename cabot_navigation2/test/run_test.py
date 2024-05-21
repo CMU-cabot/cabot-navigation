@@ -905,8 +905,8 @@ class ObstacleManager:
 <sdf version="1.6">
     <model name="{name}">
         <static>true</static>
+        <pose>{x} {y} {z+depth/2.0} 0 0 {yaw}</pose>
         <link name="{name}-link">
-            <pose>{x} {y} {z+depth/2.0} 0 0 {yaw}</pose>
             <visual name="{name}-visual">
                 <geometry>
                     <box>
@@ -922,6 +922,10 @@ class ObstacleManager:
                 </geometry>
             </collision>
         </link>
+        <plugin name="pedestrian_plugin_{name}" filename="libpedestrian_plugin.so">
+          <module>pedestrian.obstacle</module>
+          <robot>mobile_base</robot>
+        </plugin>
     </model>
 </sdf>
 """

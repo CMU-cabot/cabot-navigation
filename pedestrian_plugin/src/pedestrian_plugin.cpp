@@ -52,9 +52,10 @@ PedestrianPlugin::~PedestrianPlugin()
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 {
   this->sdf = _sdf;
+  this->model = _model;
   this->actor = boost::dynamic_pointer_cast<physics::Actor>(_model);
-  this->name = this->actor->GetName();
-  this->world = this->actor->GetWorld();
+  this->name = this->model->GetName();
+  this->world = this->model->GetWorld();
 
   this->connections.push_back(
     event::Events::ConnectWorldUpdateBegin(
@@ -130,19 +131,21 @@ void PedestrianPlugin::Reset()
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   RCLCPP_INFO(manager.get_logger(), "Reset");
 
-  auto skelAnims = this->actor->SkeletonAnimations();
-  auto it = skelAnims.find(WALKING_ANIMATION);
-  if (it == skelAnims.end()) {
-    gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
-  } else {
-    // Create custom trajectory
-    this->trajectoryInfo.reset(new physics::TrajectoryInfo());
-    this->trajectoryInfo->type = WALKING_ANIMATION;
-    this->trajectoryInfo->duration = 1.0;
-    this->actor->SetCustomTrajectory(this->trajectoryInfo);
+  if (this->actor) {
+    auto skelAnims = this->actor->SkeletonAnimations();
+    auto it = skelAnims.find(WALKING_ANIMATION);
+    if (it == skelAnims.end()) {
+      gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
+    } else {
+      // Create custom trajectory
+      this->trajectoryInfo.reset(new physics::TrajectoryInfo());
+      this->trajectoryInfo->type = WALKING_ANIMATION;
+      this->trajectoryInfo->duration = 1.0;
+      this->actor->SetCustomTrajectory(this->trajectoryInfo);
+    }
   }
 
-  auto pose = this->actor->WorldPose();
+  auto pose = this->model->WorldPose();
   auto rpy = pose.Rot().Euler();
   this->x = pose.Pos().X();
   this->y = pose.Pos().Y();
@@ -255,7 +258,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
     PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
     PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
 
-    PyObject * aname = PyUnicode_DecodeFSDefault(this->actor->GetName().c_str());
+    PyObject * aname = PyUnicode_DecodeFSDefault(this->model->GetName().c_str());
     PyDict_SetItemString(pDict, "name", aname);
     Py_DECREF(aname);
 
@@ -285,13 +288,54 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
 
       ignition::math::Pose3d pose;
       pose.Pos().X(newX);
-      pose.Pos().Y(newY + wPose[1]);
-      pose.Pos().Z(newZ + wPose[2]);
-      pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
-      this->actor->SetWorldPose(pose, false, false);
 
-      double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
-      this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
+      if (this->actor) {
+        pose.Pos().Y(newY + wPose[1]);
+        pose.Pos().Z(newZ + wPose[2]);
+        pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
+        this->model->SetWorldPose(pose, false, false);
+        double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
+        this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
+        people_msgs::msg::Person person;
+        person.name = this->name;
+        person.position.x = newX;
+        person.position.y = newY;
+        person.position.z = newZ;
+        person.velocity.x = std::cos(newYaw) * dd / dt;
+        person.velocity.y = std::sin(newYaw) * dd / dt;
+        person.velocity.z = 0.0;
+        person.reliability = 1.0;
+        if (dd / dt < 0.1) {
+          person.tags.push_back("stationary");
+        }
+        manager.updatePersonMessage(this->model->GetName(), person);
+
+        // update human agent
+        double vel_linear = dd / dt;
+        pedestrian_plugin_msgs::msg::Agent humanAgent;
+        humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
+        if (this->module_name == "pedestrian.pool") {
+          humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
+        } else {
+          humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+        }
+        humanAgent.name = person.name;
+        humanAgent.position.position = person.position;
+        humanAgent.yaw = newYaw;
+        humanAgent.velocity.linear.x = person.velocity.x;
+        humanAgent.velocity.linear.y = person.velocity.y;
+        humanAgent.velocity.linear.z = person.velocity.z;
+        humanAgent.linear_vel = vel_linear;
+        // humanAgent.velocity.angular.z // undefined
+        // humanAgent.angular_vel // undefined
+        humanAgent.radius = radius;
+        manager.updateHumanAgent(person.name, humanAgent);
+      } else { // for model
+        pose.Pos().Y(newY);
+        pose.Pos().Z(newZ);
+        pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
+        this->model->SetWorldPose(pose);
+      }
 
       this->x = newX;
       this->y = newY;
@@ -301,40 +345,6 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
       this->yaw = newYaw;
       this->dist = newDist;
 
-      people_msgs::msg::Person person;
-      person.name = this->name;
-      person.position.x = newX;
-      person.position.y = newY;
-      person.position.z = newZ;
-      person.velocity.x = std::cos(newYaw) * dd / dt;
-      person.velocity.y = std::sin(newYaw) * dd / dt;
-      person.velocity.z = 0.0;
-      person.reliability = 1.0;
-      if (dd / dt < 0.1) {
-        person.tags.push_back("stationary");
-      }
-      manager.updatePersonMessage(this->actor->GetName(), person);
-
-      // update human agent
-      double vel_linear = dd / dt;
-      pedestrian_plugin_msgs::msg::Agent humanAgent;
-      humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
-      if (this->module_name == "pedestrian.pool") {
-        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
-      } else {
-        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
-      }
-      humanAgent.name = person.name;
-      humanAgent.position.position = person.position;
-      humanAgent.yaw = newYaw;
-      humanAgent.velocity.linear.x = person.velocity.x;
-      humanAgent.velocity.linear.y = person.velocity.y;
-      humanAgent.velocity.linear.z = person.velocity.z;
-      humanAgent.linear_vel = vel_linear;
-      // humanAgent.velocity.angular.z // undefined
-      // humanAgent.angular_vel // undefined
-      humanAgent.radius = radius;
-      manager.updateHumanAgent(person.name, humanAgent);
 
       Py_DECREF(pRet);
     } else {
