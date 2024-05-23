@@ -23,6 +23,8 @@ services:
   ros2-base:
     build:
       context: ./docker/ros2
+      additional_contexts:
+        cabot_src: ./
     environment:
 # required for gazebo rendering
       - DISPLAY
