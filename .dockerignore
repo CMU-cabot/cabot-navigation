@@ -1,0 +1,4 @@
+docker/home
+docker-compose*
+Dockerfile*
+**/.git
