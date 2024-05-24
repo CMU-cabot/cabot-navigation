@@ -195,8 +195,7 @@ controller_server:
       trajectory_generator_name: "dwb_plugins::StandardTrajectoryGenerator"
       debug_trajectory_details: True
     #  prune_plan: True # default: True
-      prune_distance: 1.5 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
-      forward_prune_distance: 1.5
+      prune_distance: 2.0 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
       min_vel_x: 0.0
       min_vel_y: 0.0
       max_vel_x: 1.0
@@ -216,7 +215,7 @@ controller_server:
       vx_samples: 20
       vy_samples: 5
       vtheta_samples: 20
-      sim_time: 1.2 #  default 1.7
+      sim_time: 1.7 #  default 1.7
     #  discretize_by_time: False # default = False
     #  time_granularity: 0.1 # default = 0.5
       linear_granularity: 0.05
@@ -241,10 +240,10 @@ controller_server:
         minimum_angle: 135.0
       PathAlign:
         class: dwb_critics::PathAlignCritic
-        scale: 1.0
+        scale: 24.0
       PathDist:
         class: dwb_critics::PathDistCritic
-        scale: 1.0
+        scale: 24.0
       GoalAlign:
         class: dwb_critics::GoalAlignCritic
         forward_point_distance: 0.35
