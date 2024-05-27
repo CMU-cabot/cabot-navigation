@@ -56,7 +56,6 @@ from cabot_ui.menu import Menu
 from cabot_ui.status import State, StatusManager
 from cabot_ui.interface import UserInterface
 from cabot_ui.navigation import Navigation, NavigationInterface
-from cabot_ui.stop_reasoner import StopReason
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
@@ -146,7 +145,7 @@ class CabotUIManager(NavigationInterface, object):
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
-    # navigation delegate
+    # region NavigationInterface
     def activity_log(self, category="", text="", memo=""):
         self._interface.activity_log(category, text, memo)
 
@@ -211,17 +210,14 @@ class CabotUIManager(NavigationInterface, object):
     def could_not_get_current_location(self):
         self._interface.could_not_get_current_location()
 
+    def please_call_elevator(self, pos):
+        self._interface.please_call_elevator(pos)
+
     def enter_goal(self, goal):
         self._interface.enter_goal(goal)
 
     def exit_goal(self, goal):
         self._interface.exit_goal(goal)
-
-    def announce_social(self, message):
-        self._interface.announce_social(message)
-
-    def please_call_elevator(self, pos):
-        self._interface.please_call_elevator(pos)
 
     def elevator_opening(self):
         self._interface.elevator_opening()
@@ -250,7 +246,13 @@ class CabotUIManager(NavigationInterface, object):
     def please_return_position(self):
         self._interface.please_return_position()
 
-    ###
+    def announce_social(self, message):
+        self._interface.announce_social(message)
+
+    def request_sound(self, sound):
+        self._interface.request_sound(sound)
+    # endregion NavigationInterface
+
     def _event_callback(self, msg):
         event = BaseEvent.parse(msg.data)
         if event is None:
@@ -458,8 +460,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "cancel":
             self._logger.info("NavigationState: User Cancel requested")
-            if self._status_manager.state == State.in_action or \
-               self._status_manager.state == State.in_summons:
+            if self._status_manager.state != State.idle:
                 self._logger.info("NavigationState: canceling (user)")
                 self._interface.cancel_navigation()
 
@@ -510,11 +511,6 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info("NavigationState: Pause control = False")
             self._interface.set_pause_control(False)
             self._navigation.set_pause_control(False)
-
-        if event.subtype == "stop-reason":
-            if self._status_manager.state == State.in_action:
-                code = StopReason[event.param]
-                self._interface.speak_stop_reason(code)
 
     def _process_exploration_event(self, event):
         if event.type != ExplorationEvent.TYPE:

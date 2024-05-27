@@ -12,7 +12,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -Wfatal-errors)
 endif()
 
 # find dependencies
@@ -21,6 +21,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav2_lifecycle_manager REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_core REQUIRED)
+find_package(nav2_rotation_shim_controller REQUIRED)
 find_package(angles REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -69,8 +70,6 @@ set(dependencies
   people_msgs
   queue_msgs
   sensor_msgs
-  dwb_core
-  dwb_critics
   diagnostic_updater
   yaml_cpp_vendor
 #  OpenMP
@@ -86,7 +85,8 @@ add_library(cabot_critics SHARED
 target_compile_definitions(cabot_critics PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_critics
-  ${dependencies}
+  dwb_core
+  dwb_critics
 )
 
 ### goal checker
@@ -98,7 +98,8 @@ add_library(cabot_goals SHARED
 target_compile_definitions(cabot_goals PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_goals
-  ${dependencies}
+  nav2_core
+  pluginlib
 )
 
 ### costmap layers
@@ -111,7 +112,10 @@ add_library(cabot_layers SHARED
 target_compile_definitions(cabot_layers PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_layers
-  ${dependencies}
+  nav2_costmap_2d
+  nav2_core
+  people_msgs
+  pluginlib
 )
 
 ### planner plugin
@@ -126,7 +130,13 @@ add_library(cabot_planners SHARED
 target_compile_definitions(cabot_planners PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
 ament_target_dependencies(cabot_planners
-  ${dependencies}
+  angles
+  nav2_core
+  people_msgs
+  pluginlib
+  queue_msgs
+  rclcpp
+  tf2
 )
 
 target_link_libraries(cabot_planners
@@ -140,7 +150,9 @@ add_executable(cabot_scan
 )
 
 ament_target_dependencies(cabot_scan
-  ${dependencies}
+  diagnostic_updater
+  rclcpp
+  sensor_msgs
 )
 
 ### cabot lifecycle manager
@@ -148,7 +160,17 @@ add_executable(cabot_lifecycle_manager
   src/cabot_lifecycle_manager.cpp
 )
 ament_target_dependencies(cabot_lifecycle_manager
-  ${dependencies}
+  nav2_lifecycle_manager
+)
+
+### controller plugin
+add_library(cabot_controllers SHARED
+  plugins/cabot_rotation_shim_controller.cpp
+)
+ament_target_dependencies(cabot_controllers
+  nav2_core
+  nav2_rotation_shim_controller
+  pluginlib
 )
 
 install(TARGETS
@@ -156,6 +178,7 @@ install(TARGETS
   cabot_goals
   cabot_layers
   cabot_planners
+  cabot_controllers
   cabot_scan
   cabot_lifecycle_manager
   ARCHIVE DESTINATION lib
@@ -168,6 +191,7 @@ install(FILES
   goal_plugins.xml
   layers_plugins.xml
   planners_plugins.xml
+  controllers_plugins.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -187,13 +211,16 @@ ament_export_libraries(
   cabot_critics
   cabot_goals
   cabot_layers
-  cabot_planners)
+  cabot_planners
+  cabot_controllers
+)
 ament_export_dependencies(${dependencies})
 
 pluginlib_export_plugin_description_file(dwb_core critics_plugins.xml)
 pluginlib_export_plugin_description_file(nav2_core goal_plugins.xml)
 pluginlib_export_plugin_description_file(nav2_costmap_2d layers_plugins.xml)
 pluginlib_export_plugin_description_file(nav2_core planners_plugins.xml)
+pluginlib_export_plugin_description_file(nav2_core controllers_plugins.xml)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

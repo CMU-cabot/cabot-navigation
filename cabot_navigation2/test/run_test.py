@@ -23,16 +23,18 @@
 ###############################################################################
 
 import importlib
+import pkgutil
 import inspect
 import sys
 import math
+import numpy
 import time
 import traceback
 import uuid
 import yaml
 import logging
 import re
-
+from dataclasses import dataclass, fields
 from optparse import OptionParser
 import rclpy
 import rclpy.node
@@ -41,7 +43,8 @@ from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
 
 from cabot_common.util import callee_name
-
+from people_msgs.msg import People, Person
+from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
@@ -95,9 +98,7 @@ def wait_test(timeout=60):
                 # logger.error("Timeout")
                 # continue other test
             else:
-                if case['success'] is None:
-                    case['success'] = True
-                else:
+                if case['success'] is not None:
                     if not case['success']:
                         logger.error(F"{case}")
                     else:
@@ -178,6 +179,8 @@ class Tester:
         tfResult = result[key]
         success = True
         for aResult in tfResult:
+            if aResult['success'] is None:
+                aResult['success'] = False
             success = success and aResult['success']
         if success:
             logger.info(f"{key}: Success")
@@ -284,6 +287,51 @@ class Tester:
         self.evaluator.stop()
 
     # shorthand functions
+    def button_down(self, button, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'button_down({button})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'button_down_{button}'"
+            ),
+            **kwargs)
+        )
+
+    def cancel_navigation(self, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name='cancel_navigation',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message="data: 'navigation;cancel'"
+            ),
+            **kwargs)
+        )
+
+    def check_collision(self, **kwargs):
+        return self.check_topic_error(**dict(
+            dict(
+                action_name='check_collision',
+                topic="/collision",
+                topic_type="pedestrian_plugin_msgs/msg/Collision",
+                condition="True"
+            ),
+            **kwargs)
+        )
+
+    def check_navigation_arrived(self, **kwargs):
+        self.check_topic(**dict(
+            dict(
+                action_name='check_navigation_arrived',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+                timeout=60
+            ),
+            **kwargs)
+        )
+
     def check_position(self, **kwargs):
         x = kwargs['x'] if 'x' in kwargs else 0
         y = kwargs['y'] if 'y' in kwargs else 0
@@ -300,24 +348,14 @@ class Tester:
             **kwargs)
         )
 
-    def check_collision(self, **kwargs):
-        return self.check_topic_error(**dict(
+    def check_turn_towards(self, **kwargs):
+        self.check_topic(**dict(
             dict(
-                action_name='check_collision',
-                topic="/collision",
-                topic_type="pedestrian_plugin_msgs/msg/Collision",
-                condition="True"
-            ),
-            **kwargs)
-        )
-
-    def goto_node(self, node_id, **kwargs):
-        self.pub_topic(**dict(
-            dict(
-                action_name=f'goto_node({node_id})',
-                topic='/cabot/event',
-                topic_type='std_msgs/msg/String',
-                message=f"data: 'navigation;destination;{node_id}'"
+                action_name='check_turn_towards',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
+                timeout=60
             ),
             **kwargs)
         )
@@ -333,24 +371,22 @@ class Tester:
             **kwargs)
         )
 
-    def cancel_navigation(self, **kwargs):
+    def goto_node(self, node_id, **kwargs):
         self.pub_topic(**dict(
             dict(
-                action_name='cancel_navigation',
+                action_name=f'goto_node({node_id})',
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
-                message="data: 'navigation;cancel'"
+                message=f"data: 'navigation;destination;{node_id}'"
             ),
             **kwargs)
         )
 
-    def button_down(self, button, **kwargs):
-        self.pub_topic(**dict(
+    def wait_for(self, seconds, **kwargs):
+        self.wait(**dict(
             dict(
-                action_name=f'button_down({button})',
-                topic='/cabot/event',
-                topic_type='std_msgs/msg/String',
-                message=f"data: 'button_down_{button}'"
+                action_name=f'wait_for({seconds})',
+                seconds=seconds
             ),
             **kwargs)
         )
@@ -379,6 +415,19 @@ class Tester:
             **kwargs)
         )
 
+    def wait_localization_started(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_localization_started',
+                topic='/localize_status',
+                topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
+                qos=QoSProfile(depth=10, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+                condition='msg.status==1 or msg.status==2',
+                timeout=60
+            ),
+            **kwargs)
+        )
+
     def wait_navigation_arrived(self, **kwargs):
         self.wait_topic(**dict(
             dict(
@@ -386,6 +435,18 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
+                timeout=60
+            ),
+            **kwargs)
+        )
+
+    def wait_ready(self, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name='wait_ready',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition="msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'",
                 timeout=60
             ),
             **kwargs)
@@ -403,132 +464,29 @@ class Tester:
             **kwargs)
         )
 
-    def check_navigation_arrived(self, **kwargs):
-        self.check_topic(**dict(
-            dict(
-                action_name='check_navigation_arrived',
-                topic='/cabot/activity_log',
-                topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    def check_turn_towards(self, **kwargs):
-        self.check_topic(**dict(
-            dict(
-                action_name='check_turn_towards',
-                topic='/cabot/activity_log',
-                topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    def wait_for(self, seconds, **kwargs):
-        self.wait(**dict(
-            dict(
-                action_name=f'wait_for({seconds})',
-                seconds=seconds
-            ),
-            **kwargs)
-        )
-
-    def wait_ready(self, **kwargs):
-        self.wait_topic(**dict(
-            dict(
-                action_name='wait_ready',
-                topic='/cabot/activity_log',
-                topic_type='cabot_msgs/msg/Log',
-                condition="msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'",
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    def wait_localization_started(self, **kwargs):
-        self.wait_topic(**dict(
-            dict(
-                action_name='wait_localization_started',
-                topic='/localize_status',
-                topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
-                condition='msg.status==1',
-                timeout=60
-            ),
-            **kwargs)
-        )
-
-    @wait_test()
-    def clean_door(self, case, test_action):
-        uuid = test_action['uuid']
-
-        def done_callback(future):
-            case['done'] = True
-        future = ElevatorDoorSimulator.instance().clean(callback=done_callback)
-        if not future:
-            return
-        self.futures[uuid] = future
-
-    @wait_test()
-    def spawn_door(self, case, test_action):
-        uuid = test_action['uuid']
-        self.futures[uuid] = ElevatorDoorSimulator.instance().spawn_door(**test_action)
-
-        def done_callback(future):
-            logger.debug(future.result())
-            case['done'] = True
-        self.futures[uuid].add_done_callback(done_callback)
-
-    @wait_test()
-    def delete_door(self, case, test_action):
-        uuid = test_action['uuid']
-        self.futures[uuid] = ElevatorDoorSimulator.instance().delete_door(**test_action)
-
-        def done_callback(future):
-            logger.debug(future.result())
-            case['done'] = True
-        self.futures[uuid].add_done_callback(done_callback)
-
     # actual task needs to be waited
     @wait_test()
-    def init_manager(self, case, test_action):
+    def call_service(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
+        service = test_action['service']
+        service_type_str = test_action['service_type']
+        service_type = import_class(service_type_str)
+        request = test_action['request']
+        request_type = service_type.Request
+        uuid = test_action['uuid']
+
+        req = request_type()
+        data = yaml.safe_load(request)
+        set_message_fields(req, data)
+
+        srv = self.node.create_client(service_type, service)
+        self.futures[uuid] = srv.call_async(req)
 
         def done_callback(future):
-            logger.debug(future.result())
             case['done'] = True
-        manager.init(callback=done_callback)
+            case['success'] = True
 
-    @wait_test(1)
-    def check_topic_error(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        topic = test_action['topic']
-        topic_type = test_action['topic_type']
-        topic_type = import_class(topic_type)
-        condition = test_action['condition']
-
-        def topic_callback(msg):
-            try:
-                context = {'msg': msg, 'math': math}
-                exec(f"result=({condition})", context)
-                if context['result']:
-                    logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
-                    case['success'] = False
-                    case['error'] = f"condition {condition} matched\n{msg}"
-                    self.cancel_subscription(case)
-            except:  # noqa: #722
-                logger.error(traceback.format_exc())
-
-        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
-        self.add_subscription(case, sub)
-        case['done'] = True
-
-        def cancel_func():
-            logger.debug(F"cancel {case}")
-            self.cancel_subscription(case)
-        return cancel_func
+        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def check_topic(self, case, test_action):
@@ -554,6 +512,100 @@ class Tester:
         case['done'] = True
         case['success'] = None
 
+    @wait_test(1)
+    def check_topic_error(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        topic = test_action['topic']
+        topic_type = test_action['topic_type']
+        topic_type = import_class(topic_type)
+        condition = test_action['condition']
+
+        def topic_callback(msg):
+            try:
+                context = {'msg': msg, 'math': math}
+                exec(f"result=({condition})", context)
+                if context['result']:
+                    logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
+                    case['success'] = False
+                    case['error'] = f"condition {condition} matched\n{msg}"
+                    self.cancel_subscription(case)
+            except:  # noqa: #722
+                logger.error(traceback.format_exc())
+
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        self.add_subscription(case, sub)
+        case['done'] = True
+        case['success'] = True
+
+        def cancel_func():
+            logger.debug(F"cancel {case}")
+            self.cancel_subscription(case)
+        return cancel_func
+
+    @wait_test()
+    def clean_door(self, case, test_action):
+        uuid = test_action['uuid']
+
+        def done_callback(future):
+            case['done'] = True
+            case['success'] = True
+        future = ObstacleManager.instance().clean(callback=done_callback)
+        if not future:
+            return
+        self.futures[uuid] = future
+
+    @wait_test()
+    def delete_actor(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+        manager.delete(
+            name=test_action['name'],
+            callback=done_callback)
+
+    @wait_test()
+    def delete_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().delete_door(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def init_manager(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+        manager.init(callback=done_callback)
+
+    @wait_test()
+    def pub_topic(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        topic = test_action['topic']
+        topic_type = test_action['topic_type']
+        topic_type = import_class(topic_type)
+        message = test_action['message']
+        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
+
+        msg = topic_type()
+        data = yaml.safe_load(message)
+        set_message_fields(msg, data)
+
+        pub = self.node.create_publisher(topic_type, topic, qos)
+        pub.publish(msg)
+        self.node.destroy_publisher(pub)
+        case['done'] = True
+        case['success'] = True
+
     @wait_test()
     def reset_position(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
@@ -573,13 +625,15 @@ class Tester:
             # change gazebo model position
             request = SetEntityState.Request()
             request.state.name = 'mobile_base'
+            origin_x = test_action['origin_x'] if 'origin_x' in test_action else self.config['origin_x'] if 'origin_x' in self.config else 0
+            origin_y = test_action['origin_y'] if 'origin_y' in test_action else self.config['origin_y'] if 'origin_y' in self.config else 0
             init_x = test_action['x'] if 'x' in test_action else self.config['init_x']
             init_y = test_action['y'] if 'y' in test_action else self.config['init_y']
             init_z = test_action['z'] if 'z' in test_action else self.config['init_z']
             init_a = test_action['a'] if 'a' in test_action else self.config['init_a']
             init_yaw = init_a / 180.0 * math.pi
-            request.state.pose.position.x = float(init_x)
-            request.state.pose.position.y = float(init_y)
+            request.state.pose.position.x = float(init_x + origin_x)
+            request.state.pose.position.y = float(init_y + origin_y)
             request.state.pose.position.z = float(init_z)
             q = quaternion_from_euler(0, 0, init_yaw)
             request.state.pose.orientation.x = q[0]
@@ -596,6 +650,7 @@ class Tester:
                         exec(f"result=({condition})", context)
                         if context['result']:
                             case['done'] = True
+                            case['success'] = True
                             self.cancel_subscription(case)
                             time.sleep(2)
                     except:  # noqa: #722
@@ -649,20 +704,32 @@ class Tester:
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
+            case['success'] = True
         manager.update(
             actors=test_action['actors'],
             callback=done_callback)
 
     @wait_test()
-    def delete_actor(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
+    def spawn_door(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().spawn_door(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
-        manager.delete(
-            name=test_action['name'],
-            callback=done_callback)
+            case['success'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def spawn_obstacle(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().spawn_obstacle(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def wait_topic(self, case, test_action):
@@ -672,6 +739,7 @@ class Tester:
         topic_type = import_class(topic_type)
         condition = test_action['condition']
         once = test_action['once'] if 'once' in test_action else False
+        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
 
         def topic_callback(msg):
             try:
@@ -679,6 +747,7 @@ class Tester:
                 exec(f"result=({condition})", context)
                 if context['result']:
                     case['done'] = True
+                    case['success'] = True
                     self.cancel_subscription(case)
                 elif once:
                     case['done'] = True
@@ -687,48 +756,8 @@ class Tester:
                     self.cancel_subscription(case)
             except:  # noqa: #722
                 logger.error(traceback.format_exc())
-        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, qos)
         self.add_subscription(case, sub)
-
-    @wait_test()
-    def pub_topic(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        topic = test_action['topic']
-        topic_type = test_action['topic_type']
-        topic_type = import_class(topic_type)
-        message = test_action['message']
-        qos = test_action['qos'] if 'qos' in test_action else QoSProfile(depth=10, durability=DurabilityPolicy.SYSTEM_DEFAULT)
-
-        msg = topic_type()
-        data = yaml.safe_load(message)
-        set_message_fields(msg, data)
-
-        pub = self.node.create_publisher(topic_type, topic, qos)
-        pub.publish(msg)
-        self.node.destroy_publisher(pub)
-        case['done'] = True
-
-    @wait_test()
-    def call_service(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        service = test_action['service']
-        service_type_str = test_action['service_type']
-        service_type = import_class(service_type_str)
-        request = test_action['request']
-        request_type = service_type.Request
-        uuid = test_action['uuid']
-
-        req = request_type()
-        data = yaml.safe_load(request)
-        set_message_fields(req, data)
-
-        srv = self.node.create_client(service_type, service)
-        self.futures[uuid] = srv.call_async(req)
-
-        def done_callback(future):
-            case['done'] = True
-
-        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def wait(self, case, test_action):
@@ -738,6 +767,7 @@ class Tester:
 
         def timer_callback():
             case['done'] = True
+            case['success'] = True
             timer = self.timers[uuid]
             timer.cancel()
             self.node.destroy_timer(timer)
@@ -750,23 +780,87 @@ class Tester:
         sys.exit(0)
 
 
-class ElevatorDoorSimulator:
+@dataclass
+class Door:
+    name: str
+    x: float
+    y: float
+    z: float
+    yaw: float
+    width: float
+    height: float
+    depth: float
+
+    @staticmethod
+    def from_dict(**kwargs):
+        valid_fields = {field.name for field in fields(Door)}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
+        return Door(**filtered_kwargs)
+
+
+class ObstacleManager:
     _instance = None
 
     @classmethod
     def instance(cls):
-        if not ElevatorDoorSimulator._instance:
-            ElevatorDoorSimulator._instance = ElevatorDoorSimulator()
-        return ElevatorDoorSimulator._instance
+        if not ObstacleManager._instance:
+            ObstacleManager._instance = ObstacleManager()
+        return ObstacleManager._instance
 
     def __init__(self):
         self.spawn_entity_client = node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = node.create_client(DeleteEntity, '/delete_entity')
+        self.plan_sub = node.create_subscription(Path, '/plan', self.plan_callback, 10)
+        self.obstacle_pub = node.create_publisher(People, '/obstacles', 10)
+        self.timer = node.create_timer(0.2, self.timer_callback)
         self.remaining = []
+        self.last_plan = None
+
+    def plan_callback(self, msg):
+        self.last_plan = msg
+
+    def timer_callback(self):
+        if not self.last_plan:
+            return
+        obstacle_point = None
+        for pose in self.last_plan.poses:
+            for obstacle in self.remaining:
+                if self.is_point_in_rotated_rect(pose.pose.position, obstacle):
+                    obstacle_point = pose.pose.position
+                    break
+        if obstacle_point:
+            msg = Person()
+            msg.name = obstacle.name
+            msg.position.x = obstacle_point.x
+            msg.position.y = obstacle_point.y
+            msg.position.z = obstacle_point.z
+            msg.reliability = 1.0
+            msg.tags.append("stationary")
+            pmsg = People()
+            pmsg.people.append(msg)
+            pmsg.header.stamp = node.get_clock().now().to_msg()
+            pmsg.header.frame_id = "map_global"
+            self.obstacle_pub.publish(pmsg)
+
+    def is_point_in_rotated_rect(self, point, obstacle):
+        margin = 0.45
+        # Convert yaw to radians
+        yaw = obstacle.yaw
+        # Translate point to origin based on rect position
+        translated_point_x = point.x - obstacle.x
+        translated_point_y = point.y - obstacle.y
+        # Rotate point around origin (0,0) in the opposite direction of the rectangle's rotation
+        cos_yaw, sin_yaw = numpy.cos(-yaw), numpy.sin(-yaw)
+        rotated_point_x = translated_point_x * cos_yaw - translated_point_y * sin_yaw
+        rotated_point_y = translated_point_x * sin_yaw + translated_point_y * cos_yaw
+        # Check if the rotated point is within the rectangle bounds
+        return -margin-obstacle.width / 2 <= rotated_point_x <= obstacle.width / 2 + margin and \
+               -margin-obstacle.height / 2 <= rotated_point_y <= obstacle.height / 2 + margin
 
     def clean(self, callback):
+        self.last_path = None
         if self.remaining:
-            future = self.delete_door(name=self.ramaining[0])
+            future = self.delete_door(name=self.ramaining[0].name)
 
             def done_callback(future):
                 self.clean(callback)
@@ -781,16 +875,30 @@ class ElevatorDoorSimulator:
         future = self.delete_entity_client.call_async(request)
 
         def callback(future):
-            self.remaining.remove(name)
+            self.remaining = [door for door in self.remaining if door.name != name]
         future.add_done_callback(callback)
         return future
 
     def spawn_door(self, **kwargs):
-        name = kwargs['name']
-        x = kwargs['x']
-        y = kwargs['y']
-        z = kwargs['z']
-        yaw = kwargs['yaw']
+        return self.spawn_obstacle(**dict(
+            dict(
+                width=0.01,
+                height=2.0,
+                depth=2.0
+            ),
+            **kwargs)
+        )
+
+    def spawn_obstacle(self, **kwargs):
+        door = Door.from_dict(**kwargs)
+        name = door.name
+        x = door.x
+        y = door.y
+        z = door.z
+        yaw = door.yaw
+        width = door.width
+        height = door.height
+        depth = door.depth
 
         door_xml = f"""
 <?xml version="1.0" ?>
@@ -798,18 +906,18 @@ class ElevatorDoorSimulator:
     <model name="{name}">
         <static>true</static>
         <link name="{name}-link">
-            <pose>{x} {y} {z+1} 0 {math.pi/2} {yaw}</pose>
+            <pose>{x} {y} {z+depth/2.0} 0 0 {yaw}</pose>
             <visual name="{name}-visual">
                 <geometry>
                     <box>
-                        <size>2 2 0.01</size>
+                        <size>{width} {height} {depth}</size>
                     </box>
                 </geometry>
             </visual>
             <collision name="{name}-collision">
                 <geometry>
                     <box>
-                        <size>2 2 0.01</size>
+                        <size>{width} {height} {depth}</size>
                     </box>
                 </geometry>
             </collision>
@@ -825,7 +933,8 @@ class ElevatorDoorSimulator:
         future = self.spawn_entity_client.call_async(request)
 
         def callback(future):
-            self.remaining.append(name)
+            self.remaining.append(door)
+            logger.debug(F"spawn result = {future.result()}, {door}, {len(self.remaining)}")
         future.add_done_callback(callback)
         return future
 
@@ -887,6 +996,7 @@ def main():
     parser.add_option('-m', '--module', type=str, help='test module name')
     parser.add_option('-d', '--debug', action='store_true', help='debug print')
     parser.add_option('-f', '--func', type=str, help='test func name')
+    parser.add_option('-L', '--list-modules', action='store_true', help='list test modules')
     parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
     parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
 
@@ -902,6 +1012,13 @@ def main():
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
 
+    if options.list_modules:
+        module = __import__(options.module)
+        modules = [name for _, name, _ in pkgutil.iter_modules(module.__path__)]
+        for m in modules:
+            logger.info(m)
+        sys.exit(0)
+
     if options.list_functions:
         module = importlib.import_module(options.module)
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -912,6 +1029,7 @@ def main():
     rclpy.init()
     node = rclpy.node.Node("test_node")
     manager = PedestrianManager(node)
+    ObstacleManager.instance()
 
     ros2Handler = ROS2LogHandler(node)
     logger.addHandler(ros2Handler)

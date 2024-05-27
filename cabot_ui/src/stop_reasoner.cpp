@@ -315,7 +315,7 @@ std::tuple<double, StopReason> StopReasoner::update()
         get_current_time().nanoseconds() / 1e9,
         people_speed_.minimum(get_current_time()),
         people_speed_.average(get_current_time()));
-      return std::make_tuple(duration, StopReason::THERE_ARE_PEOPLE_ON_THE_PATH);
+      return std::make_tuple(duration, StopReason::THERE_ARE_PEOPLE_IN_THE_PATH);
     }
   }
 

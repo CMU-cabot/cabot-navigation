@@ -49,7 +49,7 @@ enum class StopReason
   NO_TOUCH,
   STOPPED_BUT_UNDER_THRESHOLD,
   NO_CMD_VEL,
-  THERE_ARE_PEOPLE_ON_THE_PATH,
+  THERE_ARE_PEOPLE_IN_THE_PATH,
   WAITING_FOR_ELEVATOR,
   AVOIDING_OBSTACLE,
   AVOIDING_PEOPLE,
@@ -69,7 +69,7 @@ public:
       case StopReason::NO_TOUCH: return "NO_TOUCH";
       case StopReason::STOPPED_BUT_UNDER_THRESHOLD: return "STOPPED_BUT_UNDER_THRESHOLD";
       case StopReason::NO_CMD_VEL: return "NO_CMD_VEL";
-      case StopReason::THERE_ARE_PEOPLE_ON_THE_PATH: return "THERE_ARE_PEOPLE_ON_THE_PATH";
+      case StopReason::THERE_ARE_PEOPLE_IN_THE_PATH: return "THERE_ARE_PEOPLE_IN_THE_PATH";
       case StopReason::WAITING_FOR_ELEVATOR: return "WAITING_FOR_ELEVATOR";
       case StopReason::AVOIDING_OBSTACLE: return "AVOIDING_OBSTACLE";
       case StopReason::AVOIDING_PEOPLE: return "AVOIDING_PEOPLE";

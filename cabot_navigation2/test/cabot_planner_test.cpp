@@ -265,10 +265,15 @@ void Test::run_test_bag()
 
   storage_options.uri = bagfile_name_;
 
+
   rosbag2_cpp::ConverterOptions converter_options{};
   converter_options.input_serialization_format = "cdr";
   converter_options.output_serialization_format = "cdr";
   reader.open(storage_options, converter_options);
+
+  auto bag_metadata = reader.get_metadata();
+  std::cout << "bag compression_format: " << bag_metadata.compression_format << std::endl;
+  std::cout << "bag compression_mode: " << bag_metadata.compression_mode << std::endl;
 
   auto topics = reader.get_all_topics_and_types();
   std::map<std::string, std::string> topic_type_map;
@@ -278,7 +283,6 @@ void Test::run_test_bag()
     std::cout << "meta name: " << t.name << std::endl;
     std::cout << "meta type: " << t.type << std::endl;
     std::cout << "meta serialization_format: " << t.serialization_format << std::endl;
-
     topic_type_map.insert({t.name, t.type});
   }
 
@@ -325,46 +329,74 @@ void Test::run_test_bag()
         topic_ready[0] = true;
       }
       if (topic == "/debug/target_goal") {
-        ros_message->message = &start;
+        ros_message->message = &goal;
         cdr_deserializer_->deserialize(serialized_message, type_support.rmw_type_support, ros_message);
         topic_ready[1] = true;
       }
       if (topic == "/debug/target_path") {
-        ros_message->message = &start;
+        ros_message->message = &navcog_path;
         cdr_deserializer_->deserialize(serialized_message, type_support.rmw_type_support, ros_message);
         topic_ready[2] = true;
       }
       if (topic == "/debug/target_people") {
-        ros_message->message = &start;
+        ros_message->message = &people;
         cdr_deserializer_->deserialize(serialized_message, type_support.rmw_type_support, ros_message);
         topic_ready[3] = true;
       }
       if (topic == "/debug/target_obstacles") {
-        ros_message->message = &start;
+        ros_message->message = &obstacles;
         cdr_deserializer_->deserialize(serialized_message, type_support.rmw_type_support, ros_message);
         topic_ready[4] = true;
       }
       if (topic == "/debug/costmap") {
-        ros_message->message = &start;
+        ros_message->message = &costmap;
         cdr_deserializer_->deserialize(serialized_message, type_support.rmw_type_support, ros_message);
         topic_ready[5] = true;
       }
       if (topic == "/debug/static_costmap") {
-        ros_message->message = &start;
+        ros_message->message = &static_costmap;
         cdr_deserializer_->deserialize(serialized_message, type_support.rmw_type_support, ros_message);
         topic_ready[6] = true;
       }
 
       bool ready = true;
-      for (uint64_t i = 0; i < sizeof(topic_ready); i++) {
+      for (uint64_t i = 0; i < sizeof(topic_ready) - 1; i++) {
         ready = ready && topic_ready[i];
       }
+
       if (ready) {
-        RCLCPP_INFO(get_logger(), "do test");
-        // do test
+        int rate = 1;
+        rclcpp::Rate r(rate);
+
+        RCLCPP_INFO(get_logger(), "===========================do test===========================");
+        RCLCPP_INFO(get_logger(), "start: (%.2f, %.2f)", start.pose.position.x, start.pose.position.y);
+        RCLCPP_INFO(get_logger(), "goal : (%.2f, %.2f)", goal.pose.position.x, goal.pose.position.y);
+        for (unsigned int i = 0; i < navcog_path.poses.size(); i++) {
+          auto pose = navcog_path.poses[i];
+          RCLCPP_INFO(get_logger(), "poses[%ld] : (%.2f, %.2f)", i, pose.pose.position.x, pose.pose.position.y);
+        }
+
+        path_publisher_->publish(navcog_path);
+        map_obstacle_publisher_->publish(costmap);
+        // map_publisher_->publish(static_costmap);
+        map_publisher_->publish(costmap);
+        r.sleep();
+
+        auto t0 = std::chrono::system_clock::now();
+        auto path = planner_->createPlan(start, goal);
+        auto t1 = std::chrono::system_clock::now();
+        auto diff = (t1 - t0);
+        RCLCPP_INFO(get_logger(), "path length = %ld, time = %.2f", path.poses.size(), diff);
+        plan_publisher_->publish(path);
+
+        r.sleep();
+
+        for (uint64_t i = 0; i < sizeof(topic_ready); i++) {
+          topic_ready[i] = false;
+        }
       }
     } catch (std::exception & e) {
-      RCLCPP_ERROR(get_logger(), "%s", e.what());
+      // RCLCPP_ERROR(get_logger(), "%s", e.what());
     }
   }
 }

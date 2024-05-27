@@ -1,7 +1,6 @@
 ^/bond$
 ^/clock$
 ^/local/bond$
-^/.*/camera_info$
 ^/carto.*$
 ^.*image_rect_raw.*$
 ^.*aligned_depth_to_color.*$

@@ -177,7 +177,7 @@ class StopReason(enum.Enum):
     NO_TOUCH = enum.auto()
     STOPPED_BUT_UNDER_THRESHOLD = enum.auto()
     NO_CMD_VEL = enum.auto()
-    THERE_ARE_PEOPLE_ON_THE_PATH = enum.auto()
+    THERE_ARE_PEOPLE_IN_THE_PATH = enum.auto()
     WAITING_FOR_ELEVATOR = enum.auto()
     AVOIDING_OBSTACLE = enum.auto()
     AVOIDING_PEOPLE = enum.auto()
@@ -438,7 +438,7 @@ class StopReasoner:
         if self.people_speed.minimum is not None:
             if self.people_speed.minimum < 0.9:
                 logger.debug("%.2f, people_speed minimum=%.2f, average=%.2f", now().nanoseconds/1e9, self.people_speed.minimum, self.people_speed.average)
-                return (duration, StopReason.THERE_ARE_PEOPLE_ON_THE_PATH)
+                return (duration, StopReason.THERE_ARE_PEOPLE_IN_THE_PATH)
 
         if self.waiting_for_elevator:
             return (duration, StopReason.WAITING_FOR_ELEVATOR)

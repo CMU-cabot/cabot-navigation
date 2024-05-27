@@ -32,14 +32,21 @@ YOU_HAVE_ARRIVED_WITH_NAME: "{0}に到着しました。"
 YOU_HAVE_ARRIVED: "到着しました。"
 
 ## Social
+PERSON_AHEAD: "前に人がいます"
 AVOIDING_A_PERSON: "人をよけます。"
 AVOIDING_PEOPLE: "複数の人をよけます。"
 AVOIDING_AN_OBSTACLE: "障害物を避けます。"
 AVOIDING_OBSTACLES: "複数の障害物を避けます。"
+TRYING_TO_AVOID_PEOPLE: "人を避けようとしています"
+TRYING_TO_AVOID_OBSTACLE: "障害物を避けようとしています"
+PEOPLE_ARE_IN_MY_WAY: "進行方向に人がいるため進めません"
+PLEASE_WAIT_FOR_A_SECOND: "少々お待ちください"
 A_PERSON_IN_THE_WAY: "ルート上に人。"
 PEOPLE_IN_THE_WAY: "ルート上に複数の人。"
 FOLLOWING_A_PERSON: "前の人に合わせています。"
 FOLLOWING_PEOPLE: "前の人たちに合わせています。"
+
+## queue
 GOING_TO_GET_IN_LINE: "列に並びます。"
 
 
@@ -95,12 +102,6 @@ HANDLE_LEFT_ABOUT_TURN: "左に旋回します"
 HANDLE_LEFT_TURN: "左に曲がります"
 HANDLE_LEFT_DEV: "左に少し曲がります"
 
-## Stop Reason
-TRYING_TO_AVOID_PEOPLE: "人を避けようとしています"
-TRYING_TO_AVOID_OBSTACLE: "障害物を避けようとしています"
-PEOPLE_ARE_ON_MY_WAY: "進行方向に人がいるため進めません"
-PLEASE_WAIT_FOR_A_SECOND: "少々お待ちください"
-
 ## Narrow
 FOLLOW_BEHIND_PLEASE_NARROW: "狭い道を通ります。スーツケースの後ろをついてきてください。"
 RETURN_TO_POSITION_PLEASE: "細い道を抜けました。元の位置に戻ってください。"
@@ -109,6 +110,7 @@ RETURN_TO_POSITION_PLEASE: "細い道を抜けました。元の位置に戻っ�
 NOT_DETECT_TOUCH: "ハンドルのタッチを検出できません。"
 
 ## Facility
+IN_FRONT: "正面"
 RIGHT_SIDE: "右側"
 LEFT_SIDE: "左側"
 APPROACEHD_TO_FACILITY: "{1}に{0}があります"

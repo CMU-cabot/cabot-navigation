@@ -12,6 +12,7 @@ function help()
 package=
 all=
 build=
+exclude="(rosbridge.*|rosapi)"
 
 while getopts "hp:ab" arg; do
     case $arg in
@@ -38,7 +39,7 @@ fi
 
 if [[ $all -eq 1 ]]; then
     ([[ -z $build ]] ||  colcon build) && \
-    colcon test && \
+    colcon test --packages-ignore-regex "$exclude" && \
     colcon test-result --verbose
 else
     ([[ -z $build ]] ||  colcon build --packages-up-to $package) && \

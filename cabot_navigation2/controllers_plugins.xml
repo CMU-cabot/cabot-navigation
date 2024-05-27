@@ -1,5 +1,5 @@
 <!--
- Copyright (c) 2022  Carnegie Mellon University
+ Copyright (c) 2024  Carnegie Mellon University
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -20,16 +20,11 @@
  SOFTWARE.
 -->
 
-<launch>
-  <!-- rosbridge for external BLE server  -->
-  <node pkg="rosbridge_server" exec="rosbridge_websocket"
-	name="rosbridge_server" output="log">
-    <param name="port" value="9091" />
-    <param name="max_message_size" value="128000000" />
-  </node>
-
-  <!-- this node is for map viewing on smartphone device (roslibjs/ros3djs) -->
-  <node pkg="tf2_web_republisher" exec="tf2_web_republisher"
-	name="tf2_web_republisher" output="log">
-  </node>
-</launch>
+<class_libraries>
+  <library path="cabot_controllers">
+    <class type="cabot_navigation2::CaBotRotationShimController"
+	   base_class_type="nav2_core::Controller">
+      <description>Custmozied Rotation Shim Controller</description>
+    </class>
+  </library>
+</class_libraries>

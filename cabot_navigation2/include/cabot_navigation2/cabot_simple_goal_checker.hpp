@@ -59,6 +59,7 @@ protected:
   double xy_goal_tolerance_, yaw_goal_tolerance_;
   bool stateful_, check_xy_;
   double xy_goal_tolerance_sq_;
+  double goal_factor_;
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
 
   std::string plugin_name_;

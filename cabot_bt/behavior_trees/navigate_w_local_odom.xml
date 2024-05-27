@@ -48,14 +48,16 @@
         <RecoveryNode number_of_retries="99999999" name="NavigateRecovery">
           <PipelineSequence name="NavigateWithReplanning">
             <!-- Not using RateController, so that the robot can keep trying to find an updated path -->
-            <Fallback>
-              <Sequence>
-                <WaitFloat wait_duration_float="0.5"/>
-                <ComputePathToPose goal="{goal}" path="{path_temp}" planner_id="GridBased"/>
-                <CheckPath path="{path_temp}" path_topic="/path" plan_topic="/plan" path_out="{path}" average_threshold="0.3"/>
-              </Sequence>
-              <AlwaysSuccess/>
-            </Fallback>
+            <RateController hz="1" name="RateController">
+              <Fallback>
+                <Sequence>
+                  <WaitFloat wait_duration_float="0.5"/>
+                  <ComputePathToPose goal="{goal}" path="{path_temp}" planner_id="GridBased"/>
+                  <CheckPath path="{path_temp}" path_topic="/path" plan_topic="/plan" path_out="{path}" average_threshold="0.3"/>
+                </Sequence>
+                <AlwaysSuccess/>
+              </Fallback>
+            </RateController>
             <FollowPath path="{path}" controller_id="FollowPath" />
           </PipelineSequence>
           <RecoveryNode>

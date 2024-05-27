@@ -79,6 +79,15 @@ if (( $(echo "$start > 0.01" | bc -l) )); then
     temp_file="robot:=$temp_file"
 fi
 
+# republish uncompressed images to visualize in rviz2
+readarray -t compressed_image_topics < <(ros2 bag info $bag | grep -oP '(?<=Topic: ).*(?=/compressed )')
+for compressed_image_topic in "${compressed_image_topics[@]}"; do
+    com="ros2 run image_transport republish compressed --ros-args -r in/compressed:=$compressed_image_topic/compressed -r out:=$compressed_image_topic &"
+    echo $com
+    eval $com
+    pids+=($!)
+done
+
 com="ros2 launch cabot_debug play_bag.launch.py \
    bagfile:=$bag \
    start:=$start \

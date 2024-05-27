@@ -31,8 +31,9 @@ import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
 from cabot_ui import visualizer, i18n
+from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
-from cabot_ui.stop_reasoner import StopReason
+from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
 
 
@@ -47,6 +48,7 @@ class UserInterface(object):
         self.note_pub = node.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.activity_log_pub = node.create_publisher(cabot_msgs.msg.Log, "/cabot/activity_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.pose_log_pub = node.create_publisher(cabot_msgs.msg.PoseLog, "/cabot/pose_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.event_pub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_angle", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_type_pub = node.create_publisher(std_msgs.msg.String, "/cabot/turn_type", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -301,12 +303,16 @@ class UserInterface(object):
     def exit_goal(self, goal):
         pass
 
-    def announce_social(self, message):
-        self._activity_log("cabot/interface", "notify", "social")
-        if self.last_social_announce is None or \
-           self._node.get_clock().now() - self.last_social_announce > UserInterface.SOCIAL_ANNOUNCE_INTERVAL:
-            self.speak(i18n.localized_string(message))
-            self.last_social_announce = self._node.get_clock().now()
+    def announce_social(self, message: SNMessage):
+        self._activity_log("cabot/interface", message.type.name, message.code.name)
+        self.speak(i18n.localized_string(message.code.name))
+
+    def request_sound(self, sound: SNMessage):
+        self._activity_log("cabot/interface", sound.type.name, sound.code.name)
+        e = NavigationEvent("sound", sound.code.name)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self.event_pub.publish(msg)
 
     def set_pause_control(self, flag):
         self._activity_log("cabot/interface", "pause_control", str(flag))
@@ -345,21 +351,6 @@ class UserInterface(object):
     def door_passed(self):
         self._activity_log("cabot/interface", "navigation", "door passed")
         self.speak(i18n.localized_string("DOOR_POI_PASSED"))
-
-    def speak_stop_reason(self, code):
-        message = None
-        if code == StopReason.AVOIDING_PEOPLE:
-            message = "TRYING_TO_AVOID_PEOPLE"
-        elif code == StopReason.AVOIDING_OBSTACLE:
-            message = "TRYING_TO_AVOID_OBSTACLE"
-        elif code == StopReason.THERE_ARE_PEOPLE_ON_THE_PATH:
-            message = "PEOPLE_ARE_ON_MY_WAY"
-        elif code == StopReason.UNKNOWN:
-            message = "PLEASE_WAIT_FOR_A_SECOND"
-        elif code == StopReason.NO_TOUCH:
-            message = "NOT_DETECT_TOUCH"
-        if message:
-            self.announce_social(message)
 
     def please_follow_behind(self):
         self._activity_log("cabot/interface", "navigation", "please_follow_behind")
