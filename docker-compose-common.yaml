@@ -165,6 +165,8 @@ services:
   localization-base:
     build:
       context: ./docker/localization
+      additional_contexts:
+        cabot_src: ./
     environment:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
@@ -200,17 +202,17 @@ services:
       - /var/lib/bluetooth:/var/lib/bluetooth
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
-      - ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
-      - ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
-      - ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
-      - ./cabot_mf_localization:/home/developer/loc_ws/src/cabot_mf_localization
-      - ./cabot_sites:/home/developer/loc_ws/src/cabot_sites
-      - ./script:/home/developer/loc_ws/script
-      - ./mf_localization:/home/developer/loc_ws/src/mf_localization
-      - ./mf_localization_gazebo:/home/developer/loc_ws/src/mf_localization_gazebo
-      - ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
-      - ./mf_localization_msgs:/home/developer/loc_ws/src/mf_localization_msgs
-      - ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
+      #- ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
+      #- ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
+      #- ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
+      #- ./cabot_mf_localization:/home/developer/loc_ws/src/cabot_mf_localization
+      #- ./cabot_sites:/home/developer/loc_ws/src/cabot_sites
+      #- ./script:/home/developer/loc_ws/script
+      #- ./mf_localization:/home/developer/loc_ws/src/mf_localization
+      #- ./mf_localization_gazebo:/home/developer/loc_ws/src/mf_localization_gazebo
+      #- ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
+      #- ./mf_localization_msgs:/home/developer/loc_ws/src/mf_localization_msgs
+      #- ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
     privileged: true
@@ -233,5 +235,5 @@ services:
   localization:
     extends: localization-base
     volumes:
-      - ./docker/home:/home/developer/
+      #- ./docker/home:/home/developer/
 
