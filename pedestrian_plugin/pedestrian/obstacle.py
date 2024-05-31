@@ -20,6 +20,7 @@
 
 import ros
 import math
+from pedestrian.check_polygon_collision import isCircleCollidingWithPolygon
 
 count = 0
 
@@ -33,6 +34,15 @@ def onUpdate(**args):
     robot = args['robot'] if 'robot' in args else None
 
     if robot:
+        circle_center_point = {'x':robot['x'],robot['y']}
+        robot_radius = 3.0
+        polygon_vertex_points = [\
+            {'x':args['x']-0.5,'y':args['y']-0.5}, \
+            {'x':args['x']+0.5,'y':args['y']-0.5}, \
+            {'x':args['x']+0.5,'y':args['y']+0.5}, \
+            {'x':args['x']-0.5,'y':args['y']+0.5}]
+        is_collision_detected = isCircleCollidingWithPolygon(circle_center_point,robot_radius,polygon_vertex_points)
+
         rx = robot['x']
         ry = robot['y']
         x = args['x']
@@ -41,7 +51,8 @@ def onUpdate(**args):
         dy = ry - y
         dist = math.sqrt(dx * dx + dy * dy)
         ros.info(f"obstacle collision {rx=}, {ry=}, {x=}, {y=}, {dx=}, {dy=}, {dist=}")
-        if dist < 3.0:
+
+        if is_collision_detected:
             ros.collision(name, dist)
 
     return args
