@@ -155,9 +155,9 @@ WORKDIR $HOME/loc_ws
 RUN mkdir -p $HOME/loc_ws/src && \
     mkdir -p $HOME/loc_ws/script
 
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_description src/cabot-description/cabot_description
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_common src/cabot-common/cabot_common
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/cabot-common/cabot_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_description src/cabot_description
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_common src/cabot_common
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/cabot_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_mf_localization src/cabot_mf_localization
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_sites src/cabot_sites
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
