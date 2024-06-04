@@ -46,8 +46,10 @@ from cabot_common.util import callee_name
 from people_msgs.msg import People, Person
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from rcl_interfaces.msg import Parameter, ParameterType
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
+from rcl_interfaces.srv import SetParameters
 
 from pedestrian.manager import PedestrianManager
 from gazebo_msgs.srv import DeleteEntity
@@ -125,10 +127,17 @@ class Tester:
         self.set_current_floor_client = self.node.create_client(MFSetInt, '/set_current_floor')
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
+        self.set_people_detection_params_client = self.node.create_client(
+            SetParameters,
+            '/gazebo/set_parameters'
+        )
         self.test_func_name = None
         self.result = {}
         # evaluation
         self.evaluator = None
+
+        # while not self.set_people_detection_params_client.wait_for_service(timeout_sec=1.0):
+        #     self.node.get_logger().info('service not available, waiting again...')
 
     def set_evaluator(self, evaluator):
         self.evaluator = evaluator
@@ -285,6 +294,51 @@ class Tester:
         This method can be used when the user intentionally stops the metric computation
         """
         self.evaluator.stop()
+
+    # people detection
+    def set_people_detection_range(self, **kwargs):
+        params = []
+
+        # min_range parameter
+        param = Parameter()
+        param.name = 'pedestrian_plugin.min_range'
+        param.value.type = ParameterType.PARAMETER_DOUBLE
+        param.value.double_value = kwargs['min_range']
+        params.append(param)
+
+        # max_range parameter
+        param = Parameter()
+        param.name = 'pedestrian_plugin.max_range'
+        param.value.type = ParameterType.PARAMETER_DOUBLE
+        param.value.double_value = kwargs['max_range']
+        params.append(param)
+
+        # min_angle parameter
+        param = Parameter()
+        param.name = 'pedestrian_plugin.min_angle'
+        param.value.type = ParameterType.PARAMETER_DOUBLE
+        param.value.double_value = kwargs['min_angle']
+        params.append(param)
+
+        # max_angle parameter
+        param = Parameter()
+        param.name = 'pedestrian_plugin.max_angle'
+        param.value.type = ParameterType.PARAMETER_DOUBLE
+        param.value.double_value = kwargs['max_angle']
+        params.append(param)
+
+        request = SetParameters.Request()
+        request.parameters = params
+
+        logger.info("Set pedestrian_plugin params")
+
+        future = self.set_people_detection_params_client.call_async(request)
+
+        rclpy.spin_until_future_complete(self.node, future)
+        if future.result() is not None:
+            logger.info(f'Service call succeeded: {future.result()}')
+        else:
+            logger.error(f'Service call failed: {future.exception()}')
 
     # shorthand functions
     def button_down(self, button, **kwargs):

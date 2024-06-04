@@ -119,6 +119,10 @@ private:
   void handle_plugin_update(
     const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
+  bool isWithinRange(
+    const geometry_msgs::msg::Pose & robot_pose, const geometry_msgs::msg::Pose & person_pose);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
+    std::vector<rclcpp::Parameter> parameters);
 
   gazebo_ros::Node::SharedPtr node_;
   geometry_msgs::msg::Pose::SharedPtr robot_pose_;
@@ -134,6 +138,12 @@ private:
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agent>::SharedPtr robot_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr human_pub_;
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
+
+  double min_range_;
+  double max_range_;
+  double min_angle_;
+  double max_angle_;
 };
 
 }  // namespace gazebo

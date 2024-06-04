@@ -126,6 +126,11 @@ ParamValue PedestrianPluginParams::getParam(std::string name)
 PedestrianPluginManager::PedestrianPluginManager()
 : node_(gazebo_ros::Node::Get())
 {
+  min_range_ = node_->declare_parameter<double>("pedestrian_plugin.min_range", 0.1);
+  max_range_ = node_->declare_parameter<double>("pedestrian_plugin.max_range", 10.0);
+  min_angle_ = node_->declare_parameter<double>("pedestrian_plugin.min_angle", -1.0);
+  max_angle_ = node_->declare_parameter<double>("pedestrian_plugin.max_angle", 1.0);
+
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
@@ -134,6 +139,8 @@ PedestrianPluginManager::PedestrianPluginManager()
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
     "/pedestrian_plugin_update",
     std::bind(&PedestrianPluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
+  dyn_params_handler_ = node_->add_on_set_parameters_callback(
+    std::bind(&PedestrianPluginManager::dynamicParametersCallback, this, std::placeholders::_1));
 }
 
 PedestrianPluginManager::~PedestrianPluginManager() {}
@@ -268,4 +275,50 @@ void PedestrianPluginManager::handle_plugin_update(
     response->plugin_names.push_back(it.first);
   }
   response->message = "Plugin Updated";
+}
+
+bool PedestrianPluginManager::isWithinRange(
+  const geometry_msgs::msg::Pose & robot_pose, const geometry_msgs::msg::Pose & person_pose)
+{
+  double dx = person_pose.position.x - robot_pose.position.x;
+  double dy = person_pose.position.y - robot_pose.position.y;
+  double dz = person_pose.position.z - robot_pose.position.z;
+
+  double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+  return (distance >= min_range_ && distance <= max_range_);
+}
+
+rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParametersCallback(
+  std::vector<rclcpp::Parameter> parameters)
+{
+  using rcl_interfaces::msg::ParameterType;
+
+  rcl_interfaces::msg::SetParametersResult result;
+
+  RCLCPP_INFO(node_->get_logger(), "Call for pedestrian_plugin params");
+
+  for (auto parameter : parameters) {
+    const auto & type = parameter.get_type();
+    const auto & name = parameter.get_name();
+
+    if (type == ParameterType::PARAMETER_DOUBLE) {
+      if (name == "pedestrian_plugin.min_range") {
+        min_range_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change min_range parameter: %lf", min_range_);
+      } else if (name == "pedestrian_plugin.max_range") {
+        max_range_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change max_range parameter: %lf", max_range_);
+      } else if (name == "pedestrian_plugin.min_angle") {
+        min_angle_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change min_angle parameter: %lf", min_angle_);
+      } else if (name == "pedestrian_plugin.max_angle") {
+        max_angle_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change max_angle parameter: %lf", max_angle_);
+      }
+    }
+  }
+
+  result.successful = true;
+  return result;
 }
