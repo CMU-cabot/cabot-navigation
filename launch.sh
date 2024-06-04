@@ -103,6 +103,7 @@ function help()
 {
     echo "Usage:"
     echo "-A          find all test module under cabot_sites"
+    echo "-e          exploration mode (for demo/research)"
     echo "-h          show this help"
     echo "-H          headless"
     echo "-M          log dmesg output"
@@ -124,6 +125,7 @@ function help()
 }
 
 
+exploration=0
 simulation=0
 log_prefix=cabot
 verbose=0
@@ -148,8 +150,11 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDf:HlLMn:rsS:tT:uvy" arg; do
+while getopts "ehDf:HlLMn:rsS:tT:uvy" arg; do
     case $arg in
+        e)
+            exploration=1
+            ;;
         h)
             help
             exit
@@ -283,12 +288,13 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
+if [[ $exploration -eq 1 ]]; then dcfile="${dcfile}-exploration"; fi
 if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
 if [[ $CABOT_HEADLESS -eq 1 ]]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
-    err "There is not $dcfile, simulation=$simulation)"
+    err "There is not $dcfile, exploration=$exploration, simulation=$simulation)"
     exit
 fi
 
