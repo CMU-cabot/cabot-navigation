@@ -1,0 +1,55 @@
+launch:
+  - arg:
+      name: output
+      default: log
+  - arg:
+      name: use_sim_time
+      default: "false"
+  - arg:
+      name: configuration_basename
+      default: cartographer_2d_explore.lua
+  - arg:
+      name: points2_topic
+      default: /velodyne_points
+  - arg:
+      name: imu_topic
+      default: /imu/data
+  - arg:
+      name: bagfile
+      default: ""
+
+  - node:
+      pkg: cartographer_ros
+      exec: cartographer_node
+      name: cartographer_node
+      args: |
+        -configuration_directory $(find-pkg-share cabot_exploration)/configuration_files
+        -configuration_basename $(var configuration_basename)
+      remap:
+        -
+          from: points2
+          to: $(var points2_topic)
+        -
+          from: imu
+          to: $(var imu_topic)
+      param:
+        -
+          name: use_sim_time
+          value: $(var use_sim_time)
+
+  - node:
+      pkg: cartographer_ros
+      exec: cartographer_occupancy_grid_node
+      name: cartographer_occupancy_grid_node
+      args: |
+        -resolution 0.05
+        -publish_period_sec 0.5
+
+#  - node:
+#      pkg: cabot_exploration
+#      exec: record_data.py
+#      name: record_data
+#      param:
+#        -
+#          name: bagfile
+#          value: $(arg bagfile)

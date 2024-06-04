@@ -188,6 +188,7 @@ services:
       - ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
       - ./mf_localization_msgs:/home/developer/loc_ws/src/mf_localization_msgs
       - ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
+      - ./cabot_exploration:/home/developer/loc_ws/src/cabot_exploration
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
     privileged: true
@@ -212,3 +213,10 @@ services:
     volumes:
       - ./docker/home:/home/developer/
 
+  exploration:
+    extends: localization-base
+    volumes:
+      - ./docker/home:/home/developer/
+    command:
+      - "/launch.sh"
+      - "exploration"

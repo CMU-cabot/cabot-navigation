@@ -89,7 +89,14 @@ case $1 in
 	cd src/cabot_mf_localization/script
 	exec ./cabot_mf_localization.sh $@
 	;;
-    
+
+	exploration)
+	shift
+	source install/setup.bash
+	cd src/cabot_exploration/script
+	exec ./cabot_exploration.sh $@
+    ;;
+
     *)
 	red "There is no \"$1\" mode"
 	usage
