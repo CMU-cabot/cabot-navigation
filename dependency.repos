@@ -50,3 +50,4 @@ repositories:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
     version: dev
+    version: main

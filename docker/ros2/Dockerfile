@@ -197,7 +197,6 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_msgs src/queue_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_people_py src/queue_people_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_utils_py src/queue_utils_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
-COPY --chown=$USERNAME:$USERNAME --from=docker_home ./ros2_ws/src/rosbridge_suite src/rosbridge_suite
 
 RUN /ros_entrypoint.sh /launch.sh build
 
