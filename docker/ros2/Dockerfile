@@ -29,6 +29,7 @@ ENV UNDERLAY_WS=/opt/underlay_ws
 
 RUN mkdir -p $UNDERLAY_WS/src
 COPY ./tf2_web_republisher $UNDERLAY_WS/src/tf2_web_republisher
+COPY ./rosbridge_suite $UNDERLAY_WS/src/rosbridge_suite
 
 WORKDIR $UNDERLAY_WS
 
@@ -195,7 +196,6 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_msgs src/queue_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_people_py src/queue_people_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_utils_py src/queue_utils_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
-COPY --chown=$USERNAME:$USERNAME --from=docker_home ./ros2_ws/src/rosbridge_suite src/rosbridge_suite
 
 RUN /ros_entrypoint.sh /launch.sh build
 
