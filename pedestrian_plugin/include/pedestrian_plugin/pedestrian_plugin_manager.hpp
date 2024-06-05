@@ -121,6 +121,10 @@ private:
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
   bool isWithinRange(
     const geometry_msgs::msg::Point & robot_point, const geometry_msgs::msg::Point & person_point);
+  bool isWithinFOV(
+    const double robot_yaw,
+    const geometry_msgs::msg::Point & robot_point,
+    const geometry_msgs::msg::Point & person_point);
   rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
     std::vector<rclcpp::Parameter> parameters);
 

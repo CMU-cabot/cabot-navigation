@@ -175,9 +175,13 @@ void PedestrianPluginManager::publishPeopleIfReady()
   if (peopleReadyMap_.size() == pluginMap_.size()) {
     people_msgs::msg::People msg;
     for (auto it : peopleMap_) {
-      if (isWithinRange(robotAgent_->position.position, it.second.position)) {
-        msg.people.push_back(it.second);
+      if (!isWithinRange(robotAgent_->position.position, it.second.position)) {
+        continue;
       }
+      if (!isWithinFOV(robotAgent_->yaw, robotAgent_->position.position, it.second.position)) {
+        continue;
+      }
+      msg.people.push_back(it.second);
     }
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
@@ -305,6 +309,26 @@ bool PedestrianPluginManager::isWithinRange(
   double distance = std::sqrt(dx * dx + dy * dy);
 
   return (distance >= min_range_ && distance <= max_range_);
+}
+
+bool PedestrianPluginManager::isWithinFOV(
+  const double robot_yaw,
+  const geometry_msgs::msg::Point & robot_point,
+  const geometry_msgs::msg::Point & person_point)
+{
+  double dx = person_point.x - robot_point.x;
+  double dy = person_point.y - robot_point.y;
+  double angle_to_person = std::atan2(dy, dx);
+  double relative_angle = angle_to_person - robot_yaw;
+
+  while (relative_angle < -M_PI) {
+    relative_angle += 2.0 * M_PI;
+  }
+  while (relative_angle >= M_PI) {
+    relative_angle -= 2.0 * M_PI;
+  }
+
+  return (relative_angle >= min_angle_ && relative_angle <= max_angle_);
 }
 
 rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParametersCallback(
