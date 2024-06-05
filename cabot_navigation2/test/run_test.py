@@ -300,39 +300,44 @@ class Tester:
         params = []
 
         # min_range parameter
-        param = Parameter()
-        param.name = 'pedestrian_plugin.min_range'
-        param.value.type = ParameterType.PARAMETER_DOUBLE
-        param.value.double_value = kwargs['min_range']
-        params.append(param)
+        if 'min_range' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.min_range'
+            param.value.type = ParameterType.PARAMETER_DOUBLE
+            param.value.double_value = kwargs['min_range']
+            params.append(param)
 
         # max_range parameter
-        param = Parameter()
-        param.name = 'pedestrian_plugin.max_range'
-        param.value.type = ParameterType.PARAMETER_DOUBLE
-        param.value.double_value = kwargs['max_range']
-        params.append(param)
+        if 'max_range' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.max_range'
+            param.value.type = ParameterType.PARAMETER_DOUBLE
+            param.value.double_value = kwargs['max_range']
+            params.append(param)
 
         # min_angle parameter
-        param = Parameter()
-        param.name = 'pedestrian_plugin.min_angle'
-        param.value.type = ParameterType.PARAMETER_DOUBLE
-        param.value.double_value = kwargs['min_angle']
-        params.append(param)
+        if 'min_angle' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.min_angle'
+            param.value.type = ParameterType.PARAMETER_DOUBLE
+            param.value.double_value = kwargs['min_angle']
+            params.append(param)
 
         # max_angle parameter
-        param = Parameter()
-        param.name = 'pedestrian_plugin.max_angle'
-        param.value.type = ParameterType.PARAMETER_DOUBLE
-        param.value.double_value = kwargs['max_angle']
-        params.append(param)
+        if 'max_angle' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.max_angle'
+            param.value.type = ParameterType.PARAMETER_DOUBLE
+            param.value.double_value = kwargs['max_angle']
+            params.append(param)
 
         # occlusion_radius parameter
-        param = Parameter()
-        param.name = 'pedestrian_plugin.occlusion_radius'
-        param.value.type = ParameterType.PARAMETER_DOUBLE
-        param.value.double_value = kwargs['occlusion_radius']
-        params.append(param)
+        if 'occlusion_radius' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.occlusion_radius'
+            param.value.type = ParameterType.PARAMETER_DOUBLE
+            param.value.double_value = kwargs['occlusion_radius']
+            params.append(param)
 
         request = SetParameters.Request()
         request.parameters = params
