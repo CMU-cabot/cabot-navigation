@@ -34,7 +34,7 @@ def onUpdate(**args):
     robot = args['robot'] if 'robot' in args else None
 
     if robot:
-        circle_center_point = {'x':robot['x'],robot['y']}
+        circle_center_point = {'x':robot['x'],'y':robot['y']}
         robot_radius = 3.0
         polygon_vertex_points = [\
             {'x':args['x']-0.5,'y':args['y']-0.5}, \
