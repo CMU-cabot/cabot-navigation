@@ -69,6 +69,8 @@ services:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
 # code
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/ros2_ws/install/${CABOT_SITE}
       #- ./cabot:/home/developer/ros2_ws/src/cabot
       #- ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
       #- ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
@@ -202,6 +204,8 @@ services:
       - /var/lib/bluetooth:/var/lib/bluetooth
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/loc_ws/install/${CABOT_SITE}
       #- ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
       #- ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
       #- ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
