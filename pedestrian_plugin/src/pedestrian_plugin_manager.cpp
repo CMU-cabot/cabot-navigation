@@ -126,10 +126,23 @@ ParamValue PedestrianPluginParams::getParam(std::string name)
 PedestrianPluginManager::PedestrianPluginManager()
 : node_(gazebo_ros::Node::Get())
 {
-  min_range_ = node_->declare_parameter<double>("pedestrian_plugin.min_range", 0.1);
-  max_range_ = node_->declare_parameter<double>("pedestrian_plugin.max_range", 10.0);
-  min_angle_ = node_->declare_parameter<double>("pedestrian_plugin.min_angle", -1.0);
-  max_angle_ = node_->declare_parameter<double>("pedestrian_plugin.max_angle", 1.0);
+  if (!node_->has_parameter("pedestrian_plugin.min_range")) {
+    node_->declare_parameter<double>("pedestrian_plugin.min_range", 0.1);
+  }
+  if (!node_->has_parameter("pedestrian_plugin.max_range")) {
+    node_->declare_parameter<double>("pedestrian_plugin.max_range", 10.0);
+  }
+  if (!node_->has_parameter("pedestrian_plugin.min_angle")) {
+    node_->declare_parameter<double>("pedestrian_plugin.min_angle", -1.0);
+  }
+  if (!node_->has_parameter("pedestrian_plugin.max_angle")) {
+    node_->declare_parameter<double>("pedestrian_plugin.max_angle", 1.0);
+  }
+
+  min_range_ = node_->get_parameter("pedestrian_plugin.min_range").as_double();
+  max_range_ = node_->get_parameter("pedestrian_plugin.max_range").as_double();
+  min_angle_ = node_->get_parameter("pedestrian_plugin.min_angle").as_double();
+  max_angle_ = node_->get_parameter("pedestrian_plugin.max_angle").as_double();
 
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
