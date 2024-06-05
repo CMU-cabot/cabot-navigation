@@ -171,7 +171,9 @@ void PedestrianPluginManager::publishPeopleIfReady()
   if (peopleReadyMap_.size() == pluginMap_.size()) {
     people_msgs::msg::People msg;
     for (auto it : peopleMap_) {
-      msg.people.push_back(it.second);
+      if (isWithinRange(robotAgent_->position.position, it.second.position)) {
+        msg.people.push_back(it.second);
+      }
     }
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
@@ -291,11 +293,11 @@ void PedestrianPluginManager::handle_plugin_update(
 }
 
 bool PedestrianPluginManager::isWithinRange(
-  const geometry_msgs::msg::Pose & robot_pose, const geometry_msgs::msg::Pose & person_pose)
+  const geometry_msgs::msg::Point & robot_point, const geometry_msgs::msg::Point & person_point)
 {
-  double dx = person_pose.position.x - robot_pose.position.x;
-  double dy = person_pose.position.y - robot_pose.position.y;
-  double dz = person_pose.position.z - robot_pose.position.z;
+  double dx = person_point.x - robot_point.x;
+  double dy = person_point.y - robot_point.y;
+  double dz = person_point.z - robot_point.z;
 
   double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
 

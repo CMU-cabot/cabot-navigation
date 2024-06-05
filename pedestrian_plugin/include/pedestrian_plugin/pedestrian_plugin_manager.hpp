@@ -120,7 +120,7 @@ private:
     const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
   bool isWithinRange(
-    const geometry_msgs::msg::Pose & robot_pose, const geometry_msgs::msg::Pose & person_pose);
+    const geometry_msgs::msg::Point & robot_point, const geometry_msgs::msg::Point & person_point);
   rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
     std::vector<rclcpp::Parameter> parameters);
 
