@@ -738,7 +738,7 @@ class SimpleGoal(Goal):
         CaBotRclpyUtil.info("SimpleGoal._enter is called")
         try:
             self.delegate.navigate_to_pose(self.goal, SimpleGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
-        except:
+        except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
     def done_callback(self, future):
