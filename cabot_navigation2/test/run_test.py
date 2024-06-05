@@ -327,6 +327,13 @@ class Tester:
         param.value.double_value = kwargs['max_angle']
         params.append(param)
 
+        # occlusion_radius parameter
+        param = Parameter()
+        param.name = 'pedestrian_plugin.occlusion_radius'
+        param.value.type = ParameterType.PARAMETER_DOUBLE
+        param.value.double_value = kwargs['occlusion_radius']
+        params.append(param)
+
         request = SetParameters.Request()
         request.parameters = params
 

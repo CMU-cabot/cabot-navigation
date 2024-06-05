@@ -144,6 +144,7 @@ private:
   double max_range_;
   double min_angle_;
   double max_angle_;
+  double occlusion_radius_;
 };
 
 }  // namespace gazebo

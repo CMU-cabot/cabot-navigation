@@ -138,11 +138,15 @@ PedestrianPluginManager::PedestrianPluginManager()
   if (!node_->has_parameter("pedestrian_plugin.max_angle")) {
     node_->declare_parameter<double>("pedestrian_plugin.max_angle", 1.0);
   }
+  if (!node_->has_parameter("pedestrian_plugin.occlusion_radius")) {
+    node_->declare_parameter<double>("pedestrian_plugin.occlusion_radius", 0.25);
+  }
 
   min_range_ = node_->get_parameter("pedestrian_plugin.min_range").as_double();
   max_range_ = node_->get_parameter("pedestrian_plugin.max_range").as_double();
   min_angle_ = node_->get_parameter("pedestrian_plugin.min_angle").as_double();
   max_angle_ = node_->get_parameter("pedestrian_plugin.max_angle").as_double();
+  occlusion_radius_ = node_->get_parameter("pedestrian_plugin.occlusion_radius").as_double();
 
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
@@ -330,6 +334,9 @@ rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParamet
       } else if (name == "pedestrian_plugin.max_angle") {
         max_angle_ = parameter.as_double();
         RCLCPP_INFO(node_->get_logger(), "Change max_angle parameter: %lf", max_angle_);
+      } else if (name == "pedestrian_plugin.occlusion_radius") {
+        occlusion_radius_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change occlusion_radius parameter: %lf", occlusion_radius_);
       }
     }
   }
