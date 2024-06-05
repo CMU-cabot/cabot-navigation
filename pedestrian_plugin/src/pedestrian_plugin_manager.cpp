@@ -301,9 +301,8 @@ bool PedestrianPluginManager::isWithinRange(
 {
   double dx = person_point.x - robot_point.x;
   double dy = person_point.y - robot_point.y;
-  double dz = person_point.z - robot_point.z;
 
-  double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+  double distance = std::sqrt(dx * dx + dy * dy);
 
   return (distance >= min_range_ && distance <= max_range_);
 }
