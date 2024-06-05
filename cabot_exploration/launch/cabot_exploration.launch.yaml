@@ -45,6 +45,18 @@ launch:
         -resolution 0.05
         -publish_period_sec 0.5
 
+  # provide map_global -> map as identical transform
+  - node:
+      pkg: tf2_ros
+      exec: static_transform_publisher
+      args: |
+        --frame-id map_global
+        --child-frame-id map
+
+  - node:
+      pkg: cabot_exploration
+      exec: cabot_exploration.py
+
 #  - node:
 #      pkg: cabot_exploration
 #      exec: record_data.py

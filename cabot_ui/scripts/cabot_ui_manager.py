@@ -594,8 +594,6 @@ class EventMapper(object):
 def receiveSignal(signal_num, frame):
     print("Received:", signal_num)
     node.destroy_node()
-    for t in threads:
-        t.join()
     sys.exit()
 
 

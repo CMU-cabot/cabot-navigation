@@ -64,6 +64,7 @@ class DataUtil(object):
         self.current_route = None
         self.is_ready = False
         self.is_analyzed = False
+        self.no_server = False
 
     def _update(self):
         geojson.Object.update_anchor_all(self._anchor)
@@ -95,6 +96,7 @@ class DataUtil(object):
         except RuntimeError as err:
             CaBotRclpyUtil.info(F"{err}")
             if retry_count <= 0:
+                self.no_server = True
                 return
             time.sleep(5)
             CaBotRclpyUtil.info(F"retrying to init server {retry_count})")

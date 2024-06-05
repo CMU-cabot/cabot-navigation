@@ -302,6 +302,10 @@ def make_goals(delegate, groute, anchor, yaw=None):
     return goals
 
 
+def make_goal_to(delegate, x, y):
+    return [SimpleGoal(delegate, x, y)]
+
+
 def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_back=[0.0, 0.0]):
     """convert a NavCog path to ROS path"""
     mode = geojson.NavigationMode.Standard
@@ -309,7 +313,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
     points = []
     if len(navcog_route) == 0:
         CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
-        return points
+        return (points, None, None)
     CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
     last_index = len(navcog_route)-1
 
@@ -711,6 +715,43 @@ class Nav2Params:
 
 if __name__ == "__main__":
     print(Nav2Params.all_keys())
+
+
+class SimpleGoal(Goal):
+    DEFAULT_BT_XML = "package://cabot_bt/behavior_trees/cabot_explore.xml"
+
+    def __init__(self, delegate, x, y):
+        self.delegate = delegate
+        self.goal = geometry_msgs.msg.PoseStamped()
+        self.goal.header.frame_id = "map"
+        self.goal.pose.position.x = x
+        self.goal.pose.position.y = y
+        super(SimpleGoal, self).__init__(delegate, pose_msg=self.goal, angle=180, floor=None)
+
+    def nav_params_keys(self):
+        return Nav2Params.all_keys()
+
+    def nav_params(self):
+        return Nav2Params.get_parameters_for(geojson.NavigationMode.Standard)
+
+    def _enter(self):
+        CaBotRclpyUtil.info("SimpleGoal._enter is called")
+        try:
+            self.delegate.navigate_to_pose(self.goal, SimpleGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
+        except:
+            self._logger.error(traceback.format_exc())
+
+    def done_callback(self, future):
+        CaBotRclpyUtil.info(F"SimpleGoal completed result={future.result()}")
+        status = future.result().status
+        self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
+        self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
+
+    def match(self, pose, floor):
+        return False
+
+    def completed(self, pose, floor):
+        return False
 
 
 class NavGoal(Goal):

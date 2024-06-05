@@ -67,7 +67,7 @@ def generate_launch_description():
     param_substitutions = {
         'use_sim_time': use_sim_time,
         'autostart': autostart,
-        'default_bt_xml_filename': default_bt_xml_file,
+        'default_nav_to_pose_bt_xml': default_bt_xml_file,
         'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
         'inflation_radius': PythonExpression([footprint_radius, "+ 0.25"]),
@@ -84,7 +84,7 @@ def generate_launch_description():
     param_substitutions2 = {
         'use_sim_time': use_sim_time,
         'autostart': autostart,
-        'default_bt_xml_filename': default_bt_xml_file2,
+        'default_nav_to_pose_bt_xml': default_bt_xml_file2,
         'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
         'offset_normal': PythonExpression([offset, " if '", cabot_side, "'=='left' else -", offset]),
@@ -127,7 +127,7 @@ def generate_launch_description():
             'default_bt_xml_file',
             default_value=os.path.join(
                 get_package_share_directory('cabot_bt'),
-                'behavior_trees', 'navigate_w_replanning_and_recovery.xml'),
+                'behavior_trees', 'cabot_explore.xml'),
             description='Full path to the behavior tree xml file to use'),
 
         DeclareLaunchArgument(

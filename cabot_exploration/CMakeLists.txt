@@ -22,6 +22,10 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+install(PROGRAMS
+  script/cabot_exploration.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 install(DIRECTORY configuration_files/ DESTINATION share/${PROJECT_NAME}/configuration_files)
 
