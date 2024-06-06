@@ -185,7 +185,6 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_desc
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_diagnostics src/cabot_diagnostics
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_gazebo src/cabot_gazebo
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_navigation2 src/cabot_navigation2
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_sites src/cabot_sites
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_ui src/cabot_ui
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_msgs src/mf_localization_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_rviz src/mf_localization_rviz
