@@ -159,7 +159,6 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_desc
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_common src/cabot_common
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/cabot_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_mf_localization src/cabot_mf_localization
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_sites src/cabot_sites
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization src/mf_localization
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_gazebo src/mf_localization_gazebo
