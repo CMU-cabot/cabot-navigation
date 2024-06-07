@@ -64,6 +64,7 @@ function help()
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
+    echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
 }
 
 pwd=`pwd`
@@ -76,8 +77,10 @@ ignore_error=0
 verbose=0
 clean_server=0
 location_tools=0
+environment=
+launch_prefix=
 
-while getopts "hd:p:fvcCl" arg; do
+while getopts "hd:E:p:fvcCl" arg; do
     case $arg in
         h)
             help
@@ -86,6 +89,9 @@ while getopts "hd:p:fvcCl" arg; do
         d)
             data_dir=$(realpath $OPTARG)
             ;;
+	E)
+	    environment=$OPTARG
+	    ;;
 	p)
 	    cabot_site_dir=$(find $scriptdir/cabot_sites -name $OPTARG | head -1)
 	    data_dir=${cabot_site_dir}/server_data
@@ -115,6 +121,12 @@ pids=()
 temp_dir=$scriptdir/.tmp
 mkdir -p $temp_dir
 
+launch_prefix=$(basename $scriptdir)
+if [[ -n $environment ]]; then
+    export MAP_SERVER_PORT=$((9090+environment*10))
+    launch_prefix="${launch_prefix}-env${environment}"
+fi
+
 # forcely clean and extit
 if [[ $clean_server -eq 2 ]]; then
     blue "Clean servers"
@@ -134,14 +146,14 @@ if [[ $clean_server -eq 2 ]]; then
     exit 0
 fi
 
-	if [[ $location_tools -eq 1 ]]; then
-    docker compose -f docker-compose-location-tools.yaml up -d
+if [[ $location_tools -eq 1 ]]; then
+    docker compose -p $launch_prefix -f docker-compose-location-tools.yaml up -d
     exit 0
 fi
 
 
 function check_server() {
-    server=http://localhost:9090/map
+    server=http://localhost:${MAP_SERVER_PORT}/map
 
     # check if the server data is same with the specified data
     curl $server/content-md5 --fail > ${temp_dir}/content-md5 2> /dev/null
@@ -182,9 +194,9 @@ if [[ $clean_server -eq 1 ]]; then
     else
 	blue "Clean servers"
 	for service in "map_server" "map_data" "mongodb"; do
-            if [[ ! -z $(docker ps -f "name=$service" -q -a) ]]; then
-		docker ps -f "name=$service" -q -a | xargs docker stop
-		docker ps -f "name=$service" -q -a | xargs docker container rm
+            if [[ ! -z $(docker ps -f "name=${launch_prefix}-$service" -q -a) ]]; then
+		docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker stop
+		docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker container rm
             fi
 	done
     fi
@@ -229,16 +241,16 @@ fi
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 if [ -e $data_dir/server.env ]; then
     if [[ $verbose -eq 1 ]]; then
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
-        ENV_FILE=$data_dir/server.env docker compose --ansi never -f docker-compose-server.yaml logs -f
+        ENV_FILE=$data_dir/server.env docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        ENV_FILE=$data_dir/server.env docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
     else
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
+        ENV_FILE=$data_dir/server.env docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
-        docker compose -f docker-compose-server.yaml up -d
-        docker compose --ansi never -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
     else
-        docker compose -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
     fi
 fi

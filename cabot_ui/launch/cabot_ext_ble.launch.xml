@@ -21,10 +21,11 @@
 -->
 
 <launch>
+   <arg name="port" default="$(env CABOT_ROSBRIDGE_PORT 9091)" />
   <!-- rosbridge for external BLE server  -->
   <node pkg="rosbridge_server" exec="rosbridge_websocket"
 	name="rosbridge_server" output="log">
-    <param name="port" value="9091" />
+    <param name="port" value="$(var port)" />
     <param name="max_message_size" value="128000000" />
   </node>
 

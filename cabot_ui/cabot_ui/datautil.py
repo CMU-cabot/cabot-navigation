@@ -26,6 +26,7 @@ Author: Daisuke Sato<daisukes@cmu.edu>
 
 import time
 import json
+import os
 
 from rclpy.node import Node
 import requests
@@ -42,6 +43,8 @@ class DataUtil(object):
         self._node = node
         self._protocol = node.declare_parameter("protocol", "http").value
         self._hostname = node.declare_parameter("map_server_host", "").value
+        if os.environ.get("CABOT_MAP_SERVER_HOST"):
+            self._hostname = os.environ.get("CABOT_MAP_SERVER_HOST")
         if not node.has_parameter("lang"):
             self._lang = node.declare_parameter("lang", "en").value
         else:
