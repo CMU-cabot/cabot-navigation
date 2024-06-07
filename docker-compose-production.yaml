@@ -26,7 +26,7 @@ version: "2.3"
 services:
   navigation:
     extends:
-      file: docker-compose.yaml
+      file: docker-compose-common-production.yaml
       service: navigation
     environment:
       - CABOT_GAZEBO=0
@@ -35,7 +35,7 @@ services:
 
   gui:
     extends:
-      file: docker-compose-common.yaml
+      file: docker-compose-common-production.yaml
       service: gui
     environment:
       - CABOT_GAZEBO=0
@@ -43,7 +43,7 @@ services:
 
   localization:
     extends:
-      file: docker-compose.yaml
+      file: docker-compose-common-production.yaml
       service: localization
     environment:
       - CABOT_GAZEBO=0
