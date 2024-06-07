@@ -23,8 +23,6 @@ services:
   ros2-base:
     build:
       context: ./docker/ros2
-      additional_contexts:
-        cabot_src: ./
     environment:
 # required for gazebo rendering
       - DISPLAY
@@ -69,26 +67,24 @@ services:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
 # code
-      - ./config:/home/developer/config
-      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/ros2_ws/install/${CABOT_SITE}
-      #- ./cabot:/home/developer/ros2_ws/src/cabot
-      #- ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
-      #- ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
-      #- ./cabot_diagnostics:/home/developer/ros2_ws/src/cabot_diagnostics
-      #- ./cabot_gazebo:/home/developer/ros2_ws/src/cabot_gazebo
-      #- ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
-      #- ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
-      #- ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
-      #- ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
-      #- ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
-      #- ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
-      #- ./pedestrian_plugin_msgs:/home/developer/ros2_ws/src/pedestrian_plugin_msgs
-      #- ./script:/home/developer/ros2_ws/script
-      #- ./cabot-common/cabot_common:/home/developer/ros2_ws/src/cabot_common
-      #- ./cabot-common/cabot_msgs:/home/developer/ros2_ws/src/cabot_msgs
-      #- ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
-      #- ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
-      #- ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
+      - ./cabot:/home/developer/ros2_ws/src/cabot
+      - ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
+      - ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
+      - ./cabot_diagnostics:/home/developer/ros2_ws/src/cabot_diagnostics
+      - ./cabot_gazebo:/home/developer/ros2_ws/src/cabot_gazebo
+      - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
+      - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
+      - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
+      - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
+      - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
+      - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
+      - ./pedestrian_plugin_msgs:/home/developer/ros2_ws/src/pedestrian_plugin_msgs
+      - ./script:/home/developer/ros2_ws/script
+      - ./cabot-common/cabot_common:/home/developer/ros2_ws/src/cabot_common
+      - ./cabot-common/cabot_msgs:/home/developer/ros2_ws/src/cabot_msgs
+      - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
+      - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
+      - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
 # network
     privileged: true
     network_mode: host
@@ -152,23 +148,21 @@ services:
   navigation:
     extends: navigation-base
     volumes:
-      #- ./docker/home:/home/developer/
+      - ./docker/home:/home/developer/
 
   gazebo:
     extends: gazebo-base
     volumes:
-      #- ./docker/home:/home/developer/
+      - ./docker/home:/home/developer/
 
   gui:
     extends: gui-base
     volumes:
-      #- ./docker/home:/home/developer/
+      - ./docker/home:/home/developer/
 
   localization-base:
     build:
       context: ./docker/localization
-      additional_contexts:
-        cabot_src: ./
     environment:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
@@ -204,19 +198,17 @@ services:
       - /var/lib/bluetooth:/var/lib/bluetooth
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
-      - ./config:/home/developer/config
-      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/loc_ws/install/${CABOT_SITE}
-      #- ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
-      #- ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
-      #- ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
-      #- ./cabot_mf_localization:/home/developer/loc_ws/src/cabot_mf_localization
-      #- ./cabot_sites:/home/developer/loc_ws/src/cabot_sites
-      #- ./script:/home/developer/loc_ws/script
-      #- ./mf_localization:/home/developer/loc_ws/src/mf_localization
-      #- ./mf_localization_gazebo:/home/developer/loc_ws/src/mf_localization_gazebo
-      #- ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
-      #- ./mf_localization_msgs:/home/developer/loc_ws/src/mf_localization_msgs
-      #- ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
+      - ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
+      - ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
+      - ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
+      - ./cabot_mf_localization:/home/developer/loc_ws/src/cabot_mf_localization
+      - ./cabot_sites:/home/developer/loc_ws/src/cabot_sites
+      - ./script:/home/developer/loc_ws/script
+      - ./mf_localization:/home/developer/loc_ws/src/mf_localization
+      - ./mf_localization_gazebo:/home/developer/loc_ws/src/mf_localization_gazebo
+      - ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
+      - ./mf_localization_msgs:/home/developer/loc_ws/src/mf_localization_msgs
+      - ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
     privileged: true
@@ -239,5 +231,4 @@ services:
   localization:
     extends: localization-base
     volumes:
-      #- ./docker/home:/home/developer/
-
+      - ./docker/home:/home/developer/

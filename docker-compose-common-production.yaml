@@ -24,6 +24,7 @@ services:
   ros2-base:
     build:
       context: ./docker/ros2
+      filename: Dockerfile.production
       additional_contexts:
         cabot_src: ./
     environment:
@@ -158,6 +159,7 @@ services:
   localization-base:
     build:
       context: ./docker/localization
+      filename: Dockerfile.production
       additional_contexts:
         cabot_src: ./
     environment:
