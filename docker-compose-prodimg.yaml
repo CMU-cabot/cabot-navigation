@@ -18,33 +18,38 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+version: "2.3"
 
-# configuration of real robot for single PC
-# services environments are overrideed
+# configuration of simulation for single PC
+# services extend from docker-compose-common.yaml
 
 services:
-  navigation:
+  navigation-prodimg:
     extends:
-      file: docker-compose-common.yaml
-      service: navigation
+      file: docker-compose-prodimg-common.yaml
+      service: navigation-prodimg
     environment:
-      - CABOT_GAZEBO=0
-      - CABOT_USE_SIM_TIME=0
-      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
+      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
 
-  gui:
+  gazebo-prodimg:
     extends:
-      file: docker-compose-common.yaml
-      service: gui
-    environment:
-      - CABOT_GAZEBO=0
-      - CABOT_USE_SIM_TIME=0
+      file: docker-compose-prodimg-common.yaml
+      service: gazebo-prodimg
 
-  localization:
+  gui-prodimg:
     extends:
-      file: docker-compose-common.yaml
-      service: localization
+      file: docker-compose-prodimg-common.yaml
+      service: gui-prodimg
     environment:
-      - CABOT_GAZEBO=0
-      - CABOT_PRESSURE_AVAILABLE=0
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
 
+  localization-prodimg:
+    extends:
+      file: docker-compose-prodimg-common.yaml
+      service: localization-prodimg
+    environment:
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
