@@ -78,6 +78,6 @@ inline double roundAngleDeg(const double deg, const double resolution)
   return normalizeDeg(std::round(deg / resolution) * resolution);
 }
 
-}  // math
+}  // namespace math
 
 #endif // PEDESTRIAN_PLUGIN__MATH_UTILS_HPP_

@@ -364,7 +364,7 @@ std::vector<people_msgs::msg::Person> PedestrianPluginManager::getNonOccludedPeo
   std::vector<gazebo::PersonInfo> people_info_list;
   people_info_list.reserve(people_map.size());
 
- int angle_divisions = std::ceil(360.0 / divider_angle_deg_);
+  int angle_divisions = std::ceil(360.0 / divider_angle_deg_);
   std::vector<bool> visibility_table(angle_divisions, true);
 
   for (const auto & it : people_map) {
