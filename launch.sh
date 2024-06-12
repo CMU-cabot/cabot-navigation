@@ -109,6 +109,7 @@ function help()
     echo "-H          headless"
     echo "-M          log dmesg output"
     echo "-n <name>   set log name prefix"
+    echo "-p          use production image"
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
@@ -142,6 +143,7 @@ retryoption=
 list_modules=0
 list_functions=0
 environment=
+prodimg=0
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -153,7 +155,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDE:f:HlLMn:rsS:ti:T:uvy" arg; do
+while getopts "hDE:f:HlLMn:prsS:ti:T:uvy" arg; do
     case $arg in
         h)
             help
@@ -182,6 +184,9 @@ while getopts "hDE:f:HlLMn:rsS:ti:T:uvy" arg; do
             ;;
         n)
             log_prefix=$OPTARG
+            ;;
+        p)
+            prodimg=1
             ;;
         r)
             retryoption="-r"
@@ -306,6 +311,7 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
+if [[ $prodimg -eq 1 ]]; then dcfile="${dcfile}-prodimg"; fi
 if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
 if [[ $CABOT_HEADLESS -eq 1 ]]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
@@ -347,10 +353,12 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test $module $test_regex"
+    nav_service="navigation"
+    if [[ $prodimg -eq 1 ]]; then nav_service="${nav_service}-prodimg"; fi
     if [[ $debug -eq 1 ]]; then
         docker compose -p $launch_prefix -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
     else
-        docker compose -p $launch_prefix exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
+        docker compose -p $launch_prefix -f $dcfile exec $nav_service /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
     fi
     ctrl_c $?
 fi
