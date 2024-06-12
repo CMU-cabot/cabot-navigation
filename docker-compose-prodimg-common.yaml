@@ -21,10 +21,10 @@
 version: "2.3"
 
 services:
-  ros2-base:
+  ros2-prodimg-base:
     build:
       context: ./docker/ros2
-      filename: Dockerfile.production
+      dockerfile: Dockerfile.prodimg
       additional_contexts:
         cabot_src: ./
     environment:
@@ -89,8 +89,8 @@ services:
     stop_grace_period: 30s
 
   
-  ros2:
-    extends: ros2-base
+  ros2-prodimg:
+    extends: ros2-prodimg-base
     environment:
 # CaBot
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
@@ -113,23 +113,23 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  navigation-base:
-    extends: ros2
+  navigation-prodimg-base:
+    extends: ros2-prodimg
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "navigation"
 
-  gazebo-base:
-    extends: ros2-base
+  gazebo-prodimg-base:
+    extends: ros2-prodimg-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gazebo"
       #- "-g"                   # run with gdb
 
-  gui-base:
-    extends: ros2-base
+  gui-prodimg-base:
+    extends: ros2-prodimg-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -141,25 +141,25 @@ services:
       - CABOT_SHOW_ROS2_RVIZ=${CABOT_SHOW_ROS2_RVIZ:-1}
       - CABOT_SHOW_ROS2_LOCAL_RVIZ
 
-  navigation:
-    extends: navigation-base
+  navigation-prodimg:
+    extends: navigation-prodimg-base
     volumes:
       #- ./docker/home:/home/developer/
 
-  gazebo:
-    extends: gazebo-base
+  gazebo-prodimg:
+    extends: gazebo-prodimg-base
     volumes:
       #- ./docker/home:/home/developer/
 
-  gui:
-    extends: gui-base
+  gui-prodimg:
+    extends: gui-prodimg-base
     volumes:
       #- ./docker/home:/home/developer/
 
-  localization-base:
+  localization-prodimg-base:
     build:
       context: ./docker/localization
-      filename: Dockerfile.production
+      dockerfile: Dockerfile.prodimg
       additional_contexts:
         cabot_src: ./
     environment:
@@ -218,8 +218,8 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  localization:
-    extends: localization-base
+  localization-prodimg:
+    extends: localization-prodimg-base
     volumes:
       #- ./docker/home:/home/developer/
 
