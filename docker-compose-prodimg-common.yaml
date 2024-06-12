@@ -21,6 +21,7 @@
 version: "2.3"
 
 services:
+  ros2-base:
   ros2-prodimg-base:
     build:
       context: ./docker/ros2
@@ -89,8 +90,8 @@ services:
     stop_grace_period: 30s
 
   
-  ros2-prodimg:
-    extends: ros2-prodimg-base
+  ros2:
+    extends: ros2-base
     environment:
 # CaBot
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
@@ -113,23 +114,23 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  navigation-prodimg-base:
-    extends: ros2-prodimg
+  navigation-base:
+    extends: ros2
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "navigation"
 
-  gazebo-prodimg-base:
-    extends: ros2-prodimg-base
+  gazebo-base:
+    extends: ros2-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gazebo"
       #- "-g"                   # run with gdb
 
-  gui-prodimg-base:
-    extends: ros2-prodimg-base
+  gui-base:
+    extends: ros2-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -141,22 +142,22 @@ services:
       - CABOT_SHOW_ROS2_RVIZ=${CABOT_SHOW_ROS2_RVIZ:-1}
       - CABOT_SHOW_ROS2_LOCAL_RVIZ
 
-  navigation-prodimg:
-    extends: navigation-prodimg-base
+  navigation:
+    extends: navigation-base
     volumes:
       #- ./docker/home:/home/developer/
 
-  gazebo-prodimg:
-    extends: gazebo-prodimg-base
+  gazebo:
+    extends: gazebo-base
     volumes:
       #- ./docker/home:/home/developer/
 
-  gui-prodimg:
-    extends: gui-prodimg-base
+  gui:
+    extends: gui-base
     volumes:
       #- ./docker/home:/home/developer/
 
-  localization-prodimg-base:
+  localization-base:
     build:
       context: ./docker/localization
       dockerfile: Dockerfile.prodimg
@@ -218,8 +219,8 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  localization-prodimg:
-    extends: localization-prodimg-base
+  localization:
+    extends: localization-base
     volumes:
       #- ./docker/home:/home/developer/
 
