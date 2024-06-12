@@ -24,32 +24,32 @@ version: "2.3"
 # services extend from docker-compose-common.yaml
 
 services:
-  navigation-prodimg:
+  navigation:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: navigation-prodimg
+      service: navigation
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
 
-  gazebo-prodimg:
+  gazebo:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: gazebo-prodimg
+      service: gazebo
 
-  gui-prodimg:
+  gui:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: gui-prodimg
+      service: gui
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
 
-  localization-prodimg:
+  localization:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: localization-prodimg
+      service: localization
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1

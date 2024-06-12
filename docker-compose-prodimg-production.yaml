@@ -24,27 +24,27 @@ version: "2.3"
 # services environments are overrideed
 
 services:
-  navigation-prodimg:
+  navigation:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: navigation-prodimg
+      service: navigation
     environment:
       - CABOT_GAZEBO=0
       - CABOT_USE_SIM_TIME=0
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
 
-  gui-prodimg:
+  gui:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: gui-prodimg
+      service: gui
     environment:
       - CABOT_GAZEBO=0
       - CABOT_USE_SIM_TIME=0
 
-  localization-prodimg:
+  localization:
     extends:
       file: docker-compose-prodimg-common.yaml
-      service: localization-prodimg
+      service: localization
     environment:
       - CABOT_GAZEBO=0
       - CABOT_PRESSURE_AVAILABLE=0
