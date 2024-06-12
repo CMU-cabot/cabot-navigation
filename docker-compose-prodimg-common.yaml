@@ -22,12 +22,7 @@ version: "2.3"
 
 services:
   ros2-base:
-  ros2-prodimg-base:
-    build:
-      context: ./docker/ros2
-      dockerfile: Dockerfile.prodimg
-      additional_contexts:
-        cabot_src: ./
+    image: cmucal/cabot-prodimg-navigation
     environment:
 # required for gazebo rendering
       - DISPLAY
@@ -158,11 +153,7 @@ services:
       #- ./docker/home:/home/developer/
 
   localization-base:
-    build:
-      context: ./docker/localization
-      dockerfile: Dockerfile.prodimg
-      additional_contexts:
-        cabot_src: ./
+    image: cmucal/cabot_localization
     environment:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
