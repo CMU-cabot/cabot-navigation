@@ -299,6 +299,14 @@ class Tester:
     def set_people_detection_range(self, **kwargs):
         params = []
 
+        # occlusion_angle_range parameter
+        if 'occlusion_ray_range' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.occlusion_ray_range'
+            param.value.type = ParameterType.PARAMETER_INTEGER
+            param.value.double_value = kwargs['occlusion_ray_range']
+            params.append(param)
+
         # min_range parameter
         if 'min_range' in kwargs:
             param = Parameter()
@@ -331,12 +339,20 @@ class Tester:
             param.value.double_value = kwargs['max_angle']
             params.append(param)
 
-        # occlusion_radius parameter
-        if 'occlusion_radius' in kwargs:
+        # divider_distance_m parameter
+        if 'divider_distance_m' in kwargs:
             param = Parameter()
-            param.name = 'pedestrian_plugin.occlusion_radius'
+            param.name = 'pedestrian_plugin.divider_distance_m'
             param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['occlusion_radius']
+            param.value.double_value = kwargs['divider_distance_m']
+            params.append(param)
+
+        # divider_angle_deg parameter
+        if 'divider_angle_deg' in kwargs:
+            param = Parameter()
+            param.name = 'pedestrian_plugin.divider_angle_deg'
+            param.value.type = ParameterType.PARAMETER_DOUBLE
+            param.value.double_value = kwargs['divider_angle_deg']
             params.append(param)
 
         request = SetParameters.Request()

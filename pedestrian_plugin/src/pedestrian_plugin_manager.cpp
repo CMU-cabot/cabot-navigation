@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "pedestrian_plugin/math_utils.hpp"
 #include "pedestrian_plugin/python_utils.hpp"
 #include "pedestrian_plugin/pedestrian_plugin.hpp"
 #include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
@@ -126,27 +127,39 @@ ParamValue PedestrianPluginParams::getParam(std::string name)
 PedestrianPluginManager::PedestrianPluginManager()
 : node_(gazebo_ros::Node::Get())
 {
+  if (!node_->has_parameter("pedestrian_plugin.occlusion_ray_range")) {
+    node_->declare_parameter<int>("pedestrian_plugin.occlusion_ray_range", 2);
+  }
   if (!node_->has_parameter("pedestrian_plugin.min_range")) {
-    node_->declare_parameter<double>("pedestrian_plugin.min_range", 0.1);
+    node_->declare_parameter<double>("pedestrian_plugin.min_range", 0.0);
   }
   if (!node_->has_parameter("pedestrian_plugin.max_range")) {
-    node_->declare_parameter<double>("pedestrian_plugin.max_range", 10.0);
+    node_->declare_parameter<double>(
+      "pedestrian_plugin.max_range", std::numeric_limits<double>::max());
   }
   if (!node_->has_parameter("pedestrian_plugin.min_angle")) {
-    node_->declare_parameter<double>("pedestrian_plugin.min_angle", -1.0);
+    node_->declare_parameter<double>(
+      "pedestrian_plugin.min_angle", -std::numeric_limits<double>::max());
   }
   if (!node_->has_parameter("pedestrian_plugin.max_angle")) {
-    node_->declare_parameter<double>("pedestrian_plugin.max_angle", 1.0);
+    node_->declare_parameter<double>(
+      "pedestrian_plugin.max_angle", std::numeric_limits<double>::max());
   }
-  if (!node_->has_parameter("pedestrian_plugin.occlusion_radius")) {
-    node_->declare_parameter<double>("pedestrian_plugin.occlusion_radius", 0.25);
+  if (!node_->has_parameter("pedestrian_plugin.divider_distance_m")) {
+    node_->declare_parameter<double>("pedestrian_plugin.divider_distance_m", 0.05);
+  }
+  if (!node_->has_parameter("pedestrian_plugin.divider_angle_deg")) {
+    node_->declare_parameter<double>("pedestrian_plugin.divider_angle_deg", 1.0);
   }
 
+  occlusion_ray_range_ =
+    node_->get_parameter("pedestrian_plugin.occlusion_ray_range").as_int();
   min_range_ = node_->get_parameter("pedestrian_plugin.min_range").as_double();
   max_range_ = node_->get_parameter("pedestrian_plugin.max_range").as_double();
   min_angle_ = node_->get_parameter("pedestrian_plugin.min_angle").as_double();
   max_angle_ = node_->get_parameter("pedestrian_plugin.max_angle").as_double();
-  occlusion_radius_ = node_->get_parameter("pedestrian_plugin.occlusion_radius").as_double();
+  divider_distance_m_ = node_->get_parameter("pedestrian_plugin.divider_distance_m").as_double();
+  divider_angle_deg_ = node_->get_parameter("pedestrian_plugin.divider_angle_deg").as_double();
 
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
@@ -174,17 +187,14 @@ void PedestrianPluginManager::publishPeopleIfReady()
 {
   if (peopleReadyMap_.size() == pluginMap_.size()) {
     people_msgs::msg::People msg;
-    for (auto it : peopleMap_) {
-      if (!isWithinRange(robotAgent_->position.position, it.second.position)) {
-        continue;
-      }
-      if (!isWithinFOV(robotAgent_->yaw, robotAgent_->position.position, it.second.position)) {
-        continue;
-      }
-      msg.people.push_back(it.second);
-    }
+
+    auto visible_people = getNonOccludedPeople(robotAgent_->position.position, peopleMap_);
+    auto filtered_people = filterByDistanceAndAngle(
+      robotAgent_->yaw, robotAgent_->position.position, visible_people);
+
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
+    msg.people = filtered_people;
     people_pub_->publish(msg);
 
     // publish robot and human messages
@@ -303,12 +313,10 @@ void PedestrianPluginManager::handle_plugin_update(
 bool PedestrianPluginManager::isWithinRange(
   const geometry_msgs::msg::Point & robot_point, const geometry_msgs::msg::Point & person_point)
 {
-  double dx = person_point.x - robot_point.x;
-  double dy = person_point.y - robot_point.y;
+  double dist = math::getDistance(
+    robot_point.x, robot_point.y, person_point.x, person_point.y);
 
-  double distance = std::sqrt(dx * dx + dy * dy);
-
-  return (distance >= min_range_ && distance <= max_range_);
+  return dist >= min_range_ && dist <= max_range_;
 }
 
 bool PedestrianPluginManager::isWithinFOV(
@@ -316,9 +324,8 @@ bool PedestrianPluginManager::isWithinFOV(
   const geometry_msgs::msg::Point & robot_point,
   const geometry_msgs::msg::Point & person_point)
 {
-  double dx = person_point.x - robot_point.x;
-  double dy = person_point.y - robot_point.y;
-  double angle_to_person = std::atan2(dy, dx);
+  double angle_to_person = math::getAngleRad(
+    robot_point.x, robot_point.y, person_point.x, person_point.y);
   double relative_angle = angle_to_person - robot_yaw;
 
   while (relative_angle < -M_PI) {
@@ -328,7 +335,88 @@ bool PedestrianPluginManager::isWithinFOV(
     relative_angle -= 2.0 * M_PI;
   }
 
-  return (relative_angle >= min_angle_ && relative_angle <= max_angle_);
+  return relative_angle >= min_angle_ && relative_angle <= max_angle_;
+}
+
+bool PedestrianPluginManager::isPersonVisible(
+  int angle_idx, std::vector<bool> & visibility_table)
+{
+  int angle_divisions = visibility_table.size();
+  bool is_person_visible = true;
+  for (int offset = -occlusion_ray_range_; offset <= occlusion_ray_range_; ++offset) {
+    int check_idx = (angle_idx + offset + angle_divisions) % angle_divisions;
+    if (!visibility_table[check_idx]) {
+      is_person_visible = false;
+    }
+    visibility_table[check_idx] = false;
+  }
+
+  if (is_person_visible) {
+    return true;
+  }
+  return false;
+}
+
+std::vector<people_msgs::msg::Person> PedestrianPluginManager::getNonOccludedPeople(
+  const geometry_msgs::msg::Point & robot_point,
+  const std::map<std::string, people_msgs::msg::Person> & people_map)
+{
+  std::vector<gazebo::PersonInfo> people_info_list;
+  people_info_list.reserve(people_map.size());
+
+ int angle_divisions = std::ceil(360.0 / divider_angle_deg_);
+  std::vector<bool> visibility_table(angle_divisions, true);
+
+  for (const auto & it : people_map) {
+    const double dist = math::getDistance(
+      robot_point.x, robot_point.y, it.second.position.x, it.second.position.y);
+    const double deg = math::getAngleDeg(
+      robot_point.x, robot_point.y, it.second.position.x, it.second.position.y);
+
+    gazebo::PersonInfo p;
+    p.person = it.second;
+    p.distance_m = math::roundDistance(dist, divider_distance_m_);
+    p.angle_deg = math::roundAngleDeg(deg, divider_angle_deg_);
+
+    people_info_list.push_back(p);
+  }
+
+  std::sort(
+    people_info_list.begin(), people_info_list.end(),
+    [](const gazebo::PersonInfo & a, const gazebo::PersonInfo & b) {
+      return a.distance_m < b.distance_m;
+    });
+
+  std::vector<people_msgs::msg::Person> visible_people;
+
+  for (const auto & person_info : people_info_list) {
+    int angle_idx = math::getAngleIndex(person_info.angle_deg, divider_angle_deg_);
+    bool is_visible = isPersonVisible(angle_idx, visibility_table);
+
+    if (is_visible) {
+      visible_people.push_back(person_info.person);
+    }
+  }
+
+  return visible_people;
+}
+
+std::vector<people_msgs::msg::Person> PedestrianPluginManager::filterByDistanceAndAngle(
+  const double robot_yaw,
+  const geometry_msgs::msg::Point & robot_point,
+  const std::vector<people_msgs::msg::Person> & people)
+{
+  std::vector<people_msgs::msg::Person> filtered_people;
+  for (const auto & person : people) {
+    if (!isWithinRange(robot_point, person.position)) {
+      continue;
+    }
+    if (!isWithinFOV(robot_yaw, robot_point, person.position)) {
+      continue;
+    }
+    filtered_people.push_back(person);
+  }
+  return filtered_people;
 }
 
 rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParametersCallback(
@@ -344,7 +432,14 @@ rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParamet
     const auto & type = parameter.get_type();
     const auto & name = parameter.get_name();
 
-    if (type == ParameterType::PARAMETER_DOUBLE) {
+    if (type == ParameterType::PARAMETER_INTEGER) {
+      if (name == "pedestrian_plugin.occlusion_ray_range") {
+        occlusion_ray_range_ = parameter.as_double();
+        RCLCPP_INFO(
+          node_->get_logger(),
+          "Change occlusion_ray_range parameter: %d", occlusion_ray_range_);
+      }
+    } else if (type == ParameterType::PARAMETER_DOUBLE) {
       if (name == "pedestrian_plugin.min_range") {
         min_range_ = parameter.as_double();
         RCLCPP_INFO(node_->get_logger(), "Change min_range parameter: %lf", min_range_);
@@ -357,9 +452,12 @@ rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParamet
       } else if (name == "pedestrian_plugin.max_angle") {
         max_angle_ = parameter.as_double();
         RCLCPP_INFO(node_->get_logger(), "Change max_angle parameter: %lf", max_angle_);
-      } else if (name == "pedestrian_plugin.occlusion_radius") {
-        occlusion_radius_ = parameter.as_double();
-        RCLCPP_INFO(node_->get_logger(), "Change occlusion_radius parameter: %lf", occlusion_radius_);
+      } else if (name == "pedestrian_plugin.divider_distance_m") {
+        divider_distance_m_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change divider_distance_m: %lf", divider_distance_m_);
+      } else if (name == "pedestrian_plugin.divider_angle_deg") {
+        divider_angle_deg_ = parameter.as_double();
+        RCLCPP_INFO(node_->get_logger(), "Change divider_angle_deg: %lf", divider_angle_deg_);
       }
     }
   }

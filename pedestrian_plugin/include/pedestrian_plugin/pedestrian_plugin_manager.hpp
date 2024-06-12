@@ -22,9 +22,11 @@
 #define PEDESTRIAN_PLUGIN__PEDESTRIAN_PLUGIN_MANAGER_HPP_
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <limits>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 #include <gazebo_ros/node.hpp>
 #include <gazebo_ros/conversions/builtin_interfaces.hpp>
 #include <geometry_msgs/msg/pose.hpp>
@@ -40,6 +42,13 @@ PyObject * PyInit_ros(void);
 
 namespace gazebo
 {
+
+struct PersonInfo
+{
+  people_msgs::msg::Person person;
+  double distance_m;
+  double angle_deg;
+};
 
 class PedestrianPlugin;
 
@@ -120,11 +129,21 @@ private:
     const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
   bool isWithinRange(
-    const geometry_msgs::msg::Point & robot_point, const geometry_msgs::msg::Point & person_point);
+    const geometry_msgs::msg::Point & robot_point,
+    const geometry_msgs::msg::Point & person_point);
   bool isWithinFOV(
     const double robot_yaw,
     const geometry_msgs::msg::Point & robot_point,
     const geometry_msgs::msg::Point & person_point);
+  bool isPersonVisible(
+    int angle_idx, std::vector<bool> & visibility_table);
+  std::vector<people_msgs::msg::Person> getNonOccludedPeople(
+    const geometry_msgs::msg::Point & robot_point,
+    const std::map<std::string, people_msgs::msg::Person> & people_map);
+  std::vector<people_msgs::msg::Person> filterByDistanceAndAngle(
+    const double robot_yaw,
+    const geometry_msgs::msg::Point & robot_point,
+    const std::vector<people_msgs::msg::Person> & people);
   rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
     std::vector<rclcpp::Parameter> parameters);
 
@@ -144,11 +163,13 @@ private:
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 
+  int occlusion_ray_range_;
   double min_range_;
   double max_range_;
   double min_angle_;
   double max_angle_;
-  double occlusion_radius_;
+  double divider_distance_m_;
+  double divider_angle_deg_;
 };
 
 }  // namespace gazebo
