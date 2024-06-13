@@ -80,4 +80,4 @@ inline double roundAngleDeg(const double deg, const double resolution)
 
 }  // namespace math
 
-#endif // PEDESTRIAN_PLUGIN__MATH_UTILS_HPP_
+#endif  // PEDESTRIAN_PLUGIN__MATH_UTILS_HPP_
