@@ -313,7 +313,7 @@ class Tester:
         return self.check_topic_error(**dict(
             dict(
                 action_name='check_collision',
-                topic="/collision",
+                topic="/collision_person",
                 topic_type="pedestrian_plugin_msgs/msg/Collision",
                 condition="True"
             ),

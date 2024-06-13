@@ -18,7 +18,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-std_msgs/Header header
-geometry_msgs/Pose robot_pose
-pedestrian_plugin_msgs/Obstacle collided_obstacle
-float64 distance
+string name
+geometry_msgs/Point position
+geometry_msgs/Point velocity
+geometry_msgs/Vector3 size
+float64 heading
+float64 reliability
+string[] tagnames
+string[] tags

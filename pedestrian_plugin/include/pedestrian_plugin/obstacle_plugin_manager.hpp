@@ -30,7 +30,7 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <people_msgs/msg/people.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <pedestrian_plugin_msgs/msg/collision.hpp>
+#include <pedestrian_plugin_msgs/msg/obstacle_collision.hpp>
 #include <pedestrian_plugin_msgs/msg/metric.hpp>
 #include <pedestrian_plugin_msgs/msg/agent.hpp>
 #include <pedestrian_plugin_msgs/msg/agents.hpp>
@@ -129,7 +129,7 @@ private:
   pedestrian_plugin_msgs::msg::Agent::SharedPtr robotAgent_;
   std::map<std::string, pedestrian_plugin_msgs::msg::Agent> humanAgentsMap_;
   rclcpp::Publisher<people_msgs::msg::People>::SharedPtr people_pub_;
-  rclcpp::Publisher<pedestrian_plugin_msgs::msg::Collision>::SharedPtr collision_pub_;
+  rclcpp::Publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>::SharedPtr collision_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Metric>::SharedPtr metric_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agent>::SharedPtr robot_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr human_pub_;

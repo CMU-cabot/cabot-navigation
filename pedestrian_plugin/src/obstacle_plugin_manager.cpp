@@ -127,7 +127,7 @@ ObstaclePluginManager::ObstaclePluginManager()
 : node_(gazebo_ros::Node::Get())
 {
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
-  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
+  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>("/collision_obstacle", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
   human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
@@ -222,10 +222,10 @@ void ObstaclePluginManager::process_collision(std::string actor_name, double dis
     RCLCPP_ERROR(get_logger(), "cannot find person msg for %s", actor_name.c_str());
     return;
   }
-  people_msgs::msg::Person collided_person = it->second;
-  pedestrian_plugin_msgs::msg::Collision msg;
+  pedestrian_plugin_msgs::msg::Obstacle collided_obstacle = it->second;
+  pedestrian_plugin_msgs::msg::ObstacleCollision msg;
   msg.robot_pose = *robot_pose_;
-  msg.collided_person = collided_person;
+  msg.collided_obstacle = collided_obstacle;
   msg.distance = distance;
   collision_pub_->publish(msg);
 }

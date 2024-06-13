@@ -127,7 +127,7 @@ PedestrianPluginManager::PedestrianPluginManager()
 : node_(gazebo_ros::Node::Get())
 {
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
-  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
+  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision_person", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
   human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
