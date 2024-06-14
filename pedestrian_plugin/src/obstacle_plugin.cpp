@@ -33,14 +33,14 @@
 
 using namespace gazebo;  // NOLINT
 
-GZ_REGISTER_MODEL_PLUGIN(ObstaclePlugin)
+//GZ_REGISTER_MODEL_PLUGIN(ObstaclePlugin)
 
 #define WALKING_ANIMATION "walking"
 
 // ObstaclePlugin implementation
 
 ObstaclePlugin::ObstaclePlugin()
-: manager(ObstaclePluginManager::getInstance())
+: manager(PedestrianPluginManager::getInstance())
 {
 }
 
@@ -64,7 +64,7 @@ void ObstaclePlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   actor_id = manager.addPlugin(this->name, this);
   RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
 
-  ObstaclePluginParams temp_params;
+  PedestrianPluginParams temp_params;
   sdf::ElementPtr child = this->sdf->GetFirstElement();
   while (child) {
     std::string key = child->GetName();
@@ -119,7 +119,7 @@ void ObstaclePlugin::apply_parameters()
   }
 }
 
-void ObstaclePlugin::update_parameters(ObstaclePluginParams params)
+void ObstaclePlugin::update_parameters(PedestrianPluginParams params)
 {
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   plugin_params = params;

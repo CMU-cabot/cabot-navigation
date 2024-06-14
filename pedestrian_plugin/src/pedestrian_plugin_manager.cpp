@@ -20,6 +20,7 @@
 
 #include "pedestrian_plugin/python_utils.hpp"
 #include "pedestrian_plugin/pedestrian_plugin.hpp"
+//#include "pedestrian_plugin/obstacle_plugin.hpp"
 #include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
 
 using namespace gazebo;  // NOLINT
@@ -127,7 +128,8 @@ PedestrianPluginManager::PedestrianPluginManager()
 : node_(gazebo_ros::Node::Get())
 {
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
-  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision_person", 10);
+  pedestrian_collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision_person", 10);
+  obstacle_collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>("/collision_obstacle", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
   human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
@@ -140,15 +142,28 @@ PedestrianPluginManager::~PedestrianPluginManager() {}
 
 size_t PedestrianPluginManager::addPlugin(std::string name, PedestrianPlugin * plugin)
 {
-  pluginMap_.insert({name, plugin});
-  return pluginMap_.size();
+  pedestrian_pluginMap_.insert({name, plugin});
+  return pedestrian_pluginMap_.size();
 }
 
-void PedestrianPluginManager::removePlugin(std::string name) {pluginMap_.erase(name);}
+size_t PedestrianPluginManager::addPlugin(std::string name, ObstaclePlugin * plugin)
+{
+  obstacle_pluginMap_.insert({name, plugin});
+  return obstacle_pluginMap_.size();
+}
+
+void PedestrianPluginManager::removePlugin(std::string name)
+{
+  if(pedestrian_pluginMap_.find(name) == pedestrian_pluginMap_.end()) {
+    pedestrian_pluginMap_.erase(name);
+  } else if(obstacle_pluginMap_.find(name) == obstacle_pluginMap_.end()) {
+    obstacle_pluginMap_.erase(name);
+  }
+}
 
 void PedestrianPluginManager::publishPeopleIfReady()
 {
-  if (peopleReadyMap_.size() == pluginMap_.size()) {
+  if (peopleReadyMap_.size() == pedestrian_pluginMap_.size()) {
     people_msgs::msg::People msg;
     for (auto it : peopleMap_) {
       msg.people.push_back(it.second);
@@ -227,7 +242,7 @@ void PedestrianPluginManager::process_collision(std::string actor_name, double d
   msg.robot_pose = *robot_pose_;
   msg.collided_person = collided_person;
   msg.distance = distance;
-  collision_pub_->publish(msg);
+  pedestrian_collision_pub_->publish(msg);
 }
 
 void PedestrianPluginManager::process_metric(std::string name, double value)
@@ -247,8 +262,8 @@ void PedestrianPluginManager::handle_plugin_update(
   RCLCPP_INFO(get_logger(), "pedestrian plugin update service is called");
   for (const pedestrian_plugin_msgs::msg::Plugin & update : request->plugins) {
     std::string name = update.name;
-    auto it = pluginMap_.find(name);
-    if (it == pluginMap_.end()) {
+    auto it = pedestrian_pluginMap_.find(name);
+    if (it == pedestrian_pluginMap_.end()) {
       RCLCPP_ERROR(get_logger(), "could not find actor(%s)'s plugin", name.c_str());
       continue;
     }
@@ -264,7 +279,7 @@ void PedestrianPluginManager::handle_plugin_update(
     RCLCPP_INFO(get_logger(), "update parameters %s", name.c_str());
     plugin->update_parameters(update_params);
   }
-  for (const auto & it : pluginMap_) {
+  for (const auto & it : pedestrian_pluginMap_) {
     response->plugin_names.push_back(it.first);
   }
   response->message = "Plugin Updated";

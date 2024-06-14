@@ -32,7 +32,7 @@
 #include "gazebo/common/Plugin.hh"
 #include "gazebo/physics/physics.hh"
 #include "gazebo/util/system.hh"
-#include "pedestrian_plugin/obstacle_plugin_manager.hpp"
+#include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
 
 namespace gazebo
 {
@@ -45,7 +45,7 @@ public:
   virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
   virtual void Reset();
   void apply_parameters();
-  void update_parameters(ObstaclePluginParams params);
+  void update_parameters(PedestrianPluginParams params);
 
 private:
   void OnUpdate(const common::UpdateInfo & _info);
@@ -64,7 +64,7 @@ private:
 
   double * get_walking_pose(double distance);
 
-  ObstaclePluginManager & manager;
+  PedestrianPluginManager & manager;
 
   // manage the actor location by the plugin
   // because animation can change its position
@@ -77,7 +77,7 @@ private:
   double dist;
   int actor_id;
 
-  ObstaclePluginParams plugin_params;
+  PedestrianPluginParams plugin_params;
   bool needs_to_apply_params;
 
   // Need to be separated
