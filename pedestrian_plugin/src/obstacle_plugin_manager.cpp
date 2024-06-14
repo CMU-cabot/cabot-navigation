@@ -126,11 +126,11 @@ ParamValue ObstaclePluginParams::getParam(std::string name)
 ObstaclePluginManager::ObstaclePluginManager()
 : node_(gazebo_ros::Node::Get())
 {
-  people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
+  obstacle_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Obstacles>("/obstacle", 10); // tentative
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>("/collision_obstacle", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
-  robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
-  human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
+  //robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
+  //human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
     "/obstacle_plugin_update",
     std::bind(&ObstaclePluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
@@ -149,18 +149,20 @@ void ObstaclePluginManager::removePlugin(std::string name) {pluginMap_.erase(nam
 void ObstaclePluginManager::publishPeopleIfReady()
 {
   if (peopleReadyMap_.size() == pluginMap_.size()) {
-    people_msgs::msg::People msg;
-    for (auto it : peopleMap_) {
+    pedestrian_plugin_msgs::msg::Obstacles msg;
+    for (auto it : obstaclesMap_) {
       msg.people.push_back(it.second);
     }
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
-    people_pub_->publish(msg);
+    obstacle_pub_->publish(msg);
 
+/*
     // publish robot and human messages
     robotAgent_->header.stamp = *stamp_;
     robotAgent_->header.frame_id = "map_global";
     robot_pub_->publish(*robotAgent_);
+
     pedestrian_plugin_msgs::msg::Agents humanAgentsMsg;
     for (auto it : humanAgentsMap_) {
       humanAgentsMsg.agents.push_back(it.second);
@@ -168,7 +170,7 @@ void ObstaclePluginManager::publishPeopleIfReady()
     humanAgentsMsg.header.stamp = *stamp_;
     humanAgentsMsg.header.frame_id = "map_global";
     human_pub_->publish(humanAgentsMsg);
-
+*/
     peopleReadyMap_.clear();
   }
 }
@@ -182,9 +184,9 @@ void ObstaclePluginManager::updateRobotPose(geometry_msgs::msg::Pose robot_pose)
   robot_pose_->orientation = robot_pose.orientation;
 }
 
-void ObstaclePluginManager::updatePersonMessage(std::string name, people_msgs::msg::Person person)
+void ObstaclePluginManager::updateObstacleMessage(std::string name, pedestrian_plugin_msgs::msg::Obstacle obstacle)
 {
-  peopleMap_.insert_or_assign(name, person);
+  obstaclesMap_.insert_or_assign(name, obstacle);
   peopleReadyMap_.insert({name, true});
 }
 
@@ -217,8 +219,8 @@ void ObstaclePluginManager::process_collision(std::string actor_name, double dis
     RCLCPP_ERROR(get_logger(), "no robot_pose");
     return;
   }
-  auto it = peopleMap_.find(actor_name);
-  if (it == peopleMap_.end()) {
+  auto it = obstaclesMap_.find(actor_name);
+  if (it == obstaclesMap_.end()) {
     RCLCPP_ERROR(get_logger(), "cannot find person msg for %s", actor_name.c_str());
     return;
   }

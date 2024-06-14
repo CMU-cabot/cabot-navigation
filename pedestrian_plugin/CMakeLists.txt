@@ -44,11 +44,10 @@ include_directories(
 #  ${GAZEBO_LIBRARY_DIRS}
 #)
 
+## pedestrian plugin
 add_library(${PROJECT_NAME} SHARED
   src/pedestrian_plugin.cpp
   src/pedestrian_plugin_manager.cpp
-  src/obstacle_plugin.cpp
-  src/obstacle_plugin_manager.cpp
   src/python_module_loader.cpp
   src/walking_pose.cpp
 )
@@ -63,6 +62,27 @@ ament_target_dependencies(${PROJECT_NAME}
 )
 ament_export_libraries(${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}
+  ${GAZEBO_LIBRARIES}
+  ${PYTHON_LIBRARIES}
+)
+
+## obstacle plugin
+add_library(obstacle_plugin SHARED
+  src/obstacle_plugin.cpp
+  src/obstacle_plugin_manager.cpp
+  src/python_module_loader.cpp
+)
+
+#target_include_directories(pedestrian_plugin PUBLIC include)
+ament_target_dependencies(obstacle_plugin
+  rclcpp
+  gazebo
+  gazebo_ros
+  people_msgs
+  pedestrian_plugin_msgs
+)
+ament_export_libraries(obstacle_plugin)
+target_link_libraries(obstacle_plugin
   ${GAZEBO_LIBRARIES}
   ${PYTHON_LIBRARIES}
 )

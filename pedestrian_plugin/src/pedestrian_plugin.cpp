@@ -288,54 +288,46 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
 
       ignition::math::Pose3d pose;
       pose.Pos().X(newX);
-
-      if (this->actor) {
-        pose.Pos().Y(newY + wPose[1]);
-        pose.Pos().Z(newZ + wPose[2]);
-        pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
-        this->model->SetWorldPose(pose, false, false);
-        double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
-        this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
-        people_msgs::msg::Person person;
-        person.name = this->name;
-        person.position.x = newX;
-        person.position.y = newY;
-        person.position.z = newZ;
-        person.velocity.x = std::cos(newYaw) * dd / dt;
-        person.velocity.y = std::sin(newYaw) * dd / dt;
-        person.velocity.z = 0.0;
-        person.reliability = 1.0;
-        if (dd / dt < 0.1) {
-          person.tags.push_back("stationary");
-        }
-        manager.updatePersonMessage(this->model->GetName(), person);
-
-        // update human agent
-        double vel_linear = dd / dt;
-        pedestrian_plugin_msgs::msg::Agent humanAgent;
-        humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
-        if (this->module_name == "pedestrian.pool") {
-          humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
-        } else {
-          humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
-        }
-        humanAgent.name = person.name;
-        humanAgent.position.position = person.position;
-        humanAgent.yaw = newYaw;
-        humanAgent.velocity.linear.x = person.velocity.x;
-        humanAgent.velocity.linear.y = person.velocity.y;
-        humanAgent.velocity.linear.z = person.velocity.z;
-        humanAgent.linear_vel = vel_linear;
-        // humanAgent.velocity.angular.z // undefined
-        // humanAgent.angular_vel // undefined
-        humanAgent.radius = radius;
-        manager.updateHumanAgent(person.name, humanAgent);
-      } else { // for model
-        pose.Pos().Y(newY);
-        pose.Pos().Z(newZ);
-        pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
-        this->model->SetWorldPose(pose);
+      pose.Pos().Y(newY + wPose[1]);
+      pose.Pos().Z(newZ + wPose[2]);
+      pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
+      this->model->SetWorldPose(pose, false, false);
+      double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
+      this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
+      people_msgs::msg::Person person;
+      person.name = this->name;
+      person.position.x = newX;
+      person.position.y = newY;
+      person.position.z = newZ;
+      person.velocity.x = std::cos(newYaw) * dd / dt;
+      person.velocity.y = std::sin(newYaw) * dd / dt;
+      person.velocity.z = 0.0;
+      person.reliability = 1.0;
+      if (dd / dt < 0.1) {
+        person.tags.push_back("stationary");
       }
+      manager.updatePersonMessage(this->model->GetName(), person);
+
+      // update human agent
+      double vel_linear = dd / dt;
+      pedestrian_plugin_msgs::msg::Agent humanAgent;
+      humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
+      if (this->module_name == "pedestrian.pool") {
+        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
+      } else {
+        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+      }
+      humanAgent.name = person.name;
+      humanAgent.position.position = person.position;
+      humanAgent.yaw = newYaw;
+      humanAgent.velocity.linear.x = person.velocity.x;
+      humanAgent.velocity.linear.y = person.velocity.y;
+      humanAgent.velocity.linear.z = person.velocity.z;
+      humanAgent.linear_vel = vel_linear;
+      // humanAgent.velocity.angular.z // undefined
+      // humanAgent.angular_vel // undefined
+      humanAgent.radius = radius;
+      manager.updateHumanAgent(person.name, humanAgent);
 
       this->x = newX;
       this->y = newY;

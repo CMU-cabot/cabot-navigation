@@ -62,8 +62,6 @@ private:
   common::Time lastUpdate;
   physics::TrajectoryInfoPtr trajectoryInfo;
 
-  double * get_walking_pose(double distance);
-
   ObstaclePluginManager & manager;
 
   // manage the actor location by the plugin

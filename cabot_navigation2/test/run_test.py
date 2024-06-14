@@ -922,7 +922,7 @@ class ObstacleManager:
                 </geometry>
             </collision>
         </link>
-        <plugin name="pedestrian_plugin_{name}" filename="libpedestrian_plugin.so">
+        <plugin name="pedestrian_plugin_{name}" filename="libobstacle_plugin.so">
           <module>pedestrian.obstacle</module>
           <robot>mobile_base</robot>
         </plugin>
