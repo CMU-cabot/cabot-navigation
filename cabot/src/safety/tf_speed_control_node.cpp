@@ -35,8 +35,9 @@ class TFSpeedControlNode : public rclcpp::Node
 {
 public:
   std::string limit_topic_;
-
-  int check_rate_;
+  double max_speed_;
+  double check_rate_;
+  double tf_timeout_;
   std::string map_frame_;
   std::string robot_base_frame_;
 
@@ -48,7 +49,9 @@ public:
   explicit TFSpeedControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("tf_speed_control_node", options),
     limit_topic_("tf_limit"),
-    check_rate_(1),
+    max_speed_(1.0),
+    check_rate_(1.0),
+    tf_timeout_(1.0),
     map_frame_("map"),
     robot_base_frame_("base_footprint")
   {
@@ -72,7 +75,11 @@ private:
   {
     RCLCPP_INFO(get_logger(), "tf speed control - %s", __FUNCTION__);
 
-    declare_parameter("limit_topic", limit_topic_);
+    limit_topic_ = declare_parameter("limit_topic", limit_topic_);
+    max_speed_ = declare_parameter("max_speed", max_speed_);  // [m/s]
+    check_rate_ = declare_parameter("check_rate", check_rate_);  // [Hz]
+    tf_timeout_ = declare_parameter("tf_timeout", tf_timeout_);  // [seconds]
+
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
     timer_ = create_wall_timer(
@@ -82,11 +89,11 @@ private:
 
   void tfCheckLoop()
   {
-    double speed_limit = 1.0;
+    double speed_limit = max_speed_;
 
     try {
       geometry_msgs::msg::TransformStamped transform_msg = tfBuffer->lookupTransform(
-        robot_base_frame_, map_frame_, rclcpp::Time(0), rclcpp::Duration(std::chrono::duration<double>(1.0)));
+        robot_base_frame_, map_frame_, get_clock()->now(), rclcpp::Duration(std::chrono::duration<double>(tf_timeout_)));
       RCLCPP_INFO(get_logger(), "TFSpeedControl, lookup transform success");
     } catch (tf2::TransformException & ex) {
       speed_limit = 0.0;
