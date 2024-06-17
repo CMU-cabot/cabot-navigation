@@ -50,8 +50,8 @@ public:
   : rclcpp::Node("tf_speed_control_node", options),
     limit_topic_("tf_limit"),
     max_speed_(1.0),
-    check_rate_(1.0),
-    tf_timeout_(1.0),
+    check_rate_(5.0),
+    tf_timeout_(0.2),
     map_frame_("map"),
     robot_base_frame_("base_footprint")
   {
