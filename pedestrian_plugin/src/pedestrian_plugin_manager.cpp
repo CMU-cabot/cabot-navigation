@@ -434,7 +434,7 @@ rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParamet
 
     if (type == ParameterType::PARAMETER_INTEGER) {
       if (name == "pedestrian_plugin.occlusion_ray_range") {
-        occlusion_ray_range_ = parameter.as_double();
+        occlusion_ray_range_ = parameter.as_int();
         RCLCPP_INFO(
           node_->get_logger(),
           "Change occlusion_ray_range parameter: %d", occlusion_ray_range_);
