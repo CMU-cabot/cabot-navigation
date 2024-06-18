@@ -234,6 +234,7 @@ def main():
     from pathlib import Path
     from rosbags.highlevel import AnyReader
     import matplotlib.pyplot as plt
+    from matplotlib.ticker import MultipleLocator
 
     parser = argparse.ArgumentParser("Sample program to run altitude floor estimator")
     parser.add_argument("-i", "--input_bag", required=True)
@@ -262,6 +263,8 @@ def main():
     ax2 = ax1.twinx()
     ax1.plot(X[:, 0], X[:, 2], marker="o", label="height", color="red")
     ax2.plot(X[:, 0], X[:, 3], marker="x", label="floor", color="blue")
+    ax1.yaxis.set_major_locator(MultipleLocator(0.5))
+    ax1.grid(True, which='both', axis='both', linestyle='--', linewidth=0.5)
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     plt.legend(lines1 + lines2, labels1 + labels2)
