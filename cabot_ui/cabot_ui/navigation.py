@@ -610,9 +610,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
         msg = nav_msgs.msg.Path()
         msg.header = gpath.header
-        msg.header.frame_id = "map"
+        msg.header.frame_id = self._global_map_name
         for pose in gpath.poses:
-            msg.poses.append(self.buffer.transform(pose, "map"))
+            msg.poses.append(self.buffer.transform(pose, self._global_map_name))
             msg.poses[-1].pose.position.z = 0.0
         self.path_all_pub.publish(msg)
 
