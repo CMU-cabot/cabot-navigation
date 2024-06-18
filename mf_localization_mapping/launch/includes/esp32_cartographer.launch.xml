@@ -27,5 +27,6 @@
     <param name="touch_params" value="[128,64,24]" /> <!-- dummy param to avoid error -->
     
     <remap from="/imu" to="/imu/data" />
+    <remap from="/wifi" to="/esp32/wifi_scan_str" />
   </node>
 </launch>
