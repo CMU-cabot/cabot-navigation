@@ -125,7 +125,9 @@ ParamValue PedestrianPluginParams::getParam(std::string name)
 }
 
 PedestrianPluginManager::PedestrianPluginManager()
-: node_(gazebo_ros::Node::Get())
+: node_(gazebo_ros::Node::Get()),
+  tf_listener_(nullptr),
+  tf_buffer_(nullptr)
 {
   if (!node_->has_parameter("pedestrian_plugin.occlusion_ray_range")) {
     node_->declare_parameter<int>("pedestrian_plugin.occlusion_ray_range", 2);
@@ -161,6 +163,9 @@ PedestrianPluginManager::PedestrianPluginManager()
   divider_distance_m_ = node_->get_parameter("pedestrian_plugin.divider_distance_m").as_double();
   divider_angle_deg_ = node_->get_parameter("pedestrian_plugin.divider_angle_deg").as_double();
 
+  tf_buffer_ = std::make_unique<tf2_ros::Buffer>(node_->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
@@ -185,12 +190,39 @@ void PedestrianPluginManager::removePlugin(std::string name) {pluginMap_.erase(n
 
 void PedestrianPluginManager::publishPeopleIfReady()
 {
+  if (tf_buffer_ && tf_listener_) {
+    std::string base_control_shift_link = "base_control_shift";
+    std::string lidar_link = "lidar_link";
+    try {
+      geometry_msgs::msg::TransformStamped transform_stamped;
+      transform_stamped = tf_buffer_->lookupTransform(
+        base_control_shift_link, lidar_link, tf2::TimePointZero);
+
+      const geometry_msgs::msg::Transform & transform = transform_stamped.transform;
+      tf2::fromMsg(transform, control_to_lidar_tf_);
+
+      tf_listener_.reset();
+      tf_buffer_.reset();
+    } catch (tf2::TransformException & ex) {
+      RCLCPP_INFO(
+        node_->get_logger(), "Could not transform %s to %s: %s",
+        base_control_shift_link.c_str(), lidar_link.c_str(), ex.what());
+      return;
+    }
+  }
+
+  if (!initialized_base_control_shift_link_) return;
+
   if (peopleReadyMap_.size() == pluginMap_.size()) {
     people_msgs::msg::People msg;
+    tf2::Transform base_to_lidar_tf;
 
-    auto visible_people = getNonOccludedPeople(robotAgent_->position.position, peopleMap_);
-    auto filtered_people = filterByDistanceAndAngle(
-      robotAgent_->yaw, robotAgent_->position.position, visible_people);
+    base_to_lidar_tf = base_to_control_tf_ * control_to_lidar_tf_;
+    const auto robot_point = getPointFromTransform(base_to_lidar_tf);
+    const auto robot_yaw = getYawFromTransform(base_to_lidar_tf);
+
+    auto visible_people = getNonOccludedPeople(robot_point, peopleMap_);
+    auto filtered_people = filterByDistanceAndAngle(robot_yaw, robot_point, visible_people);
 
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
@@ -242,6 +274,13 @@ void PedestrianPluginManager::updateRobotAgent(pedestrian_plugin_msgs::msg::Agen
     robotAgent_ = std::make_shared<pedestrian_plugin_msgs::msg::Agent>();
   }
   *robotAgent_ = robotAgent;
+
+  if (initialized_base_control_shift_link_) return;
+  if (!initializedBaseControlShiftLink()) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to initialize lidar link");
+  } else {
+    RCLCPP_INFO(node_->get_logger(), "Success to initialize lidar link");
+  }
 }
 
 void PedestrianPluginManager::updateHumanAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent)
@@ -317,6 +356,37 @@ bool PedestrianPluginManager::isWithinRange(
     robot_point.x, robot_point.y, person_point.x, person_point.y);
 
   return dist >= min_range_ && dist <= max_range_;
+}
+
+void PedestrianPluginManager::retrieveBaseControlShiftLinkPose()
+{
+  if (base_control_shift_link_) {
+    base_to_control_tf_ = getTransformFromPose3d(base_control_shift_link_->WorldPose());
+  } else {
+    RCLCPP_ERROR(node_->get_logger(), "base_control_shift_link is not initialized properly.");
+  }
+}
+
+bool PedestrianPluginManager::initializedBaseControlShiftLink()
+{
+  if (robotAgent_ == nullptr) {
+    return false;
+  }
+
+  model_ = gazebo::physics::get_world()->ModelByName(robotAgent_->name);
+  if (model_) {
+    base_control_shift_link_ = model_->GetLink("base_control_shift");
+    if (base_control_shift_link_) {
+      initialized_base_control_shift_link_ = true;
+      return true;
+    } else {
+      RCLCPP_ERROR(node_->get_logger(), "base_control_shift_link not found!");
+      return false;
+    }
+  } else {
+    RCLCPP_ERROR(node_->get_logger(), "Model not found!");
+    return false;
+  }
 }
 
 bool PedestrianPluginManager::isWithinFOV(
@@ -464,4 +534,40 @@ rcl_interfaces::msg::SetParametersResult PedestrianPluginManager::dynamicParamet
 
   result.successful = true;
   return result;
+}
+
+inline double PedestrianPluginManager::getYawFromTransform(const tf2::Transform & transform)
+{
+  tf2::Quaternion rotation = transform.getRotation();
+  double roll, pitch, yaw;
+
+  tf2::Matrix3x3(rotation).getRPY(roll, pitch, yaw);
+
+  return yaw;
+}
+
+inline geometry_msgs::msg::Point PedestrianPluginManager::getPointFromTransform(
+  const tf2::Transform & transform)
+{
+  geometry_msgs::msg::Point point;
+  tf2::Vector3 origin = transform.getOrigin();
+
+  point.x = origin.x();
+  point.y = origin.y();
+  point.z = origin.z();
+
+  return point;
+}
+
+inline tf2::Transform PedestrianPluginManager::getTransformFromPose3d(
+  const ignition::math::Pose3d & pose)
+{
+  tf2::Vector3 origin(pose.Pos().X(), pose.Pos().Y(), pose.Pos().Z());
+  tf2::Quaternion rotation(pose.Rot().X(), pose.Rot().Y(), pose.Rot().Z(), pose.Rot().W());
+
+  tf2::Transform transform;
+  transform.setOrigin(origin);
+  transform.setRotation(rotation);
+
+  return transform;
 }
