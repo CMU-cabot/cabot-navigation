@@ -277,9 +277,7 @@ void PedestrianPluginManager::updateRobotAgent(pedestrian_plugin_msgs::msg::Agen
 
   if (initialized_base_control_shift_link_) return;
   if (!initializedBaseControlShiftLink()) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to initialize lidar link");
-  } else {
-    RCLCPP_INFO(node_->get_logger(), "Success to initialize lidar link");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to initialize base_control_shift link");
   }
 }
 
@@ -363,7 +361,7 @@ void PedestrianPluginManager::retrieveBaseControlShiftLinkPose()
   if (base_control_shift_link_) {
     base_to_control_tf_ = getTransformFromPose3d(base_control_shift_link_->WorldPose());
   } else {
-    RCLCPP_ERROR(node_->get_logger(), "base_control_shift_link is not initialized properly.");
+    RCLCPP_ERROR(node_->get_logger(), "base_control_shift link is not initialized properly.");
   }
 }
 
@@ -380,7 +378,7 @@ bool PedestrianPluginManager::initializedBaseControlShiftLink()
       initialized_base_control_shift_link_ = true;
       return true;
     } else {
-      RCLCPP_ERROR(node_->get_logger(), "base_control_shift_link not found!");
+      RCLCPP_ERROR(node_->get_logger(), "base_control_shift link not found!");
       return false;
     }
   } else {
