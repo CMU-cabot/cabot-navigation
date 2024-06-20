@@ -22,11 +22,6 @@
 #define PEDESTRIAN_PLUGIN__PEDESTRIAN_PLUGIN_MANAGER_HPP_
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include <limits>
-#include <map>
-#include <memory>
-#include <string>
-#include <vector>
 #include <tf2/exceptions.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -34,6 +29,11 @@
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 #include <gazebo/gazebo.hh>
 #include <gazebo/physics/physics.hh>
 #include <gazebo/common/common.hh>
