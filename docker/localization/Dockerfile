@@ -117,7 +117,7 @@ RUN (cd RTKLIB/lib/iers/gcc/; make) && \
 
 # TODO merge
 RUN pip install --no-cache-dir \
-	transforms3d \
+	'transforms3d==0.4.1' \
 	pyserial
 RUN apt update && \
     apt-get install -y \
