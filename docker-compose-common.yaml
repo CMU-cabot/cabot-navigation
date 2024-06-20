@@ -170,6 +170,7 @@ services:
       - CYCLONEDDS_URI
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-false}
       - ROS_DOMAIN_ID
       # ntrip client
       - NTRIP_CLIENT # rtklib, str2str_node, or ntrip_client
@@ -182,6 +183,8 @@ services:
       - NTRIP_USERNAME
       - NTRIP_PASSWORD
       - NTRIP_STR2STR_RELAY_BACK=${NTRIP_STR2STR_RELAY_BACK:-0}
+      - __NV_PRIME_RENDER_OFFLOAD
+      - __GLX_VENDOR_LIBRARY_NAME
     volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
