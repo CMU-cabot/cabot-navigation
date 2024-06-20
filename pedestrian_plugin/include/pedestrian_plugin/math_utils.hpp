@@ -28,9 +28,14 @@ namespace math
 
 constexpr double RAD_TO_DEG = 180.0 / M_PI;
 
+inline int getDistanceIndex(const double dist, const double resolution)
+{
+  return std::round(dist / resolution);
+}
+
 inline int getAngleIndex(const double deg, const double resolution)
 {
-  return static_cast<int>(std::floor(deg / resolution));
+  return std::round(deg / resolution);
 }
 
 inline double rad2deg(const double rad)

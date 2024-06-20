@@ -141,6 +141,7 @@ private:
   void handle_plugin_update(
     const std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Request> request,
     std::shared_ptr<pedestrian_plugin_msgs::srv::PluginUpdate::Response> response);
+  void setOffsetTable();
   void retrieveBaseControlShiftLinkPose();
   bool initializedBaseControlShiftLink();
   bool isWithinRange(
@@ -151,7 +152,8 @@ private:
     const geometry_msgs::msg::Point & robot_point,
     const geometry_msgs::msg::Point & person_point);
   bool isPersonVisible(
-    int angle_idx, std::vector<bool> & visibility_table);
+    int dist_idx, int angle_idx, std::vector<bool> & visibility_table,
+    const std::vector<int> & offset_table);
   std::vector<people_msgs::msg::Person> getNonOccludedPeople(
     const geometry_msgs::msg::Point & robot_point,
     const std::map<std::string, people_msgs::msg::Person> & people_map);
@@ -189,12 +191,13 @@ private:
   gazebo::physics::ModelPtr model_;
   gazebo::physics::LinkPtr base_control_shift_link_;
 
+  std::vector<int> offset_table_;
   bool initialized_base_control_shift_link_;
-  int occlusion_ray_range_;
   double min_range_;
   double max_range_;
   double min_angle_;
   double max_angle_;
+  double occlusion_radius_;
   double divider_distance_m_;
   double divider_angle_deg_;
 };
