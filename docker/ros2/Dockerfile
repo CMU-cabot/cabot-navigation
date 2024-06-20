@@ -123,7 +123,6 @@ RUN pip3 install --no-cache-dir \
     pyserial \
     requests \
     transforms3d==0.4.1
-
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]' \
@@ -175,5 +174,28 @@ USER $USERNAME
 ENV HOME /home/$USERNAME
 
 WORKDIR $HOME/ros2_ws
+
+RUN mkdir -p $HOME/ros2_ws/src && \
+    mkdir -p $HOME/ros2_ws/script
+
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot src/cabot
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_bt src/cabot_bt
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_description src/cabot_description
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_diagnostics src/cabot_diagnostics
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_gazebo src/cabot_gazebo
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_navigation2 src/cabot_navigation2
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_ui src/cabot_ui
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_msgs src/mf_localization_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_rviz src/mf_localization_rviz
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./pedestrian_plugin src/pedestrian_plugin
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./pedestrian_plugin_msgs src/pedestrian_plugin_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_common src/cabot_common
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/cabot_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_msgs src/queue_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_people_py src/queue_people_py
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_utils_py src/queue_utils_py
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
+
+RUN /ros_entrypoint.sh /launch.sh build
 
 CMD [ "/launch.sh" ]

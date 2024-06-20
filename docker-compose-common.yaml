@@ -23,6 +23,8 @@ services:
   ros2-base:
     build:
       context: ./docker/ros2
+      additional_contexts:
+        cabot_src: ./
     environment:
 # required for gazebo rendering
       - DISPLAY
@@ -66,7 +68,19 @@ services:
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
+# network
+    privileged: true
+    network_mode: host
+# shutdown
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+  ros2-dev-base:
+    extends: ros2-base
+    volumes:
 # code
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/ros2_ws/install/${CABOT_SITE}
       - ./cabot:/home/developer/ros2_ws/src/cabot
       - ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
       - ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
@@ -85,16 +99,17 @@ services:
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
       - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
       - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
-# network
-    privileged: true
-    network_mode: host
-# shutdown
-    stop_signal: SIGINT
-    stop_grace_period: 30s
 
-  
-  ros2:
+  ros2-prod-base:
     extends: ros2-base
+    image: cmucal/cabot-navigation
+    volumes:
+# code
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/ros2_ws/install/${CABOT_SITE}
+
+  ros2-dev:
+    extends: ros2-dev-base
     environment:
 # CaBot
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
@@ -117,23 +132,47 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  navigation-base:
-    extends: ros2
+  ros2-prod:
+    extends: ros2-prod-base
+    environment:
+# CaBot
+      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
+      - CABOT_TOUCH_PARAMS
+      - CABOT_USE_HANDLE_SIMULATOR=${CABOT_USE_HANDLE_SIMULATOR:-0}
+      - CABOT_ODRIVER_SERIAL_0
+      - CABOT_ODRIVER_SERIAL_1
+      - CABOT_REMOTE_USE_KEYBOARD
+      - CABOT_REMOTE_USE_IMU
+      - CABOT_FOOTPRINT_RADIUS
+    volumes:
+# device, bluetooth
+      - /dev:/dev
+      - /sys/devices:/sys/devices
+      - /var/lib/bluetooth:/var/lib/bluetooth
+      - /run/dbus:/run/dbus
+      - /var/run/dbus:/var/run/dbus
+    devices:
+      - /dev/dri
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+  navigation-dev-base:
+    extends: ros2-dev
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "navigation"
 
-  gazebo-base:
-    extends: ros2-base
+  gazebo-dev-base:
+    extends: ros2-dev-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gazebo"
       #- "-g"                   # run with gdb
 
-  gui-base:
-    extends: ros2-base
+  gui-dev-base:
+    extends: ros2-dev-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -145,24 +184,63 @@ services:
       - CABOT_SHOW_ROS2_RVIZ=${CABOT_SHOW_ROS2_RVIZ:-1}
       - CABOT_SHOW_ROS2_LOCAL_RVIZ
 
-  navigation:
-    extends: navigation-base
+  navigation-prod-base:
+    extends: ros2-prod
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "navigation"
+
+  gazebo-prod-base:
+    extends: ros2-prod-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gazebo"
+      #- "-g"                   # run with gdb
+
+  gui-prod-base:
+    extends: ros2-prod-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gui"
+    environment:
+# CaBot
+      - CABOT_SHOW_GAZEBO_CLIENT
+      - CABOT_SHOW_ROBOT_MONITOR
+      - CABOT_SHOW_ROS2_RVIZ=${CABOT_SHOW_ROS2_RVIZ:-1}
+      - CABOT_SHOW_ROS2_LOCAL_RVIZ
+
+  navigation-dev:
+    extends: navigation-dev-base
     volumes:
       - ./docker/home:/home/developer/
 
-  gazebo:
-    extends: gazebo-base
+  gazebo-dev:
+    extends: gazebo-dev-base
     volumes:
       - ./docker/home:/home/developer/
 
-  gui:
-    extends: gui-base
+  gui-dev:
+    extends: gui-dev-base
     volumes:
       - ./docker/home:/home/developer/
 
-  localization-base:
+  navigation-prod:
+    extends: navigation-prod-base
+
+  gazebo-prod:
+    extends: gazebo-prod-base
+
+  gui-prod:
+    extends: gui-prod-base
+
+  localization-dev-base:
     build:
       context: ./docker/localization
+      additional_contexts:
+        cabot_src: ./
     environment:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
@@ -198,6 +276,8 @@ services:
       - /var/lib/bluetooth:/var/lib/bluetooth
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/loc_ws/install/${CABOT_SITE}
       - ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
       - ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
       - ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
@@ -228,7 +308,57 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  localization:
-    extends: localization-base
+  localization-prod-base:
+    image: cmucal/cabot-localization
+    environment:
+      - DISPLAY
+      - XAUTHORITY=/tmp/.docker.xauth
+      - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
+      - ROS_LOG_DIR
+# CaBot
+      - CABOT_GAZEBO=${CABOT_GAZEBO:-1}
+      - CABOT_PRESSURE_AVAILABLE=${CABOT_PRESSURE_AVAILABLE:-0}
+      - CABOT_USE_GNSS=${CABOT_USE_GNSS:-0}
+      - CABOT_MODEL
+      - CABOT_SITE
+      - CABOT_SHOW_LOC_RVIZ=${CABOT_SHOW_LOC_RVIZ:-1}
+      - CABOT_HEADLESS
+      - RMW_IMPLEMENTATION
+      - CYCLONEDDS_URI
+      - CYCLONEDDS_NETWORK_INTERFACE_NAME
+      - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
+      - ROS_DOMAIN_ID
+    volumes:
+      - /dev:/dev
+      - /sys/devices:/sys/devices
+      - /var/lib/bluetooth:/var/lib/bluetooth
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/.docker.xauth:/tmp/.docker.xauth
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/loc_ws/install/${CABOT_SITE}
+# bridge - if DDS use shared memory
+      - /dev/shm:/dev/shm
+    privileged: true
+    devices:
+      - /dev/dri
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    network_mode: host
+    command:
+      - "/launch.sh"
+      - "localization"
+      - "-M"                                # start multifloor map server
+      - "-R 1"                              # set publish_current_rate to 1hz
+      # - "-C"                                # launch cvi client
+      # - "-N"                                # start ROS1 navigation for development
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+  localization-dev:
+    extends: localization-dev-base
     volumes:
       - ./docker/home:/home/developer/
+
+  localization-prod:
+    extends: localization-prod-base
