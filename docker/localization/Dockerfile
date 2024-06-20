@@ -151,3 +151,21 @@ USER $USERNAME
 
 ENV HOME /home/$USERNAME
 WORKDIR $HOME/loc_ws
+
+RUN mkdir -p $HOME/loc_ws/src && \
+    mkdir -p $HOME/loc_ws/script
+
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_description src/cabot_description
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_common src/cabot_common
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/cabot_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_mf_localization src/cabot_mf_localization
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization src/mf_localization
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_gazebo src/mf_localization_gazebo
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_mapping src/mf_localization_mapping
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_msgs src/mf_localization_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_rviz src/mf_localization_rviz
+
+RUN /ros_entrypoint.sh /launch.sh build
+
+CMD [ "/launch.sh" ]

@@ -23,7 +23,7 @@ services:
   debug:
     extends:
       file: docker-compose-common.yaml
-      service: navigation
+      service: navigation-dev
     build:
       context: ./docker/ros2
       dockerfile: Dockerfile.debug

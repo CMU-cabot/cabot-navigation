@@ -25,7 +25,7 @@ services:
   navigation:
     extends:
       file: docker-compose-common.yaml
-      service: navigation
+      service: navigation-dev
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
@@ -34,12 +34,12 @@ services:
   gazebo:
     extends:
       file: docker-compose-common.yaml
-      service: gazebo
+      service: gazebo-dev
 
   gui:
     extends:
       file: docker-compose-common.yaml
-      service: gui
+      service: gui-dev
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
@@ -47,7 +47,7 @@ services:
   localization:
     extends:
       file: docker-compose-common.yaml
-      service: localization
+      service: localization-dev
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1

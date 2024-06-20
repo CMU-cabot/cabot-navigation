@@ -26,8 +26,8 @@ version: "2.3"
 services:
   navigation:
     extends:
-      file: docker-compose-prodimg-common.yaml
-      service: navigation
+      file: docker-compose-common.yaml
+      service: navigation-prod
     environment:
       - CABOT_GAZEBO=0
       - CABOT_USE_SIM_TIME=0
@@ -35,16 +35,16 @@ services:
 
   gui:
     extends:
-      file: docker-compose-prodimg-common.yaml
-      service: gui
+      file: docker-compose-common.yaml
+      service: gui-prod
     environment:
       - CABOT_GAZEBO=0
       - CABOT_USE_SIM_TIME=0
 
   localization:
     extends:
-      file: docker-compose-prodimg-common.yaml
-      service: localization
+      file: docker-compose-common.yaml
+      service: localization-prod
     environment:
       - CABOT_GAZEBO=0
       - CABOT_PRESSURE_AVAILABLE=0
