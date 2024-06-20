@@ -357,7 +357,7 @@ void PedestrianPluginManager::setOffsetTable()
 
   for (int i = 0; i < dist_divisions; ++i) {
     if (i * divider_distance_m_ <= occlusion_radius_) {
-      offset_table_[i] = 0; // TODO
+      offset_table_[i] = -1;
     } else {
       double occlusion_angle_deg =
         math::rad2deg(std::asin(occlusion_radius_ / (i * divider_distance_m_)));
@@ -432,12 +432,19 @@ bool PedestrianPluginManager::isPersonVisible(
   int ray_offset = offset_table[dist_idx];
   int angle_divisions = visibility_table.size();
   bool is_person_visible = true;
-  for (int offset = -ray_offset; offset <= ray_offset; ++offset) {
-    int check_idx = (angle_idx + offset + angle_divisions) % angle_divisions;
-    if (!visibility_table[check_idx]) {
-      is_person_visible = false;
+  if (ray_offset == -1) {  // when robot and person overlap
+    is_person_visible = false;
+    for (auto it = visibility_table.begin(); it != visibility_table.end(); ++it) {
+      *it = false;
     }
-    visibility_table[check_idx] = false;
+  } else {
+    for (int offset = -ray_offset; offset <= ray_offset; ++offset) {
+      int check_idx = (angle_idx + offset + angle_divisions) % angle_divisions;
+      if (!visibility_table[check_idx]) {
+        is_person_visible = false;
+      }
+      visibility_table[check_idx] = false;
+    }
   }
 
   if (is_person_visible) {
