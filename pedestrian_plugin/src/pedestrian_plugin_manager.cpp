@@ -134,15 +134,15 @@ PedestrianPluginManager::PedestrianPluginManager()
   }
   if (!node_->has_parameter("pedestrian_plugin.max_range")) {
     node_->declare_parameter<double>(
-      "pedestrian_plugin.max_range", std::numeric_limits<double>::max());
+      "pedestrian_plugin.max_range", 20.0);
   }
   if (!node_->has_parameter("pedestrian_plugin.min_angle")) {
     node_->declare_parameter<double>(
-      "pedestrian_plugin.min_angle", -std::numeric_limits<double>::max());
+      "pedestrian_plugin.min_angle", -M_PI);
   }
   if (!node_->has_parameter("pedestrian_plugin.max_angle")) {
     node_->declare_parameter<double>(
-      "pedestrian_plugin.max_angle", std::numeric_limits<double>::max());
+      "pedestrian_plugin.max_angle", M_PI);
   }
   if (!node_->has_parameter("pedestrian_plugin.occlusion_radius")) {
     node_->declare_parameter<double>("pedestrian_plugin.occlusion_radius", 0.25);
