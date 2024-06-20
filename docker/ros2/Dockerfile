@@ -198,4 +198,127 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
 
 RUN /ros_entrypoint.sh /launch.sh build
 
+FROM ${FROM_IMAGE} as final
+ENV ROS_DISTRO=humble
+ARG TZ=UTC
+ENV TZ=$TZ
+RUN sudo ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | sudo tee /etc/timezone
+ENV UNDERLAY_WS=/opt/underlay_ws
+
+WORKDIR $UNDERLAY_WS
+
+COPY --from=cache $UNDERLAY_WS/install $UNDERLAY_WS/install
+# copy package.xml files from cache
+COPY --from=cache /tmp/opt/src $UNDERLAY_WS/src
+
+RUN apt update && rosdep update && rosdep install -q -y \
+	--from-paths src \
+	--ignore-src
+
+ARG ROS_DISTRO
+
+# TODO replace with rosdep install
+RUN apt update && \
+    apt install -y --no-install-recommends \
+    bc \
+    libqt5svg5-dev \
+    libzmq3-dev \
+    libdw-dev \
+    libyaml-cpp-dev \
+    libomp-dev \
+    libpcl-dev \
+    python3-pykdl \
+    python3-sklearn \
+    python3-venv \
+    qtbase5-dev \
+    ros-$ROS_DISTRO-diagnostic-aggregator \
+    ros-$ROS_DISTRO-gazebo-msgs \
+    ros-$ROS_DISTRO-image-transport-plugins \
+    ros-$ROS_DISTRO-joint-state-publisher \
+    ros-$ROS_DISTRO-joint-state-publisher-gui \
+    ros-$ROS_DISTRO-navigation2 \
+    ros-$ROS_DISTRO-rosidl-runtime-cpp \
+# pcl-ros is not ported yet
+# #    ros-$ROS_DISTRO-pcl-msgs \
+# #    ros-$ROS_DISTRO-pcl-ros \
+    ros-$ROS_DISTRO-pointcloud-to-laserscan \
+    ros-$ROS_DISTRO-realsense2-description \
+    ros-$ROS_DISTRO-robot-localization \
+    ros-$ROS_DISTRO-geographic-msgs \
+    libgeographic-dev \
+# workaround end
+    ros-$ROS_DISTRO-rosbridge-server \
+    ros-$ROS_DISTRO-ros-testing \
+    ros-$ROS_DISTRO-rqt-robot-monitor \
+    ros-$ROS_DISTRO-teleop-twist-keyboard \
+    ros-$ROS_DISTRO-tf-transformations \
+    ros-$ROS_DISTRO-xacro \
+    ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
+    ros-$ROS_DISTRO-rosbag2-storage-mcap \
+    xterm \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir \
+    # install ipython==8.0.1 to prevent errors while using odrivetool
+    ipython==8.0.1 \
+    odrive==0.6.5 \
+    numpy==1.24.4 \
+    pyproj \
+    pyserial \
+    requests \
+    transforms3d==0.4.1
+# for pedestrian test
+RUN pip3 install --no-cache-dir \
+    'pysocialforce[test,plot]'
+
+# for debug
+# RUN apt update && \
+#     apt install -y --no-install-recommends \
+#     gdb \
+#     vim \
+#     && \
+#     rm -rf /var/lib/apt/lists/*
+
+# set up venv for keeping compatibility
+RUN mkdir -p /opt/venv
+# cabot2 venv (odrive==0.5.2.post0)
+RUN python3 -m venv --system-site-packages /opt/venv/cabot2 && \
+    . /opt/venv/cabot2/bin/activate && \
+    pip3 install --no-cache-dir odrive==0.5.2.post0 && \
+    deactivate
+# cabot3 venv (odrive==0.6.5)
+RUN python3 -m venv --system-site-packages /opt/venv/cabot3
+
+ENV USERNAME developer
+# Replace 1000 with your user/group id
+ARG UID=1000
+RUN useradd -m $USERNAME && \
+        echo "$USERNAME:$USERNAME" | chpasswd && \
+        usermod --shell /bin/bash $USERNAME && \
+	usermod -aG sudo $USERNAME && \
+        mkdir -p /etc/sudoers.d/ && \
+        echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && \
+        chmod 0440 /etc/sudoers.d/$USERNAME && \
+        usermod  --uid $UID $USERNAME && \
+        groupmod --gid $UID $USERNAME
+# add user to video group to fix NvRmMemInitNvmap error on Jetson
+# https://forums.developer.nvidia.com/t/jetpack-5-0-dp-nvrmmeminitnvmap-failed-with-permission-denied/219804
+RUN usermod -aG video $USERNAME
+
+# install entrypoint
+COPY launch.sh /
+
+# change location of ros base
+RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
+
+USER $USERNAME
+
+ENV HOME /home/$USERNAME
+
+WORKDIR $HOME/ros2_ws
+
+COPY --from=build $HOME/ros2_ws/install $HOME/ros2_ws/install
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
+
 CMD [ "/launch.sh" ]
