@@ -60,7 +60,7 @@ RUN pip3 install --no-cache-dir \
     odrive==0.5.2.post0 \
     pyproj \
     pyserial \
-    transforms3d
+    transforms3d==0.4.1
 
 # for debug
 # RUN apt update && \
