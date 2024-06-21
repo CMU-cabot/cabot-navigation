@@ -1,5 +1,5 @@
-ARG PREFIX=cabot
-ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
+ARG BASE_IMAGE=cabot-base
+ARG FROM_IMAGE=cmucal/${BASE_IMAGE}:humble-desktop-custom-mesa
 
 FROM ${FROM_IMAGE} as cache
 

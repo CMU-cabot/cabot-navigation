@@ -25,6 +25,16 @@ services:
       context: ./docker/ros2
       additional_contexts:
         cabot_src: ./
+      args:
+        - BASE_IMAGE=${BASE_IMAGE}
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-navigation
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     environment:
 # required for gazebo rendering
       - DISPLAY
@@ -241,6 +251,16 @@ services:
       context: ./docker/localization
       additional_contexts:
         cabot_src: ./
+      args:
+        - BASE_IMAGE=${BASE_IMAGE}
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-localization
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     environment:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
