@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "pedestrian_plugin/geometry_utils.hpp"
 #include "pedestrian_plugin/math_utils.hpp"
 #include "pedestrian_plugin/python_utils.hpp"
 #include "pedestrian_plugin/pedestrian_plugin.hpp"
@@ -219,8 +220,10 @@ void PedestrianPluginManager::publishPeopleIfReady()
     tf2::Transform base_to_lidar_tf;
 
     base_to_lidar_tf = base_to_control_tf_ * control_to_lidar_tf_;
-    const auto robot_point = getPointFromTransform(base_to_lidar_tf);
-    const auto robot_yaw = getYawFromTransform(base_to_lidar_tf);
+    const auto robot_point =
+      robotAgent_->position.position + getPointFromTransform(base_to_lidar_tf);
+    const auto robot_yaw =
+      math::normalizeRad(robotAgent_->yaw + getYawFromTransform(base_to_lidar_tf));
 
     auto visible_people = getNonOccludedPeople(robot_point, peopleMap_);
     auto filtered_people = filterByDistanceAndAngle(robot_yaw, robot_point, visible_people);
@@ -413,14 +416,7 @@ bool PedestrianPluginManager::isWithinFOV(
 {
   double angle_to_person = math::getAngleRad(
     robot_point.x, robot_point.y, person_point.x, person_point.y);
-  double relative_angle = angle_to_person - robot_yaw;
-
-  while (relative_angle < -M_PI) {
-    relative_angle += 2.0 * M_PI;
-  }
-  while (relative_angle >= M_PI) {
-    relative_angle -= 2.0 * M_PI;
-  }
+  double relative_angle = math::normalizeRad(angle_to_person - robot_yaw);
 
   return relative_angle >= min_angle_ && relative_angle <= max_angle_;
 }

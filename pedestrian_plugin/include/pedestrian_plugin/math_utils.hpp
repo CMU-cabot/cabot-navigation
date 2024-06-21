@@ -43,6 +43,18 @@ inline double rad2deg(const double rad)
   return rad * RAD_TO_DEG;
 }
 
+inline double normalizeRad(const double rad)
+{
+  double normalized_rad = std::fmod(rad, 2.0 * M_PI);
+  if (normalized_rad < -M_PI) {
+    normalized_rad += 2.0 * M_PI;
+  }
+  if (normalized_rad >= M_PI) {
+    normalized_rad -= 2.0 * M_PI;
+  }
+  return normalized_rad;
+}
+
 inline double normalizeDeg(const double deg)
 {
   double normalized_deg = std::fmod(deg, 360.0);
