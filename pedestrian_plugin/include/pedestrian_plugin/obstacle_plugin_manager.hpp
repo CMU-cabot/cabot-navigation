@@ -28,8 +28,8 @@
 #include <gazebo_ros/node.hpp>
 #include <gazebo_ros/conversions/builtin_interfaces.hpp>
 #include <geometry_msgs/msg/pose.hpp>
-#include <people_msgs/msg/people.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <pedestrian_plugin_msgs/msg/obstacles.hpp>
 #include <pedestrian_plugin_msgs/msg/obstacle_collision.hpp>
 #include <pedestrian_plugin_msgs/msg/metric.hpp>
 #include <pedestrian_plugin_msgs/msg/agent.hpp>
@@ -103,14 +103,15 @@ public:
   ~ObstaclePluginManager();
   size_t addPlugin(std::string name, ObstaclePlugin * plugin);
   void removePlugin(std::string name);
-  void publishPeopleIfReady();
+  //void publishPeopleIfReady();
+  void publishObstaclesIfReady();
   void updateRobotPose(geometry_msgs::msg::Pose robot_pose);
   void updateObstacleMessage(std::string name, pedestrian_plugin_msgs::msg::Obstacle obstacle);
   void updateStamp(builtin_interfaces::msg::Time stamp);
   void updateRobotAgent(pedestrian_plugin_msgs::msg::Agent robotAgent);
   void updateHumanAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent);
   rclcpp::Logger get_logger();
-  void process_collision(std::string actor_name, double distance);
+  void process_collision(std::string obstacle_name, double distance);
   void process_metric(std::string name, double value);
 
   std::recursive_mutex mtx;
@@ -124,10 +125,17 @@ private:
   geometry_msgs::msg::Pose::SharedPtr robot_pose_;
   std::map<std::string, ObstaclePlugin *> pluginMap_;
   std::map<std::string, pedestrian_plugin_msgs::msg::Obstacle> obstaclesMap_;
-  std::map<std::string, bool> peopleReadyMap_;
+  //std::map<std::string, bool> peopleReadyMap_;
+  std::map<std::string, bool> obstaclesReadyMap_;
   builtin_interfaces::msg::Time::SharedPtr stamp_;
   pedestrian_plugin_msgs::msg::Agent::SharedPtr robotAgent_;
-  std::map<std::string, pedestrian_plugin_msgs::msg::Agent> humanAgentsMap_;
+  //std::map<std::string, pedestrian_plugin_msgs::msg::Agent> humanAgentsMap_;
+  
+  // !!!!!!!!!!!!!! ATTENTION !!!!!!!!!!!!!!
+  std::map<std::string, pedestrian_plugin_msgs::msg::Agent> obstacleAgentsMap_; // Obstacles do not move.
+  // If it is needed, Agents.msg need "uint8 OBSTACLE=3"
+  // !!!!!!!!!!!!!! ATTENTION !!!!!!!!!!!!!!
+
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Obstacles>::SharedPtr obstacle_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>::SharedPtr collision_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Metric>::SharedPtr metric_pub_;

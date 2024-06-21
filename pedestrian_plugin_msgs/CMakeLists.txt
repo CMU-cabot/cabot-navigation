@@ -19,6 +19,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   msg/Agents.msg
   msg/Collision.msg
   msg/Obstacle.msg
+  msg/Obstacles.msg
   msg/ObstacleCollision.msg
   msg/Metric.msg
   msg/Plugin.msg

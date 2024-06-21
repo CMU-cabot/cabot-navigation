@@ -51,7 +51,7 @@ private:
   void OnUpdate(const common::UpdateInfo & _info);
   void print_pyobject(PyObject * obj);
   sdf::ElementPtr sdf;
-  physics::ActorPtr actor;
+  //physics::ActorPtr actor;
   physics::ModelPtr model;
   physics::WorldPtr world;
   std::string name;
@@ -64,7 +64,7 @@ private:
 
   ObstaclePluginManager & manager;
 
-  // manage the actor location by the plugin
+  // manage the obstacle location by the plugin
   // because animation can change its position
   double x;
   double y;
@@ -73,7 +73,10 @@ private:
   double pitch;
   double yaw;
   double dist;
-  int actor_id;
+  double width; // x axis length
+  double height; // y axis length
+  double depth; // z axis length
+  int obstacle_id;
 
   ObstaclePluginParams plugin_params;
   bool needs_to_apply_params;

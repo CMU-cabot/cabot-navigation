@@ -146,12 +146,12 @@ size_t ObstaclePluginManager::addPlugin(std::string name, ObstaclePlugin * plugi
 
 void ObstaclePluginManager::removePlugin(std::string name) {pluginMap_.erase(name);}
 
-void ObstaclePluginManager::publishPeopleIfReady()
+void ObstaclePluginManager::publishObstaclesIfReady()
 {
-  if (peopleReadyMap_.size() == pluginMap_.size()) {
+  if (obstaclesReadyMap_.size() == pluginMap_.size()) {
     pedestrian_plugin_msgs::msg::Obstacles msg;
     for (auto it : obstaclesMap_) {
-      msg.people.push_back(it.second);
+      msg.obstacles.push_back(it.second);
     }
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
@@ -171,7 +171,7 @@ void ObstaclePluginManager::publishPeopleIfReady()
     humanAgentsMsg.header.frame_id = "map_global";
     human_pub_->publish(humanAgentsMsg);
 */
-    peopleReadyMap_.clear();
+    obstaclesReadyMap_.clear();
   }
 }
 
@@ -187,7 +187,7 @@ void ObstaclePluginManager::updateRobotPose(geometry_msgs::msg::Pose robot_pose)
 void ObstaclePluginManager::updateObstacleMessage(std::string name, pedestrian_plugin_msgs::msg::Obstacle obstacle)
 {
   obstaclesMap_.insert_or_assign(name, obstacle);
-  peopleReadyMap_.insert({name, true});
+  obstaclesReadyMap_.insert({name, true});
 }
 
 void ObstaclePluginManager::updateStamp(builtin_interfaces::msg::Time stamp)
@@ -208,20 +208,20 @@ void ObstaclePluginManager::updateRobotAgent(pedestrian_plugin_msgs::msg::Agent 
 
 void ObstaclePluginManager::updateHumanAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent)
 {
-  humanAgentsMap_.insert_or_assign(name, humanAgent);
+  obstacleAgentsMap_.insert_or_assign(name, humanAgent);
 }
 
 rclcpp::Logger ObstaclePluginManager::get_logger() {return node_->get_logger();}
 
-void ObstaclePluginManager::process_collision(std::string actor_name, double distance)
+void ObstaclePluginManager::process_collision(std::string obstacle_name, double distance)
 {
   if (robot_pose_ == nullptr) {
     RCLCPP_ERROR(get_logger(), "no robot_pose");
     return;
   }
-  auto it = obstaclesMap_.find(actor_name);
+  auto it = obstaclesMap_.find(obstacle_name);
   if (it == obstaclesMap_.end()) {
-    RCLCPP_ERROR(get_logger(), "cannot find person msg for %s", actor_name.c_str());
+    RCLCPP_ERROR(get_logger(), "cannot find person msg for %s", obstacle_name.c_str());
     return;
   }
   pedestrian_plugin_msgs::msg::Obstacle collided_obstacle = it->second;
@@ -251,7 +251,7 @@ void ObstaclePluginManager::handle_plugin_update(
     std::string name = update.name;
     auto it = pluginMap_.find(name);
     if (it == pluginMap_.end()) {
-      RCLCPP_ERROR(get_logger(), "could not find actor(%s)'s plugin", name.c_str());
+      RCLCPP_ERROR(get_logger(), "could not find obstacle(%s)'s plugin", name.c_str());
       continue;
     }
     ObstaclePlugin * plugin = it->second;

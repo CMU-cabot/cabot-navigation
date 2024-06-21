@@ -35,7 +35,7 @@ using namespace gazebo;  // NOLINT
 
 GZ_REGISTER_MODEL_PLUGIN(ObstaclePlugin)
 
-#define WALKING_ANIMATION "walking"
+//#define WALKING_ANIMATION "walking"
 
 // ObstaclePlugin implementation
 
@@ -53,7 +53,7 @@ void ObstaclePlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 {
   this->sdf = _sdf;
   this->model = _model;
-  this->actor = boost::dynamic_pointer_cast<physics::Actor>(_model);
+  //this->actor = boost::dynamic_pointer_cast<physics::Actor>(_model);
   this->name = this->model->GetName();
   this->world = this->model->GetWorld();
 
@@ -61,7 +61,7 @@ void ObstaclePlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     event::Events::ConnectWorldUpdateBegin(
       std::bind(&ObstaclePlugin::OnUpdate, this, std::placeholders::_1)));
 
-  actor_id = manager.addPlugin(this->name, this);
+  obstacle_id = manager.addPlugin(this->name, this);
   RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
 
   ObstaclePluginParams temp_params;
@@ -116,6 +116,15 @@ void ObstaclePlugin::apply_parameters()
     if (it.first == "init_a") {
       this->yaw = it.second.get<double>() / 180.0 * M_PI;
     }
+    if (it.first == "init_obstacle_width") {
+      this->width = it.second.get<double>();
+    }
+    if (it.first == "init_obstacle_height") {
+      this->height = it.second.get<double>();
+    }
+    if (it.first == "init_obstacle_depth") {
+      this->depth = it.second.get<double>();
+    }
   }
 }
 
@@ -131,19 +140,19 @@ void ObstaclePlugin::Reset()
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   RCLCPP_INFO(manager.get_logger(), "Reset");
 
-  if (this->actor) {
-    auto skelAnims = this->actor->SkeletonAnimations();
-    auto it = skelAnims.find(WALKING_ANIMATION);
-    if (it == skelAnims.end()) {
-      gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
-    } else {
-      // Create custom trajectory
-      this->trajectoryInfo.reset(new physics::TrajectoryInfo());
-      this->trajectoryInfo->type = WALKING_ANIMATION;
-      this->trajectoryInfo->duration = 1.0;
-      this->actor->SetCustomTrajectory(this->trajectoryInfo);
-    }
-  }
+  // if (this->actor) {
+  //   auto skelAnims = this->actor->SkeletonAnimations();
+  //   auto it = skelAnims.find(WALKING_ANIMATION);
+  //   if (it == skelAnims.end()) {
+  //     gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
+  //   } else {
+  //     // Create custom trajectory
+  //     this->trajectoryInfo.reset(new physics::TrajectoryInfo());
+  //     this->trajectoryInfo->type = WALKING_ANIMATION;
+  //     this->trajectoryInfo->duration = 1.0;
+  //     this->actor->SetCustomTrajectory(this->trajectoryInfo);
+  //   }
+  // }
 
   auto pose = this->model->WorldPose();
   auto rpy = pose.Rot().Euler();
@@ -154,6 +163,9 @@ void ObstaclePlugin::Reset()
   this->pitch = rpy.Y();
   this->yaw = rpy.Z();
   this->dist = 0;
+  this->width = 1;
+  this->height = 1;
+  this->depth = 1;
 
   apply_parameters();
 }
@@ -179,7 +191,7 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
   }
   auto stamp = gazebo_ros::Convert<builtin_interfaces::msg::Time>(_info.simTime);
   manager.updateStamp(stamp);
-  manager.publishPeopleIfReady();
+  manager.publishObstaclesIfReady();
 
   this->lastUpdate = _info.simTime;
 
@@ -198,8 +210,9 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
     }
 
     // set robot values to pDict
+    double robot_radius;
     if (robotModel) {
-      auto robot_radius = PythonUtils::getDictItemAsDouble(pDict, "robot_radius", 0.45);
+      robot_radius = PythonUtils::getDictItemAsDouble(pDict, "robot_radius", 0.45);
 
       PyObject * pRobotPose = PyDict_New();
       ignition::math::Vector3d rPos = robotModel->WorldPose().Pos();
@@ -249,14 +262,18 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
     }
 
     // set actor values to pDict
-    PythonUtils::setDictItemAsFloat(pDict, "time", _info.simTime.Float());
-    PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
+    //PythonUtils::setDictItemAsFloat(pDict, "time", _info.simTime.Float());
+    //PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
     PythonUtils::setDictItemAsFloat(pDict, "x", this->x);
     PythonUtils::setDictItemAsFloat(pDict, "y", this->y);
-    PythonUtils::setDictItemAsFloat(pDict, "z", this->z);
-    PythonUtils::setDictItemAsFloat(pDict, "roll", this->roll);
-    PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
+    //PythonUtils::setDictItemAsFloat(pDict, "z", this->z);
+    //PythonUtils::setDictItemAsFloat(pDict, "roll", this->roll);
+    //PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
     PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
+    PythonUtils::setDictItemAsFloat(pDict, "obstacle_width", this->width);
+    PythonUtils::setDictItemAsFloat(pDict, "obstacle_height", this->height);
+    //PythonUtils::setDictItemAsFloat(pDict, "obstacle_depth", this->depth);
+    PythonUtils::setDictItemAsFloat(pDict, "robot_radius", robot_radius);
 
     PyObject * aname = PyUnicode_DecodeFSDefault(this->model->GetName().c_str());
     PyDict_SetItemString(pDict, "name", aname);
@@ -266,12 +283,14 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
     auto pRet = PyObject_Call(pFunc, pArgs, pDict);
 
     if (pRet != NULL && PyDict_Check(pRet)) {
+      // Obstacles do not move. Following variables are not necessary.
       auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
       auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
       auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
       auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
       auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
       auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+      
       // variables only get from the module
       auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
       auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
@@ -292,16 +311,17 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
       pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
       this->model->SetWorldPose(pose);
 
-      // code depends on being obstacle as Person msg...
+      // code depends on being obstacle as Obstacle msg...
       pedestrian_plugin_msgs::msg::Obstacle obstacle;
-      // person.name = this->name;
-      // person.position.x = newX;
-      // person.position.y = newY;
-      // person.position.z = newZ;
-      // person.velocity.x = std::cos(newYaw) * dd / dt;
-      // person.velocity.y = std::sin(newYaw) * dd / dt;
-      // person.velocity.z = 0.0;
-      // person.reliability = 1.0;
+      obstacle.name = this->name;
+      obstacle.position.x = this->x;
+      obstacle.position.y = this->y;
+      obstacle.position.z = this->z;
+      obstacle.reliability = 1.0;
+      obstacle.heading = this->yaw;
+      obstacle.size.x = this->width;
+      obstacle.size.y = this->height;
+      obstacle.size.z = this->depth;
       // if (dd / dt < 0.1) {
       //   person.tags.push_back("stationary");
       // }
