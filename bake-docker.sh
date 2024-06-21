@@ -36,13 +36,17 @@ function help {
     echo "-l                    build using local registry"
     echo "-P <platform>         specify platform"
     echo "                      build linux/arm64 and linux/amd64 if not specified"
+    echo "-t <tags>             additional tags"
 }
 
 platform=
 base_name=cabot-base
+image_name_navigation=cabot-navigation
+image_name_localization=cabot-localization
 local=0
+tags=
 
-while getopts "hb:ilP:" arg; do
+while getopts "hb:ilP:t:" arg; do
     case $arg in
     h)
         help
@@ -65,6 +69,9 @@ while getopts "hb:ilP:" arg; do
     P)
         platform=${OPTARG}
         ;;
+    t)
+        tags=${OPTARG}
+	;;
     esac
 done
 shift $((OPTIND-1))
@@ -88,6 +95,8 @@ if [[ $local -eq 1 ]]; then
             -p 127.0.0.1:9092:5000 \
             registry:2.7
     fi
+else
+    export REGISTRY=cmucal
 fi
 
 # setup multiplatform builder
@@ -105,14 +114,25 @@ if [[ -z $(docker buildx ls | grep "mybuilder\*") ]]; then
     fi
 fi
 
-# bake
-export BASE_IMAGE=$base_name
+# tag option
+tag_option_navigation="--set=*.tags=${REGISTRY}/${image_name_navigation}:{${tags}}"
+tag_option_localization="--set=*.tags=${REGISTRY}/${image_name_localization}:{${tags}}"
+
+# platform option
+platform_option=
 if [[ -n $platform ]]; then
-    com="docker buildx bake -f docker-compose.yaml --set *.platform=\"$platform\" navigation localization $@"
-else
-    com="docker buildx bake -f docker-compose.yaml navigation localization $@"
+    platform_option="--set=*.platform=\"$platform\""
 fi
 
+# navigation bake
+com="docker buildx bake -f docker-compose.yaml $platform_option $tag_option_navigation navigation $@"
+export BASE_IMAGE=$base_name
+echo $com
+eval $com
+
+# localization bake
+com="docker buildx bake -f docker-compose.yaml $platform_option $tag_option_localization localization $@"
+export BASE_IMAGE=$base_name
 echo $com
 eval $com
 
