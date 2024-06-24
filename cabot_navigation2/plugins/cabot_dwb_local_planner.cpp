@@ -36,7 +36,7 @@ CaBotDWBLocalPlanner::CaBotDWBLocalPlanner()
 {
 }
 
-// CaBotDWBLocalPlanner extends transformGlobalPlan of DWBLocalPlanner
+// CaBotDWBLocalPlanner extends transformGlobalPlan method of DWBLocalPlanner
 /*
  * Software License Agreement (BSD License)
  *
@@ -71,7 +71,7 @@ CaBotDWBLocalPlanner::CaBotDWBLocalPlanner()
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-nav_2d_msgs::msg::Path2D 
+nav_2d_msgs::msg::Path2D
 CaBotDWBLocalPlanner::transformGlobalPlan(
   const nav_2d_msgs::msg::Pose2DStamped & pose)
 {
@@ -119,26 +119,57 @@ CaBotDWBLocalPlanner::transformGlobalPlan(
     transform_end_threshold = dist_threshold;
   }
 
-  // Find the first pose in the global plan that's further than prune distance
-  // from the robot using integrated distance
-  auto prune_point = nav2_util::geometry_utils::first_after_integrated_distance(
-    global_plan_.poses.begin(), global_plan_.poses.end(), prune_dist);
-
-  // Find the first pose in the plan (upto prune_point) that's less than transform_start_threshold
-  // from the robot.
-  auto transformation_begin = std::find_if(
-    begin(global_plan_.poses), prune_point,
-    [&](const auto & global_plan_pose) {
-      return euclidean_distance(robot_pose.pose, global_plan_pose) < transform_start_threshold;
+  // Customized: Find the closest point from the robot pose
+  auto nearest_point_from_robot = std::min_element(
+    global_plan_.poses.begin(), global_plan_.poses.end(),
+    [&](const auto & pose1, const auto & pose2) {
+      return euclidean_distance(pose1, robot_pose.pose) < euclidean_distance(pose2, robot_pose.pose);
     });
+  double nearest_distance = euclidean_distance(*nearest_point_from_robot, robot_pose.pose);
 
-  // Find the first pose in the end of the plan that's further than transform_end_threshold
-  // from the robot using integrated distance
-  auto transformation_end = std::find_if(
-    transformation_begin, global_plan_.poses.end(),
+  // Customized: Find the first pose less than double of nearset_distance - adhoc solution
+  auto search_start_point = std::find_if(
+    global_plan_.poses.begin(), global_plan_.poses.end(),
     [&](const auto & pose) {
-      return euclidean_distance(pose, robot_pose.pose) > transform_end_threshold;
+      return euclidean_distance(pose, robot_pose.pose) < nearest_distance * 2;
     });
+
+  // Customized: Find the first pose in the end of the plan that's further than transform_end_threshold
+  // from the robot using integrated distance
+  // accumulate distance so that the search can ignore after a sharp turn
+  double accumulated_distance = 0.0;
+  auto transformation_end = std::find_if(
+    search_start_point, global_plan_.poses.end(),
+    [&](const auto & pose) {
+      if (pose != *search_start_point) {
+        accumulated_distance += euclidean_distance(*std::prev(&pose), pose);
+      }
+      return accumulated_distance > transform_end_threshold + nearest_distance * 2;
+    });
+
+  // Customized: Find the first pose in the beginning of the plan that's further than transform_start_threshold
+  // from the robot using integrated distance
+  // accumulate distance so that the search can ignore after a sharp turn
+  accumulated_distance = 0.0;
+  auto transformation_begin_reverse = std::find_if(
+    std::make_reverse_iterator(search_start_point), global_plan_.poses.rend(),
+    [&](const auto & pose) {
+      if (pose != *search_start_point) {
+        accumulated_distance += euclidean_distance(*std::prev(&pose), pose);
+      }
+      return accumulated_distance > transform_start_threshold - nearest_distance * 2;
+    });
+  auto transformation_begin = (transformation_begin_reverse.base());
+
+  RCLCPP_INFO(
+    logger_, "transformation_begin = %ld, transformation_end = %ld, size = %ld",
+    std::distance(global_plan_.poses.begin(), transformation_begin),
+    std::distance(global_plan_.poses.begin(), transformation_end),
+    global_plan_.poses.size());
+  if (transformation_end < transformation_begin) {
+    RCLCPP_ERROR(logger_, "transformation_begin should be lower than transformation_end");
+    transformation_begin = transformation_end;
+  }
 
   // Transform the near part of the global plan into the robot's frame of reference.
   nav_2d_msgs::msg::Path2D transformed_plan;
