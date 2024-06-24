@@ -41,8 +41,6 @@ function help {
 
 platform=
 base_name=cabot-base
-image_name_navigation=cabot-navigation
-image_name_localization=cabot-localization
 local=0
 tags=
 
@@ -114,24 +112,14 @@ if [[ -z $(docker buildx ls | grep "mybuilder\*") ]]; then
     fi
 fi
 
-# tag option
-tag_option_navigation="--set=*.tags=${REGISTRY}/${image_name_navigation}:{${tags}}"
-tag_option_localization="--set=*.tags=${REGISTRY}/${image_name_localization}:{${tags}}"
-
 # platform option
 platform_option=
 if [[ -n $platform ]]; then
     platform_option="--set=*.platform=\"$platform\""
 fi
 
-# navigation bake
-com="docker buildx bake -f docker-compose.yaml $platform_option $tag_option_navigation navigation $@"
-export BASE_IMAGE=$base_name
-echo $com
-eval $com
-
-# localization bake
-com="docker buildx bake -f docker-compose.yaml $platform_option $tag_option_localization localization $@"
+# bake
+com="docker buildx bake -f docker-compose.yaml $platform_option $@"
 export BASE_IMAGE=$base_name
 echo $com
 eval $com
