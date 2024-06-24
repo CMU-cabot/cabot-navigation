@@ -42,6 +42,7 @@ class Evaluator:
         # variables
         self.robot_list = []
         self.human_list = []
+        self.results = []
         self._recording = False
         self._ready = False
         self._logger = None
@@ -94,9 +95,13 @@ class Evaluator:
             self._evaluation_timer = None
         self.reset()
 
+    def get_results(self):
+        return self.results
+
     def reset(self):
         self.robot_list = []
         self.human_list = []
+        self.results = []
         self._ready = False
 
     def agents_callback(self, robot, human):
@@ -121,6 +126,7 @@ class Evaluator:
         for metric, func in zip(self._metrics_to_compute, self._metrics_func_list):
             result = func(self.human_list, self.robot_list)
             value = result[0]
+            self.results.append({"name": metric, "value": value})
 
             if self._logger is not None:
                 self._logger.debug(f"{metric}={value}")

@@ -129,6 +129,7 @@ class Tester:
         self.test_func_name = None
         self.result = {}
         self.test_summary = {}
+        self.evaluator_summary = {}
         # evaluation
         self.evaluator = None
 
@@ -164,6 +165,7 @@ class Tester:
             logger.info(f"Testing {func}")
             self.test_func_name = func
             getattr(module, func)(self)
+            self.evaluator_summary[func] = self.evaluator.get_results()
             self.stop_evaluation()  # automatically stop metric evaluation
             success = self.print_result(self.result, func)
             self.register_action_result(func, self.result)
@@ -218,6 +220,12 @@ class Tester:
                 total_count = success_count + fail_count
                 success_rate = success_count / total_count if total_count > 0 else 0
                 writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
+
+            writer.writerow([''])
+            writer.writerow(["Test name", "evaluator", "value"])
+            for test_name, results in self.evaluator_summary.items():
+                for result in results:
+                    writer.writerow([test_name, result["name"], result["value"]])
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
