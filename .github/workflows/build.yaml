@@ -22,6 +22,7 @@ jobs:
             sudo rm -rf /opt/ghc
             echo "Available storage:"
             df -h
+            docker system prune -a --volumes -f # delete unnecessary preinstalled docker images
 
     - uses: actions/checkout@v4
 
