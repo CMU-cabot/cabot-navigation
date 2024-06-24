@@ -25,6 +25,7 @@
 import importlib
 import pkgutil
 import inspect
+import csv
 import sys
 import math
 import numpy
@@ -127,6 +128,7 @@ class Tester:
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.test_func_name = None
         self.result = {}
+        self.test_summary = {}
         # evaluation
         self.evaluator = None
 
@@ -168,6 +170,15 @@ class Tester:
             self.cancel_subscription(func)
             allSuccess = allSuccess and success
 
+            if func not in self.test_summary:
+                self.test_summary[func] = {'success': 0, 'failure': 0}
+            if success:
+                self.test_summary[func]['success'] += 1
+            else:
+                self.test_summary[func]['failure'] += 1
+
+        self.output_test_summary()
+
         logger.info("Done all test")
 
         if allSuccess:
@@ -196,6 +207,17 @@ class Tester:
                 logger.error(f"{aResult['error']}")
         logger.info("--------------------------")
         return success
+
+    def output_test_summary(self):
+        with open('test_summary.csv', mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Test name", "Number of success", "Number of failure", "Success rate"])
+            for test_name, counts in self.test_summary.items():
+                success_count = counts['success']
+                fail_count = counts['failure']
+                total_count = success_count + fail_count
+                success_rate = success_count / total_count if total_count > 0 else 0
+                writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
