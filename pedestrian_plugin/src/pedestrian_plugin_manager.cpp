@@ -443,10 +443,7 @@ bool PedestrianPluginManager::isPersonVisible(
     }
   }
 
-  if (is_person_visible) {
-    return true;
-  }
-  return false;
+  return is_person_visible;
 }
 
 std::vector<people_msgs::msg::Person> PedestrianPluginManager::getNonOccludedPeople(

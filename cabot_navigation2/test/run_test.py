@@ -127,17 +127,10 @@ class Tester:
         self.set_current_floor_client = self.node.create_client(MFSetInt, '/set_current_floor')
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
-        self.set_people_detection_params_client = self.node.create_client(
-            SetParameters,
-            '/gazebo/set_parameters'
-        )
         self.test_func_name = None
         self.result = {}
         # evaluation
         self.evaluator = None
-
-        # while not self.set_people_detection_params_client.wait_for_service(timeout_sec=1.0):
-        #     self.node.get_logger().info('service not available, waiting again...')
 
     def set_evaluator(self, evaluator):
         self.evaluator = evaluator
@@ -299,74 +292,30 @@ class Tester:
     def set_people_detection_range(self, **kwargs):
         params = []
 
-        # min_range parameter
-        if 'min_range' in kwargs:
+        for name in ['min_range', 'max_range', 'min_angle', 'max_angle', 'occlusion_radius', 'divider_distance_m', 'divider_angle_deg']:
+            if name not in kwargs:
+                continue
             param = Parameter()
-            param.name = 'pedestrian_plugin.min_range'
+            param.name = f'pedestrian_plugin.{name}'
             param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['min_range']
-            params.append(param)
-
-        # max_range parameter
-        if 'max_range' in kwargs:
-            param = Parameter()
-            param.name = 'pedestrian_plugin.max_range'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['max_range']
-            params.append(param)
-
-        # min_angle parameter
-        if 'min_angle' in kwargs:
-            param = Parameter()
-            param.name = 'pedestrian_plugin.min_angle'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['min_angle']
-            params.append(param)
-
-        # max_angle parameter
-        if 'max_angle' in kwargs:
-            param = Parameter()
-            param.name = 'pedestrian_plugin.max_angle'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['max_angle']
-            params.append(param)
-
-        # occlusion_radius parameter
-        if 'occlusion_radius' in kwargs:
-            param = Parameter()
-            param.name = 'pedestrian_plugin.occlusion_radius'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['occlusion_radius']
-            params.append(param)
-
-        # divider_distance_m parameter
-        if 'divider_distance_m' in kwargs:
-            param = Parameter()
-            param.name = 'pedestrian_plugin.divider_distance_m'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['divider_distance_m']
-            params.append(param)
-
-        # divider_angle_deg parameter
-        if 'divider_angle_deg' in kwargs:
-            param = Parameter()
-            param.name = 'pedestrian_plugin.divider_angle_deg'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs['divider_angle_deg']
+            param.value.double_value = kwargs[name]
             params.append(param)
 
         request = SetParameters.Request()
         request.parameters = params
 
-        logger.info("Set pedestrian_plugin params")
+        param_dict = [{'name': param.name, 'value': {'type': param.value.type, 'double_value': param.value.double_value}} for param in params]
+        request_yaml = yaml.dump({'parameters': param_dict})
 
-        future = self.set_people_detection_params_client.call_async(request)
-
-        rclpy.spin_until_future_complete(self.node, future)
-        if future.result() is not None:
-            logger.info(f'Service call succeeded: {future.result()}')
-        else:
-            logger.error(f'Service call failed: {future.exception()}')
+        self.call_service(**dict(
+            dict(
+                action_name='set_people_detection_range',
+                service='/gazebo/set_parameters',
+                service_type='rcl_interfaces.srv/SetParameters',
+                request=request_yaml
+            ),
+            **kwargs)
+        )
 
     # shorthand functions
     def button_down(self, button, **kwargs):
