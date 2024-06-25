@@ -22,6 +22,7 @@
 # THE SOFTWARE.
 ###############################################################################
 
+import os
 import importlib
 import pkgutil
 import inspect
@@ -211,7 +212,15 @@ class Tester:
         return success
 
     def output_test_summary(self):
-        with open('test_summary.csv', mode='w', newline='') as file:
+        ros_log_dir = os.getenv('ROS_LOG_DIR')
+        if not ros_log_dir:
+            logger.error('ROS_LOG_DIR environment variable is not set')
+            return
+
+        test_summary_path = os.path.join(ros_log_dir, 'test_summary.csv')
+        test_evaluation_path = os.path.join(ros_log_dir, 'test_evaluation_results.csv')
+
+        with open(test_summary_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Test name", "Number of success", "Number of failure", "Success rate"])
             for test_name, counts in self.test_summary.items():
@@ -221,7 +230,7 @@ class Tester:
                 success_rate = success_count / total_count if total_count > 0 else 0
                 writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
 
-        with open('test_evaliation_results.csv', mode='w', newline='') as file:
+        with open(test_evaluation_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Test name", "evaluator", "value"])
             for test_name, results in self.evaluator_summary.items():
