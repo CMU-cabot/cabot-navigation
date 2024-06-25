@@ -290,22 +290,22 @@ class Tester:
 
     # people detection
     def set_people_detection_range(self, **kwargs):
-        params = []
+        param_list = []
 
         for name in ['min_range', 'max_range', 'min_angle', 'max_angle', 'occlusion_radius', 'divider_distance_m', 'divider_angle_deg']:
             if name not in kwargs:
                 continue
-            param = Parameter()
-            param.name = f'pedestrian_plugin.{name}'
-            param.value.type = ParameterType.PARAMETER_DOUBLE
-            param.value.double_value = kwargs[name]
-            params.append(param)
 
-        request = SetParameters.Request()
-        request.parameters = params
+            param = {
+                'name': f'pedestrian_plugin.{name}',
+                'value': {
+                    'type': ParameterType.PARAMETER_DOUBLE,
+                    'double_value': kwargs[name]
+                }
+            }
+            param_list.append(param)
 
-        param_dict = [{'name': param.name, 'value': {'type': param.value.type, 'double_value': param.value.double_value}} for param in params]
-        request_yaml = yaml.dump({'parameters': param_dict})
+        request_yaml = yaml.dump({'parameters': param_list})
 
         self.call_service(**dict(
             dict(
