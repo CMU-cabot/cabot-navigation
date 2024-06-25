@@ -165,7 +165,7 @@ class Tester:
             logger.info(f"Testing {func}")
             self.test_func_name = func
             getattr(module, func)(self)
-            self.evaluator_summary[func] = self.evaluator.get_results()
+            self.evaluator_summary[func] = self.evaluator.get_evaluation_results()
             self.stop_evaluation()  # automatically stop metric evaluation
             success = self.print_result(self.result, func)
             self.register_action_result(func, self.result)
@@ -221,7 +221,7 @@ class Tester:
                 success_rate = success_count / total_count if total_count > 0 else 0
                 writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
 
-        with open('test_evaliator_results.csv', mode='w', newline='') as file:
+        with open('test_evaliation_results.csv', mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Test name", "evaluator", "value"])
             for test_name, results in self.evaluator_summary.items():
