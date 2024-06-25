@@ -1183,7 +1183,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             if self.turn_towards_last_diff and abs(self.turn_towards_last_diff - diff) < 0.1:
                 self.turn_towards_count += 1
 
-            if abs(diff) > 0.05 or self.turn_towards_count < 3:
+            if abs(diff) > 0.05 and self.turn_towards_count < 3:
                 self._logger.info(F"send turn {diff:.2f}")
                 self.turn_towards_last_diff = diff
                 self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
