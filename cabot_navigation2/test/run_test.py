@@ -46,6 +46,7 @@ from cabot_common.util import callee_name
 from people_msgs.msg import People, Person
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from rcl_interfaces.msg import ParameterType
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
 
@@ -285,6 +286,35 @@ class Tester:
         This method can be used when the user intentionally stops the metric computation
         """
         self.evaluator.stop()
+
+    # people detection
+    def set_people_detection_range(self, **kwargs):
+        param_list = []
+
+        for name in ['min_range', 'max_range', 'min_angle', 'max_angle', 'occlusion_radius', 'divider_distance_m', 'divider_angle_deg']:
+            if name not in kwargs:
+                continue
+
+            param = {
+                'name': f'pedestrian_plugin.{name}',
+                'value': {
+                    'type': ParameterType.PARAMETER_DOUBLE,
+                    'double_value': kwargs[name]
+                }
+            }
+            param_list.append(param)
+
+        request_yaml = yaml.dump({'parameters': param_list})
+
+        self.call_service(**dict(
+            dict(
+                action_name='set_people_detection_range',
+                service='/gazebo/set_parameters',
+                service_type='rcl_interfaces.srv/SetParameters',
+                request=request_yaml
+            ),
+            **kwargs)
+        )
 
     # shorthand functions
     def button_down(self, button, **kwargs):

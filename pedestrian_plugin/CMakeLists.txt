@@ -14,6 +14,9 @@ find_package(gazebo_ros REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(pedestrian_plugin_msgs REQUIRED)
 find_package(PythonLibs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 
 if(BUILD_TESTING)
@@ -58,6 +61,9 @@ ament_target_dependencies(${PROJECT_NAME}
   gazebo_ros
   people_msgs
   pedestrian_plugin_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
 )
 ament_export_libraries(${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}
