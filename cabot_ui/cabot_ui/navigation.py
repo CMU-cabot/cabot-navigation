@@ -581,6 +581,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # check facilities
         self.nearby_facilities = []
         links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
+        target = groute[-1]
         if len(links) > 0:
             kdtree = geojson.LinkKDTree()
             kdtree.build(links)
@@ -596,13 +597,18 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
                 for ent in facility.entrances:
                     min_link, min_dist = kdtree.get_nearest_link(ent.node)
-                    if min_link and min_dist < 5.0:
-                        # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
-                        ent.set_target(min_link)
-                        self.nearby_facilities.append({
-                            "facility": facility,
-                            "entrance": ent
-                        })
+                    if min_link is None or min_dist >= 5.0:
+                        continue
+                    # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
+                    gp = ent.set_target(min_link)
+                    dist = target.geometry.distance_to(gp)
+                    if dist < 1.0:
+                        self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
+                        continue
+                    self.nearby_facilities.append({
+                        "facility": facility,
+                        "entrance": ent
+                    })
             end = time.time()
             self._logger.info(F"Check Facilities {end - start:.3f}.sec")
 
@@ -862,7 +868,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _check_nearby_facility(self, current_pose):
         if not self.nearby_facilities:
             return
-        entry = min(self.nearby_facilities, key=lambda p, c=current_pose: p["entrance"].distance_to(c))
+        entry = min(self.nearby_facilities, key=lambda p, c=current_pose: abs(p["entrance"].distance_to(c)))
         if entry is None:
             return
         entrance = entry["entrance"]
