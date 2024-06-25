@@ -221,7 +221,8 @@ class Tester:
                 success_rate = success_count / total_count if total_count > 0 else 0
                 writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
 
-            writer.writerow([''])
+        with open('test_evaliator_results.csv', mode='w', newline='') as file:
+            writer = csv.writer(file)
             writer.writerow(["Test name", "evaluator", "value"])
             for test_name, results in self.evaluator_summary.items():
                 for result in results:
