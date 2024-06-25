@@ -49,7 +49,6 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from rcl_interfaces.msg import ParameterType
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
-from rcl_interfaces.srv import SetParameters
 
 from pedestrian.manager import PedestrianManager
 from gazebo_msgs.srv import DeleteEntity
