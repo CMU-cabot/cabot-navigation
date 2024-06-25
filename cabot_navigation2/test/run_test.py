@@ -46,7 +46,7 @@ from cabot_common.util import callee_name
 from people_msgs.msg import People, Person
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from rcl_interfaces.msg import Parameter, ParameterType
+from rcl_interfaces.msg import ParameterType
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
 from rcl_interfaces.srv import SetParameters
