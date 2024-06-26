@@ -113,8 +113,9 @@ def wait_test(timeout=60):
 
 
 class Tester:
-    def __init__(self, node):
+    def __init__(self, node, output_dir):
         self.node = node
+        self.output_dir = output_dir
         self.done = False
         self.alive = True
         self.config = {}
@@ -212,13 +213,8 @@ class Tester:
         return success
 
     def output_test_summary(self):
-        ros_log_dir = os.getenv('ROS_LOG_DIR')
-        if not ros_log_dir:
-            logger.error('ROS_LOG_DIR environment variable is not set')
-            return
-
-        test_summary_path = os.path.join(ros_log_dir, 'test_summary.csv')
-        test_evaluation_path = os.path.join(ros_log_dir, 'test_evaluation_results.csv')
+        test_summary_path = os.path.join(self.output_dir, 'test_summary.csv')
+        test_evaluation_path = os.path.join(self.output_dir, 'test_evaluation_results.csv')
 
         with open(test_summary_path, mode='w', newline='') as file:
             writer = csv.writer(file)
@@ -1039,6 +1035,7 @@ def main():
     parser.add_option('-L', '--list-modules', action='store_true', help='list test modules')
     parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
     parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
+    parser.add_option('-o', '--output-dir', type=str, help='directory where the summary will be output')
 
     (options, args) = parser.parse_args()
 
@@ -1077,7 +1074,7 @@ def main():
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
 
-    tester = Tester(node)
+    tester = Tester(node, options.output_dir)
     tester.set_evaluator(evaluator)
     try:
         mod = importlib.import_module(options.module)

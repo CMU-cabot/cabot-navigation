@@ -84,27 +84,29 @@ if [[ $2 != "" ]]; then
   test_func_option="-f $2"
 fi  
 
+output_dir_option="-o ${ROS_LOG_DIR}"
+
 blue "testing with $CABOT_SITE"
 
 source $scriptdir/../install/setup.bash
 
 while [[ 1 -eq 1 ]]; do
     if [[ $list_modules -eq 1 ]]; then
-	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE} -L
+	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE} -L $output_dir_option
 	exit
     fi
 
     if [[ $list_functions -eq 1 ]]; then
-	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module -l
+	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module -l $output_dir_option
 	exit
     fi
 
     if [[ ! -z $debug ]]; then
-	echo "ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
-	ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args python3' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug
+	echo "ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option"
+	ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args python3' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option
     else
-	echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug"
-	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option
+	echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option"
+	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $output_dir_option
     fi
     result=$?
     if [[ $result -le 1 ]]; then
