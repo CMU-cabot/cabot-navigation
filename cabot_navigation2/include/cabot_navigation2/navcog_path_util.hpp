@@ -28,7 +28,9 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/path.hpp>
 
-#define FIRST_LINK_THRETHOLD (3.0)
+// #define FIRST_LINK_THRETHOLD (3.0)
+// reduce FIRST_LINK_THRETHOLD to avoid crossing the navcog_path with lethal area
+#define FIRST_LINK_THRETHOLD (0.0)
 
 using PoseStamped = geometry_msgs::msg::PoseStamped;
 using Path = nav_msgs::msg::Path;
