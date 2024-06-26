@@ -22,6 +22,7 @@ find_package(nav2_lifecycle_manager REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_rotation_shim_controller REQUIRED)
+find_package(nav2_util REQUIRED)
 find_package(angles REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -166,10 +167,13 @@ ament_target_dependencies(cabot_lifecycle_manager
 ### controller plugin
 add_library(cabot_controllers SHARED
   plugins/cabot_rotation_shim_controller.cpp
+  plugins/cabot_dwb_local_planner.cpp
 )
 ament_target_dependencies(cabot_controllers
+  dwb_core
   nav2_core
   nav2_rotation_shim_controller
+  nav2_util
   pluginlib
 )
 
