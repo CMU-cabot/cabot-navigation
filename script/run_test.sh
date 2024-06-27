@@ -84,7 +84,7 @@ if [[ $2 != "" ]]; then
   test_func_option="-f $2"
 fi  
 
-output_dir_option="-o ${ROS_LOG_DIR}"
+output_dir_option="-o ${ROS_LOG_DIR:-$pwd}"
 
 blue "testing with $CABOT_SITE"
 
