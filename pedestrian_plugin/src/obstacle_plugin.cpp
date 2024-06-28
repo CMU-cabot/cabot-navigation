@@ -326,7 +326,19 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
       //   person.tags.push_back("stationary");
       // }
       manager.updateObstacleMessage(this->model->GetName(), obstacle);
-      
+
+      // update obstacle agent
+      pedestrian_plugin_msgs::msg::Agent obstacleAgent;
+      obstacleAgent.type = pedestrian_plugin_msgs::msg::Agent::OBSTACLE;
+      obstacleAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+      obstacleAgent.name = obstacle.name;
+      obstacleAgent.position.position = obstacle.position;
+      obstacleAgent.yaw = obstacle.heading;
+      obstacleAgent.velocity.linear.x = 0;
+      obstacleAgent.velocity.linear.y = 0;
+      obstacleAgent.velocity.linear.z = 0;
+      obstacleAgent.linear_vel = 0;
+      manager.updateObstacleAgent(obstacleAgent.name, obstacleAgent);
 
       this->x = newX;
       this->y = newY;

@@ -109,7 +109,7 @@ public:
   void updateObstacleMessage(std::string name, pedestrian_plugin_msgs::msg::Obstacle obstacle);
   void updateStamp(builtin_interfaces::msg::Time stamp);
   void updateRobotAgent(pedestrian_plugin_msgs::msg::Agent robotAgent);
-  void updateHumanAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent);
+  void updateObstacleAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent);
   rclcpp::Logger get_logger();
   void process_collision(std::string obstacle_name, double distance);
   void process_metric(std::string name, double value);
@@ -130,17 +130,13 @@ private:
   builtin_interfaces::msg::Time::SharedPtr stamp_;
   pedestrian_plugin_msgs::msg::Agent::SharedPtr robotAgent_;
   //std::map<std::string, pedestrian_plugin_msgs::msg::Agent> humanAgentsMap_;
-  
-  // !!!!!!!!!!!!!! ATTENTION !!!!!!!!!!!!!!
-  std::map<std::string, pedestrian_plugin_msgs::msg::Agent> obstacleAgentsMap_; // Obstacles do not move.
-  // If it is needed, Agents.msg need "uint8 OBSTACLE=3"
-  // !!!!!!!!!!!!!! ATTENTION !!!!!!!!!!!!!!
-
+  std::map<std::string, pedestrian_plugin_msgs::msg::Agent> obstacleAgentsMap_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Obstacles>::SharedPtr obstacle_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>::SharedPtr collision_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Metric>::SharedPtr metric_pub_;
   // rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agent>::SharedPtr robot_pub_;
   // rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr human_pub_;
+  rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr obstacle_agents_pub_;
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
 };
 

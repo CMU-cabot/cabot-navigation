@@ -44,6 +44,7 @@ from tf_transformations import quaternion_from_euler
 
 from cabot_common.util import callee_name
 from people_msgs.msg import People, Person
+from pedestrian_plugin_msgs.msg import Agents
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
@@ -555,6 +556,18 @@ class Tester:
         self.futures[uuid] = future
 
     @wait_test()
+    def clean_obstacle(self, case, test_action):
+        uuid = test_action['uuid']
+
+        def done_callback(future):
+            case['done'] = True
+            case['success'] = True
+        future = ObstacleManager.instance().clean(callback=done_callback)
+        if not future:
+            return
+        self.futures[uuid] = future
+
+    @wait_test()
     def delete_actor(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")
 
@@ -568,8 +581,12 @@ class Tester:
 
     @wait_test()
     def delete_door(self, case, test_action):
+        self.delete_obstacle(case, test_action)
+
+    @wait_test()
+    def delete_obstacle(self, case, test_action):
         uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().delete_door(**test_action)
+        self.futures[uuid] = ObstacleManager.instance().delete_obstacle(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
@@ -808,16 +825,35 @@ class ObstacleManager:
         return ObstacleManager._instance
 
     def __init__(self):
+        self.timer = node.create_timer(0.2, self.timer_callback)
+        self.remaining = []
+        self.last_plan = None
         self.spawn_entity_client = node.create_client(SpawnEntity, '/spawn_entity')
         self.delete_entity_client = node.create_client(DeleteEntity, '/delete_entity')
         self.plan_sub = node.create_subscription(Path, '/plan', self.plan_callback, 10)
         self.obstacle_pub = node.create_publisher(People, '/obstacles', 10)
-        self.timer = node.create_timer(0.2, self.timer_callback)
-        self.remaining = []
-        self.last_plan = None
+        self.obstacle_states_sub = node.create_subscription(Agents, '/obstacle_states', self.obstacle_states_callback, 10)
 
     def plan_callback(self, msg):
         self.last_plan = msg
+
+    def obstacle_states_callback(self, msg):
+        if len(self.remaining) < len(msg.agents):
+            remaining_names = [rem.name for rem in self.remaining]
+            #agent_names = [agent.name for agent in msg.agents]
+            for agent in msg.agents:
+                if agent.name not in remaining_names:
+                    obstacle = Door.from_dict(**{
+                        "name": agent.name,
+                        "x": agent.position.position.x,
+                        "y": agent.position.position.y,
+                        "z": agent.position.position.z,
+                        "yaw": agent.yaw,
+                        "width": 0, # Agent.msg does not provide this parameter
+                        "height": 0, # Agent.msg does not provide this parameter
+                        "depth": 0 # Agent.msg does not provide this parameter
+                        })
+                    self.remaining.append(obstacle)
 
     def timer_callback(self):
         if not self.last_plan:
@@ -860,8 +896,8 @@ class ObstacleManager:
     def clean(self, callback):
         self.last_path = None
         if self.remaining:
-            future = self.delete_door(name=self.ramaining[0].name)
-
+            future = self.delete_door(name=self.remaining[0].name)
+            self.remaining.pop(0)
             def done_callback(future):
                 self.clean(callback)
             future.add_done_callback(done_callback)
@@ -869,6 +905,9 @@ class ObstacleManager:
             callback("Done")
 
     def delete_door(self, **kwargs):
+        return self.delete_obstacle(**kwargs)
+
+    def delete_obstacle(self, **kwargs):
         name = kwargs['name']
         request = DeleteEntity.Request()
         request.name = name
@@ -876,6 +915,7 @@ class ObstacleManager:
 
         def callback(future):
             self.remaining = [door for door in self.remaining if door.name != name]
+            logger.debug(F"delete result = {future.result()}, {name}, {len(self.remaining)}")
         future.add_done_callback(callback)
         return future
 
@@ -891,7 +931,15 @@ class ObstacleManager:
 
     def spawn_obstacle(self, **kwargs):
         door = Door.from_dict(**kwargs)
-        name = door.name
+        if kwargs['name'] in [rem.name for rem in self.remaining]:
+            # add suffix '_NUMBER' if the name already exists
+            obstacle_suffix_num = 1
+            while kwargs['name']+f"_{obstacle_suffix_num}" \
+                    in [rem.name for rem in self.remaining]:
+                obstacle_suffix_num += 1
+            name = door.name + f"_{obstacle_suffix_num}"
+        else:
+            name = door.name
         x = door.x
         y = door.y
         z = door.z

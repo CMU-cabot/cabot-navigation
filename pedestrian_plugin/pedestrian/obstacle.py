@@ -57,7 +57,7 @@ def onUpdate(**args):
         dx = rx - x
         dy = ry - y
         dist = math.sqrt(dx * dx + dy * dy)
-        ros.info(f"obstacle collision {rx=}, {ry=}, {x=}, {y=}, {dx=}, {dy=}, {dist=}")
+        ros.info(f"obstacle collision [{is_collision_detected=}]: {rx=}, {ry=}, {x=}, {y=}, {dx=}, {dy=}, {dist=}")
 
         if is_collision_detected:
             ros.collision(name, dist)

@@ -90,7 +90,7 @@ target_link_libraries(obstacle_plugin
 # Install Python modules
 ament_python_install_package("pedestrian")
 
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} obstacle_plugin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin

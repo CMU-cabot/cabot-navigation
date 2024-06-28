@@ -131,6 +131,7 @@ ObstaclePluginManager::ObstaclePluginManager()
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   //robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
   //human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
+  obstacle_agents_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/obstacle_states", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
     "/obstacle_plugin_update",
     std::bind(&ObstaclePluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
@@ -156,6 +157,14 @@ void ObstaclePluginManager::publishObstaclesIfReady()
     msg.header.stamp = *stamp_;
     msg.header.frame_id = "map_global";
     obstacle_pub_->publish(msg);
+
+    pedestrian_plugin_msgs::msg::Agents obstacleAgentsMsg;
+    for (auto it : obstacleAgentsMap_) {
+      obstacleAgentsMsg.agents.push_back(it.second);
+    }
+    obstacleAgentsMsg.header.stamp = *stamp_;
+    obstacleAgentsMsg.header.frame_id = "map_global";
+    obstacle_agents_pub_->publish(obstacleAgentsMsg);
 
 /*
     // publish robot and human messages
@@ -206,9 +215,9 @@ void ObstaclePluginManager::updateRobotAgent(pedestrian_plugin_msgs::msg::Agent 
   *robotAgent_ = robotAgent;
 }
 
-void ObstaclePluginManager::updateHumanAgent(std::string name, pedestrian_plugin_msgs::msg::Agent humanAgent)
+void ObstaclePluginManager::updateObstacleAgent(std::string name, pedestrian_plugin_msgs::msg::Agent obstacleAgent)
 {
-  obstacleAgentsMap_.insert_or_assign(name, humanAgent);
+  obstacleAgentsMap_.insert_or_assign(name, obstacleAgent);
 }
 
 rclcpp::Logger ObstaclePluginManager::get_logger() {return node_->get_logger();}

@@ -21,6 +21,7 @@
 # types
 uint8 PERSON=1
 uint8 ROBOT=2
+uint8 OBSTACLE=3
 
 # behavior states
 uint8 INACTIVE=0
