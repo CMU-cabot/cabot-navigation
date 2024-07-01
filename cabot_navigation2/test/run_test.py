@@ -321,6 +321,17 @@ class Tester:
             **kwargs)
         )
 
+    def check_collision_obstacle(self, **kwargs):
+        self.check_topic(**dict(
+            dict(
+                action_name='check_collision_obstacle',
+                topic="/collision_obstacle",
+                topic_type="pedestrian_plugin_msgs/msg/ObstacleCollision",
+                condition="True"
+            ),
+            **kwargs)
+        )
+
     def check_navigation_arrived(self, **kwargs):
         self.check_topic(**dict(
             dict(

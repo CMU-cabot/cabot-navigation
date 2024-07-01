@@ -230,7 +230,7 @@ void ObstaclePluginManager::process_collision(std::string obstacle_name, double 
   }
   auto it = obstaclesMap_.find(obstacle_name);
   if (it == obstaclesMap_.end()) {
-    RCLCPP_ERROR(get_logger(), "cannot find person msg for %s", obstacle_name.c_str());
+    RCLCPP_ERROR(get_logger(), "cannot find obstacle msg for %s", obstacle_name.c_str());
     return;
   }
   pedestrian_plugin_msgs::msg::Obstacle collided_obstacle = it->second;

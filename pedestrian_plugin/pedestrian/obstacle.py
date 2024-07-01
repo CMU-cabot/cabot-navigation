@@ -48,10 +48,10 @@ def onUpdate(**args):
         circle_center_point = {'x':robot['x'],'y':robot['y']}
         robot_radius = args['robot_radius']
         polygon_vertex_points = [\
-            calc2DPointRotZ(x-obstacle_width,y-obstacle_height,obstacle_yaw), \
-            calc2DPointRotZ(x+obstacle_width,y-obstacle_height,obstacle_yaw), \
-            calc2DPointRotZ(x+obstacle_width,y+obstacle_height,obstacle_yaw), \
-            calc2DPointRotZ(x-obstacle_width,y+obstacle_height,obstacle_yaw)]
+            calc2DPointRotZ(x-obstacle_width/2.,y-obstacle_height/2.,obstacle_yaw), \
+            calc2DPointRotZ(x+obstacle_width/2.,y-obstacle_height/2.,obstacle_yaw), \
+            calc2DPointRotZ(x+obstacle_width/2.,y+obstacle_height/2.,obstacle_yaw), \
+            calc2DPointRotZ(x-obstacle_width/2.,y+obstacle_height/2.,obstacle_yaw)]
         is_collision_detected = isCircleCollidingWithPolygon(circle_center_point,robot_radius,polygon_vertex_points)
 
         dx = rx - x
