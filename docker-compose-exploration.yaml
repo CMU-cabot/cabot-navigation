@@ -50,4 +50,4 @@ services:
       service: exploration
     environment:
       - CABOT_GAZEBO=1
-      - CABOT_USE_SIM_TIME=1                         # set publish_current_rate to 1hz
+      - CABOT_USE_SIM_TIME=1
