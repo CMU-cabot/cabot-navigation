@@ -331,6 +331,19 @@ class Tester:
             ),
             **kwargs)
         )
+        self.wait_for(1)
+
+    def check_no_collision_obstacle(self, **kwargs):
+        self.check_topic_absence(**dict(
+            dict(
+                action_name='check_collision_obstacle',
+                topic="/collision_obstacle",
+                topic_type="pedestrian_plugin_msgs/msg/ObstacleCollision",
+                condition="True"
+            ),
+            **kwargs)
+        )
+        self.wait_for(1)
 
     def check_navigation_arrived(self, **kwargs):
         self.check_topic(**dict(
@@ -523,6 +536,30 @@ class Tester:
         self.add_subscription(case, sub)
         case['done'] = True
         case['success'] = None
+
+    @wait_test()
+    def check_topic_absence(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        topic = test_action['topic']
+        topic_type = test_action['topic_type']
+        topic_type = import_class(topic_type)
+        condition = test_action['condition']
+
+        def topic_callback(msg):
+            try:
+                context = {'msg': msg, 'math': math}
+                exec(f"result=({condition})", context)
+                if context['result']:
+                    logger.debug(f"success {condition}")
+                    case['success'] = False
+                    self.cancel_subscription(case)
+            except:  # noqa: #722
+                logger.error(traceback.format_exc())
+
+        sub = self.node.create_subscription(topic_type, topic, topic_callback, 10)
+        self.add_subscription(case, sub)
+        case['done'] = True
+        case['success'] = True
 
     @wait_test(1)
     def check_topic_error(self, case, test_action):
