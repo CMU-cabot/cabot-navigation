@@ -67,10 +67,6 @@ record_cam=${CABOT_ROSBAG_RECORD_CAMERA:=0}
 
 exclude_topics_file="rosbag2-exclude-topics.txt"
 exclude_camera_topics="/.*/image_raw.*"
-# if [[ $record_cam -eq 1 ]]; then
-#     # exclude_camera_topics='/.*/image_raw$'  # record compressed images
-#     com="ros2 bag record ${use_sim_time} -s ${backend} ${compression} -p ${interval} -e '/.*camera_info|/.*image_raw' -x '/.*image_raw$' ${hidden_topics} ${qos_option} -o $ROS_LOG_DIR/image_topics 2>&1 &"
-# fi
 lines=$(cat $scriptdir/${exclude_topics_file})
 exclude_topics=$(echo -n "${lines}" | tr '\n' '|')
 exclude_topics="${exclude_topics}|${exclude_camera_topics}"
@@ -96,8 +92,7 @@ eval $com
 pid=$!
 
 if [[ $record_cam -eq 1 ]]; then
-    # exclude_camera_topics='/.*/image_raw$'  # record compressed images
-    image_com="ros2 bag record ${use_sim_time} -s ${backend} ${compression} -p ${interval} -e '/.*camera_info|/.*image_raw' -x '/.*image_raw$' ${hidden_topics} ${qos_option} -o $ROS_LOG_DIR/image_topics 2>&1 &"
+    image_com="ros2 bag record ${use_sim_time} -s ${backend} ${compression} -p ${interval} -e '/.*camera_info|/.*/color/image_raw' -x '/.*image_raw$' ${hidden_topics} ${qos_option} -o $ROS_LOG_DIR/image_topics 2>&1 &"
     echo $image_com
     eval $image_com
     image_pid=$!
