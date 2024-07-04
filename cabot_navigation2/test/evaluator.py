@@ -94,9 +94,17 @@ class Evaluator:
             self._evaluation_timer = None
         self.reset()
 
+    def get_evaluation_results(self):
+        results = []
+        for metric, func in zip(self._metrics_to_compute, self._metrics_func_list):
+            result = func(self.human_list, self.robot_list)
+            results.append({"name": metric, "value": result[0]})
+        return results
+
     def reset(self):
         self.robot_list = []
         self.human_list = []
+        self.results = []
         self._ready = False
 
     def agents_callback(self, robot, human):
