@@ -157,7 +157,7 @@ CaBotDWBLocalPlanner::transformGlobalPlan(
       if (pose != *search_start_point) {
         accumulated_distance += euclidean_distance(*std::prev(&pose), pose);
       }
-      return accumulated_distance > transform_start_threshold - nearest_distance * 2;
+      return accumulated_distance > transform_start_threshold - transform_start_threshold / 2;
     });
   auto transformation_begin = (transformation_begin_reverse.base());
 
