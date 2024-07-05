@@ -22,9 +22,11 @@
 # THE SOFTWARE.
 ###############################################################################
 
+import os
 import importlib
 import pkgutil
 import inspect
+import csv
 import sys
 import math
 import numpy
@@ -46,6 +48,7 @@ from cabot_common.util import callee_name
 from people_msgs.msg import People, Person
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from rcl_interfaces.msg import ParameterType
 from mf_localization_msgs.srv import StartLocalization, StopLocalization, MFSetInt
 from gazebo_msgs.srv import SetEntityState
 
@@ -111,8 +114,9 @@ def wait_test(timeout=60):
 
 
 class Tester:
-    def __init__(self, node):
+    def __init__(self, node, output_dir):
         self.node = node
+        self.output_dir = output_dir
         self.done = False
         self.alive = True
         self.config = {}
@@ -127,6 +131,8 @@ class Tester:
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.test_func_name = None
         self.result = {}
+        self.test_summary = {}
+        self.evaluator_summary = {}
         # evaluation
         self.evaluator = None
 
@@ -162,11 +168,21 @@ class Tester:
             logger.info(f"Testing {func}")
             self.test_func_name = func
             getattr(module, func)(self)
+            self.evaluator_summary[func] = self.evaluator.get_evaluation_results()
             self.stop_evaluation()  # automatically stop metric evaluation
             success = self.print_result(self.result, func)
             self.register_action_result(func, self.result)
             self.cancel_subscription(func)
             allSuccess = allSuccess and success
+
+            if func not in self.test_summary:
+                self.test_summary[func] = {'success': 0, 'failure': 0}
+            if success:
+                self.test_summary[func]['success'] += 1
+            else:
+                self.test_summary[func]['failure'] += 1
+
+        self.output_test_summary()
 
         logger.info("Done all test")
 
@@ -196,6 +212,27 @@ class Tester:
                 logger.error(f"{aResult['error']}")
         logger.info("--------------------------")
         return success
+
+    def output_test_summary(self):
+        test_summary_path = os.path.join(self.output_dir, 'test_summary.csv')
+        test_evaluation_path = os.path.join(self.output_dir, 'test_evaluation_results.csv')
+
+        with open(test_summary_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Test name", "Number of success", "Number of failure", "Success rate"])
+            for test_name, counts in self.test_summary.items():
+                success_count = counts['success']
+                fail_count = counts['failure']
+                total_count = success_count + fail_count
+                success_rate = success_count / total_count if total_count > 0 else 0
+                writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
+
+        with open(test_evaluation_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Test name", "evaluator", "value"])
+            for test_name, results in self.evaluator_summary.items():
+                for result in results:
+                    writer.writerow([test_name, result["name"], result["value"]])
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
@@ -285,6 +322,35 @@ class Tester:
         This method can be used when the user intentionally stops the metric computation
         """
         self.evaluator.stop()
+
+    # people detection
+    def set_people_detection_range(self, **kwargs):
+        param_list = []
+
+        for name in ['min_range', 'max_range', 'min_angle', 'max_angle', 'occlusion_radius', 'divider_distance_m', 'divider_angle_deg']:
+            if name not in kwargs:
+                continue
+
+            param = {
+                'name': f'pedestrian_plugin.{name}',
+                'value': {
+                    'type': ParameterType.PARAMETER_DOUBLE,
+                    'double_value': kwargs[name]
+                }
+            }
+            param_list.append(param)
+
+        request_yaml = yaml.dump({'parameters': param_list})
+
+        self.call_service(**dict(
+            dict(
+                action_name='set_people_detection_range',
+                service='/gazebo/set_parameters',
+                service_type='rcl_interfaces.srv/SetParameters',
+                request=request_yaml
+            ),
+            **kwargs)
+        )
 
     # shorthand functions
     def button_down(self, button, **kwargs):
@@ -999,6 +1065,7 @@ def main():
     parser.add_option('-L', '--list-modules', action='store_true', help='list test modules')
     parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
     parser.add_option('-w', '--wait-ready', action='store_true', help='wait ready')
+    parser.add_option('-o', '--output-dir', type=str, help='directory where the summary will be output')
 
     (options, args) = parser.parse_args()
 
@@ -1037,7 +1104,7 @@ def main():
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
 
-    tester = Tester(node)
+    tester = Tester(node, options.output_dir)
     tester.set_evaluator(evaluator)
     try:
         mod = importlib.import_module(options.module)

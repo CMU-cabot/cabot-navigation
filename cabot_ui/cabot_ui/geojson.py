@@ -617,6 +617,7 @@ class Entrance(geoutil.TargetPlace):
         gpoint = link.geometry.nearest_point_on_line(self.node.geometry)
         lpoint = geoutil.global2local(gpoint, self.anchor)
         self.update_pose(lpoint, link.pose.r + math.pi)
+        return gpoint
 
     def approaching_statement(self):
         return None
