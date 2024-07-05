@@ -185,7 +185,9 @@ controller_server:
     # DWB parameters
     FollowPath:
       plugin: "cabot_navigation2::CaBotRotationShimController"
-      primary_controller: "dwb_core::DWBLocalPlanner"
+      primary_controller: "cabot_navigation2::CaBotDWBLocalPlanner"
+      # primary_controller: "dwb_core::DWBLocalPlanner"
+      # publish_cost_grid_pc: true  # for debug
       angular_dist_threshold: 0.3
       forward_sampling_distance: 1.0
       rotate_to_heading_angular_vel: 0.5
