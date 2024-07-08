@@ -63,13 +63,11 @@ shift $((OPTIND-1))
 backend=${CABOT_ROSBAG_BACKEND:=sqlite3}
 compression=${CABOT_ROSBAG_COMPRESSION:=message}
 record_cam=${CABOT_ROSBAG_RECORD_CAMERA:=0}
+separate_log=${CABOT_ROSBAG_SEPARATE_LOG:=0}
 
 
 exclude_topics_file="rosbag2-exclude-topics.txt"
 exclude_camera_topics="/.*/image_raw.*"
-lines=$(cat $scriptdir/${exclude_topics_file})
-exclude_topics=$(echo -n "${lines}" | tr '\n' '|')
-exclude_topics="${exclude_topics}|${exclude_camera_topics}"
 #hidden_topics="--include-hidden-topics"
 hidden_topics="" # workaround - if this is specified with '-s mcap', only a few topics can be recorded
 qos_option="--qos-profile-overrides-path $scriptdir/rosbag2-qos-profile-overrides.yaml"
@@ -81,6 +79,20 @@ fi
 
 interval=1000
 
+if [[ $record_cam -eq 1 ]]; then
+    if [[ $separate_log -eq 1 ]]; then
+        image_com="ros2 bag record ${use_sim_time} -s ${backend} ${compression} -p ${interval} -e '/.*camera_info|/.*/color/image_raw' -x '/.*image_raw$' ${hidden_topics} ${qos_option} -o $ROS_LOG_DIR/image_topics 2>&1 &"
+        echo $image_com
+        eval $image_com
+        image_pid=$!
+    else
+        exclude_camera_topics='/.*/image_raw$'  # record compressed images
+    fi
+fi
+lines=$(cat $scriptdir/${exclude_topics_file})
+exclude_topics=$(echo -n "${lines}" | tr '\n' '|')
+exclude_topics="${exclude_topics}|${exclude_camera_topics}"
+
 if [[ -z $ROS_LOG_DIR ]]; then
     # for debug only
     com="ros2 bag record ${use_sim_time} -s ${backend} ${compression} -p ${interval} -a -x \"${exclude_topics}\" ${hidden_topics} ${qos_option} 2>&1 &"
@@ -90,13 +102,6 @@ fi
 echo $com
 eval $com
 pid=$!
-
-if [[ $record_cam -eq 1 ]]; then
-    image_com="ros2 bag record ${use_sim_time} -s ${backend} ${compression} -p ${interval} -e '/.*camera_info|/.*/color/image_raw' -x '/.*image_raw$' ${hidden_topics} ${qos_option} -o $ROS_LOG_DIR/image_topics 2>&1 &"
-    echo $image_com
-    eval $image_com
-    image_pid=$!
-fi
 
 ## wait until it is terminated by the user
 while [ 1 -eq 1 ];
