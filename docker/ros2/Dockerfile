@@ -123,6 +123,9 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
 
+# for test aggregation
+RUN pip3 install --no-cache-dir pandas
+
 # for debug
 # RUN apt update && \
 #     apt install -y --no-install-recommends \
