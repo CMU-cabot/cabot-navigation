@@ -27,6 +27,7 @@
 #include <ignition/math/Vector3.hh>
 #include <ignition/common/Profiler.hh>
 #include "gazebo/physics/physics.hh"
+#include "gazebo/physics/BoxShape.hh"
 #include "pedestrian_plugin/obstacle_plugin.hpp"
 #include "pedestrian_plugin/python_module_loader.hpp"
 #include "pedestrian_plugin/python_utils.hpp"
@@ -116,15 +117,6 @@ void ObstaclePlugin::apply_parameters()
     if (it.first == "init_a") {
       this->yaw = it.second.get<double>() / 180.0 * M_PI;
     }
-    if (it.first == "init_obstacle_width") {
-      this->width = it.second.get<double>();
-    }
-    if (it.first == "init_obstacle_height") {
-      this->height = it.second.get<double>();
-    }
-    if (it.first == "init_obstacle_depth") {
-      this->depth = it.second.get<double>();
-    }
   }
 }
 
@@ -163,9 +155,36 @@ void ObstaclePlugin::Reset()
   this->pitch = rpy.Y();
   this->yaw = rpy.Z();
   this->dist = 0;
-  this->width = 1;
-  this->height = 1;
-  this->depth = 1;
+  //this->width = 1;
+  //this->height = 1;
+  //this->depth = 1;
+  
+  //this->width = this->model->BOX_SHAPE.Size().X();
+  //this->height = this->model->BOX_SHAPE.Size().Y();
+  //this->depth = this->model->BOX_SHAPE.Size().Z();
+  //this->sdf->GetElement("model");//->GetAttribute("size");
+  //std::string obstacle_size_string = this->sdf->GetAttribute("size")->GetAsString();
+  //std::stringstream ss(obstacle_size_string);
+  //char c;
+  //ss>>this->width; ss>>c;
+  //ss>>this->height; ss>>c;
+  //ss>>this->depth;
+  //this->width = this->model->Scale().X();
+  physics::BoxShape box(this->model->GetLink(this->name + "-link")->GetCollision(this->name + "-collision"));
+  gazebo::physics::ShapePtr shape_ptr = this->model->GetLink(this->name + "-link")->GetCollision(this->name+"-collision")->GetShape();
+  RCLCPP_INFO(manager.get_logger(),("!!!!!!!!!!! shapename: " + shape_ptr->GetName()).c_str());
+  //RCLCPP_INFO(manager.get_logger(), ("!!!!!!!!!!! collisionname: " + this->model->GetLink(this->name+"-link")->GetCollision(this->name + "-collision")->GetName()).c_str());
+  //std::string box_err_txt = "!!!!!!!! BOXNAME: "+box.GetName();
+  //RCLCPP_INFO(manager.get_logger(), box_err_txt.c_str());
+
+  //auto box = boost::dynamic_pointer_cast<gazebo::physics::BoxShape>(this->model);
+  ////gazebo::physics::BoxShape boxshape;
+  ////box->Load(this->sdf);
+  this->width = 1;//box.Size().X();
+  this->height = 1;//box.Size().Y();
+  //this->depth = box.Size().Z();
+  ////this->height = this->model->CollisionBoundingBox().YLength();
+  ////this->depth = this->model->CollisionBoundingBox().ZLength();
 
   apply_parameters();
 }

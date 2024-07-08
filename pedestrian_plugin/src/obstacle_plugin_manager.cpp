@@ -145,7 +145,10 @@ size_t ObstaclePluginManager::addPlugin(std::string name, ObstaclePlugin * plugi
   return pluginMap_.size();
 }
 
-void ObstaclePluginManager::removePlugin(std::string name) {pluginMap_.erase(name);}
+void ObstaclePluginManager::removePlugin(std::string name) {
+  pluginMap_.erase(name);
+  obstacleAgentsMap_.erase(name);
+}
 
 void ObstaclePluginManager::publishObstaclesIfReady()
 {

@@ -45,19 +45,24 @@ def onUpdate(**args):
         obstacle_width = args['obstacle_width']
         obstacle_height = args['obstacle_height']
         obstacle_yaw = args['yaw']
-        circle_center_point = {'x':robot['x'],'y':robot['y']}
+        circle_center_point = {'x':rx-x,'y':ry-y}
         robot_radius = args['robot_radius']
-        polygon_vertex_points = [\
-            calc2DPointRotZ(x-obstacle_width/2.,y-obstacle_height/2.,obstacle_yaw), \
-            calc2DPointRotZ(x+obstacle_width/2.,y-obstacle_height/2.,obstacle_yaw), \
-            calc2DPointRotZ(x+obstacle_width/2.,y+obstacle_height/2.,obstacle_yaw), \
-            calc2DPointRotZ(x-obstacle_width/2.,y+obstacle_height/2.,obstacle_yaw)]
+        polygon_vertex_points = [
+            calc2DPointRotZ(-obstacle_width/2.,-obstacle_height/2.,obstacle_yaw),
+            calc2DPointRotZ(+obstacle_width/2.,-obstacle_height/2.,obstacle_yaw),
+            calc2DPointRotZ(+obstacle_width/2.,+obstacle_height/2.,obstacle_yaw),
+            calc2DPointRotZ(-obstacle_width/2.,+obstacle_height/2.,obstacle_yaw)
+            ]
         is_collision_detected = isCircleCollidingWithPolygon(circle_center_point,robot_radius,polygon_vertex_points)
 
         dx = rx - x
         dy = ry - y
         dist = math.sqrt(dx * dx + dy * dy)
-        ros.info(f"obstacle collision [{is_collision_detected=}]: {rx=}, {ry=}, {x=}, {y=}, {dx=}, {dy=}, {dist=}")
+        #ros.info(f"obstacle collision [{is_collision_detected=}]: {rx=}, {ry=}, {x=}, {y=}, {dx=}, {dy=}, {dist=}")
+        ros.info(f"[{is_collision_detected=}]: {rx=}, {ry=}, {x=}, {y=}, {robot_radius=}, {obstacle_width=}, {obstacle_height=}, {obstacle_yaw=}")
+        ros.info(f"                         : {obstacle_width=}, {obstacle_height=}, {obstacle_depth=}")
+        for i in range(len(polygon_vertex_points)):
+            ros.info(f"[{is_collision_detected=}]: p{i}: ({polygon_vertex_points[i]['x']},{polygon_vertex_points[i]['y']})")
 
         if is_collision_detected:
             ros.collision(name, dist)
