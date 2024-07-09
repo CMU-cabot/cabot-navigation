@@ -110,6 +110,16 @@ fi
 : ${CABOT_PRESSURE_AVAILABLE:=0}
 : ${CABOT_USE_GNSS:=0}
 
+# ntrip client
+: ${NTRIP_CLIENT:=ntrip_client}
+: ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
+: ${GNSS_NODE_START_AT_LAUNCH:=1}
+: ${NTRIP_HOST:=}
+: ${NTRIP_PORT:=}
+: ${NTRIP_MOUNTPOINT:=}
+: ${NTRIP_AUTHENTIFICATE:=}
+: ${NTRIP_USERNAME:=}
+
 gazebo=$CABOT_GAZEBO
 site=$CABOT_SITE
 show_rviz=$CABOT_SHOW_LOC_RVIZ
@@ -273,13 +283,33 @@ if [ $gazebo -eq 1 ]; then
     echo "${pids[@]}"
   fi
 else
+  # launch ntrip client
+  if [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 1 ]; then
+    if [ "$NTRIP_CLIENT" == "ntrip_client" ]; then
+        echo "launch ntrip client"
+        cmd="$command ros2 launch ntrip_client ntrip_client_launch.py \
+                        host:=$NTRIP_HOST \
+                        port:=$NTRIP_PORT \
+                        mountpoint:=$NTRIP_MOUNTPOINT \
+                        authentificate:=$NTRIP_AUTHENTIFICATE \
+                        username:=$NTRIP_USERNAME \
+                        password:=$NTRIP_PASSWORD \
+                        $commandpost"
+        echo $cmd
+        eval $cmd
+        pids+=($!)
+    fi
+  fi
+
   # launch ublox node
-  echo "launch ublox node helpers"
-  cmd="$command ros2 launch mf_localization ublox-zed-f9p.launch.xml \
-                    $commandpost"
-  echo $cmd
-  eval $cmd
-  pids+=($!)
+  if [ $GNSS_NODE_START_AT_LAUNCH -eq 1 ]; then
+    echo "launch ublox node helpers"
+    cmd="$command ros2 launch mf_localization ublox-zed-f9p.launch.xml \
+                        $commandpost"
+    echo $cmd
+    eval $cmd
+    pids+=($!)
+  fi
 fi
 
 gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\

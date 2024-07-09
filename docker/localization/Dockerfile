@@ -104,6 +104,7 @@ RUN apt update && \
     libasio-dev \
     ros-${ROS_DISTRO}-rtcm-msgs \
     ros-${ROS_DISTRO}-nmea-msgs \
+    ros-${ROS_DISTRO}-ntrip-client \
     gfortran \
     && \
     rm -rf /var/lib/apt/lists/*

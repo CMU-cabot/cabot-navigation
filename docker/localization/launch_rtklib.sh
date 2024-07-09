@@ -37,25 +37,43 @@ function snore()
 # load catkin_ws
 source install/setup.bash
 
-# if RTK_STR_IN exists in environment variables, use it.
-# if not, load RTK_STR_IN from CABOT_SITE package
-if [ "${RTK_STR_IN}" != "" ]; then
-    echo "RTK_STR_IN=${RTK_STR_IN}"
-else
-    if [ "${CABOT_SITE}" != "" ]; then
-	sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
-        source $sitedir/config/rtk_config.sh
+# RTKLIB
+if [ "${NTRIP_CLIENT}" = "rtklib" ]; then
+    # if RTK_STR_IN exists in environment variables, use it.
+    # if not, load RTK_STR_IN from CABOT_SITE package
+    if [ "${RTK_STR_IN}" != "" ]; then
+        echo "RTK_STR_IN=${RTK_STR_IN}"
+    else
+        if [ "${CABOT_SITE}" != "" ]; then
+        sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
+            source $sitedir/config/rtk_config.sh
+        fi
     fi
-fi
 
-# check if RTK_STR_IN is defined.
-if [ "${RTK_STR_IN}" = "" ]; then
-    while [ 1 -eq 1 ]
-    do
-    red "You need to specify RTK_STR_IN or CABOT_SITE environment variable"
-    snore 1
-    done
-    exit
-fi
+    # check if RTK_STR_IN is defined.
+    if [ "${RTK_STR_IN}" = "" ]; then
+        while [ 1 -eq 1 ]
+        do
+        red "You need to specify RTK_STR_IN or CABOT_SITE environment variable"
+        snore 1
+        done
+        exit
+    fi
 
-str2str -in ${RTK_STR_IN} -out serial://ttyUBLOX:${BAUD_UBLOX}
+    # launch str2str
+    com="str2str -in ${RTK_STR_IN} -out serial://ttyUBLOX:${BAUD_UBLOX}"
+    echo $com
+    echo $eval
+# ntrip_client
+elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
+    # launch ntrip_client
+    com="ros2 launch ntrip_client ntrip_client_launch.py \
+        host:=$NTRIP_HOST \
+        port:=$NTRIP_PORT \
+        mountpoint:=$NTRIP_MOUNTPOINT \
+        authentificate:=$NTRIP_AUTHENTIFICATE \
+        username:=$NTRIP_USERNAME \
+        password:=$NTRIP_PASSWORD"
+    echo $com
+    eval $com
+fi

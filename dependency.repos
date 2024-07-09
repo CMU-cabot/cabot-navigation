@@ -21,6 +21,10 @@ repositories:
     type: git
     url: https://github.com/CMU-cabot/ublox.git
     version: ros2-fix-topic-name
+  docker/localization/ntrip_client:
+    type: git
+    url: https://github.com/LORD-MicroStrain/ntrip_client.git
+    version: ros2
 
   docker/ros2/tf2_web_republisher:
     type: git
