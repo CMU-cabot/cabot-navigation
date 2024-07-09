@@ -60,7 +60,7 @@ def onUpdate(**args):
         dist = math.sqrt(dx * dx + dy * dy)
         #ros.info(f"obstacle collision [{is_collision_detected=}]: {rx=}, {ry=}, {x=}, {y=}, {dx=}, {dy=}, {dist=}")
         ros.info(f"[{is_collision_detected=}]: {rx=}, {ry=}, {x=}, {y=}, {robot_radius=}, {obstacle_width=}, {obstacle_height=}, {obstacle_yaw=}")
-        ros.info(f"                         : {obstacle_width=}, {obstacle_height=}, {obstacle_depth=}")
+        ros.info(f"                         : {obstacle_width=}, {obstacle_height=}")
         for i in range(len(polygon_vertex_points)):
             ros.info(f"[{is_collision_detected=}]: p{i}: ({polygon_vertex_points[i]['x']},{polygon_vertex_points[i]['y']})")
 

@@ -155,36 +155,12 @@ void ObstaclePlugin::Reset()
   this->pitch = rpy.Y();
   this->yaw = rpy.Z();
   this->dist = 0;
-  //this->width = 1;
-  //this->height = 1;
-  //this->depth = 1;
   
-  //this->width = this->model->BOX_SHAPE.Size().X();
-  //this->height = this->model->BOX_SHAPE.Size().Y();
-  //this->depth = this->model->BOX_SHAPE.Size().Z();
-  //this->sdf->GetElement("model");//->GetAttribute("size");
-  //std::string obstacle_size_string = this->sdf->GetAttribute("size")->GetAsString();
-  //std::stringstream ss(obstacle_size_string);
-  //char c;
-  //ss>>this->width; ss>>c;
-  //ss>>this->height; ss>>c;
-  //ss>>this->depth;
-  //this->width = this->model->Scale().X();
-  physics::BoxShape box(this->model->GetLink(this->name + "-link")->GetCollision(this->name + "-collision"));
   gazebo::physics::ShapePtr shape_ptr = this->model->GetLink(this->name + "-link")->GetCollision(this->name+"-collision")->GetShape();
-  RCLCPP_INFO(manager.get_logger(),("!!!!!!!!!!! shapename: " + shape_ptr->GetName()).c_str());
-  //RCLCPP_INFO(manager.get_logger(), ("!!!!!!!!!!! collisionname: " + this->model->GetLink(this->name+"-link")->GetCollision(this->name + "-collision")->GetName()).c_str());
-  //std::string box_err_txt = "!!!!!!!! BOXNAME: "+box.GetName();
-  //RCLCPP_INFO(manager.get_logger(), box_err_txt.c_str());
-
-  //auto box = boost::dynamic_pointer_cast<gazebo::physics::BoxShape>(this->model);
-  ////gazebo::physics::BoxShape boxshape;
-  ////box->Load(this->sdf);
-  this->width = 1;//box.Size().X();
-  this->height = 1;//box.Size().Y();
-  //this->depth = box.Size().Z();
-  ////this->height = this->model->CollisionBoundingBox().YLength();
-  ////this->depth = this->model->CollisionBoundingBox().ZLength();
+  physics::BoxShapePtr box_ptr = boost::dynamic_pointer_cast<physics::BoxShape>(shape_ptr);
+  this->width = box_ptr->Size().X();
+  this->height = box_ptr->Size().Y();
+  this->depth = box_ptr->Size().Z();
 
   apply_parameters();
 }
