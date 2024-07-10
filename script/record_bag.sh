@@ -16,16 +16,16 @@ trap signal INT TERM
 function signal() {
     echo "trap record_bag.sh"
     kill -2 $pid
-    if [[ $record_cam -eq 1 ]]; then
+    if [[ $separate_log -eq 1 ]]; then
         kill -2 $image_pid
     fi
 
-    while kill -0 $pid 2> /dev/null || ([[ $record_cam -eq 1 ]] && kill -0 $image_pid 2> /dev/null); do
+    while kill -0 $pid 2> /dev/null || ([[ $separate_log -eq 1 ]] && kill -0 $image_pid 2> /dev/null); do
         if [[ $count -eq 15 ]]; then
             blue "escalate to SIGTERM $pid"
             com="kill -TERM $pid"
             eval $com
-            if [[ $record_cam -eq 1 ]]; then
+            if [[ $separate_log -eq 1 ]]; then
                 com="kill -TERM $image_pid"
                 eval $com
             fi
@@ -34,7 +34,7 @@ function signal() {
             blue "escalate to SIGKILL $pid"
             com="kill -KILL $pid"
             eval $com
-            if [[ $record_cam -eq 1 ]]; then
+            if [[ $separate_log -eq 1 ]]; then
                 com="kill -KILL $image_pid"
                 eval $com
             fi
