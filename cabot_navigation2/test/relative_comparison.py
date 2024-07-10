@@ -25,7 +25,7 @@
 import os
 import pandas as pd
 from optparse import OptionParser
-from typing import List, Optional
+from typing import List
 
 
 class Color:
