@@ -93,13 +93,16 @@ def main():
     str2str.run()
 
     while rclpy.ok():
-        output, rc = str2str.poll()
+        try:
+            output, rc = str2str.poll()
 
-        if output == '' and rc is not None:
-            break
+            if output == '' and rc is not None:
+                break
 
-        if output is not None:
-            logger.info(output)
+            if output is not None:
+                logger.info(output)
+        except Exception as e:
+            logger.error(f'Error executing binary: {str(e)}')
 
         rclpy.spin_once(node, timeout_sec=0)  # do not wait because no callback is registered for now
 
