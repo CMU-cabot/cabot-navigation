@@ -23,61 +23,66 @@
 ###############################################################################
 
 import os
-from optparse import OptionParser
-
 import pandas as pd
+from optparse import OptionParser
+from typing import List, Optional
 
 
 class Color:
     GREEN = '\033[32m'
     RESET = '\033[0m'
 
-def read_test_summary_files(folder_paths):
+
+def read_test_summary_files(folder_paths: List[str]) -> List[pd.DataFrame]:
     data = []
     for folder_path in folder_paths:
         test_summary_path = os.path.join(folder_path, 'test_summary.csv')
 
-        if os.path.exists(test_summary_path):
+        try:
             df = pd.read_csv(test_summary_path, index_col=0, encoding='utf-8')
             df['Test run'] = os.path.basename(folder_path)
             df['Number of test cases'] = df['Number of success'] + df['Number of failure']
             data.append(df)
-
+        except FileNotFoundError:
+            print(f"File {test_summary_path} not found.")
     return data
 
-def read_test_evaluation_files(folder_paths):
+
+def read_test_evaluation_files(folder_paths: List[str]) -> List[pd.DataFrame]:
     data = []
     for folder_path in folder_paths:
         test_evaluation_path = os.path.join(folder_path, 'test_evaluation_results.csv')
 
-        if os.path.exists(test_evaluation_path):
+        try:
             df = pd.read_csv(test_evaluation_path, index_col=0, encoding='utf-8')
             df['Test run'] = os.path.basename(folder_path)
             data.append(df)
-
+        except FileNotFoundError:
+            print(f"File {test_evaluation_path} not found.")
     return data
 
-def summarize_test_summary_by_module(data):
+
+def summarize_test_summary_by_module(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
     summary = combined_df.groupby(['Test module name', 'Test run']).agg({
         'Number of test cases': 'sum',
         'Number of success': 'sum',
         'Number of failure': 'sum'
     })
-
     summary['Success rate'] = summary['Number of success'] / (summary['Number of success'] + summary['Number of failure'])
     return summary
 
-def summarize_test_summary_by_case(data):
+
+def summarize_test_summary_by_case(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
     summary = combined_df.groupby(['Test module name', 'Test case name', 'Test run']).agg({
         'Number of success': 'sum',
         'Number of failure': 'sum'
     })
-
     return summary
 
-def summarize_test_evaluation_by_module(data):
+
+def summarize_test_evaluation_by_module(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
     summary = combined_df.groupby(['Test module name', 'evaluator', 'Test run']).agg(
         **{'Number of test cases': ('value', 'count')},
@@ -85,15 +90,19 @@ def summarize_test_evaluation_by_module(data):
         mean=('value', 'mean'),
         min=('value', 'min'),
         max=('value', 'max')
-    ).reset_index()
+    )
     return summary
 
-def summarize_test_evaluation_by_case(data):
+
+def summarize_test_evaluation_by_case(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
-    summary = combined_df[['Test case name', 'evaluator', 'Test run', 'value']]
+    summary = combined_df.groupby(['Test module name', 'Test case name', 'evaluator', 'Test run']).agg(
+        value=('value', 'first')
+    )
     return summary
 
-def print_test_summary(summary, by_module=True):
+
+def print_test_summary(summary: pd.DataFrame, by_module: bool = True) -> None:
     if by_module:
         print(f"{Color.GREEN}Test Summary by Test Module: {Color.RESET}")
     else:
@@ -101,7 +110,8 @@ def print_test_summary(summary, by_module=True):
     print(summary.to_string())
     print("")
 
-def print_test_evaluation(summary, by_module=True):
+
+def print_test_evaluation(summary: pd.DataFrame, by_module: bool = True) -> None:
     if by_module:
         print(f"{Color.GREEN}Test Evaluation by Test Module: {Color.RESET}")
     else:
@@ -109,11 +119,12 @@ def print_test_evaluation(summary, by_module=True):
     print(summary.to_string())
     print("")
 
-def output_summary_to_csv(summary, output_dir, filename):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+
+def output_summary_to_csv(summary: pd.DataFrame, output_dir: str, filename: str) -> None:
+    os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, filename)
     summary.to_csv(output_file)
+
 
 def main():
     parser = OptionParser()
