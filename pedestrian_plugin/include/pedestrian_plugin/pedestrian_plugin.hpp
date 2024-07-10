@@ -52,6 +52,7 @@ private:
   void print_pyobject(PyObject * obj);
   sdf::ElementPtr sdf;
   physics::ActorPtr actor;
+  physics::ModelPtr model;
   physics::WorldPtr world;
   std::string name;
   std::string module_name;

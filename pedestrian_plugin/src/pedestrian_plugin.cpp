@@ -52,16 +52,20 @@ PedestrianPlugin::~PedestrianPlugin()
 void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 {
   this->sdf = _sdf;
+  this->model = _model;
   this->actor = boost::dynamic_pointer_cast<physics::Actor>(_model);
-  this->name = this->actor->GetName();
-  this->world = this->actor->GetWorld();
+  this->name = this->model->GetName();
+  this->world = this->model->GetWorld();
 
   this->connections.push_back(
     event::Events::ConnectWorldUpdateBegin(
       std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
-  actor_id = manager.addPlugin(this->name, this);
-  RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
+  // register only if the model is actor
+  if (this->actor) {
+    actor_id = manager.addPlugin(this->name, this);
+  }
+  RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin for %s...", this->name.c_str());
 
   PedestrianPluginParams temp_params;
   sdf::ElementPtr child = this->sdf->GetFirstElement();
@@ -130,19 +134,21 @@ void PedestrianPlugin::Reset()
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   RCLCPP_INFO(manager.get_logger(), "Reset");
 
-  auto skelAnims = this->actor->SkeletonAnimations();
-  auto it = skelAnims.find(WALKING_ANIMATION);
-  if (it == skelAnims.end()) {
-    gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
-  } else {
-    // Create custom trajectory
-    this->trajectoryInfo.reset(new physics::TrajectoryInfo());
-    this->trajectoryInfo->type = WALKING_ANIMATION;
-    this->trajectoryInfo->duration = 1.0;
-    this->actor->SetCustomTrajectory(this->trajectoryInfo);
+  if (this->actor) {
+    auto skelAnims = this->actor->SkeletonAnimations();
+    auto it = skelAnims.find(WALKING_ANIMATION);
+    if (it == skelAnims.end()) {
+      gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
+    } else {
+      // Create custom trajectory
+      this->trajectoryInfo.reset(new physics::TrajectoryInfo());
+      this->trajectoryInfo->type = WALKING_ANIMATION;
+      this->trajectoryInfo->duration = 1.0;
+      this->actor->SetCustomTrajectory(this->trajectoryInfo);
+    }
   }
 
-  auto pose = this->actor->WorldPose();
+  auto pose = this->model->WorldPose();
   auto rpy = pose.Rot().Euler();
   this->x = pose.Pos().X();
   this->y = pose.Pos().Y();
@@ -255,7 +261,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
     PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
     PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
 
-    PyObject * aname = PyUnicode_DecodeFSDefault(this->actor->GetName().c_str());
+    PyObject * aname = PyUnicode_DecodeFSDefault(this->model->GetName().c_str());
     PyDict_SetItemString(pDict, "name", aname);
     Py_DECREF(aname);
 
@@ -263,79 +269,102 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
     auto pRet = PyObject_Call(pFunc, pArgs, pDict);
 
     if (pRet != NULL && PyDict_Check(pRet)) {
-      auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
-      auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
-      auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
-      auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
-      auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
-      auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
-      // variables only get from the module
-      auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
-      auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
+      if (this->actor) {
+        auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
+        auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
+        auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
+        auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
+        auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
+        auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+        // variables only get from the module
+        auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
+        auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
 
-      auto dx = newX - this->x;
-      auto dy = newY - this->y;
-      auto dz = newZ - this->z;
-      auto dd = std::sqrt(dx * dx + dy * dy + dz * dz);
-      if (progress == 0.0) {
-        dd = 0.0;
-      }
-      auto newDist = this->dist + dd;
-      double * wPose = get_walking_pose(newDist);
+        auto dx = newX - this->x;
+        auto dy = newY - this->y;
+        auto dz = newZ - this->z;
+        auto dd = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (progress == 0.0) {
+          dd = 0.0;
+        }
+        auto newDist = this->dist + dd;
+        double *wPose = get_walking_pose(newDist);
 
-      ignition::math::Pose3d pose;
-      pose.Pos().X(newX);
-      pose.Pos().Y(newY + wPose[1]);
-      pose.Pos().Z(newZ + wPose[2]);
-      pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
-      this->actor->SetWorldPose(pose, false, false);
+        ignition::math::Pose3d pose;
+        pose.Pos().X(newX);
+        pose.Pos().Y(newY + wPose[1]);
+        pose.Pos().Z(newZ + wPose[2]);
+        pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
+        this->actor->SetWorldPose(pose, false, false);
 
-      double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
-      this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
+        double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
+        this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
 
-      this->x = newX;
-      this->y = newY;
-      this->z = newZ;
-      this->roll = newRoll;
-      this->pitch = newPitch;
-      this->yaw = newYaw;
-      this->dist = newDist;
+        this->x = newX;
+        this->y = newY;
+        this->z = newZ;
+        this->roll = newRoll;
+        this->pitch = newPitch;
+        this->yaw = newYaw;
+        this->dist = newDist;
 
-      people_msgs::msg::Person person;
-      person.name = this->name;
-      person.position.x = newX;
-      person.position.y = newY;
-      person.position.z = newZ;
-      person.velocity.x = std::cos(newYaw) * dd / dt;
-      person.velocity.y = std::sin(newYaw) * dd / dt;
-      person.velocity.z = 0.0;
-      person.reliability = 1.0;
-      if (dd / dt < 0.1) {
-        person.tags.push_back("stationary");
-      }
-      manager.updatePersonMessage(this->actor->GetName(), person);
+        people_msgs::msg::Person person;
+        person.name = this->name;
+        person.position.x = newX;
+        person.position.y = newY;
+        person.position.z = newZ;
+        person.velocity.x = std::cos(newYaw) * dd / dt;
+        person.velocity.y = std::sin(newYaw) * dd / dt;
+        person.velocity.z = 0.0;
+        person.reliability = 1.0;
+        if (dd / dt < 0.1) {
+          person.tags.push_back("stationary");
+        }
+        manager.updatePersonMessage(this->actor->GetName(), person);
 
-      // update human agent
-      double vel_linear = dd / dt;
-      pedestrian_plugin_msgs::msg::Agent humanAgent;
-      humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
-      if (this->module_name == "pedestrian.pool") {
-        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
+        // update human agent
+        double vel_linear = dd / dt;
+        pedestrian_plugin_msgs::msg::Agent humanAgent;
+        humanAgent.type = pedestrian_plugin_msgs::msg::Agent::PERSON;
+        if (this->module_name == "pedestrian.pool") {
+          humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::INACTIVE;
+        } else {
+          humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
+        }
+        humanAgent.name = person.name;
+        humanAgent.position.position = person.position;
+        humanAgent.yaw = newYaw;
+        humanAgent.velocity.linear.x = person.velocity.x;
+        humanAgent.velocity.linear.y = person.velocity.y;
+        humanAgent.velocity.linear.z = person.velocity.z;
+        humanAgent.linear_vel = vel_linear;
+        // humanAgent.velocity.angular.z // undefined
+        // humanAgent.angular_vel // undefined
+        humanAgent.radius = radius;
+        manager.updateHumanAgent(person.name, humanAgent);
       } else {
-        humanAgent.behavior_state = pedestrian_plugin_msgs::msg::Agent::ACTIVE;
-      }
-      humanAgent.name = person.name;
-      humanAgent.position.position = person.position;
-      humanAgent.yaw = newYaw;
-      humanAgent.velocity.linear.x = person.velocity.x;
-      humanAgent.velocity.linear.y = person.velocity.y;
-      humanAgent.velocity.linear.z = person.velocity.z;
-      humanAgent.linear_vel = vel_linear;
-      // humanAgent.velocity.angular.z // undefined
-      // humanAgent.angular_vel // undefined
-      humanAgent.radius = radius;
-      manager.updateHumanAgent(person.name, humanAgent);
+        auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
+        auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
+        auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
+        auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
+        auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
+        auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+        RCLCPP_INFO(manager.get_logger(), "x=%.2f, y=%.2f", newX, newY);
 
+        ignition::math::Pose3d pose;
+        pose.Pos().X(newX);
+        pose.Pos().Y(newY);
+        pose.Pos().Z(newZ);
+        pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
+        this->model->SetWorldPose(pose, true, true);
+
+        this->x = newX;
+        this->y = newY;
+        this->z = newZ;
+        this->roll = newRoll;
+        this->pitch = newPitch;
+        this->yaw = newYaw;
+      }
       Py_DECREF(pRet);
     } else {
       PyErr_Print();
