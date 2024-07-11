@@ -852,6 +852,7 @@ class ObstacleManager:
         return ObstacleManager._instance
 
     def __init__(self):
+        self.node = node
         self.timer = node.create_timer(0.2, self.timer_callback)
         self.remaining = []
         self.last_plan = None
@@ -957,6 +958,7 @@ class ObstacleManager:
         )
 
     def spawn_obstacle(self, **kwargs):
+        rclpy.spin_once(node, timeout_sec=1) # wait until topic /obstacle_states ready
         door = Door.from_dict(**kwargs)
         if kwargs['name'] in [rem.name for rem in self.remaining]:
             # add suffix '_NUMBER' if the name already exists
@@ -1016,7 +1018,6 @@ class ObstacleManager:
             logger.debug(F"spawn result = {future.result()}, {door}, {len(self.remaining)}")
         future.add_done_callback(callback)
         return future
-
 
 class LogColors:
     DEBUG = '\033[94m'       # Blue

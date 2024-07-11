@@ -148,10 +148,12 @@ size_t ObstaclePluginManager::addPlugin(std::string name, ObstaclePlugin * plugi
 void ObstaclePluginManager::removePlugin(std::string name) {
   pluginMap_.erase(name);
   obstacleAgentsMap_.erase(name);
+  obstaclesReadyMap_.erase(name);
 }
 
 void ObstaclePluginManager::publishObstaclesIfReady()
 {
+  RCLCPP_INFO(get_logger(), "obstacleReadyMap size: %d, pluginMap size: %d", obstaclesReadyMap_.size(), pluginMap_.size());
   if (obstaclesReadyMap_.size() == pluginMap_.size()) {
     pedestrian_plugin_msgs::msg::Obstacles msg;
     for (auto it : obstaclesMap_) {
