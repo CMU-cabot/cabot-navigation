@@ -28,7 +28,10 @@ import rclpy
 
 
 class Str2Str:
-    def __init__(self, node, host, port, mountpoint, authentificate, username, password, serial_port, serial_baud):
+    def __init__(self, node, host, port, mountpoint, authentificate, username, password, serial_port, serial_baud,
+                 relay_back, latitude, longitude, height, nmea_request_cycle
+                 ):
+        # parameters
         self._node = node
         self._host = host
         self._port = port
@@ -38,12 +41,17 @@ class Str2Str:
         self._password = password
         self._serial_port = serial_port
         self._serial_baud = serial_baud
+        self._relay_back = relay_back
+        self._latitude = latitude
+        self._longitude = longitude
+        self._height = height
+        self._nmea_request_cycle = nmea_request_cycle
 
+        # variables
         self._logger = self._node.get_logger()
-
         self._process = None
 
-    def run(self):
+    def popen(self):
         # str in
         str_in = "ntrip://"
         if self._authentificate:
@@ -60,15 +68,29 @@ class Str2Str:
         # command
         com = ["str2str", "-in", str_in, "-out", str_out]
 
+        # add options
+        if self._relay_back != 0:
+            com.extend(["-b", str(self._relay_back)])
+
+        if self._latitude != 0.0 and self._longitude != 0.0:
+            com.extend(["-p", str(self._latitude), str(self._longitude), str(self._height)])
+
+        if self._nmea_request_cycle != 0:
+            com.extend(["-n", str(self._nmea_request_cycle)])
+
         try:
+            self._logger.info(" ".join(com))
             self._process = subprocess.Popen(com, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         except Exception as e:
             self._logger.error(f'Error executing binary: {str(e)}')
 
-    def poll(self):
+    def readline(self):
         output = self._process.stdout.readline().strip()
+        return output
+
+    def poll(self):
         rc = self._process.poll()
-        return output, rc
+        return rc
 
 
 def main():
@@ -87,14 +109,27 @@ def main():
     serial_port = node.declare_parameter("serial_port", "ttyUBLOX").value
     serial_baud = str(node.declare_parameter("serial_baud", 230400).value)
 
+    # relay back option
+    relay_back = node.declare_parameter("relay_back", 0).value
+
+    # position options
+    latitude = node.declare_parameter("latitude", 0.0).value
+    longitude = node.declare_parameter("longitude", 0.0).value
+    height = node.declare_parameter("height", 0.0).value
+
+    nmea_request_cycle = node.declare_parameter("nmea_request_cycle", 0).value
+
     logger = node.get_logger()
 
-    str2str = Str2Str(node, host, port, mountpoint, authentificate, username, password, serial_port, serial_baud)
-    str2str.run()
+    str2str = Str2Str(node, host, port, mountpoint, authentificate, username, password, serial_port, serial_baud,
+                      relay_back, latitude, longitude, height, nmea_request_cycle
+                      )
+    str2str.popen()
 
     while rclpy.ok():
         try:
-            output, rc = str2str.poll()
+            output = str2str.readline()
+            rc = str2str.poll()
 
             if output == '' and rc is not None:
                 break
