@@ -128,7 +128,8 @@ ParamValue PedestrianPluginParams::getParam(std::string name)
 PedestrianPluginManager::PedestrianPluginManager()
 : node_(gazebo_ros::Node::Get()),
   tf_listener_(nullptr),
-  tf_buffer_(nullptr)
+  tf_buffer_(nullptr),
+  model_count_(0)
 {
   if (!node_->has_parameter("pedestrian_plugin.min_range")) {
     node_->declare_parameter<double>("pedestrian_plugin.min_range", 0.0);
@@ -182,8 +183,11 @@ PedestrianPluginManager::PedestrianPluginManager()
 
 PedestrianPluginManager::~PedestrianPluginManager() {}
 
-size_t PedestrianPluginManager::addPlugin(std::string name, PedestrianPlugin * plugin)
+size_t PedestrianPluginManager::addPlugin(std::string name, PedestrianPlugin * plugin, bool is_model)
 {
+  if (is_model) {
+    model_count_++;
+  }
   pluginMap_.insert({name, plugin});
   return pluginMap_.size();
 }
@@ -215,7 +219,7 @@ void PedestrianPluginManager::publishPeopleIfReady()
 
   if (!initialized_base_control_shift_link_) {return;}
 
-  if (peopleReadyMap_.size() == pluginMap_.size()) {
+  if (peopleReadyMap_.size() == pluginMap_.size() - model_count_) {
     people_msgs::msg::People msg;
     tf2::Transform base_to_lidar_tf;
 

@@ -52,7 +52,7 @@ class PedestrianManager():
         self.human_states_sub = self.node.create_subscription(Agents, '/human_states', self.human_states_callback, 10)
         self.timer = self.node.create_timer(1, self.check_service)
         self.serviceReady = False
-        self.actorMap = {}
+        self.actorMap = {'mobile_base': {}}
         self.futures = {}
 
     def human_states_callback(self, msg):

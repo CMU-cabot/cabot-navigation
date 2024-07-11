@@ -62,9 +62,7 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
       std::bind(&PedestrianPlugin::OnUpdate, this, std::placeholders::_1)));
 
   // register only if the model is actor
-  if (this->actor) {
-    actor_id = manager.addPlugin(this->name, this);
-  }
+  actor_id = manager.addPlugin(this->name, this, this->actor==nullptr);
   RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin for %s...", this->name.c_str());
 
   PedestrianPluginParams temp_params;

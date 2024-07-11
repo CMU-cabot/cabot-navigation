@@ -123,7 +123,7 @@ public:
   }
   PedestrianPluginManager();
   ~PedestrianPluginManager();
-  size_t addPlugin(std::string name, PedestrianPlugin * plugin);
+  size_t addPlugin(std::string name, PedestrianPlugin * plugin, bool is_model=false);
   void removePlugin(std::string name);
   void publishPeopleIfReady();
   void updateRobotPose(geometry_msgs::msg::Pose robot_pose);
@@ -200,6 +200,7 @@ private:
   double occlusion_radius_;
   double divider_distance_m_;
   double divider_angle_deg_;
+  int model_count_;
 };
 
 }  // namespace gazebo
