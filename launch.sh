@@ -354,7 +354,6 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 if [[ $run_test -eq 1 ]]; then
     blue "Running test $module $test_regex"
     nav_service="navigation"
-    if [[ $prodimg -eq 1 ]]; then nav_service="${nav_service}-prodimg"; fi
     if [[ $debug -eq 1 ]]; then
         docker compose -p $launch_prefix -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
     else
