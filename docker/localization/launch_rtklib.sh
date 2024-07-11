@@ -34,7 +34,7 @@ function snore()
     read ${1:+-t "$1"} -u $_snore_fd || :
 }
 
-# load catkin_ws
+# source local workspace
 source install/setup.bash
 
 # RTKLIB
@@ -64,6 +64,20 @@ if [ "${NTRIP_CLIENT}" = "rtklib" ]; then
     com="str2str -in ${RTK_STR_IN} -out serial://ttyUBLOX:${BAUD_UBLOX}"
     echo $com
     echo $eval
+
+# str2str node
+elif [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
+    # launch str2str_node
+    com="ros2 launch mf_localization str2str.launch.py \
+        host:=$NTRIP_HOST \
+        port:=$NTRIP_PORT \
+        mountpoint:=$NTRIP_MOUNTPOINT \
+        authentificate:=$NTRIP_AUTHENTIFICATE \
+        username:=$NTRIP_USERNAME \
+        password:=$NTRIP_PASSWORD"
+    echo $com
+    eval $com
+
 # ntrip_client
 elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
     # launch ntrip_client

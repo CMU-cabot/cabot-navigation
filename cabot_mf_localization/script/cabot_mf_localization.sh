@@ -110,7 +110,7 @@ fi
 : ${CABOT_PRESSURE_AVAILABLE:=0}
 : ${CABOT_USE_GNSS:=0}
 
-# ntrip client
+# ntrip client parameters
 : ${NTRIP_CLIENT:=ntrip_client}
 : ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
 : ${GNSS_NODE_START_AT_LAUNCH:=1}
@@ -283,33 +283,55 @@ if [ $gazebo -eq 1 ]; then
     echo "${pids[@]}"
   fi
 else
-  # launch ntrip client
-  if [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 1 ]; then
-    if [ "$NTRIP_CLIENT" == "ntrip_client" ]; then
-        echo "launch ntrip client"
-        cmd="$command ros2 launch ntrip_client ntrip_client_launch.py \
-                        host:=$NTRIP_HOST \
-                        port:=$NTRIP_PORT \
-                        mountpoint:=$NTRIP_MOUNTPOINT \
-                        authentificate:=$NTRIP_AUTHENTIFICATE \
-                        username:=$NTRIP_USERNAME \
-                        password:=$NTRIP_PASSWORD \
-                        $commandpost"
+    # launch ntrip client
+    if [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 1 ]; then
+        if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
+            echo "launch str2_str_node"
+            cmd="$command ros2 launch mf_localization str2str.launch.py \
+                            host:=$NTRIP_HOST \
+                            port:=$NTRIP_PORT \
+                            mountpoint:=$NTRIP_MOUNTPOINT \
+                            authentificate:=$NTRIP_AUTHENTIFICATE \
+                            username:=$NTRIP_USERNAME \
+                            password:=$NTRIP_PASSWORD \
+                            $commandpost"
+            echo $cmd
+            eval $cmd
+            pids+=($!)
+        elif [ "$NTRIP_CLIENT" == "ntrip_client" ]; then
+            echo "launch ntrip client"
+            cmd="$command ros2 launch ntrip_client ntrip_client_launch.py \
+                            host:=$NTRIP_HOST \
+                            port:=$NTRIP_PORT \
+                            mountpoint:=$NTRIP_MOUNTPOINT \
+                            authentificate:=$NTRIP_AUTHENTIFICATE \
+                            username:=$NTRIP_USERNAME \
+                            password:=$NTRIP_PASSWORD \
+                            $commandpost"
+            echo $cmd
+            eval $cmd
+            pids+=($!)
+        fi
+    fi
+
+    # launch ublox node
+    if [ $GNSS_NODE_START_AT_LAUNCH -eq 1 ]; then
+        # add sleep if necessary
+        sleepcom=""
+        if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
+            # add short sleep because ublox node must be launched after str2str node has established connection to the serial device
+            sleepcom="sleep 5 && "
+        fi
+
+        echo "launch ublox node helpers"
+        cmd="$command \
+                $sleepcom \
+                ros2 launch mf_localization ublox-zed-f9p.launch.xml \
+                $commandpost"
         echo $cmd
         eval $cmd
         pids+=($!)
     fi
-  fi
-
-  # launch ublox node
-  if [ $GNSS_NODE_START_AT_LAUNCH -eq 1 ]; then
-    echo "launch ublox node helpers"
-    cmd="$command ros2 launch mf_localization ublox-zed-f9p.launch.xml \
-                        $commandpost"
-    echo $cmd
-    eval $cmd
-    pids+=($!)
-  fi
 fi
 
 gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\
