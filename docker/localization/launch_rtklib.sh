@@ -65,10 +65,29 @@ if [ "${NTRIP_CLIENT}" = "rtklib" ]; then
     echo $com
     echo $eval
 
-# str2str node
-elif [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
-    # launch str2str_node
-    com="ros2 launch mf_localization str2str.launch.py \
+# ros2 launch
+else
+    # ntrip client
+    ntrip_client_arg=""
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 0 ]; then
+        if [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
+            # launch str2str_node
+            ntrip_client_arg="str2str_node:=true"
+        elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
+            # launch ntrip_client
+            ntrip_client_arg="ntrip_client:=true"
+        fi
+    fi
+
+    # gnss node
+    gnss_arg=""
+    if [ ${GNSS_NODE_START_AT_LAUNCH} -eq 0 ]; then
+        gnss_arg="ublox_node:=true"
+    fi
+
+    com="ros2 launch mf_localization gnss.launch.py \
+        $ntrip_client_arg \
+        $gnss_arg \
         host:=$NTRIP_HOST \
         port:=$NTRIP_PORT \
         mountpoint:=$NTRIP_MOUNTPOINT \
@@ -76,21 +95,6 @@ elif [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
         username:=$NTRIP_USERNAME \
         password:=$NTRIP_PASSWORD \
         relay_back:=$NTRIP_STR2STR_RELAYBACK \
-        "
-    echo $com
-    eval $com
-
-# ntrip_client
-elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
-    # launch ntrip_client
-    com="ros2 launch ntrip_client ntrip_client_launch.py \
-        host:=$NTRIP_HOST \
-        port:=$NTRIP_PORT \
-        mountpoint:=$NTRIP_MOUNTPOINT \
-        authentificate:=$NTRIP_AUTHENTIFICATE \
-        username:=$NTRIP_USERNAME \
-        password:=$NTRIP_PASSWORD \
-        nmea_max_length:=90 \
         "
     echo $com
     eval $com

@@ -62,6 +62,50 @@ def generate_launch_description():
     height = LaunchConfiguration('height')
     nmea_request_cycle = LaunchConfiguration('nmea_request_cycle')
 
+    str2str_node_launch = IncludeLaunchDescription(
+                            PythonLaunchDescriptionSource([mf_localization_dir + "/launch/str2str.launch.py"]),
+                            launch_arguments={
+                                'node_name': 'str2str_node',
+                                'host': host,
+                                'port': port,
+                                'mountpoint': mountpoint,
+                                'authentificate': authentificate,
+                                'username': username,
+                                'password': password,
+                                'serial_port': serial_port,
+                                'serial_baud': serial_baud,
+                                'relay_back': relay_back,
+                                'latitude': latitude,
+                                'longitude': longitude,
+                                'height': height,
+                                'nmea_request_cycle': nmea_request_cycle
+                            }.items(),
+                            condition=IfCondition(str2str_node)
+                        )
+
+    ntrip_client_launch = IncludeLaunchDescription(
+                            PythonLaunchDescriptionSource([ntrip_client_dir + "/ntrip_client_launch.py"]),
+                            launch_arguments={
+                                'node_name': 'ntrip_client',
+                                'host': host,
+                                'port': port,
+                                'mountpoint': mountpoint,
+                                'authentificate': authentificate,
+                                'username': username,
+                                'password': password,
+                                'nmea_max_length': '90',  # a large value to accept high precision mode
+                            }.items(),
+                            condition=IfCondition(ntrip_client)
+    )
+
+    ublox_node_launch = IncludeLaunchDescription(
+                            FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
+                            launch_arguments={
+                                'node_name': 'ublox',
+                            }.items(),
+                            condition=IfCondition(ublox_node)
+                        )
+
     return LaunchDescription([
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
@@ -89,50 +133,7 @@ def generate_launch_description():
         DeclareLaunchArgument('height', default_value="0.0", description=''),
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
 
-        # str2str_node
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([mf_localization_dir + "/launch/str2str.launch.py"]),
-            launch_arguments={
-                'node_name': 'str2str_node',
-                'host': host,
-                'port': port,
-                'mountpoint': mountpoint,
-                'authentificate': authentificate,
-                'username': username,
-                'password': password,
-                'serial_port': serial_port,
-                'serial_baud': serial_baud,
-                'relay_back': relay_back,
-                'latitude': latitude,
-                'longitude': longitude,
-                'height': height,
-                'nmea_request_cycle': nmea_request_cycle
-            }.items(),
-            condition=IfCondition(str2str_node)
-        ),
-
-        # ntrip_client
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([ntrip_client_dir + "/ntrip_client_launch.py"]),
-            launch_arguments={
-                'node_name': 'ntrip_client',
-                'host': host,
-                'port': port,
-                'mountpoint': mountpoint,
-                'authentificate': authentificate,
-                'username': username,
-                'password': password,
-                'nmea_max_length': '90',  # a large value to accept high precision mode
-            }.items(),
-            condition=IfCondition(ntrip_client)
-        ),
-
-        # ublox node
-        IncludeLaunchDescription(
-            FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
-            launch_arguments={
-                'node_name': 'ublox',
-            }.items(),
-            condition=IfCondition(ublox_node)
-        ),
+        str2str_node_launch,
+        ntrip_client_launch,
+        ublox_node_launch
     ])
