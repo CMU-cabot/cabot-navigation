@@ -111,14 +111,15 @@ fi
 : ${CABOT_USE_GNSS:=0}
 
 # ntrip client parameters
-: ${NTRIP_CLIENT:=ntrip_client}
-: ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
 : ${GNSS_NODE_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT:=ntrip_client}
 : ${NTRIP_HOST:=}
 : ${NTRIP_PORT:=}
 : ${NTRIP_MOUNTPOINT:=}
 : ${NTRIP_AUTHENTIFICATE:=}
 : ${NTRIP_USERNAME:=}
+: ${NTRIP_STR2STR_RELAYBACK:=0}
 
 gazebo=$CABOT_GAZEBO
 site=$CABOT_SITE
@@ -294,6 +295,7 @@ else
                             authentificate:=$NTRIP_AUTHENTIFICATE \
                             username:=$NTRIP_USERNAME \
                             password:=$NTRIP_PASSWORD \
+                            relay_back:=$NTRIP_STR2STR_RELAYBACK \
                             $commandpost"
             echo $cmd
             eval $cmd
@@ -307,6 +309,7 @@ else
                             authentificate:=$NTRIP_AUTHENTIFICATE \
                             username:=$NTRIP_USERNAME \
                             password:=$NTRIP_PASSWORD \
+                            nmea_max_length:=90 \
                             $commandpost"
             echo $cmd
             eval $cmd

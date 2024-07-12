@@ -74,7 +74,9 @@ elif [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
         mountpoint:=$NTRIP_MOUNTPOINT \
         authentificate:=$NTRIP_AUTHENTIFICATE \
         username:=$NTRIP_USERNAME \
-        password:=$NTRIP_PASSWORD"
+        password:=$NTRIP_PASSWORD \
+        relay_back:=$NTRIP_STR2STR_RELAYBACK \
+        "
     echo $com
     eval $com
 
@@ -87,7 +89,9 @@ elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
         mountpoint:=$NTRIP_MOUNTPOINT \
         authentificate:=$NTRIP_AUTHENTIFICATE \
         username:=$NTRIP_USERNAME \
-        password:=$NTRIP_PASSWORD"
+        password:=$NTRIP_PASSWORD \
+        nmea_max_length:=90 \
+        "
     echo $com
     eval $com
 fi

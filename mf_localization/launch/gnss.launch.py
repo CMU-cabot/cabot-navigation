@@ -22,24 +22,37 @@
 
 from launch.logging import launch_config
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.substitutions import LaunchConfiguration
 from launch.actions import DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
+from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
-from launch_ros.actions import Node
+from launch.launch_description_sources import FrontendLaunchDescriptionSource
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
-    node_name = LaunchConfiguration('node_name')
+
+    mf_localization_dir = get_package_share_directory('mf_localization')
+    ntrip_client_dir = get_package_share_directory('ntrip_client')
+
+    str2str_node = LaunchConfiguration('str2str_node')
+    ntrip_client = LaunchConfiguration('ntrip_client')
+    ublox_node = LaunchConfiguration('ublox_node')
+
     host = LaunchConfiguration('host')
     port = LaunchConfiguration('port')
     mountpoint = LaunchConfiguration('mountpoint')
     authentificate = LaunchConfiguration('authentificate')
     username = LaunchConfiguration('username')
     password = LaunchConfiguration('password')
+
+    # str2str_node
     serial_port = LaunchConfiguration('serial_port')
     serial_baud = LaunchConfiguration('serial_baud')
     # options
@@ -53,15 +66,20 @@ def generate_launch_description():
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
-        RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("str2str")])),
+        RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("gnss")])),
 
-        DeclareLaunchArgument('node_name', default_value='str2str_node'),
+        DeclareLaunchArgument('str2str_node', default_value='false', description=''),
+        DeclareLaunchArgument('ntrip_client', default_value='false', description=''),
+        DeclareLaunchArgument('ublox_node', default_value='false', description=''),
+
         DeclareLaunchArgument('host', default_value='', description=''),
         DeclareLaunchArgument('port', default_value='2101', description=''),
         DeclareLaunchArgument('mountpoint', default_value='', description=''),
         DeclareLaunchArgument('authentificate', default_value='false', description=''),
         DeclareLaunchArgument('username', default_value='', description=''),
         DeclareLaunchArgument('password', default_value='', description=''),
+
+        # str2str_node
         DeclareLaunchArgument('serial_port', default_value='ttyUBLOX', description=''),
         DeclareLaunchArgument('serial_baud', default_value='230400', description=''),
         # options
@@ -71,27 +89,50 @@ def generate_launch_description():
         DeclareLaunchArgument('height', default_value="0.0", description=''),
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
 
-        Node(
-            package='mf_localization',
-            executable='str2str_node.py',
-            name='str2str_node',
-            parameters=[
-                {
-                    'node_name': node_name,
-                    'host': host,
-                    'port': port,
-                    'mountpoint': mountpoint,
-                    'authentificate': authentificate,
-                    'username': username,
-                    'password': password,
-                    'serial_port': serial_port,
-                    'serial_baud': serial_baud,
-                    'relay_back': relay_back,
-                    'latitude': latitude,
-                    'longitude': longitude,
-                    'height': height,
-                    'nmea_request_cycle': nmea_request_cycle
-                }
-            ],
+        # str2str_node
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([mf_localization_dir + "/launch/str2str.launch.py"]),
+            launch_arguments={
+                'node_name': 'str2str_node',
+                'host': host,
+                'port': port,
+                'mountpoint': mountpoint,
+                'authentificate': authentificate,
+                'username': username,
+                'password': password,
+                'serial_port': serial_port,
+                'serial_baud': serial_baud,
+                'relay_back': relay_back,
+                'latitude': latitude,
+                'longitude': longitude,
+                'height': height,
+                'nmea_request_cycle': nmea_request_cycle
+            }.items(),
+            condition=IfCondition(str2str_node)
+        ),
+
+        # ntrip_client
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([ntrip_client_dir + "/ntrip_client_launch.py"]),
+            launch_arguments={
+                'node_name': 'ntrip_client',
+                'host': host,
+                'port': port,
+                'mountpoint': mountpoint,
+                'authentificate': authentificate,
+                'username': username,
+                'password': password,
+                'nmea_max_length': '90',  # a large value to accept high precision mode
+            }.items(),
+            condition=IfCondition(ntrip_client)
+        ),
+
+        # ublox node
+        IncludeLaunchDescription(
+            FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
+            launch_arguments={
+                'node_name': 'ublox',
+            }.items(),
+            condition=IfCondition(ublox_node)
         ),
     ])

@@ -10,6 +10,7 @@ COPY ./cartographer /opt/cartographer_ws/src/cartographer
 COPY ./cartographer_ros /opt/cartographer_ws/src/cartographer_ros
 COPY ./bluespace_ai_xsens_ros_mti_driver /opt/cartographer_ws/src/bluespace_ai_xsens_ros_mti_driver
 COPY ./ublox /opt/cartographer_ws/src/ublox
+COPY ./ntrip_client /opt/cartographer_ws/src/ntrip_client
 
 WORKDIR /opt/cartographer_ws/
 
@@ -104,7 +105,6 @@ RUN apt update && \
     libasio-dev \
     ros-${ROS_DISTRO}-rtcm-msgs \
     ros-${ROS_DISTRO}-nmea-msgs \
-    ros-${ROS_DISTRO}-ntrip-client \
     gfortran \
     && \
     rm -rf /var/lib/apt/lists/*
