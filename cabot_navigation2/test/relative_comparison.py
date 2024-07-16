@@ -24,6 +24,7 @@
 
 import os
 import pandas as pd
+import yaml
 from optparse import OptionParser
 from typing import List
 
@@ -37,10 +38,17 @@ def read_test_summary_files(folder_paths: List[str]) -> List[pd.DataFrame]:
     data = []
     for folder_path in folder_paths:
         test_summary_path = os.path.join(folder_path, 'test_summary.csv')
+        launch_metadata_path = os.path.join(folder_path, 'launch_metadata.yaml')
 
         try:
+            title = ""
+            with open(launch_metadata_path, 'r') as yaml_file:
+                yaml_data = yaml.safe_load(yaml_file)
+                title = yaml_data.get('title', 'no title')
+
             df = pd.read_csv(test_summary_path, index_col=0, encoding='utf-8')
             df['Test run'] = os.path.basename(folder_path)
+            df['Test title'] = title
             df['Number of test cases'] = df['Number of success'] + df['Number of failure']
             data.append(df)
         except FileNotFoundError:
@@ -52,10 +60,17 @@ def read_test_evaluation_files(folder_paths: List[str]) -> List[pd.DataFrame]:
     data = []
     for folder_path in folder_paths:
         test_evaluation_path = os.path.join(folder_path, 'test_evaluation_results.csv')
+        launch_metadata_path = os.path.join(folder_path, 'launch_metadata.yaml')
 
         try:
+            title = ""
+            with open(launch_metadata_path, 'r') as yaml_file:
+                yaml_data = yaml.safe_load(yaml_file)
+                title = yaml_data.get('title', 'no title')
+
             df = pd.read_csv(test_evaluation_path, index_col=0, encoding='utf-8')
             df['Test run'] = os.path.basename(folder_path)
+            df['Test title'] = title
             data.append(df)
         except FileNotFoundError:
             print(f"File {test_evaluation_path} not found.")
@@ -64,7 +79,7 @@ def read_test_evaluation_files(folder_paths: List[str]) -> List[pd.DataFrame]:
 
 def summarize_test_summary_by_module(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
-    summary = combined_df.groupby(['Test module name', 'Test run']).agg({
+    summary = combined_df.groupby(['Test module name', 'Test run', 'Test title']).agg({
         'Number of test cases': 'sum',
         'Number of success': 'sum',
         'Number of failure': 'sum'
@@ -75,7 +90,7 @@ def summarize_test_summary_by_module(data: List[pd.DataFrame]) -> pd.DataFrame:
 
 def summarize_test_summary_by_case(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
-    summary = combined_df.groupby(['Test module name', 'Test case name', 'Test run']).agg({
+    summary = combined_df.groupby(['Test module name', 'Test case name', 'Test run', 'Test title']).agg({
         'Number of success': 'sum',
         'Number of failure': 'sum'
     })
@@ -84,7 +99,7 @@ def summarize_test_summary_by_case(data: List[pd.DataFrame]) -> pd.DataFrame:
 
 def summarize_test_evaluation_by_module(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
-    summary = combined_df.groupby(['Test module name', 'evaluator', 'Test run']).agg(
+    summary = combined_df.groupby(['Test module name', 'evaluator', 'Test run', 'Test title']).agg(
         **{'Number of test cases': ('value', 'count')},
         sum=('value', 'sum'),
         mean=('value', 'mean'),
@@ -96,7 +111,7 @@ def summarize_test_evaluation_by_module(data: List[pd.DataFrame]) -> pd.DataFram
 
 def summarize_test_evaluation_by_case(data: List[pd.DataFrame]) -> pd.DataFrame:
     combined_df = pd.concat(data)
-    summary = combined_df.groupby(['Test module name', 'Test case name', 'evaluator', 'Test run']).agg(
+    summary = combined_df.groupby(['Test module name', 'Test case name', 'evaluator', 'Test run', 'Test title']).agg(
         value=('value', 'first')
     )
     return summary
