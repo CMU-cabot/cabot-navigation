@@ -56,20 +56,21 @@ def generate_launch_description():
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("str2str")])),
 
         DeclareLaunchArgument('node_name', default_value='str2str_node'),
-        DeclareLaunchArgument('host', default_value='', description=''),
-        DeclareLaunchArgument('port', default_value='2101', description=''),
-        DeclareLaunchArgument('mountpoint', default_value='', description=''),
-        DeclareLaunchArgument('authentificate', default_value='false', description=''),
+        DeclareLaunchArgument('host', default_value=''),
+        DeclareLaunchArgument('port', default_value='2101'),
+        DeclareLaunchArgument('mountpoint', default_value=''),
+        DeclareLaunchArgument('authentificate', default_value='false', description='Whether to authentificate with the server. If set to true, username and password must be supplied.'),
         DeclareLaunchArgument('username', default_value='', description=''),
         DeclareLaunchArgument('password', default_value='', description=''),
-        DeclareLaunchArgument('serial_port', default_value='ttyUBLOX', description=''),
-        DeclareLaunchArgument('serial_baud', default_value='230400', description=''),
+
+        DeclareLaunchArgument('serial_port', default_value='ttyUBLOX'),
+        DeclareLaunchArgument('serial_baud', default_value='230400'),
         # options
-        DeclareLaunchArgument('relay_back', default_value="0", description=''),
-        DeclareLaunchArgument('latitude', default_value="0.0", description=''),
-        DeclareLaunchArgument('longitude', default_value="0.0", description=''),
-        DeclareLaunchArgument('height', default_value="0.0", description=''),
-        DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
+        DeclareLaunchArgument('relay_back', default_value="0", description='relay back messages from output stream to input stream (-b option) [0]'),
+        DeclareLaunchArgument('latitude', default_value="0.0", description='latitude of -p option'),
+        DeclareLaunchArgument('longitude', default_value="0.0", description='longitude of -p option'),
+        DeclareLaunchArgument('height', default_value="0.0", description='height of -p option'),
+        DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycle (ms) [0]'),
 
         Node(
             package='mf_localization',

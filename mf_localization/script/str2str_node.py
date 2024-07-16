@@ -28,6 +28,9 @@ import rclpy
 
 
 class Str2Str:
+    """
+    A class to run str2str binary in a ROS node
+    """
     def __init__(self, node, host, port, mountpoint, authentificate, username, password, serial_port, serial_baud,
                  relay_back, latitude, longitude, height, nmea_request_cycle
                  ):

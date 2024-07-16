@@ -112,25 +112,26 @@ def generate_launch_description():
         # append prefix name to the log directory for convenience
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("gnss")])),
 
-        DeclareLaunchArgument('str2str_node', default_value='false', description=''),
-        DeclareLaunchArgument('ntrip_client', default_value='false', description=''),
-        DeclareLaunchArgument('ublox_node', default_value='false', description=''),
+        DeclareLaunchArgument('str2str_node', default_value='false', description='Whether to launch str2str node [false]'),
+        DeclareLaunchArgument('ntrip_client', default_value='false', description='Whether to launch ntrip_client node [false]'),
+        DeclareLaunchArgument('ublox_node', default_value='false', description='Whether to launch ublox_node [false]'),
 
-        DeclareLaunchArgument('host', default_value='', description=''),
-        DeclareLaunchArgument('port', default_value='2101', description=''),
-        DeclareLaunchArgument('mountpoint', default_value='', description=''),
-        DeclareLaunchArgument('authentificate', default_value='false', description=''),
-        DeclareLaunchArgument('username', default_value='', description=''),
-        DeclareLaunchArgument('password', default_value='', description=''),
+        # ntrip_client and str2str_node-
+        DeclareLaunchArgument('host', default_value=''),
+        DeclareLaunchArgument('port', default_value='2101'),
+        DeclareLaunchArgument('mountpoint', default_value=''),
+        DeclareLaunchArgument('authentificate', default_value='false', description='Whether to authentificate with the server. If set to true, username and password must be supplied.'),
+        DeclareLaunchArgument('username', default_value=''),
+        DeclareLaunchArgument('password', default_value=''),
 
         # str2str_node
-        DeclareLaunchArgument('serial_port', default_value='ttyUBLOX', description=''),
-        DeclareLaunchArgument('serial_baud', default_value='230400', description=''),
-        # options
-        DeclareLaunchArgument('relay_back', default_value="0", description=''),
-        DeclareLaunchArgument('latitude', default_value="0.0", description=''),
-        DeclareLaunchArgument('longitude', default_value="0.0", description=''),
-        DeclareLaunchArgument('height', default_value="0.0", description=''),
+        DeclareLaunchArgument('serial_port', default_value='ttyUBLOX'),
+        DeclareLaunchArgument('serial_baud', default_value='230400'),
+        # str2str_node options
+        DeclareLaunchArgument('relay_back', default_value="0", description='relay back messages from output stream to input stream (-b option) [0]'),
+        DeclareLaunchArgument('latitude', default_value="0.0", description='latitude of -p option'),
+        DeclareLaunchArgument('longitude', default_value="0.0", description='longitude of -p option'),
+        DeclareLaunchArgument('height', default_value="0.0", description='height of -p option'),
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
 
         str2str_node_launch,

@@ -119,7 +119,7 @@ fi
 : ${NTRIP_MOUNTPOINT:=}
 : ${NTRIP_AUTHENTIFICATE:=}
 : ${NTRIP_USERNAME:=}
-: ${NTRIP_STR2STR_RELAYBACK:=0}
+: ${NTRIP_STR2STR_RELAY_BACK:=0}
 
 gazebo=$CABOT_GAZEBO
 site=$CABOT_SITE
@@ -295,7 +295,7 @@ else
                             authentificate:=$NTRIP_AUTHENTIFICATE \
                             username:=$NTRIP_USERNAME \
                             password:=$NTRIP_PASSWORD \
-                            relay_back:=$NTRIP_STR2STR_RELAYBACK \
+                            relay_back:=$NTRIP_STR2STR_RELAY_BACK \
                             $commandpost"
             echo $cmd
             eval $cmd

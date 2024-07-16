@@ -34,6 +34,18 @@ function snore()
     read ${1:+-t "$1"} -u $_snore_fd || :
 }
 
+# environment variables
+# ntrip client parameters
+: ${GNSS_NODE_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT:=ntrip_client}
+: ${NTRIP_HOST:=}
+: ${NTRIP_PORT:=}
+: ${NTRIP_MOUNTPOINT:=}
+: ${NTRIP_AUTHENTIFICATE:=}
+: ${NTRIP_USERNAME:=}
+: ${NTRIP_STR2STR_RELAY_BACK:=0}
+
 # source local workspace
 source install/setup.bash
 
@@ -94,7 +106,7 @@ else
         authentificate:=$NTRIP_AUTHENTIFICATE \
         username:=$NTRIP_USERNAME \
         password:=$NTRIP_PASSWORD \
-        relay_back:=$NTRIP_STR2STR_RELAYBACK \
+        relay_back:=$NTRIP_STR2STR_RELAY_BACK \
         "
     echo $com
     eval $com
