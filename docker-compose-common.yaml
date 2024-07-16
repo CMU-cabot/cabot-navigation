@@ -252,7 +252,7 @@ services:
       additional_contexts:
         cabot_src: ./
       args:
-        - ${BASE_IMAGE:-cabot-base}
+        - BASE_IMAGE=${BASE_IMAGE:-cabot-base}
       x-bake:
         tags:
           - ${REGISTRY:-cmucal}/cabot-localization
