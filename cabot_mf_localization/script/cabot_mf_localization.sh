@@ -287,7 +287,7 @@ else
     # launch ntrip client
     if [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 1 ]; then
         if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
-            echo "launch str2_str_node"
+            echo "launch str2str_node"
             cmd="$command ros2 launch mf_localization str2str.launch.py \
                             host:=$NTRIP_HOST \
                             port:=$NTRIP_PORT \
@@ -315,6 +315,24 @@ else
             eval $cmd
             pids+=($!)
         fi
+    elif [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 0 ]; then
+        if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
+            echo "launch str2str_node_logger"
+            cmd="$command ros2 launch mf_localization gnss.launch.py \
+                            str2str_node_logger:=true \
+                            $commandpost"
+            echo $cmd
+            eval $cmd
+            pids+=($!)
+        elif [ "$NTRIP_CLIENT" == "ntrip_client" ]; then
+            echo "launch ntrip_client_logger"
+            cmd="$command ros2 launch mf_localization gnss.launch.py \
+                            ntrip_client_logger:=true \
+                            $commandpost"
+            echo $cmd
+            eval $cmd
+            pids+=($!)
+        fi
     fi
 
     # launch ublox node
@@ -331,6 +349,14 @@ else
                 $sleepcom \
                 ros2 launch mf_localization ublox-zed-f9p.launch.xml \
                 $commandpost"
+        echo $cmd
+        eval $cmd
+        pids+=($!)
+    elif [ $GNSS_NODE_START_AT_LAUNCH -eq 0 ]; then
+        echo "launch ublox_node_logger"
+        cmd="$command ros2 launch mf_localization gnss.launch.py \
+                        ublox_node_logger:=true \
+                        $commandpost"
         echo $cmd
         eval $cmd
         pids+=($!)

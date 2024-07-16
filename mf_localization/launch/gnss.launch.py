@@ -33,6 +33,7 @@ from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import FrontendLaunchDescriptionSource
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 from cabot_common.launch import AppendLogDirPrefix
 
 
@@ -44,6 +45,9 @@ def generate_launch_description():
     str2str_node = LaunchConfiguration('str2str_node')
     ntrip_client = LaunchConfiguration('ntrip_client')
     ublox_node = LaunchConfiguration('ublox_node')
+    str2str_node_logger = LaunchConfiguration('str2str_node_logger')
+    ntrip_client_logger = LaunchConfiguration('ntrip_client_logger')
+    ublox_node_logger = LaunchConfiguration('ublox_node_logger')
 
     host = LaunchConfiguration('host')
     port = LaunchConfiguration('port')
@@ -106,6 +110,39 @@ def generate_launch_description():
                             condition=IfCondition(ublox_node)
                         )
 
+    str2str_node_logger_launch = Node(
+            package='cabot_common',
+            executable='log_redirector_node',
+            name='str2str_node_log_redirector',
+            parameters=[
+                {'target_node': 'str2str_node'}
+            ],
+            output='log',
+            condition=IfCondition(str2str_node_logger)
+        )
+
+    ntrip_client_logger_launch = Node(
+            package='cabot_common',
+            executable='log_redirector_node',
+            name='ntrip_client_log_redirector',
+            parameters=[
+                {'target_node': 'ntrip_client'}
+            ],
+            output='log',
+            condition=IfCondition(ntrip_client_logger)
+        )
+
+    ublox_node_logger_launch = Node(
+            package='cabot_common',
+            executable='log_redirector_node',
+            name='ublox_node_log_redirector',
+            parameters=[
+                {'target_node': 'ublox'}
+            ],
+            output='log',
+            condition=IfCondition(ublox_node_logger)
+        )
+
     return LaunchDescription([
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
@@ -115,6 +152,9 @@ def generate_launch_description():
         DeclareLaunchArgument('str2str_node', default_value='false', description='Whether to launch str2str node [false]'),
         DeclareLaunchArgument('ntrip_client', default_value='false', description='Whether to launch ntrip_client node [false]'),
         DeclareLaunchArgument('ublox_node', default_value='false', description='Whether to launch ublox_node [false]'),
+        DeclareLaunchArgument('str2str_node_logger', default_value='false', description='Whether to launch str2str_node_logger [false]'),
+        DeclareLaunchArgument('ntrip_client_logger', default_value='false', description='Whether to launch ntrip_client_logger [false]'),
+        DeclareLaunchArgument('ublox_node_logger', default_value='false', description='Whether to launch ublox_node_logger [false]'),
 
         # ntrip_client and str2str_node-
         DeclareLaunchArgument('host', default_value=''),
@@ -136,5 +176,9 @@ def generate_launch_description():
 
         str2str_node_launch,
         ntrip_client_launch,
-        ublox_node_launch
+        ublox_node_launch,
+
+        str2str_node_logger_launch,
+        ntrip_client_logger_launch,
+        ublox_node_logger_launch,
     ])
