@@ -284,83 +284,79 @@ if [ $gazebo -eq 1 ]; then
     echo "${pids[@]}"
   fi
 else
-    # launch ntrip client
-    if [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 1 ]; then
-        if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
-            echo "launch str2str_node"
-            cmd="$command ros2 launch mf_localization str2str.launch.py \
-                            host:=$NTRIP_HOST \
-                            port:=$NTRIP_PORT \
-                            mountpoint:=$NTRIP_MOUNTPOINT \
-                            authentificate:=$NTRIP_AUTHENTIFICATE \
-                            username:=$NTRIP_USERNAME \
-                            password:=$NTRIP_PASSWORD \
-                            relay_back:=$NTRIP_STR2STR_RELAY_BACK \
-                            $commandpost"
-            echo $cmd
-            eval $cmd
-            pids+=($!)
-        elif [ "$NTRIP_CLIENT" == "ntrip_client" ]; then
-            echo "launch ntrip client"
-            cmd="$command ros2 launch ntrip_client ntrip_client_launch.py \
-                            host:=$NTRIP_HOST \
-                            port:=$NTRIP_PORT \
-                            mountpoint:=$NTRIP_MOUNTPOINT \
-                            authentificate:=$NTRIP_AUTHENTIFICATE \
-                            username:=$NTRIP_USERNAME \
-                            password:=$NTRIP_PASSWORD \
-                            nmea_max_length:=90 \
-                            $commandpost"
-            echo $cmd
-            eval $cmd
-            pids+=($!)
+    # launch ntrip client and/or ublox node
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
+        # if NTRIP_HOST exists in environment variables, use it.
+        # if not, load NTRIP_HOST from CABOT_SITE package
+        if [ "${NTRIP_HOST}" = "" ]; then
+            echo "NTRIP_HOST does not exist in environment variables. load NTRIP_HOST from CABOT_SITE package"
+            if [ "${CABOT_SITE}" != "" ]; then
+                sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
+                source $sitedir/config/rtk_config.sh
+            fi
         fi
-    elif [ $NTRIP_CLIENT_START_AT_LAUNCH -eq 0 ]; then
-        if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
-            echo "launch str2str_node_logger"
-            cmd="$command ros2 launch mf_localization gnss.launch.py \
-                            str2str_node_logger:=true \
-                            $commandpost"
-            echo $cmd
-            eval $cmd
-            pids+=($!)
-        elif [ "$NTRIP_CLIENT" == "ntrip_client" ]; then
-            echo "launch ntrip_client_logger"
-            cmd="$command ros2 launch mf_localization gnss.launch.py \
-                            ntrip_client_logger:=true \
-                            $commandpost"
-            echo $cmd
-            eval $cmd
-            pids+=($!)
+
+        # check if NTRIP_HOST is defined.
+        if [ "${NTRIP_HOST}" = "" ]; then
+            while [ 1 -eq 1 ]
+            do
+            red "You need to specify NTRIP_HOST or CABOT_SITE environment variable"
+            snore 1
+            done
         fi
     fi
 
-    # launch ublox node
-    if [ $GNSS_NODE_START_AT_LAUNCH -eq 1 ]; then
-        # add sleep if necessary
-        sleepcom=""
-        if [ "$NTRIP_CLIENT" == "str2str_node" ]; then
-            # add short sleep because ublox node must be launched after str2str node has established connection to the serial device
-            sleepcom="sleep 5 && "
+    # ntrip client
+    ntrip_client_arg=""
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
+        if [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
+            # launch str2str_node
+            ntrip_client_arg="str2str_node:=true"
+        elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
+            # launch ntrip_client
+            ntrip_client_arg="ntrip_client:=true"
         fi
+    else
+        if [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
+            # launch str2str_node
+            ntrip_client_arg="str2str_node_logger:=true"
+        elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
+            # launch ntrip_client
+            ntrip_client_arg="ntrip_client_logger:=true"
+        fi
+    fi
 
-        echo "launch ublox node helpers"
-        cmd="$command \
-                $sleepcom \
-                ros2 launch mf_localization ublox-zed-f9p.launch.xml \
-                $commandpost"
-        echo $cmd
-        eval $cmd
-        pids+=($!)
-    elif [ $GNSS_NODE_START_AT_LAUNCH -eq 0 ]; then
-        echo "launch ublox_node_logger"
+    # gnss node
+    gnss_arg=""
+    if [ ${GNSS_NODE_START_AT_LAUNCH} -eq 1 ]; then
+        gnss_arg="ublox_node:=true"
+    else
+        gnss_arg="ublox_node_logger:=true"
+    fi
+
+    # gnss.launch.py command
+    cmd=""
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
         cmd="$command ros2 launch mf_localization gnss.launch.py \
-                        ublox_node_logger:=true \
-                        $commandpost"
-        echo $cmd
-        eval $cmd
-        pids+=($!)
+                $ntrip_client_arg \
+                $gnss_arg \
+                host:=$NTRIP_HOST \
+                port:=$NTRIP_PORT \
+                mountpoint:=$NTRIP_MOUNTPOINT \
+                authentificate:=$NTRIP_AUTHENTIFICATE \
+                username:=$NTRIP_USERNAME \
+                password:=$NTRIP_PASSWORD \
+                relay_back:=$NTRIP_STR2STR_RELAY_BACK \
+                $commandpost"
+    else
+        cmd="$command ros2 launch mf_localization gnss.launch.py \
+                $ntrip_client_arg \
+                $gnss_arg \
+                $commandpost"
     fi
+    echo $cmd
+    eval $cmd
+    pids+=($!)
 fi
 
 gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\
