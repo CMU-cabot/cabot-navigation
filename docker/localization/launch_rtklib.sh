@@ -37,7 +37,7 @@ function snore()
 # environment variables
 # ntrip client parameters
 : ${GNSS_NODE_START_AT_LAUNCH:=1}
-: ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT_START_AT_LAUNCH:=0}
 : ${NTRIP_CLIENT:=ntrip_client}
 : ${NTRIP_HOST:=}
 : ${NTRIP_PORT:=}
@@ -75,10 +75,29 @@ if [ "${NTRIP_CLIENT}" = "rtklib" ]; then
     # launch str2str
     com="str2str -in ${RTK_STR_IN} -out serial://ttyUBLOX:${BAUD_UBLOX}"
     echo $com
-    echo $eval
+    eval $com
 
 # ros2 launch
 else
+    # if NTRIP_HOST exists in environment variables, use it.
+    # if not, load NTRIP_HOST from CABOT_SITE package
+    if [ "${NTRIP_HOST}" = "" ]; then
+        echo "NTRIP_HOST does not exist in environment variables. load NTRIP_HOST from CABOT_SITE package"
+        if [ "${CABOT_SITE}" != "" ]; then
+        sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
+            source $sitedir/config/rtk_config.sh
+        fi
+    fi
+
+    # check if NTRIP_HOST is defined.
+    if [ "${NTRIP_HOST}" = "" ]; then
+        while [ 1 -eq 1 ]
+        do
+        red "You need to specify NTRIP_HOST or CABOT_SITE environment variable"
+        snore 1
+        done
+    fi
+
     # ntrip client
     ntrip_client_arg=""
     if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 0 ]; then

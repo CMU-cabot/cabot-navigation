@@ -112,7 +112,7 @@ fi
 
 # ntrip client parameters
 : ${GNSS_NODE_START_AT_LAUNCH:=1}
-: ${NTRIP_CLIENT_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT_START_AT_LAUNCH:=0}
 : ${NTRIP_CLIENT:=ntrip_client}
 : ${NTRIP_HOST:=}
 : ${NTRIP_PORT:=}

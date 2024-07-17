@@ -172,8 +172,8 @@ services:
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
       - ROS_DOMAIN_ID
       # ntrip client
-      - NTRIP_CLIENT # rtklib or ntrip_client
-      - NTRIP_CLIENT_START_AT_LAUNCH=${NTRIP_CLIENT_START_AT_LAUNCH:-1}
+      - NTRIP_CLIENT # rtklib, str2str_node, or ntrip_client
+      - NTRIP_CLIENT_START_AT_LAUNCH=${NTRIP_CLIENT_START_AT_LAUNCH:-0}
       - GNSS_NODE_START_AT_LAUNCH=${GNSS_NODE_START_AT_LAUNCH:-1}
       - NTRIP_HOST
       - NTRIP_PORT=${NTRIP_PORT:-2101}

@@ -27,12 +27,16 @@ from launch import LaunchDescription
 from launch.substitutions import LaunchConfiguration
 from launch.actions import DeclareLaunchArgument
 from launch.actions import IncludeLaunchDescription
+from launch.actions import LogInfo
 from launch.actions import SetEnvironmentVariable
+from launch.actions import TimerAction
 from launch.actions import RegisterEventHandler
 from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import FrontendLaunchDescriptionSource
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import AndSubstitution
+from launch.substitutions import NotSubstitution
 from launch_ros.actions import Node
 from cabot_common.launch import AppendLogDirPrefix
 
@@ -107,8 +111,23 @@ def generate_launch_description():
                             launch_arguments={
                                 'node_name': 'ublox',
                             }.items(),
-                            condition=IfCondition(ublox_node)
+                            condition=IfCondition(AndSubstitution(ublox_node, NotSubstitution(str2str_node)))  # if ublox_node and (not str2str_node)
                         )
+
+    # ublox_node must be launched after str2str_node to prevent simultaneous access to the device
+    wait_and_ublox_node_launch = TimerAction(
+                                    period=5.0,
+                                    actions=[
+                                        LogInfo(msg="launch ublox_node 5 seconds after launching str2str_node"),
+                                        IncludeLaunchDescription(
+                                            FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
+                                            launch_arguments={
+                                                'node_name': 'ublox',
+                                            }.items()
+                                        )
+                                    ],
+                                    condition=IfCondition(AndSubstitution(ublox_node, str2str_node))  # if ublox_node and str2str_node
+                                )
 
     str2str_node_logger_launch = Node(
             package='cabot_common',
@@ -174,10 +193,13 @@ def generate_launch_description():
         DeclareLaunchArgument('height', default_value="0.0", description='height of -p option'),
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
 
+        # node actions
         str2str_node_launch,
         ntrip_client_launch,
         ublox_node_launch,
+        wait_and_ublox_node_launch,
 
+        # logger node actions
         str2str_node_logger_launch,
         ntrip_client_logger_launch,
         ublox_node_logger_launch,
