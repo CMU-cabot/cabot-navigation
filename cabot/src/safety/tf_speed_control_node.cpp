@@ -35,8 +35,10 @@ class TFSpeedControlNode : public rclcpp::Node
 {
 public:
   std::string limit_topic_;
+  double min_speed_;
   double max_speed_;
   double check_rate_;
+  double tf_decel_timeout_;
   double tf_timeout_;
   std::string map_frame_;
   std::string robot_base_frame_;
@@ -49,9 +51,11 @@ public:
   explicit TFSpeedControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("tf_speed_control_node", options),
     limit_topic_("tf_limit"),
+    min_speed_(0.0),
     max_speed_(1.0),
     check_rate_(5.0),
-    tf_timeout_(0.2),
+    tf_decel_timeout_(0.2),
+    tf_timeout_(0.5),
     map_frame_("map"),
     robot_base_frame_("base_footprint")
   {
@@ -76,8 +80,10 @@ private:
     RCLCPP_INFO(get_logger(), "tf speed control - %s", __FUNCTION__);
 
     limit_topic_ = declare_parameter("limit_topic", limit_topic_);
+    min_speed_ = declare_parameter("min_speed", min_speed_);  // [m/s]
     max_speed_ = declare_parameter("max_speed", max_speed_);  // [m/s]
     check_rate_ = declare_parameter("check_rate", check_rate_);  // [Hz]
+    tf_decel_timeout_ = declare_parameter("tf_decel_timeout", tf_decel_timeout_);  // [seconds]
     tf_timeout_ = declare_parameter("tf_timeout", tf_timeout_);  // [seconds]
 
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
@@ -92,12 +98,21 @@ private:
     double speed_limit = max_speed_;
 
     try {
+      auto now = get_clock()->now();
+      // get available latest transform
       geometry_msgs::msg::TransformStamped transform_msg = tfBuffer->lookupTransform(
-        robot_base_frame_, map_frame_, get_clock()->now(), rclcpp::Duration(std::chrono::duration<double>(tf_timeout_)));
-      RCLCPP_INFO(get_logger(), "TFSpeedControl, lookup transform success");
+        robot_base_frame_, map_frame_, rclcpp::Time(0.0), rclcpp::Duration(std::chrono::duration<double>(tf_timeout_)));
+      float delay = (now - transform_msg.header.stamp).seconds();
+      if (tf_decel_timeout_ < delay && delay <= tf_timeout_) {
+        // linearly decelerate speed_limit from max_speed to min_speed
+        speed_limit = max_speed_ + (min_speed_ - max_speed_) * (delay - tf_decel_timeout_) / (tf_timeout_ - tf_decel_timeout_);
+      } else if (tf_timeout_ < delay) {
+        speed_limit = min_speed_;
+      }
+      RCLCPP_INFO(get_logger(), "TFSpeedControl, lookup transform success (delay=%.2f, speed_limit=%.2f)", delay, speed_limit);
     } catch (tf2::TransformException & ex) {
       speed_limit = 0.0;
-      RCLCPP_INFO(get_logger(), "TFSpeedControl, lookup transform fail");
+      RCLCPP_INFO(get_logger(), "TFSpeedControl, lookup transform fail (speed_limit=%.2f)", speed_limit);
     }
 
     std_msgs::msg::Float32 msg;
