@@ -33,6 +33,8 @@ find_package(queue_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io)
 
 # find dependencies for test
 find_package(nav2_navfn_planner REQUIRED)
@@ -51,6 +53,7 @@ include_directories(
   include
 #  ${OPENMP_INCLUDES}
   ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -156,6 +159,21 @@ ament_target_dependencies(cabot_scan
   sensor_msgs
 )
 
+### livox point cloud filter
+add_executable(livox_pointcloud_filter_node
+  src/livox_pointcloud_filter_node.cpp
+)
+
+ament_target_dependencies(livox_pointcloud_filter_node
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+)
+
+target_link_libraries(livox_pointcloud_filter_node
+  ${PCL_LIBRARIES}
+)
+
 ### cabot lifecycle manager
 add_executable(cabot_lifecycle_manager
   src/cabot_lifecycle_manager.cpp
@@ -185,6 +203,7 @@ install(TARGETS
   cabot_controllers
   cabot_scan
   cabot_lifecycle_manager
+  livox_pointcloud_filter_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

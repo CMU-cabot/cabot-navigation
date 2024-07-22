@@ -29,12 +29,13 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
 from launch.actions import TimerAction
+from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression
 
 
-from nav2_common.launch import RewrittenYaml
+from nav2_common.launch import ReplaceString, RewrittenYaml
 from cabot_common.launch import AppendLogDirPrefix
 
 
@@ -53,6 +54,7 @@ def generate_launch_description():
     footprint_radius = LaunchConfiguration('footprint_radius')
     offset = LaunchConfiguration('offset')
     cabot_side = LaunchConfiguration('cabot_side')
+    use_low_obstacle_detect = LaunchConfiguration('use_low_obstacle_detect')
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -62,6 +64,33 @@ def generate_launch_description():
                    ('/local/cmd_vel', '/cmd_vel'),
                    ('/local/odom', '/odom'),
                    ]
+
+    # Set local, global costmap plugins
+    params_file = ReplaceString(
+        source_file=params_file,
+        replacements={'<local_costmap_plugins>':
+                      PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
+                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        "['obstacle_layer', 'inflation_layer']"])})
+    params_file = ReplaceString(
+        source_file=params_file,
+        replacements={'<global_costmap_plugins>':
+                      PythonExpression(["['static_layer', 'obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
+                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        "['static_layer', 'obstacle_layer', 'inflation_layer']"])})
+
+    params_file2 = ReplaceString(
+        source_file=params_file2,
+        replacements={'<local_costmap_plugins>':
+                      PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
+                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        "['obstacle_layer', 'inflation_layer']"])})
+    params_file2 = ReplaceString(
+        source_file=params_file2,
+        replacements={'<global_costmap_plugins>':
+                      PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
+                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        "['obstacle_layer', 'inflation_layer']"])})
 
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {
@@ -156,6 +185,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'cabot_side', default_value='left',
             description='cabot side (left -> user stands right) left/right'),
+
+        DeclareLaunchArgument(
+            'use_low_obstacle_detect', default_value='true',
+            description='Use low obstacle detection'),
 
         # default navigator
         Node(
@@ -342,5 +375,13 @@ def generate_launch_description():
             name='cabot_scan',
             parameters=[configured_params],
             output='log'),
+
+        Node(
+            package='cabot_navigation2',
+            executable='cabot_scan',
+            name='cabot_livox_scan',
+            parameters=[configured_params],
+            output='log',
+            condition=IfCondition(use_low_obstacle_detect)),
 
     ])

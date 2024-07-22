@@ -108,6 +108,8 @@ def generate_launch_description():
         name='check_gazebo_ready_node',
     )
 
+    use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
+
     xacro_for_cabot_model = PathJoinSubstitution([
         get_package_share_directory('cabot_description'),
         'robots',
@@ -240,6 +242,33 @@ def generate_launch_description():
                         ]
                     ),
                 ]
+            ),
+
+            Node(
+                package='pointcloud_to_laserscan',
+                executable='pointcloud_to_laserscan_node',
+                namespace='',
+                name='livox_pointcloud_to_laserscan_node',
+                parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
+                remappings=[
+                    ('/cloud_in', '/livox/lidar_filtered'),
+                    ('/scan', '/livox_scan')
+                ],
+                condition=IfCondition(use_livox)
+            ),
+
+            Node(
+                package='cabot_navigation2',
+                executable='livox_pointcloud_filter_node',
+                namespace='',
+                name='livox_pointcloud_filter_node',
+                parameters=[{
+                    'use_sim_time': use_sim_time,
+                    'xfer_format': 2,
+                    'input_topic': '/livox/lidar_PointCloud2',
+                    'output_topic': '/livox/lidar_filtered'
+                }],
+                condition=IfCondition(use_livox)
             ),
 
             IncludeLaunchDescription(
