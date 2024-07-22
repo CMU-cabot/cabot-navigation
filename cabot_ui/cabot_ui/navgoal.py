@@ -679,6 +679,66 @@ class Nav2Params:
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
 """
+        if mode == geojson.NavigationMode.ClimbUpStep:
+            params = """
+/planner_server:
+    CaBot.path_adjusted_center: 0.0
+    CaBot.path_adjusted_minimum_path_width: 0.0
+    CaBot.path_width: 0.0
+    CaBot.min_iteration_count: 5
+    CaBot.max_iteration_count: 10
+    CaBot.ignore_people: True
+/footprint_publisher:
+    footprint_mode: 1
+/controller_server:
+    FollowPath.max_vel_x: 0.3
+    FollowPath.sim_time: 0.5
+    cabot_goal_checker.xy_goal_tolerance: 0.1
+/global_costmap/global_costmap:
+    people_obstacle_layer.people_enabled: False
+    inflation_layer.inflation_radius: 0.25
+/local_costmap/local_costmap:
+    inflation_layer.inflation_radius: 0.25
+/cabot/lidar_speed_control_node:
+    min_distance: 0.85
+/cabot/people_speed_control_node:
+    social_distance_x: 1.0
+    social_distance_y: 0.50
+/cabot/speed_control_node_touch_true:
+    complete_stop: [false,false,true,false,true,false,true]
+/cabot/speed_control_node_touch_false:
+    complete_stop: [false,false,true,false,true,false,true]
+"""
+        if mode == geojson.NavigationMode.ClimbDownStep:
+            params = """
+/planner_server:
+    CaBot.path_adjusted_center: 0.0
+    CaBot.path_adjusted_minimum_path_width: 0.0
+    CaBot.path_width: 0.0
+    CaBot.min_iteration_count: 5
+    CaBot.max_iteration_count: 10
+    CaBot.ignore_people: True
+/footprint_publisher:
+    footprint_mode: 1
+/controller_server:
+    FollowPath.max_vel_x: 0.3
+    FollowPath.sim_time: 0.5
+    cabot_goal_checker.xy_goal_tolerance: 0.1
+/global_costmap/global_costmap:
+    people_obstacle_layer.people_enabled: False
+    inflation_layer.inflation_radius: 0.25
+/local_costmap/local_costmap:
+    inflation_layer.inflation_radius: 0.25
+/cabot/lidar_speed_control_node:
+    min_distance: 0.85
+/cabot/people_speed_control_node:
+    social_distance_x: 1.0
+    social_distance_y: 0.50
+/cabot/speed_control_node_touch_true:
+    complete_stop: [false,false,true,false,true,false,true]
+/cabot/speed_control_node_touch_false:
+    complete_stop: [false,false,true,false,true,false,true]
+"""
         data = yaml.safe_load(params)
         return data
 
