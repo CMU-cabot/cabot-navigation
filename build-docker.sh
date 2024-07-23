@@ -118,11 +118,11 @@ if [ $arch != "x86_64" ] && [ $arch != "aarch64" ]; then
 fi
 
 if [[ $build_image -eq 1 ]]; then
-    build_image dcfiles targets option time_zone uid prefix arc
+    build_image dcfiles targets option time_zone uid prefix arch
     if [ $? != 0 ]; then exit 1; fi
 fi
 if [[ $build_workspace -eq 1 ]]; then
-    build_workspace dcfiles targets arc debug_build
+    build_workspace dcfiles targets arch debug_build
     if [ $? != 0 ]; then exit 1; fi
 fi
 
