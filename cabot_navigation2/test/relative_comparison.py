@@ -118,7 +118,7 @@ def summarize_by_module(data: List[pd.DataFrame], is_evaluation: bool = False) -
 def summarize_by_case(data: List[pd.DataFrame], is_evaluation: bool = False) -> pd.DataFrame:
     """Summarize data by case."""
     combined_df = pd.concat(data)
-    
+
     if is_evaluation:
         summary = combined_df.groupby(['Test module name', 'Test case name', 'evaluator', 'Test run', 'Test title']).agg(
             value=('value', 'first')
@@ -128,7 +128,7 @@ def summarize_by_case(data: List[pd.DataFrame], is_evaluation: bool = False) -> 
             'Number of success': 'sum',
             'Number of failure': 'sum'
         })
-    
+
     return summary
 
 
@@ -185,4 +185,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
