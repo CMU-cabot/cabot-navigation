@@ -25,7 +25,8 @@
 import os
 import pandas as pd
 import yaml
-from optparse import OptionParser
+from argparse import ArgumentParser
+from pathlib import Path
 from typing import List
 
 
@@ -47,7 +48,7 @@ def read_test_summary_files(folder_paths: List[str]) -> List[pd.DataFrame]:
                 title = yaml_data.get('title', 'no title')
 
             df = pd.read_csv(test_summary_path, index_col=0, encoding='utf-8')
-            df['Test run'] = os.path.basename(folder_path)
+            df['Test run'] = Path(folder_path).name
             df['Test title'] = title
             df['Number of test cases'] = df['Number of success'] + df['Number of failure']
             data.append(df)
@@ -69,7 +70,7 @@ def read_test_evaluation_files(folder_paths: List[str]) -> List[pd.DataFrame]:
                 title = yaml_data.get('title', 'no title')
 
             df = pd.read_csv(test_evaluation_path, index_col=0, encoding='utf-8')
-            df['Test run'] = os.path.basename(folder_path)
+            df['Test run'] = Path(folder_path).name
             df['Test title'] = title
             data.append(df)
         except FileNotFoundError:
@@ -142,35 +143,37 @@ def output_summary_to_csv(summary: pd.DataFrame, output_dir: str, filename: str)
 
 
 def main():
-    parser = OptionParser()
+    parser = ArgumentParser()
 
-    parser.add_option('-f', '--folder_paths', action='append', type=str, help='Path to the folder containing test summary and test evaluation files')
-    parser.add_option('-o', '--output-dir', type=str, help='directory where the relative comparison summary will be output')
+    parser.add_argument('-f', '--folder_paths', action='append', nargs='*', type=str, help='Path to the folder containing test summary and test evaluation files')
+    parser.add_argument('-o', '--output-dir', type=str, help='directory where the relative comparison summary will be output')
 
-    (options, args) = parser.parse_args()
+    args = parser.parse_args()
 
-    if not options.folder_paths:
+    if not args.folder_paths:
         parser.error('Folder paths not given')
 
-    summary_data = read_test_summary_files(options.folder_paths)
+    folder_paths = [path for sublist in args.folder_paths for path in sublist]
+
+    summary_data = read_test_summary_files(folder_paths)
     if summary_data:
         test_summary_by_module = summarize_test_summary_by_module(summary_data)
         test_summary_by_case = summarize_test_summary_by_case(summary_data)
         print_test_summary(test_summary_by_module, True)
         print_test_summary(test_summary_by_case, False)
-        if options.output_dir:
-            output_summary_to_csv(test_summary_by_module, options.output_dir, 'test_summary_by_module_comparison.csv')
-            output_summary_to_csv(test_summary_by_case, options.output_dir, 'test_summary_by_case_comparison.csv')
+        if args.output_dir:
+            output_summary_to_csv(test_summary_by_module, args.output_dir, 'test_summary_by_module_comparison.csv')
+            output_summary_to_csv(test_summary_by_case, args.output_dir, 'test_summary_by_case_comparison.csv')
 
-    evaluation_data = read_test_evaluation_files(options.folder_paths)
+    evaluation_data = read_test_evaluation_files(folder_paths)
     if evaluation_data:
         test_evaluation_by_module = summarize_test_evaluation_by_module(evaluation_data)
         test_evaluation_by_case = summarize_test_evaluation_by_case(evaluation_data)
         print_test_evaluation(test_evaluation_by_module, True)
         print_test_evaluation(test_evaluation_by_case, False)
-        if options.output_dir:
-            output_summary_to_csv(test_evaluation_by_module, options.output_dir, 'test_evaluation_by_module_comparison.csv')
-            output_summary_to_csv(test_evaluation_by_case, options.output_dir, 'test_evaluation_by_case_comparison.csv')
+        if args.output_dir:
+            output_summary_to_csv(test_evaluation_by_module, args.output_dir, 'test_evaluation_by_module_comparison.csv')
+            output_summary_to_csv(test_evaluation_by_case, args.output_dir, 'test_evaluation_by_case_comparison.csv')
 
 
 if __name__ == "__main__":
