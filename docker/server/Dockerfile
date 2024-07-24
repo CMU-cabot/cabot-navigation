@@ -71,7 +71,7 @@ RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtim
 #
 
 #RUN git clone https://github.com/daisukes/MapService -b hokoukukan_2018-docker && \
-RUN git clone https://github.com/CMU-cabot/MapService -b daisukes/cabot-hokoukukan_2018 && \
+RUN git clone https://github.com/CMU-cabot/MapService -b cabot-hokoukukan_2018 && \
 	cd MapService && \
 	sh download-lib.sh
 
