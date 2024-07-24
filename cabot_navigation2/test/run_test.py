@@ -347,7 +347,8 @@ class Tester:
                 action_name='set_people_detection_range',
                 service='/gazebo/set_parameters',
                 service_type='rcl_interfaces.srv/SetParameters',
-                request=request_yaml
+                request=request_yaml,
+                wait_for_service=True
             ),
             **kwargs)
         )
@@ -540,12 +541,29 @@ class Tester:
         request = test_action['request']
         request_type = service_type.Request
         uuid = test_action['uuid']
+        # optional parameters for wait_for_service
+        wait_for_service = test_action.get('wait_for_service', False)
+        wait_for_service_timeout = test_action.get('wait_for_service_timeout', 1.0)
 
         req = request_type()
         data = yaml.safe_load(request)
         set_message_fields(req, data)
 
         srv = self.node.create_client(service_type, service)
+
+        # wait for service if requested
+        if wait_for_service:
+            if not srv.service_is_ready():
+                logger.debug(f"Waiting for service {service}...")
+                if srv.wait_for_service(wait_for_service_timeout):
+                    logger.debug(f"Finished waiting for service {service}")
+                else:
+                    logger.error(f"Timeout waiting for service {service}")
+                    # return as fail
+                    case['done'] = True
+                    case['success'] = False
+                    return
+
         self.futures[uuid] = srv.call_async(req)
 
         def done_callback(future):
