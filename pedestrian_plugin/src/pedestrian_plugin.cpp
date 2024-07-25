@@ -168,6 +168,14 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
 
   if (needs_to_apply_params) {
     apply_parameters();
+    if (!this->actor) {
+      ignition::math::Pose3d pose;
+      pose.Pos().X(this->x);
+      pose.Pos().Y(this->y);
+      pose.Pos().Z(this->z);
+      pose.Rot() = ignition::math::Quaterniond(0, 0, this->yaw);
+      this->model->SetWorldPose(pose, true, true);
+    }
   }
 
   auto dt = (_info.simTime - this->lastUpdate).Double();
@@ -341,27 +349,58 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
         humanAgent.radius = radius;
         manager.updateHumanAgent(person.name, humanAgent);
       } else {
-        auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
-        auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
-        auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
-        auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
-        auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
-        auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
-        RCLCPP_INFO(manager.get_logger(), "x=%.2f, y=%.2f", newX, newY);
+        auto pCmdVel = PythonUtils::getDictItemAsDict(pRet, "cmd_vel");
+        // if cmd_vel is specified, do not update the position in this plugin        
+        if (pCmdVel != NULL) {
+          auto pLinear = PythonUtils::getDictItemAsDict(pCmdVel, "linear");
+          auto pAngular = PythonUtils::getDictItemAsDict(pCmdVel, "angular");
+          if (pLinear && pAngular) {
+            auto lx = PythonUtils::getDictItemAsDouble(pLinear, "x", 0.0);
+            auto ly = PythonUtils::getDictItemAsDouble(pLinear, "y", 0.0);
+            auto lz = PythonUtils::getDictItemAsDouble(pLinear, "z", 0.0);
+            auto ax = PythonUtils::getDictItemAsDouble(pAngular, "x", 0.0);
+            auto ay = PythonUtils::getDictItemAsDouble(pAngular, "y", 0.0);
+            auto az = PythonUtils::getDictItemAsDouble(pAngular, "z", 0.0);
+            manager.publish_cmd_vel(lx, ly, lz, ax, ay, az);
+          }
+          if (pLinear) {
+            Py_DECREF(pLinear);
+          }
+          if (pAngular) {
+            Py_DECREF(pAngular);
+          }
+          Py_DECREF(pCmdVel);
 
-        ignition::math::Pose3d pose;
-        pose.Pos().X(newX);
-        pose.Pos().Y(newY);
-        pose.Pos().Z(newZ);
-        pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
-        this->model->SetWorldPose(pose, true, true);
+          auto pose = this->model->WorldPose();
+          this->x = pose.Pos().X();
+          this->y = pose.Pos().Y();
+          this->z = pose.Pos().Z();
+          this->roll = pose.Rot().X();
+          this->pitch = pose.Rot().Y();
+          this->yaw = pose.Rot().Z();
+        } else {
+          auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
+          auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
+          auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
+          auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
+          auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
+          auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
+          RCLCPP_INFO(manager.get_logger(), "x=%.2f, y=%.2f", newX, newY);
 
-        this->x = newX;
-        this->y = newY;
-        this->z = newZ;
-        this->roll = newRoll;
-        this->pitch = newPitch;
-        this->yaw = newYaw;
+          ignition::math::Pose3d pose;
+          pose.Pos().X(newX);
+          pose.Pos().Y(newY);
+          pose.Pos().Z(newZ);
+          pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
+          this->model->SetWorldPose(pose, true, true);
+
+          this->x = newX;
+          this->y = newY;
+          this->z = newZ;
+          this->roll = newRoll;
+          this->pitch = newPitch;
+          this->yaw = newYaw;
+        }
       }
       Py_DECREF(pRet);
     } else {

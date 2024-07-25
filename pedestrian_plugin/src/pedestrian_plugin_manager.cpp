@@ -174,6 +174,7 @@ PedestrianPluginManager::PedestrianPluginManager()
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
   human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
+  cmd_vel_pub_ = node_->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
     "/pedestrian_plugin_update",
     std::bind(&PedestrianPluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
@@ -321,6 +322,18 @@ void PedestrianPluginManager::process_metric(std::string name, double value)
   msg.name = name;
   msg.value = value;
   metric_pub_->publish(msg);
+}
+
+void PedestrianPluginManager::publish_cmd_vel(double lx, double ly, double lz, double ax, double ay, double az)
+{
+  geometry_msgs::msg::Twist msg;
+  msg.linear.x = lx;
+  msg.linear.y = ly;
+  msg.linear.z = lz;
+  msg.angular.x = ax;
+  msg.angular.y = ay;
+  msg.angular.z = az;
+  cmd_vel_pub_->publish(msg);
 }
 
 // Private methods

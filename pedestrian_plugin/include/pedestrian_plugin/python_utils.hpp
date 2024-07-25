@@ -49,6 +49,17 @@ public:
     return d;
   }
 
+  static PyObject* getDictItemAsDict(PyObject * dict, std::string key)
+  {
+    auto pName = PyUnicode_FromString(key.c_str());
+    auto obj = PyDict_GetItem(dict, pName);
+    Py_DECREF(pName);
+    if (obj == NULL) {
+      return NULL;
+    }
+    return obj;
+  }
+
   // Utility function to convert Python Unicode object to std::string (UTF-8)
   static std::string PyUnicodeObject_ToStdString(PyObject * unicodeObj)
   {

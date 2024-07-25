@@ -42,6 +42,7 @@
 #include <gazebo_ros/conversions/builtin_interfaces.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <people_msgs/msg/people.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -134,6 +135,7 @@ public:
   rclcpp::Logger get_logger();
   void process_collision(std::string actor_name, double distance);
   void process_metric(std::string name, double value);
+  void publish_cmd_vel(double lx, double ly, double lz, double ax, double ay, double az);
 
   std::recursive_mutex mtx;
 
@@ -180,6 +182,7 @@ private:
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Metric>::SharedPtr metric_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agent>::SharedPtr robot_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr human_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
