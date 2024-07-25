@@ -371,10 +371,37 @@ if [ $show_rviz -eq 1 ]; then
    pids+=($!)
 fi
 
+# mapping
 if [ $cart_mapping -eq 1 ]; then
     if [[ $gazebo -eq 0 ]]; then
         imu_topic=/imu/data
     fi
+
+    # switch lidar if specified
+    LIDAR_MODEL=${LIDAR_MODEL:-VLP16}
+    echo "LIDAR_MODEL=$LIDAR_MODEL"
+    if [ "${LIDAR_MODEL}" != "VLP16" ]; then
+        USE_VELODYNE=false
+        if [ "${LIDAR_MODEL}" = "XT32" ] || [ "${LIDAR_MODEL}" = "XT16" ]; then
+            if [ "${LIDAR_MODEL}" = "XT32" ]; then
+                model_for_lidar=cabot3-m1
+            elif [ "${LIDAR_MODEL}" = "XT16" ]; then
+                model_for_lidar=cabot3-m2
+            fi
+            echo "launch node for $LIDAR_MODEL"
+            cmd="$command ros2 launch cabot_base hesai_lidar.launch.py \
+                model:=$model_for_lidar \
+                pandar:=/velodyne_points \
+                $commandpost"
+            echo $cmd
+            eval $cmd
+            pids+=($!)
+        else
+            echo "Please specify a known lidar model (LIDAR_MODEL=$LIDAR_MODEL)"
+            exit
+        fi
+    fi
+
     cmd="$command ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
           run_cartographer:=${RUN_CARTOGRAPHER:-true} \
           record_wireless:=true \
