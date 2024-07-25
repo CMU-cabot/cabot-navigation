@@ -349,3 +349,15 @@ class UserInterface(object):
     def please_return_position(self):
         self._activity_log("cabot/interface", "navigation", "please_return_position")
         self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
+
+    def exploring_direction(self, direction):
+        self._activity_log("cabot/interface", "exploration", f"going to {direction}")
+
+        if direction == "front":
+            self.speak(i18n.localized_string("GO_STRAIGHT"))
+        elif direction == "left":
+            self.speak(i18n.localized_string("GO_LEFT"))
+        elif direction == "right":
+            self.speak(i18n.localized_string("GO_RIGHT"))
+        elif direction == "back":
+            self.speak(i18n.localized_string("GO_BACK"))

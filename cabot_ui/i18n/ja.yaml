@@ -114,3 +114,9 @@ IN_FRONT: "正面"
 RIGHT_SIDE: "右側"
 LEFT_SIDE: "左側"
 APPROACEHD_TO_FACILITY: "{1}に{0}があります"
+
+## Exploration
+GO_FORWARD: "まっすぐ進みます"
+GO_LEFT: "左に進みます"
+GO_RIGHT: "右に進みます"
+GO_BACK: "後ろに進みます"

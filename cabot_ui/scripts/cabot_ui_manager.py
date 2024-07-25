@@ -56,6 +56,7 @@ from cabot_ui.menu import Menu
 from cabot_ui.status import State, StatusManager
 from cabot_ui.interface import UserInterface
 from cabot_ui.navigation import Navigation, NavigationInterface
+from cabot_ui.exploration import Exploration
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
@@ -81,8 +82,8 @@ class CabotUIManager(NavigationInterface, object):
         self._interface.delegate = self
         self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
-        # self._exploration = Exploration()
-        # self._exploration.delegate = self
+        self._exploration = Exploration()
+        self._exploration.delegate = self
 
         self._retry_count = 0
 
@@ -516,9 +517,22 @@ class CabotUIManager(NavigationInterface, object):
         if event.type != ExplorationEvent.TYPE:
             return
 
-        if event.subtype == "start":
-            self._interface.start_exploration()
-            self._exploration.start_exploration()
+        if event.subtype == "front":
+            self._interface.exploring_direction("front")
+            self._exploration.send_query("direction","front")
+        elif event.subtype == "back":
+            self._interface.exploring_direction("back")
+            self._exploration.send_query("direction","back")
+        elif event.subtype == "left":
+            self._interface.exploring_direction("left")
+            self._exploration.send_query("direction","left")
+        elif event.subtype == "right":
+            self._interface.exploring_direction("left")
+            self._exploration.send_query("direction","right")
+        if event.subtype == "idle":
+            self._logger.info("NavigationState: Pause control = True")
+            self._interface.set_pause_control(True)
+            self._navigation.set_pause_control(True)
 
 
 class EventMapper(object):
@@ -535,7 +549,8 @@ class EventMapper(object):
         mevent = None
 
         # simplify the control
-        mevent = self.map_button_to_navigation(event)
+        # TODO: change the mapping function ased on the state of the robot
+        mevent = self.map_button_to_exploration(event)
 
         '''
         if state == State.idle:
@@ -588,6 +603,24 @@ class EventMapper(object):
             if event.buttons == cabot_common.button.BUTTON_NEXT and event.count == 2:
                 return NavigationEvent(subtype="resume")
         '''
+        return None
+
+    def map_button_to_exploration(self, event):
+        if event.type == "button" and event.down:
+            if event.button == cabot_common.button.BUTTON_UP:
+                return ExplorationEvent(subtype="front")
+            if event.button == cabot_common.button.BUTTON_DOWN:
+                return ExplorationEvent(subtype="back")
+            if event.button == cabot_common.button.BUTTON_LEFT:
+                return ExplorationEvent(subtype="left")
+            if event.button == cabot_common.button.BUTTON_RIGHT:
+                return ExplorationEvent(subtype="right")
+            if event.button == cabot_common.button.BUTTON_CENTER:
+                return ExplorationEvent(subtype="decision")
+        if event.type == HoldDownEvent.TYPE:
+            if event.holddown == cabot_common.button.BUTTON_LEFT:
+                return ExplorationEvent(subtype="idle")
+
         return None
 
 
