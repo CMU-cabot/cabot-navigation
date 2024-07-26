@@ -20,13 +20,13 @@
 
 from cabot_ui import navigation
 from std_msgs.msg import String
-from rclpy import Node
+from rclpy.node import Node
 
 
-class Exploration(navigation.ControlBase):
+class Exploration():
     def __init__(self, node: Node):
 
-        super(Exploration, self).__init__(datautil_instance=None, anchor_file=None)
+        super(Exploration, self).__init__()
         self.node = node
         self.publisher = self.node.create_publisher(String, '/cabot/user_query', 10)
 

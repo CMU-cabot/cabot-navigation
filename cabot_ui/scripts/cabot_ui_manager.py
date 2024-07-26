@@ -527,7 +527,7 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.exploring_direction("left")
             self._exploration.send_query("direction","left")
         elif event.subtype == "right":
-            self._interface.exploring_direction("left")
+            self._interface.exploring_direction("right")
             self._exploration.send_query("direction","right")
         if event.subtype == "idle":
             self._logger.info("NavigationState: Pause control = True")
