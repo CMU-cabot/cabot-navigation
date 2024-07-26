@@ -415,6 +415,18 @@ class Tester:
             **kwargs)
         )
 
+    def wait_mode_changed(self, modeName, **kwargs):
+        self.wait_topic(**dict(
+            dict(
+                action_name=f'wait_mode_changed({modeName})',
+                topic='/cabot/activity_log',
+                topic_type='cabot_msgs/msg/Log',
+                condition=f"msg.category=='cabot/navigation' and msg.text=='change_mode' and msg.memo=='{modeName}'",
+                timeout=60
+            ),
+            **kwargs)
+        )
+
     def wait_navigation_completed(self, **kwargs):
         self.wait_topic(**dict(
             dict(

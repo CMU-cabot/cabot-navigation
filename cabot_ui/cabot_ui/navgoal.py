@@ -591,6 +591,44 @@ class Goal(geoutil.TargetPlace):
 
 
 class Nav2Params:
+    motor_gain = {
+        'Standard':      {'p': 0, 'i': 0},
+        'Narrow':        {'p': 0, 'i': 0},
+        'Tight':         {'p': 0, 'i': 0},
+        'ClimbUpStep':   {'p': 0, 'i': 0},
+        'ClimbDownStep': {'p': 0, 'i': 0}
+    }
+
+    @classmethod
+    def set_motor_gain_standard(cls, p_gain, i_gain):
+        cls.motor_gain['Standard']['p'] = p_gain
+        cls.motor_gain['Standard']['i'] = i_gain
+        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
+
+    @classmethod
+    def set_motor_gain_narrow(cls, p_gain, i_gain):
+        cls.motor_gain['Narrow']['p'] = p_gain
+        cls.motor_gain['Narrow']['i'] = i_gain
+        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
+
+    @classmethod
+    def set_motor_gain_tight(cls, p_gain, i_gain):
+        cls.motor_gain['Tight']['p'] = p_gain
+        cls.motor_gain['Tight']['i'] = i_gain
+        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
+
+    @classmethod
+    def set_motor_gain_climb_up_stair(cls, p_gain, i_gain):
+        cls.motor_gain['ClimbUpStep']['p'] = p_gain
+        cls.motor_gain['ClimbUpStep']['i'] = i_gain
+        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
+
+    @classmethod
+    def set_motor_gain_climb_down_stair(cls, p_gain, i_gain):
+        cls.motor_gain['ClimbDownStep']['p'] = p_gain
+        cls.motor_gain['ClimbDownStep']['i'] = i_gain
+        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
+
     @classmethod
     def get_parameters_for(cls, mode):
         if mode == geojson.NavigationMode.Standard:
@@ -858,6 +896,7 @@ class NavGoal(Goal):
     def nav_params(self):
         new_mode = self.navcog_routes[self.route_index][2]
         self.mode = new_mode
+        self.delegate.activity_log("cabot/navigation", "change_mode", f"{self.mode}")
         return Nav2Params.get_parameters_for(new_mode)
 
     def enter(self):
