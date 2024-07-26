@@ -114,3 +114,9 @@ IN_FRONT: "in front of you"
 RIGHT_SIDE: "on your right"
 LEFT_SIDE: "on your left"
 APPROACEHD_TO_FACILITY: "{0} is {1}"
+
+## Exploration
+GO_FORWARD: "going forward"
+GO_LEFT: "going left"
+GO_RIGHT: "going right"
+GO_BACK: "going back"
