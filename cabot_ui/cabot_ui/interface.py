@@ -354,7 +354,7 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "exploration", f"going to {direction}")
 
         if direction == "front":
-            self.speak(i18n.localized_string("GO_STRAIGHT"))
+            self.speak(i18n.localized_string("GO_FORWARD"))
         elif direction == "left":
             self.speak(i18n.localized_string("GO_LEFT"))
         elif direction == "right":
