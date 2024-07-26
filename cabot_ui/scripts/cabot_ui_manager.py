@@ -82,7 +82,7 @@ class CabotUIManager(NavigationInterface, object):
         self._interface.delegate = self
         self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
-        self._exploration = Exploration()
+        self._exploration = Exploration(self._node)
         self._exploration.delegate = self
 
         self._retry_count = 0

@@ -24,9 +24,9 @@ from rclpy import Node
 
 
 class Exploration(navigation.ControlBase):
-    def __init__(self, node: Node, datautil_instance=None, anchor_file=None):
+    def __init__(self, node: Node):
 
-        super(Exploration, self).__init__(datautil_instance=datautil_instance, anchor_file=anchor_file)
+        super(Exploration, self).__init__(datautil_instance=None, anchor_file=None)
         self.node = node
         self.publisher = self.node.create_publisher(String, '/cabot/user_query', 10)
 
