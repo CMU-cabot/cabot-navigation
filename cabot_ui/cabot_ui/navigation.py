@@ -194,7 +194,7 @@ class BufferProxy():
         if not future.done():
             if not event.wait(1.0):
                 # Timed out. remove_pending_request() to free resources
-                self.remove_pending_request(future)
+                self.lookup_transform_service.remove_pending_request(future)
                 raise RuntimeError("timeout")
         if future.exception() is not None:
             raise future.exception()
