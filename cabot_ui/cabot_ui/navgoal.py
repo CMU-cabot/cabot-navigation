@@ -591,44 +591,6 @@ class Goal(geoutil.TargetPlace):
 
 
 class Nav2Params:
-    motor_gain = {
-        'Standard':      {'p': 0, 'i': 0},
-        'Narrow':        {'p': 0, 'i': 0},
-        'Tight':         {'p': 0, 'i': 0},
-        'ClimbUpStep':   {'p': 0, 'i': 0},
-        'ClimbDownStep': {'p': 0, 'i': 0}
-    }
-
-    @classmethod
-    def set_motor_gain_standard(cls, p_gain, i_gain):
-        cls.motor_gain['Standard']['p'] = p_gain
-        cls.motor_gain['Standard']['i'] = i_gain
-        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
-
-    @classmethod
-    def set_motor_gain_narrow(cls, p_gain, i_gain):
-        cls.motor_gain['Narrow']['p'] = p_gain
-        cls.motor_gain['Narrow']['i'] = i_gain
-        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
-
-    @classmethod
-    def set_motor_gain_tight(cls, p_gain, i_gain):
-        cls.motor_gain['Tight']['p'] = p_gain
-        cls.motor_gain['Tight']['i'] = i_gain
-        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
-
-    @classmethod
-    def set_motor_gain_climb_up_stair(cls, p_gain, i_gain):
-        cls.motor_gain['ClimbUpStep']['p'] = p_gain
-        cls.motor_gain['ClimbUpStep']['i'] = i_gain
-        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
-
-    @classmethod
-    def set_motor_gain_climb_down_stair(cls, p_gain, i_gain):
-        cls.motor_gain['ClimbDownStep']['p'] = p_gain
-        cls.motor_gain['ClimbDownStep']['i'] = i_gain
-        CaBotRclpyUtil.info(F"{cls.motor_gain=}")
-
     @classmethod
     def get_parameters_for(cls, mode):
         if mode == geojson.NavigationMode.Standard:
@@ -656,6 +618,8 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
     social_distance_y: 0.5
+/can_sender_node:
+    motor_pi_gain: [1.0,4.0]
 """
         if mode == geojson.NavigationMode.Narrow:
             params = """
@@ -686,6 +650,8 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
+/can_sender_node:
+    motor_pi_gain: [1.0,4.0]
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -716,6 +682,8 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
+/can_sender_node:
+    motor_pi_gain: [1.0,4.0]
 """
         if mode == geojson.NavigationMode.ClimbUpStep:
             params = """
@@ -746,6 +714,8 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
+/can_sender_node:
+    motor_pi_gain: [1.0,4.0]
 """
         if mode == geojson.NavigationMode.ClimbDownStep:
             params = """
@@ -776,6 +746,8 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
+/can_sender_node:
+    motor_pi_gain: [1.0,4.0]
 """
         data = yaml.safe_load(params)
         return data
