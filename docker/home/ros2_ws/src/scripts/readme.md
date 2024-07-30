@@ -1,0 +1,60 @@
+
+
+## GPT-4oでのテキスト生成関連
+
+1. ロボットのstate control
+まずはこれを実行し、ロボットのstateを管理する（手動操作時）
+```shell
+~/ros2_ws/src $ bash run_state_publisher.sh
+[INFO] [1722319096.147677486] [state_input]: State input started
+Enter state ([r]unning, [p]aused, [f]inished):
+```
+
+2. 周辺環境の説明
+```shell
+python3 test_image.py --log_dir logs/<exp name> -e [--sim] [--speak]
+```
+- `/cabot/nav_state` が `running` であるときにのみ説明生成が行われる
+
+3. semantic mapの生成
+```shell
+python3 test_image.py --log_dir logs/<exp name> -s [--sim]
+```
+- `/cabot/nav_state` が `running` であるときにのみ説明生成が行われる（周辺環境の説明と同様）
+
+4. 走行可能な方向についての説明生成
+```shell
+python3 test_image.py --log_dir logs/<exp name> -i [--sim] [--speak]
+```
+- `/cabot/nav_state` が `paused` であるときにのみ説明生成が行われる
+
+
+## 対話システム関連
+1. 対話サーバー（iPhone -> cabot）の起動
+```shell
+~/ros2_ws/src $ python3 test_chat_server.py [--use_openai] --log_dir logs/<exp name>
+```
+
+
+## navigation関連
+1. trajectory記録スクリプトの起動
+```shell
+~/ros2_ws/src $ python3 test_trajectory.py --log_dir logs/<exp name>
+```
+
+2. navigationキャンセルスクリプトの起動
+```shell
+~/ros2_ws/src $ python3 test_explore.py -c
+```
+
+3. navigationスクリプトの起動
+```shell
+~/ros2_ws/src $ python3 test_loop.y -d [-f] -i [-t] --log_dir <exp_name> [--sim] [-a] [-k]
+```
+- `-d` : distance filter; 距離が近すぎる・遠すぎる目的地を除外
+- `-f` : forbidden filter; 禁止エリアを除外。禁止判定は、前・右・左のカメラがとらえた画像をもとに行われる。どれかのカメラにマーカーが写っている、もしくはGPTによる画像説明で「通行不可」判定がなされると、その方向で、ロボットから8m先の場所を中心とする半径4mの円が禁止エリアとして登録される。
+- `-t` : trajectory filter; すでに通過した軌跡をなるべく通らないようにする
+- `-i` : 画像をもとに禁止エリアを設定する
+- `--sim` : シミュレーターでのテスト
+- `-a` : 次の目的地を自動で設定する
+- `-k` : 次の目的地設定をキーボードから行う。これが有効になっていない場合、`/cabot/user_query` トピックに対して、次の目的地を設定するクエリを送信することで次の目的地を設定することができる。このクエリは、`test_chat_server.py` が起動しているときに、iPhoneから送信することができる。また、`curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'` のように、curlコマンドを用いても送信することができる。直接ros2のトピックに対して送信することも可能であるが、その場合は、`ros2 topic pub /cabot/user_query std_msgs/String "data: direction;front"` もしくは `ros2 topic pub /cabot/user_query std_msgs/String "data: search;<y>,<x>"` のように、`std_msgs/String`型のデータを送信する必要がある。
