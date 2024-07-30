@@ -23,7 +23,11 @@ from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
+from launch.actions import ExecuteProcess
 from launch.actions import OpaqueFunction
+from launch.actions import RegisterEventHandler
+from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
@@ -46,6 +50,10 @@ def generate_launch_description():
     save_state_filename = LaunchConfiguration('save_state_filename')
     load_state_filename = LaunchConfiguration('load_state_filename')
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
+    # config for post processing
+    convert_pbstream = LaunchConfiguration('convert_pbstream')
+    save_state_directory = LaunchConfiguration('save_state_directory')
+    save_state_filestem = LaunchConfiguration('save_state_filestem')
 
     # function to configure a node command argument
     def add_cartographer_arguments(context, node):
@@ -59,7 +67,61 @@ def generate_launch_description():
         node.cmd.clear()
         # needs to be normalized
         node.cmd.extend([normalize_to_list_of_substitutions(x) for x in cmd])
-        return [node]
+        return [node,
+                RegisterEventHandler(
+                    OnProcessExit(
+                        target_action=node,
+                        on_exit=[
+                            convert_pbstream_to_pgm
+                        ]
+                    ),
+                    condition=IfCondition(convert_pbstream)
+                ),
+                RegisterEventHandler(
+                    OnProcessExit(
+                        target_action=convert_pbstream_to_pgm,
+                        on_exit=[
+                            convert_pgm_to_png
+                        ]
+                    ),
+                    condition=IfCondition(convert_pbstream)
+                ),
+                RegisterEventHandler(
+                    OnProcessExit(
+                        target_action=convert_pgm_to_png,
+                        on_exit=[
+                            extract_floor_map_info
+                        ]
+                    ),
+                    condition=IfCondition(convert_pbstream)
+                ),
+                ]
+
+    # post process commands
+    convert_pbstream_to_pgm = ExecuteProcess(
+       cmd=["ros2", "run", "cartographer_ros", "cartographer_pbstream_to_ros_map",
+            "-pbstream_filename", [save_state_filestem, ".pbstream"],
+            '-map_filestem', save_state_filestem],
+       cwd=save_state_directory
+    )
+
+    convert_pgm_to_png = ExecuteProcess(
+        cmd=["convert", [save_state_filestem, ".pgm"], [save_state_filestem, ".png"]],
+        cwd=save_state_directory
+    )
+
+    extract_floor_map_info = ExecuteProcess(
+        cmd=["ros2", "run", "mf_localization_mapping", "extract_floormap_info_from_yaml.py",
+             "--input", [save_state_filestem, ".yaml"],
+             "--output", [save_state_filestem, ".info.txt"],
+             "&&"
+             "identify", "-format", "'width: %w\\nheight: %h\\n'", [save_state_filestem, ".pgm"],
+             "|",
+             "tee", "-a", [save_state_filestem, ".info.txt"]
+             ],
+        cwd=save_state_directory,
+        shell=True
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument('robot', default_value='rover'),
@@ -74,6 +136,10 @@ def generate_launch_description():
         DeclareLaunchArgument('save_state_filename', default_value=''),
         DeclareLaunchArgument('load_state_filename', default_value=''),
         DeclareLaunchArgument('start_trajectory_with_default_topics', default_value='true'),
+        # config for post processing
+        DeclareLaunchArgument('convert_pbstream', default_value='false'),
+        DeclareLaunchArgument('save_state_directory', default_value=''),
+        DeclareLaunchArgument('save_state_filestem', default_value=''),
 
         Node(
             package='robot_state_publisher',
