@@ -36,6 +36,9 @@ services:
         output:
           - type=registry
     environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
 # required for gazebo rendering
       - DISPLAY
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
@@ -116,6 +119,7 @@ services:
     volumes:
 # code
       - ./config:/home/developer/config
+      - ./docker/home/.ros:/home/developer/.ros
       - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/ros2_ws/install/${CABOT_SITE}
 
   ros2-dev:

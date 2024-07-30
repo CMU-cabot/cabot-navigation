@@ -6,14 +6,27 @@ HOST_UID=${HOST_UID:-1000}
 HOST_GID=${HOST_GID:-1000}
 HOST_TZ=${HOST_TZ:-UTC}
 
-# Setting up timezone
-sudo ln -snf /usr/share/zoneinfo/$HOST_TZ /etc/localtime
-echo $HOST_TZ | sudo tee /etc/timezone
+if [[ $TZ != $HOST_TZ ]]; then
+    # Setting up timezone
+    sudo ln -snf /usr/share/zoneinfo/$HOST_TZ /etc/localtime
+    echo $HOST_TZ | sudo tee /etc/timezone
+    export TZ=$HOST_TZ
+fi
 
-# Update user and group ID to match host
-sudo usermod -u $HOST_UID developer
-sudo groupmod -g $HOST_GID developer
+CONT_UID=$(id -u developer)
+CONT_GID=$(id -g developer)
+if [[ $CONT_UID -ne $HOST_UID ]] || [[ $CONT_GID -ne $HOST_GID ]]; then
+    # Update user and group ID to match host
+    sudo usermod -u $HOST_UID developer
+    sudo groupmod -g $HOST_GID developer
+    chown -R "$HOST_UID:$HOST_GID" /home/developer
+fi
 
 # Source ROS setup script
 source "/opt/custom_ws/install/setup.bash"
-exec "$@"
+
+WORKDIR=$(pwd)
+
+env | grep -v '^_' > /tmp/envvars
+
+exec su - developer -c "cd $WORKDIR && set -a && source /tmp/envvars && set +a && exec $*"
