@@ -48,4 +48,3 @@ services:
     environment:
       - CABOT_GAZEBO=0
       - CABOT_PRESSURE_AVAILABLE=0
-
