@@ -314,27 +314,32 @@ if __name__ == '__main__':
     args.add_argument("--search", action="store_true", help="Search from user query")
     args.add_argument("--use_default_query", action="store_true", help="Use default query")
     args.add_argument("--log_dir", type=str, help="Log directory")
+    args.add_argument("--video_dir", type=str, help="Path to the video directory")
+    args.add_argument("--save_dir", type=str, help="Path to the save directory")
+    args.add_argument("--annotation_dir", type=str, help="Path to the annotation directory")
+    args.add_argument("--image_dir", type=str, help="Path to the image directory")
+    args.add_argument("--gpt_dir", type=str, help="Path to the gpt directory")
     args = args.parse_args()
 
     if args.extract:
         # extract images from video; front, left, right
         print("Extracting images from front video")
         extract_images_from_video(
-            video_path="/data1/uehara/work_space/cabot/images/out_front.mp4",
-            output_dir="/home/uehara/data/work_space/cabot/images/log_frames_front",
-            annotation_file="/data1/uehara/work_space/cabot/gpt_captions/semantic_map/log.json"
+            video_path=f"{args.video_dir}/out_front.mp4",
+            output_dir=f"{args.save_dir}/log_frames_front",
+            annotation_file=f"{args.annotation_dir}/log.json"
         )
         print("Extracting images from left video")
         extract_images_from_video(
-            video_path="/data1/uehara/work_space/cabot/images/out_left.mp4",
-            output_dir="/home/uehara/data/work_space/cabot/images/log_frames_left",
-            annotation_file="/data1/uehara/work_space/cabot/gpt_captions/semantic_map/log.json"
+            video_path=f"{args.video_dir}/out_left.mp4",
+            output_dir=f"{args.save_dir}/log_frames_left",
+            annotation_file=f"{args.annotation_dir}/log.json"
         )
         print("Extracting images from right video")
         extract_images_from_video(
-            video_path="/data1/uehara/work_space/cabot/images/out_right.mp4",
-            output_dir="/home/uehara/data/work_space/cabot/images/log_frames_right",
-            annotation_file="/data1/uehara/work_space/cabot/gpt_captions/semantic_map/log.json"
+            video_path=f"{args.video_dir}/out_right.mp4",
+            output_dir=f"{args.save_dir}/log_frames_right",
+            annotation_file=f"{args.annotation_dir}/log.json"
         )
 
 
@@ -349,15 +354,15 @@ if __name__ == '__main__':
             )
         else:
             main(
-                images_dir="/home/uehara/data/work_space/cabot/images",
-                gpt_dir="/home/uehara/data/work_space/cabot/gpt_captions",
+                images_dir=args.image_dir,
+                gpt_dir=args.gpt_dir,
                 extract_images=args.extract_image_features,
                 extract_text=args.extract_text_features
             )
     
     if args.search:
         search(
-            image_dir="/home/uehara/data/work_space/cabot/images",
-            gpt_dir="/home/uehara/data/work_space/cabot/gpt_captions",
+            image_dir=args.image_dir,
+            gpt_dir=args.gpt_dir,
             use_default_query=args.use_default_query
         )
