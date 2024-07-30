@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import logging
 import requests
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List, Union
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, UInt8, UInt8MultiArray, Int8, Int16, Float32, String
@@ -13,6 +13,8 @@ import json
 import pickle
 from transformers import AutoTokenizer, AutoModel, AutoImageProcessor
 import argparse
+import textwrap
+import re
 
 from test_semantic import main as build_semantic_map
 from test_semantic import extract_text_feature
@@ -147,8 +149,29 @@ def search(user_query: str, log_dir: str, use_default_query: bool = False):
 
 def direction_or_search(response: str) -> str:
     # Check if the response is a direction query or a search query
-    # not implemented
-    return "direction"
+    if response == "":
+        return "direction"
+    else:
+        return "search"
+
+
+def extract_json_part(json_like_string: str) -> Optional[Dict[str, Any]]:
+    # Regular expression to match JSON part
+    json_pattern = re.compile(r'\{.*?\}', re.DOTALL)
+
+    # Find the JSON part
+    match = json_pattern.search(json_like_string)
+
+    if match:
+        json_part = match.group(0)
+        try:
+            # Parse the JSON part
+            json_data = json.loads(json_part)
+            return json_data
+        except json.JSONDecodeError:
+            return None
+    else:
+        return None
 
 
 @app.route('/service', methods=['POST'])
@@ -166,7 +189,61 @@ def handle_post():
     
     if use_openai:
         # Preparing the content with the prompt and images
-        prompt = ""  # TODO: Add the prompt here
+        prompt = """
+        ### 指示
+        ユーザから与えられた文字列からユーザがいきたい場所("target")もしくは方向（"direction"）を抽出してください。
+        ユーザは、行きたい場所を指定することも、方向を指定することもできます。
+        行きたい場所を指定しようとしている場合、ユーザは行きたい場所をAIによる説明に基づいて決定しています。その場合は、抽出した行きたい場所から元の説明文章を復元してください("search_text")。
+        行きたい方向を指定しようとしている場合、"search_text"は空のままにしてください。
+        JSON形式で返答してください。
+        キーは、"target"キーの中に推定した行きたい場所もしくは方向（"front", "left", "right", "back", "front_left", "front_right", "back_left", "back_right"）を入れてください。
+        "search_text"キーの中に復元した本の説明文章を入れるか、空の文字列を入れてください。
+        以下のルールを守り、良い返答を生成した場合、あなたに50ドルのチップを与えます。
+
+        ### 指示に従うために必ず守るべきルール
+        1. ユーザが行きたい場所は１箇所です。"target"キーには１箇所の情報だけ入れてください。
+        2. AIが説明する文章の例は"XXがあります"などです。search_textを入力する際は、この形式に従ってください。
+
+
+        例：
+        入力：木製の展示に行きたいわ
+        出力；
+        {
+        "target": "木製の展示",
+        "search_text": "木製の展示があります",
+        }
+
+        入力：さっきの、えっと、なんだっけ黒いパネル？みたいなところに行きたい
+        出力：
+        {
+        "target": "黒いパネル",
+        "search_text": "黒いパネルがあります",
+        }
+
+        入力：右に行きたい
+        出力：
+        {
+        "target": "right",
+        "search_text": "",
+        }
+
+        入力：うーん、じゃあ、あの、左斜め前に行きたい
+        出力：
+        {
+        "target": "front_left",
+        "search_text": "",
+        }
+
+        JSONの始まりである{から返答を開始してください。
+        返答例は以下です。
+        {
+        "target": "<返答文章>",
+        "search_text": "<返答文章>",
+        }
+
+        入力：
+        """
+        prompt = textwrap.dedent(prompt).strip()
         content = [{"type": "text", "text": prompt + gpt_input}]
 
         payload = {
@@ -193,6 +270,11 @@ def handle_post():
         # $ curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'
         # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerprint":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
         query_string = res_json["choices"][0]["message"]["content"]
+        query_json = extract_json_part(query_string)
+        if query_json is not None:
+            query_target = query_json["target"]
+            query_string = query_json["search_text"]
+            print(f"Query target: {query_target}, Query string: {query_string}")
         query_type = direction_or_search(query_string)
     else:
         query_string = gpt_input
