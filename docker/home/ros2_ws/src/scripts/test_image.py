@@ -458,8 +458,12 @@ class GPTExplainer:
         }
 
         try:
+            print("Sending the request to OpenAI API...")
+            request_start = time.time()
             response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
             res_json = response.json()
+            request_elapsed = time.time() - request_start
+            print(f"Received response ({request_elapsed:.3f}s)")
         except Exception as e:
             print(f"Error message: {e}")
             res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
@@ -515,10 +519,10 @@ def main(
             # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
             # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
             if intersection_detection_mode and rcl_publisher.cabot_nav_state != "paused":
-                print("Not paused. Skip explaining.")
+                print(f"current state: {rcl_publisher.cabot_nav_state}; not paused. Skip explaining")
                 time.sleep(1.0)
             elif (semantic_map_mode or surronding_explain_mode) and rcl_publisher.cabot_nav_state != "running":
-                print("Not running. Skip explaining.")
+                print(f"current state: {rcl_publisher.cabot_nav_state}; not running. Skip explaining.")
                 time.sleep(1.0)
             else:
                 gpt_explainer = GPTExplainer(

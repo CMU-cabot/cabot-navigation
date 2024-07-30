@@ -8,11 +8,12 @@ import cabot_msgs.srv
 
 
 class Speaker(object):
-    def __init__(self, node: Node):
+    def __init__(self, node: Node, debug: bool = False):
         self._node = node
         self.lang = node.declare_parameter("language", "en").value
         # Comment out for debug
-        # self.speak('hello world ')
+        if debug:
+            self.speak('hello world!hello world!hello world!hello world!hello world!hello world!hello world!こんにちは')
 
     def speak(self, text, force=True, pitch=50, volume=50, rate=50):
         if text is None:
@@ -58,4 +59,4 @@ def speak_text(text: str):
 if __name__ == '__main__':
     rclpy.init()
     node = Node('speaker', start_parameter_services=False)
-    speaker = Speaker(node=node)
+    speaker = Speaker(node=node, debug=True)

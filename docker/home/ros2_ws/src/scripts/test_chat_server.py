@@ -177,7 +177,7 @@ def extract_json_part(json_like_string: str) -> Optional[Dict[str, Any]]:
 @app.route('/service', methods=['POST'])
 def handle_post():
     data = request.json
-    use_openai = False
+    use_openai = args.use_openai
 
     logging.info(data)
 
@@ -270,32 +270,58 @@ def handle_post():
         # $ curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'
         # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerprint":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
         query_string = res_json["choices"][0]["message"]["content"]
+        print(f"openai response: {query_string}")
         query_json = extract_json_part(query_string)
         if query_json is not None:
             query_target = query_json["target"]
-            query_string = query_json["search_text"]
-            print(f"Query target: {query_target}, Query string: {query_string}")
-        query_type = direction_or_search(query_string)
+            search_text = query_json["search_text"]
+            print(f"Query target: {query_target}, Search Text: {search_text}")
+        query_type = direction_or_search(search_text)
+        query_string = query_target
     else:
         query_string = gpt_input
         query_type = "search"
     
-    if query_type == "search":
-        odom = search(query_string, args.log_dir)
-        query_string = f"{odom[0]},{odom[1]}"
-
-    rclpy.init()
-    rcl_publisher = RosQueryNode(query_type, query_string)
-
-    try:
-        rclpy.spin(rcl_publisher)
-    except SystemExit as e:
-        print(e)
-    rcl_publisher.destroy_node()
-    rclpy.try_shutdown()
-
     
-    return jsonify(rcl_publisher.query_message)
+    navi = False
+    dest_info = None
+    response = {
+        "output": {
+            "log_messages":[],
+            "text": []
+        },
+        "intents":[],
+        "entities":[],
+        "context":{
+            "navi": navi,
+            "dest_info": dest_info,
+            "system":{
+                "dialog_request_counter":0
+            }
+        }
+    }
+    if query_string == "":
+        print("skip chat")
+        response["output"]["text"] = ["はじめ"]
+        return jsonify(response)
+    else:
+        if query_type == "search":
+            odom = search(query_string, args.log_dir)
+            query_string = f"{odom[0]},{odom[1]}"
+
+        rclpy.init()
+        rcl_publisher = RosQueryNode(query_type, query_string)
+
+        try:
+            rclpy.spin(rcl_publisher)
+        except SystemExit as e:
+            print(e)
+        rcl_publisher.destroy_node()
+        rclpy.try_shutdown()
+
+        response["output"]["text"] = [rcl_publisher.query_message]
+        print(f"response: {response}")
+        return jsonify(response)
 
 
 if __name__ == '__main__':
@@ -304,4 +330,4 @@ if __name__ == '__main__':
     parser.add_argument("--log_dir", type=str, help="Log directory")
     args = parser.parse_args()
 
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5050)

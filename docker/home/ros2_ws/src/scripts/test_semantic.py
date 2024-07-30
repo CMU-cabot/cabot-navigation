@@ -77,6 +77,8 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
             with open(image_feature_path, "rb") as f:
                 image_feature_dict = pickle.load(f)
             already_extracted_image_paths: Set[str] = set(image_feature_dict.get("image_file_key", []))
+        else:
+            already_extracted_image_paths = set()
         image_paths = [
             x for x in image_paths
               if os.path.dirname(x).split("/")[-1] not in already_extracted_image_paths
@@ -140,10 +142,13 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
         text_feature_path = f"{log_dir}/text_features.pickle"
         already_extracted_text_paths = set()
         if os.path.exists(text_feature_path):
-            print(f"loading pre-extracted text features ...")
+            print(f"loading pre-extracted text features from {text_feature_path} ...")
             with open(text_feature_path, "rb") as f:
                 text_feature_dict = pickle.load(f)
             already_extracted_text_paths: Set[str] = set(text_feature_dict.get("text_file_key", []))
+        else:
+            text_feature_dict = None
+            already_extracted_text_paths = set()
 
         if log_dir is None:
             annos_path = f"{gpt_dir}/semantic_map/log.json"
@@ -190,6 +195,9 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
             text_file_keys = text_feature_dict.get("text_file_key", []) + image_dirs
             print(image_dirs)
             texts = text_feature_dict.get("texts", []) + [anno["description"] for anno in annos]
+        else:
+            texts = [anno["description"] for anno in annos]
+            text_file_keys = image_dirs
 
         if gpt_dir is not None:
             text_feature_path = f"{gpt_dir}/text_features.pickle"
