@@ -101,8 +101,12 @@ class CaBotImageNode(Node):
 
         self.odom = None
 
-        transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-        self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
+        self.cabot_nav_state = ""
+        # cabot nav state subscriber
+        self.cabot_nav_state_sub = self.create_subscription(String, "/cabot/nav_state", self.cabot_nav_state_callback, 10)
+
+        # transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        # self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
         
         self.image_front_sub = message_filters.Subscriber(self, Image, self.front_camera_topic_name)
         # self.depth_front_sub = message_filters.Subscriber(self, Image, self.front_depth_topic_name)
@@ -117,21 +121,18 @@ class CaBotImageNode(Node):
         
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
-
+    
+    def cabot_nav_state_callback(self, msg: String):
+        self.cabot_nav_state = msg.data
+        self.get_logger().info(f"cabot nav state: {self.cabot_nav_state}")
+        # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-        print("image callback")
+        print(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
         left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
         right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
-        print("front", type(front_image), front_image.shape)
-        print("left", type(left_image), left_image.shape)
-        print("right", type(right_image), right_image.shape)
-        # save the image
-        cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
-        cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
-        cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
 
         # # convert the depth message to image
         # bridge = CvBridge()
@@ -156,8 +157,6 @@ class CaBotImageNode(Node):
         quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
         roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
         odom = np.array([msg_odom.pose.pose.position.x, msg_odom.pose.pose.position.y, yaw])
-        np.save(f"{self.log_dir}/odom.npy", odom)
-        print(f"odom saved: {self.log_dir}/odom.npy")
 
         # register as class variables
         self.front_image = front_image
@@ -174,7 +173,19 @@ class CaBotImageNode(Node):
         self.right_marker_detected = self.detect_marker(right_image)
 
         # finish the node
-        sys.exit(0)
+        if self.cabot_nav_state != "":
+            print("front", type(front_image), front_image.shape)
+            print("left", type(left_image), left_image.shape)
+            print("right", type(right_image), right_image.shape)
+            # save the image
+            cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
+            cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
+            cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
+
+            np.save(f"{self.log_dir}/odom.npy", odom)
+            print(f"odom saved: {self.log_dir}/odom.npy")
+
+            sys.exit(0)
     
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -202,11 +213,16 @@ class GPTExplainer:
             semantic_map_mode: bool,
             intersection_detection_mode: bool,
             surronding_explain_mode: bool,
-            should_speak: bool = False
+            should_speak: bool = False,
+            dummy: bool = False
         ):
-        self.api_key = os.environ.get('OPENAI_API_KEY')
-        if self.api_key is None:
-            raise ValueError("Please set the OPENAI_API_KEY environment variable.")
+        self.dummy = dummy
+        if dummy:
+            self.api_key = "dummy"
+        else:
+            self.api_key = os.environ.get('OPENAI_API_KEY')
+            if self.api_key is None:
+                raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
         self.semantic_map_mode = semantic_map_mode
         self.intersection_detection_mode = intersection_detection_mode
@@ -320,6 +336,8 @@ class GPTExplainer:
         self.right_available = True
 
         self.should_speak = should_speak
+
+        self.wait_time = 0.0
     
     # Function to encode the image
     def encode_image(self, image):
@@ -339,6 +357,9 @@ class GPTExplainer:
         return image
 
     def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray) -> str:
+        if self.dummy:
+            print("This is a dummy explanation.")
+            return
         # resize images max width 512
         front_image = self.resize_images(front_image, max_width=768)
         left_image = self.resize_images(left_image, max_width=768)
@@ -361,21 +382,23 @@ class GPTExplainer:
         extracted_json = self.extract_json_part(gpt_response["choices"][0]["message"]["content"])
         if extracted_json is None:
             print("Could not extract JSON part from the response.")
-        
-        if self.intersection_detection_mode:
-            self.front_available = extracted_json.get("front", True)
-            self.left_available = extracted_json.get("left", True)
-            self.right_available = extracted_json.get("right", True)
-            try:
-                gpt_response["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
-            except KeyError:
-                print("Could not extract the explanation from the response.")
-                gpt_response["description"] = ""
+            gpt_response["description"] = "不具合が発生しました。"
         else:
-            gpt_response["description"] = extracted_json["description"]
+            if self.intersection_detection_mode:
+                self.front_available = extracted_json.get("front", True)
+                self.left_available = extracted_json.get("left", True)
+                self.right_available = extracted_json.get("right", True)
+                try:
+                    gpt_response["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
+                except KeyError:
+                    print("Could not extract the explanation from the response.")
+                    gpt_response["description"] = "不具合が発生しました。"
+            else:
+                gpt_response["description"] = extracted_json["description"]
         gpt_response["log_dir"] = self.log_dir
 
         if self.should_speak:
+            self.wait_time = self.calculate_speak_time(gpt_response["description"])
             speak_text(gpt_response["description"])
 
         # add the explanation to an existing file
@@ -392,6 +415,11 @@ class GPTExplainer:
         print(">>>>>>>")
         print(gpt_response)
         print("<<<<<<<")
+    
+    def calculate_speak_time(self, text: str) -> float:
+        # calculate the time to speak the text
+        # 1 character takes 0.1 seconds
+        return len(text) * 0.1
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # Regular expression to match JSON part
@@ -452,7 +480,8 @@ def main(
         is_sim: bool = False,
         semantic_map_mode: bool = False,
         intersection_detection_mode: bool = False,
-        surronding_explain_mode: bool = False
+        surronding_explain_mode: bool = False,
+        should_speak: bool = False
     ) -> Dict[str, Any]:
     print("Starting the image node...")
     timestamp = datetime.datetime.now().strftime("%m%d-%H%M%S")
@@ -483,34 +512,50 @@ def main(
 
         # generate explanation
         if not no_explain_mode:
-            gpt_explainer = GPTExplainer(
-                log_dir=log_dir,
-                semantic_map_mode=semantic_map_mode,
-                intersection_detection_mode=intersection_detection_mode,
-                surronding_explain_mode=surronding_explain_mode
-            )
-            gpt_explainer.explain(rcl_publisher.front_image, rcl_publisher.left_image, rcl_publisher.right_image)
+            # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
+            # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
+            if intersection_detection_mode and rcl_publisher.cabot_nav_state != "paused":
+                print("Not paused. Skip explaining.")
+                time.sleep(1.0)
+            elif (semantic_map_mode or surronding_explain_mode) and rcl_publisher.cabot_nav_state != "running":
+                print("Not running. Skip explaining.")
+                time.sleep(1.0)
+            else:
+                gpt_explainer = GPTExplainer(
+                    log_dir=log_dir,
+                    semantic_map_mode=semantic_map_mode,
+                    intersection_detection_mode=intersection_detection_mode,
+                    surronding_explain_mode=surronding_explain_mode,
+                    should_speak=should_speak,
+                    dummy=True if is_sim else False
+                )
+                gpt_explainer.explain(rcl_publisher.front_image, rcl_publisher.left_image, rcl_publisher.right_image)
 
-        print("Availability of each direction")
-        print(f"Front marker : {rcl_publisher.front_marker_detected}")
-        print(f"Left marker  : {rcl_publisher.left_marker_detected}")
-        print(f"Right marker : {rcl_publisher.right_marker_detected}")
-        if not no_explain_mode:
-            print(f"Front available (GPT) : {gpt_explainer.front_available}")
-            print(f"Left available (GPT)  : {gpt_explainer.left_available}")
-            print(f"Right available (GPT) : {gpt_explainer.right_available}")
-        if once:
-            return {
-                "front_marker": rcl_publisher.front_marker_detected,
-                "left_marker": rcl_publisher.left_marker_detected,
-                "right_marker": rcl_publisher.right_marker_detected,
-                "front_available": gpt_explainer.front_available,
-                "left_available": gpt_explainer.left_available,
-                "right_available": gpt_explainer.right_available
-            }
-        else:
-            print("Waiting for the next image...")
-            time.sleep(5)
+                if intersection_detection_mode:
+                    print("Availability of each direction")
+                    print(f"Front marker : {rcl_publisher.front_marker_detected}")
+                    print(f"Left marker  : {rcl_publisher.left_marker_detected}")
+                    print(f"Right marker : {rcl_publisher.right_marker_detected}")
+                    if not no_explain_mode:
+                        print(f"Front available (GPT) : {gpt_explainer.front_available}")
+                        print(f"Left available (GPT)  : {gpt_explainer.left_available}")
+                        print(f"Right available (GPT) : {gpt_explainer.right_available}")
+                if once:
+                    return {
+                        "front_marker": rcl_publisher.front_marker_detected,
+                        "left_marker": rcl_publisher.left_marker_detected,
+                        "right_marker": rcl_publisher.right_marker_detected,
+                        "front_available": gpt_explainer.front_available,
+                        "left_available": gpt_explainer.left_available,
+                        "right_available": gpt_explainer.right_available
+                    }
+                else:
+                    print("Waiting for the next image...")
+                    if surronding_explain_mode:
+                        # we need to avoid overlapping the speaking time
+                        time.sleep(max(gpt_explainer.wait_time, 5.0))
+                    else:
+                        time.sleep(5.0)
 
 
 if __name__ == "__main__":
@@ -524,6 +569,10 @@ if __name__ == "__main__":
     parser.add_argument("--sim", action="store_true", help="Use the simulation environment")
     parser.add_argument("--speak", action="store_true", help="Speak the generated text")
     args = parser.parse_args()
+
+    # in semantic map mode, we should not use speak option
+    if args.semantic_map and args.speak:
+        raise ValueError("In semantic map mode, we should not use the speak option.")
 
     main(
         no_explain_mode=args.no_explain, 
