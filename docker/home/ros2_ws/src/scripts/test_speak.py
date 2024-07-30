@@ -41,6 +41,7 @@ class Speaker(object):
             speak_proxy.call_async(request)
             # CaBotRclpyUtil.info("speak requested")
         except InvalidServiceNameException as e:
+            print(f"Service call failed: {e}")
             pass
             # CaBotRclpyUtil.error(F"Service call failed: {e}")
 

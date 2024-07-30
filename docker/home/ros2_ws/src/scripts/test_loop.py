@@ -41,7 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("--image", "-i", action="store_true", help="Generate explanation from images")
     parser.add_argument("--log_dir", "-l", type=str, help="Log directory")
     parser.add_argument("--sim", "-s", action="store_true", help="Simulator mode")
-    parser.add_argument("--fkeyboard", "-k", action="store_true", help="Keyboard mode")
+    parser.add_argument("--keyboard", "-k", action="store_true", help="Keyboard mode")
     args = parser.parse_args()
 
     maps = []
