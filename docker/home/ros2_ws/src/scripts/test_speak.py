@@ -13,7 +13,7 @@ class Speaker(object):
         self.lang = node.declare_parameter("language", "en").value
         # Comment out for debug
         if debug:
-            self.speak('hello world!hello world!hello world!hello world!hello world!hello world!hello world!こんにちは')
+            self.speak('hello world!こんにちは')
 
     def speak(self, text, force=True, pitch=50, volume=50, rate=50):
         if text is None:

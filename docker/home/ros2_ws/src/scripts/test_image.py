@@ -523,7 +523,7 @@ def main(
         try:
             rclpy.spin(rcl_publisher)
         except SystemExit as e:
-            print(e)
+            print(f"finished rclpy node")
         
         rcl_publisher.destroy_node()
         rclpy.try_shutdown()
@@ -542,7 +542,7 @@ def main(
                     intersection_detection_mode=intersection_detection_mode,
                     surronding_explain_mode=surronding_explain_mode,
                     should_speak=should_speak,
-                    dummy=True if is_sim else False
+                    # dummy=True if is_sim else False
                 )
                 gpt_explainer.explain(rcl_publisher.front_image, rcl_publisher.left_image, rcl_publisher.right_image)
 

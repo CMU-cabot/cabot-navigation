@@ -217,7 +217,7 @@ def handle_post():
             if data["input"]["text"]:
                 gpt_input = data["input"]["text"]
     
-    if use_openai:
+    if use_openai and gpt_input != "":
         # Preparing the content with the prompt and images
         prompt = """
         ### 指示
