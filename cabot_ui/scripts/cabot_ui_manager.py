@@ -529,15 +529,24 @@ class CabotUIManager(NavigationInterface, object):
         elif event.subtype == "right":
             self._interface.exploring_direction("right")
             self._exploration.send_query("direction","right")
-        if event.subtype == "idle":
-            self._logger.info("NavigationState: Pause control = True")
-            self._interface.set_pause_control(True)
-            self._navigation.set_pause_control(True)
+        if event.subtype == "switch":
+            pause_control = self._exploration.get_pause_control()
+            if pause_control:
+                self._logger.info("NavigationState: Pause control = False")
+                self._interface.set_pause_control(False)
+                self._navigation.set_pause_control(False)
+                self._exploration.set_pause_control(False)
+            else:
+                self._logger.info("NavigationState: Pause control = True")
+                self._interface.set_pause_control(True)
+                self._navigation.set_pause_control(True)
+                self._exploration.set_pause_control(True)
 
 
 class EventMapper(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
+        self.mode = "exploration"
 
     def push(self, event):
         # state = self._manager.state
@@ -548,8 +557,12 @@ class EventMapper(object):
 
         mevent = None
 
-        # simplify the control
-        # TODO: change the mapping function ased on the state of the robot
+        # Commented out the code below to enable switching between exploration and navigation modes
+        # if self.mode == "exploration":
+        #     mevent = self.map_button_to_exploration(event)
+        # elif self.mode == "navigation":
+        #     mevent = self.map_button_to_navigation(event)
+
         mevent = self.map_button_to_exploration(event)
 
         '''
@@ -590,7 +603,8 @@ class EventMapper(object):
             if event.button == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
             if event.button == cabot_common.button.BUTTON_CENTER:
-                return NavigationEvent(subtype="decision")
+                self.mode = "exploration"
+                return None
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="idle")
@@ -616,10 +630,11 @@ class EventMapper(object):
             if event.button == cabot_common.button.BUTTON_RIGHT:
                 return ExplorationEvent(subtype="right")
             if event.button == cabot_common.button.BUTTON_CENTER:
-                return ExplorationEvent(subtype="decision")
+                self.mode = "navigation"
+                return None
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
-                return ExplorationEvent(subtype="idle")
+                return ExplorationEvent(subtype="switch")
 
         return None
 

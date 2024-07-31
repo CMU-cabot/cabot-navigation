@@ -28,6 +28,7 @@ class Exploration():
 
         super(Exploration, self).__init__()
         self.node = node
+        self.pause = False
         self.publisher = self.node.create_publisher(String, '/cabot/user_query', 10)
 
     def send_query(self, query_type, query_string):
@@ -35,3 +36,9 @@ class Exploration():
         msg.data = f"{query_type};{query_string}"
         self.publisher.publish(msg)
         self.node.get_logger().info(f"Published: {msg.data}")
+
+    def set_pause_control(self, pause):
+        self.pause = pause
+
+    def get_pause_control(self):
+        return self.pause
