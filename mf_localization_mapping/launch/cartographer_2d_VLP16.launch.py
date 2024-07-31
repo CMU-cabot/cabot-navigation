@@ -27,10 +27,13 @@ from launch.actions import ExecuteProcess
 from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
 from launch.conditions import IfCondition
+from launch.conditions import LaunchConfigurationEquals
+from launch.conditions import LaunchConfigurationNotEquals
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import PythonExpression
 from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions
 
@@ -38,7 +41,9 @@ from launch.utilities import normalize_to_list_of_substitutions
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization_mapping')
 
+    use_sim_time = LaunchConfiguration('use_sim_time')
     robot = LaunchConfiguration('robot')
+    cabot_model = LaunchConfiguration('cabot_model')
     # topic
     scan = LaunchConfiguration('scan')
     imu = LaunchConfiguration('imu')
@@ -124,7 +129,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('robot', default_value='rover'),
+        DeclareLaunchArgument('cabot_model', default_value=''),
         # topic
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
         DeclareLaunchArgument('imu', default_value='imu/data'),
@@ -141,16 +148,43 @@ def generate_launch_description():
         DeclareLaunchArgument('save_state_directory', default_value=''),
         DeclareLaunchArgument('save_state_filestem', default_value=''),
 
+        # use cabot_model argument if specified
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
             name='robot_state_publisher',
             parameters=[{
+                'use_sim_time': use_sim_time,
+                'publish_frequency': 100.0,
+                'robot_description': ParameterValue(
+                    # xacro cabot_description/share/cabot_description/robots/cabot_model.urdf.xacro.xml sim:=use_sim_time
+                    Command(['xacro ',
+                             PathJoinSubstitution([
+                                get_package_share_directory('cabot_description'),
+                                'robots',
+                                PythonExpression(['"', cabot_model, '.urdf.xacro.xml', '"'])
+                                ]),
+                            ' sim:=', use_sim_time]),
+                    value_type=str
+                )
+            }],
+            condition=LaunchConfigurationNotEquals("cabot_model", "")
+        ),
+
+        # use urdf in pkg_dir if cabot_model is not specified
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'publish_frequency': 100.0,
                 'robot_description': ParameterValue(
                     Command(['cat ', pkg_dir, '/urdf/', robot, '.urdf']),
                     value_type=str
                 )
-            }]
+            }],
+            condition=LaunchConfigurationEquals("cabot_model", "")
         ),
 
         # wrap with a OpaqueFunction to enable conditional arguments which is not possible with usual way

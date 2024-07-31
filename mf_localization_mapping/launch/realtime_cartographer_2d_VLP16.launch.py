@@ -49,6 +49,7 @@ from launch.utilities import normalize_to_list_of_substitutions
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization_mapping')
     robot = LaunchConfiguration('robot')
+    cabot_model = LaunchConfiguration('cabot_model')
     run_cartographer = LaunchConfiguration('run_cartographer')
     record_bag = LaunchConfiguration('record_bag')
     prefix = LaunchConfiguration('prefix')
@@ -116,6 +117,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('robot', default_value='rover'),
+        DeclareLaunchArgument('cabot_model', default_value=''),
         DeclareLaunchArgument('run_cartographer', default_value='true'),
         DeclareLaunchArgument('record_bag', default_value='true'),
         DeclareLaunchArgument('prefix', default_value='sensor'),
@@ -193,6 +195,7 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(PathJoinSubstitution([pkg_dir, 'launch', 'cartographer_2d_VLP16.launch.py'])),
                 launch_arguments={
                     "robot": robot,
+                    "cabot_model": cabot_model,
                     "scan": scan,
                     "configuration_basename": configuration_basename,
                     "load_state_filename": load_state_filename,

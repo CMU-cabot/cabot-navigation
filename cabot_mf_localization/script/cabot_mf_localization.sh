@@ -402,7 +402,22 @@ if [ $cart_mapping -eq 1 ]; then
         fi
     fi
 
-    cmd="$command ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
+    # find robot description from cabot_description package
+    robot_desc_pkg_share_dir=`ros2 pkg prefix --share cabot_description`
+    robot_xacro=$robot_desc_pkg_share_dir/robots/$robot.urdf.xacro.xml
+    cabot_model=""
+    # if robot_xacro is not found,
+    if [ -e $robot_xacro ]; then
+        echo "robot xacro found. use cabot_model:=$robot. (robot_xacro=$robot_xacro)"
+        cabot_model=$robot
+    else
+        red "robot xacro NOT found. use robot:=$robot instead. (robot_xacro=$robot_xacro)"
+        cabot_model=""
+    fi
+
+    # build cmd
+    cmd="$command"
+    cmd="$cmd ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
           run_cartographer:=${RUN_CARTOGRAPHER:-true} \
           record_wireless:=true \
           save_samples:=true \
@@ -413,9 +428,14 @@ if [ $cart_mapping -eq 1 ]; then
           use_esp32:=${USE_ESP32:-false} \
           use_velodyne:=${USE_VELODYNE:-true} \
           imu_topic:=${imu_topic} \
-          robot:=$robot_desc \
           use_sim_time:=$gazebo_bool \
-          bag_filename:=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S` $commandpost"
+          bag_filename:=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S`"
+    if [ $cabot_model != "" ]; then
+        cmd="$cmd cabot_model:=$cabot_model"
+    else
+        cmd="$cmd robot:=$robot"
+    fi
+    cmd="$cmd $commandpost"
     echo $cmd
     eval $cmd
     pids+=($!)
@@ -435,7 +455,7 @@ if [ $navigation -eq 0 ]; then
     launch_file="multi_floor_2d_rss_localization.launch.py"
     echo "launch $launch_file"
     com="$command ros2 launch mf_localization $launch_file \
-                    robot:=$robot_desc \
+                    robot:=$robot \
                     map_config_file:=$map \
                     with_odom_topic:=true \
                     beacons_topic:=$beacons_topic \
@@ -479,7 +499,7 @@ else
                     publish_current_rate:=$publish_current_rate \
                     cmd_vel_topic:=$cmd_vel_topic \
                     $lplanner $gplanner \
-                    robot:=$robot_desc \
+                    robot:=$robot \
                     with_human:=$with_human \
                     $commandpost"
     echo $com

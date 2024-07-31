@@ -29,6 +29,7 @@ from launch.actions import IncludeLaunchDescription
 from launch.actions import OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.conditions import IfCondition
+from launch.conditions import LaunchConfigurationEquals
 from launch.conditions import LaunchConfigurationNotEquals
 from launch.substitutions import Command
 from launch.substitutions import LaunchConfiguration
@@ -47,6 +48,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     robot = LaunchConfiguration('robot')
+    cabot_model = LaunchConfiguration('cabot_model')
 
     convert_points = LaunchConfiguration('convert_points')
     convert_imu = LaunchConfiguration('convert_imu')
@@ -121,6 +123,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
 
         DeclareLaunchArgument('robot', default_value='rover'),
+        DeclareLaunchArgument('cabot_model', default_value=''),
 
         DeclareLaunchArgument('convert_points', default_value='false'),
         DeclareLaunchArgument('convert_imu', default_value='false'),
@@ -279,16 +282,42 @@ def generate_launch_description():
         ]),
 
         # publish robot model
+        # use cabot_model argument if specified
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
             name='robot_state_publisher',
             parameters=[{
+                'use_sim_time': use_sim_time,
+                'publish_frequency': 100.0,
+                'robot_description': ParameterValue(
+                    # xacro cabot_description/share/cabot_description/robots/cabot_model.urdf.xacro.xml sim:=use_sim_time
+                    Command(['xacro ',
+                             PathJoinSubstitution([
+                                get_package_share_directory('cabot_description'),
+                                'robots',
+                                PythonExpression(['"', cabot_model, '.urdf.xacro.xml', '"'])
+                                ]),
+                            ' sim:=', use_sim_time]),
+                    value_type=str
+                )
+            }],
+            condition=LaunchConfigurationNotEquals("cabot_model", "")
+        ),
+        # use urdf in pkg_dir if cabot_model is not specified
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'publish_frequency': 100.0,
                 'robot_description': ParameterValue(
                     Command(['cat ', pkg_dir, '/urdf/', robot, '.urdf']),
                     value_type=str
                 )
-            }]
+            }],
+            condition=LaunchConfigurationEquals("cabot_model", "")
         ),
 
         # /velodyne_packets to /velodyne_points
