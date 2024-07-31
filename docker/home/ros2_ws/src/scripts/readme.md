@@ -29,8 +29,11 @@ cabot-navigation$ ./launch.sh -e
 ```
 
 
-
 ## GPT-4oでのテキスト生成関連
+0. docker containerの起動
+```shell
+cabot-ros2/cabot-navigation$ docker compose exec navigation bash
+```
 
 1. ロボットのstate control
 まずはこれを実行し、ロボットのstateを管理する（手動操作時）
@@ -60,6 +63,11 @@ python3 test_image.py --log_dir logs/<exp name> -i [--sim] [--speak]
 
 
 ## 対話システム関連
+0. docker containerの起動
+```shell
+cabot-ros2/cabot-navigation$ docker compose exec navigation bash
+```
+
 1. 対話サーバー（iPhone -> cabot）の起動
 ```shell
 ~/ros2_ws/src $ python3 test_chat_server.py [--use_openai] --log_dir logs/<exp name>
@@ -67,6 +75,11 @@ python3 test_image.py --log_dir logs/<exp name> -i [--sim] [--speak]
 
 
 ## navigation関連
+0. docker containerの起動
+```shell
+cabot-ros2/cabot-navigation$ docker compose exec navigation bash
+```
+
 1. trajectory記録スクリプトの起動
 ```shell
 ~/ros2_ws/src $ python3 test_trajectory.py --log_dir logs/<exp name>
@@ -79,7 +92,7 @@ python3 test_image.py --log_dir logs/<exp name> -i [--sim] [--speak]
 
 3. navigationスクリプトの起動
 ```shell
-~/ros2_ws/src $ python3 test_loop.y -d [-f] -i [-t] --log_dir <exp_name> [--sim] [-a] [-k]
+~/ros2_ws/src $ python3 test_loop.py -d [-f] -i [-t] --log_dir <exp_name> [--sim] [-a] [-k]
 ```
 - `-d` : distance filter; 距離が近すぎる・遠すぎる目的地を除外
 - `-f` : forbidden filter; 禁止エリアを除外。禁止判定は、前・右・左のカメラがとらえた画像をもとに行われる。どれかのカメラにマーカーが写っている、もしくはGPTによる画像説明で「通行不可」判定がなされると、その方向で、ロボットから8m先の場所を中心とする半径4mの円が禁止エリアとして登録される。
@@ -90,7 +103,7 @@ python3 test_image.py --log_dir logs/<exp name> -i [--sim] [--speak]
 - `-k` : 次の目的地設定をキーボードから行う。これが有効になっていない場合、`/cabot/user_query` トピックに対して、次の目的地を設定するクエリを送信することで次の目的地を設定することができる。このクエリは、`test_chat_server.py` が起動しているときに、iPhoneから送信することができる。
   - その他のクエリの投げ方
     - curl
-      - `curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'` 
+      - `curl -X POST http://127.0.0.1:5050/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'` 
       - `curl -X POST http://127.0.0.1:5050/service -H "Content-Type: application/json" -d '{"input":{"text": "right"}}'` 
     - 直接ros2のトピックに対して送信（`std_msgs/String`型のデータを送信）
       - `ros2 topic pub /cabot/user_query std_msgs/String "data: direction;front" --once` 
