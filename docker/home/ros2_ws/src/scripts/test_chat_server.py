@@ -317,8 +317,8 @@ def handle_post():
         query_target = gpt_input  # same as gpt_input; e.g., right, left, front, back
     
     
-    navi = False
-    dest_info = None
+    navi = True
+    dest_info = {"nodes": []}
     response = {
         "output": {
             "log_messages":[],
@@ -330,7 +330,7 @@ def handle_post():
             "navi": navi,
             "dest_info": dest_info,
             "system":{
-                "dialog_request_counter":0
+                "dialog_request_counter": 0
             }
         }
     }
