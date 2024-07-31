@@ -52,18 +52,19 @@ class CabotQueryNode(Node):
         
         print(f"Query received: {self.query_type}, {self.query_string}")
         
-        if self.query_type != "direction":
-            print(f"query type '{self.query_type}' is not supported in this script currently; please use 'data: direction;front' format instead")
-        else:
-            if self.query_type != "direction":
-                print(f"query type '{self.query_type}' is not supported in this script currently; please use 'data: direction;front' format instead")
-                return
+        if self.query_type == "direction":
             if self.query_string not in self.candidates:
                 self.get_logger().info(f"Invalid direction: {self.query_string}; please select from {self.candidates}")
                 speak_text(f"指定された{self.dir_to_jp[self.query_string]}方向には進めないようです。")
             else:
                 # finish the node
                 sys.exit(0)
+        elif self.query_type == "search":
+            print("get search query")
+            # finish the node
+            sys.exit(0)
+        else:
+            print(f"query type '{self.query_type}' is not supported in this script currently; please use 'data: direction;front' format instead")
 
 
 def publish_nav_state(state_str):
@@ -212,9 +213,11 @@ if __name__ == "__main__":
                 if query_node.query_type == "direction":
                     selected_dir = query_node.query_string
                     selected_dir = "".join([x[0] for x in selected_dir.split("_")])
-                else:
+                elif query_node.query_type == "search":
                     selected_dir = "coordinates"
                     y, x = query_node.query_string.split(",")
+                else:
+                    print(f"query type '{query_node.query_type}' is not supported!")
         else:
             selected_dir = "none"
 
@@ -267,7 +270,10 @@ if __name__ == "__main__":
             "back_left": "左後ろ",
             "back_right": "右後ろ"
         }
-        speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
+        if output_direction == "coordinates":
+            speak_text(f"次は、指定された座標、およそ{dist:.2f}メートル先に進みます。")
+        else:
+            speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
         # return output_point, cand_filter.forbidden_area_centers
         
         print(f"Exploring next point: {output_point}\n")
