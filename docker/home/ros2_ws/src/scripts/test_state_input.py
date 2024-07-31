@@ -35,6 +35,11 @@ class StateInput:
         msg.data = self.state_str
         self.state_pub.publish(msg)
         self.node.get_logger().info(f"State published: {msg.data}")
+    
+    def set_state(self, state_str):
+        self.state_str = state_str
+        self.state_idx = self.state_to_idx[self.state_str]
+        self.publish_state()
 
 
 if __name__ == '__main__':

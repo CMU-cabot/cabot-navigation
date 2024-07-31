@@ -48,12 +48,19 @@ class Speaker(object):
 
 
 def speak_text(text: str):
-    rclpy.init()
+    if not rclpy.ok():
+        reinit = True
+    else:
+        reinit = False
+    
+    if reinit:
+        rclpy.init()
     node = Node('speaker', start_parameter_services=False)
     speaker = Speaker(node=node)
     speaker.speak(text)
     node.destroy_node()
-    rclpy.shutdown()
+    if reinit:
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
