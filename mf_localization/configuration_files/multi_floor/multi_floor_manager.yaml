@@ -25,7 +25,7 @@ multi_floor_manager:
     floor_queue_size: 5
     global_map_frame: map_global
     odom_frame: odom_cart
-    published_frame: base_link
+    published_frame: base_control_shift
     # initial localization
     min_beacons_floor: 1
     min_beacons_local: 1
