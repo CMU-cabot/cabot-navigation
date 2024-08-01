@@ -110,6 +110,17 @@ fi
 : ${CABOT_PRESSURE_AVAILABLE:=0}
 : ${CABOT_USE_GNSS:=0}
 
+# ntrip client parameters
+: ${GNSS_NODE_START_AT_LAUNCH:=1}
+: ${NTRIP_CLIENT_START_AT_LAUNCH:=0}
+: ${NTRIP_CLIENT:=ntrip_client}
+: ${NTRIP_HOST:=}
+: ${NTRIP_PORT:=}
+: ${NTRIP_MOUNTPOINT:=}
+: ${NTRIP_AUTHENTIFICATE:=}
+: ${NTRIP_USERNAME:=}
+: ${NTRIP_STR2STR_RELAY_BACK:=0}
+
 gazebo=$CABOT_GAZEBO
 site=$CABOT_SITE
 show_rviz=$CABOT_SHOW_LOC_RVIZ
@@ -273,13 +284,79 @@ if [ $gazebo -eq 1 ]; then
     echo "${pids[@]}"
   fi
 else
-  # launch ublox node
-  echo "launch ublox node helpers"
-  cmd="$command ros2 launch mf_localization ublox-zed-f9p.launch.xml \
-                    $commandpost"
-  echo $cmd
-  eval $cmd
-  pids+=($!)
+    # launch ntrip client and/or ublox node
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
+        # if NTRIP_HOST exists in environment variables, use it.
+        # if not, load NTRIP_HOST from CABOT_SITE package
+        if [ "${NTRIP_HOST}" = "" ]; then
+            echo "NTRIP_HOST does not exist in environment variables. load NTRIP_HOST from CABOT_SITE package"
+            if [ "${CABOT_SITE}" != "" ]; then
+                sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
+                source $sitedir/config/rtk_config.sh
+            fi
+        fi
+
+        # check if NTRIP_HOST is defined.
+        if [ "${NTRIP_HOST}" = "" ]; then
+            while [ 1 -eq 1 ]
+            do
+            red "You need to specify NTRIP_HOST or CABOT_SITE environment variable"
+            snore 1
+            done
+        fi
+    fi
+
+    # ntrip client
+    ntrip_client_arg=""
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
+        if [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
+            # launch str2str_node
+            ntrip_client_arg="str2str_node:=true"
+        elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
+            # launch ntrip_client
+            ntrip_client_arg="ntrip_client:=true"
+        fi
+    else
+        if [ "${NTRIP_CLIENT}" = "str2str_node" ]; then
+            # launch str2str_node
+            ntrip_client_arg="str2str_node_logger:=true"
+        elif [ "${NTRIP_CLIENT}" = "ntrip_client" ]; then
+            # launch ntrip_client
+            ntrip_client_arg="ntrip_client_logger:=true"
+        fi
+    fi
+
+    # gnss node
+    gnss_arg=""
+    if [ ${GNSS_NODE_START_AT_LAUNCH} -eq 1 ]; then
+        gnss_arg="ublox_node:=true"
+    else
+        gnss_arg="ublox_node_logger:=true"
+    fi
+
+    # gnss.launch.py command
+    cmd=""
+    if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
+        cmd="$command ros2 launch mf_localization gnss.launch.py \
+                $ntrip_client_arg \
+                $gnss_arg \
+                host:=$NTRIP_HOST \
+                port:=$NTRIP_PORT \
+                mountpoint:=$NTRIP_MOUNTPOINT \
+                authentificate:=$NTRIP_AUTHENTIFICATE \
+                username:=$NTRIP_USERNAME \
+                password:=$NTRIP_PASSWORD \
+                relay_back:=$NTRIP_STR2STR_RELAY_BACK \
+                $commandpost"
+    else
+        cmd="$command ros2 launch mf_localization gnss.launch.py \
+                $ntrip_client_arg \
+                $gnss_arg \
+                $commandpost"
+    fi
+    echo $cmd
+    eval $cmd
+    pids+=($!)
 fi
 
 gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\
@@ -294,11 +371,53 @@ if [ $show_rviz -eq 1 ]; then
    pids+=($!)
 fi
 
+# mapping
 if [ $cart_mapping -eq 1 ]; then
     if [[ $gazebo -eq 0 ]]; then
         imu_topic=/imu/data
     fi
-    cmd="$command ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
+
+    # switch lidar if specified
+    LIDAR_MODEL=${LIDAR_MODEL:-VLP16}
+    echo "LIDAR_MODEL=$LIDAR_MODEL"
+    if [ "${LIDAR_MODEL}" != "VLP16" ]; then
+        USE_VELODYNE=false
+        if [ "${LIDAR_MODEL}" = "XT32" ] || [ "${LIDAR_MODEL}" = "XT16" ]; then
+            if [ "${LIDAR_MODEL}" = "XT32" ]; then
+                model_for_lidar=cabot3-m1
+            elif [ "${LIDAR_MODEL}" = "XT16" ]; then
+                model_for_lidar=cabot3-m2
+            fi
+            echo "launch node for $LIDAR_MODEL"
+            cmd="$command ros2 launch cabot_base hesai_lidar.launch.py \
+                model:=$model_for_lidar \
+                pandar:=/velodyne_points \
+                $commandpost"
+            echo $cmd
+            eval $cmd
+            pids+=($!)
+        else
+            echo "Please specify a known lidar model (LIDAR_MODEL=$LIDAR_MODEL)"
+            exit
+        fi
+    fi
+
+    # find robot description from cabot_description package
+    robot_desc_pkg_share_dir=`ros2 pkg prefix --share cabot_description`
+    robot_xacro=$robot_desc_pkg_share_dir/robots/$robot.urdf.xacro.xml
+    cabot_model=""
+    # if robot_xacro is not found,
+    if [ -e $robot_xacro ]; then
+        echo "robot xacro found. use cabot_model:=$robot. (robot_xacro=$robot_xacro)"
+        cabot_model=$robot
+    else
+        red "robot xacro NOT found. use robot:=$robot instead. (robot_xacro=$robot_xacro)"
+        cabot_model=""
+    fi
+
+    # build cmd
+    cmd="$command"
+    cmd="$cmd ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
           run_cartographer:=${RUN_CARTOGRAPHER:-true} \
           record_wireless:=true \
           save_samples:=true \
@@ -309,9 +428,14 @@ if [ $cart_mapping -eq 1 ]; then
           use_esp32:=${USE_ESP32:-false} \
           use_velodyne:=${USE_VELODYNE:-true} \
           imu_topic:=${imu_topic} \
-          robot:=$robot_desc \
           use_sim_time:=$gazebo_bool \
-          bag_filename:=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S` $commandpost"
+          bag_filename:=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S`"
+    if [ $cabot_model != "" ]; then
+        cmd="$cmd cabot_model:=$cabot_model"
+    else
+        cmd="$cmd robot:=$robot"
+    fi
+    cmd="$cmd $commandpost"
     echo $cmd
     eval $cmd
     pids+=($!)
@@ -331,7 +455,7 @@ if [ $navigation -eq 0 ]; then
     launch_file="multi_floor_2d_rss_localization.launch.py"
     echo "launch $launch_file"
     com="$command ros2 launch mf_localization $launch_file \
-                    robot:=$robot_desc \
+                    robot:=$robot \
                     map_config_file:=$map \
                     with_odom_topic:=true \
                     beacons_topic:=$beacons_topic \
@@ -375,7 +499,7 @@ else
                     publish_current_rate:=$publish_current_rate \
                     cmd_vel_topic:=$cmd_vel_topic \
                     $lplanner $gplanner \
-                    robot:=$robot_desc \
+                    robot:=$robot \
                     with_human:=$with_human \
                     $commandpost"
     echo $com

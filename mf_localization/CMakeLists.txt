@@ -57,6 +57,7 @@ install(PROGRAMS
   script/tf2_beacons_listener.py
   script/tf2_listener.py
   script/trajectory_restarter.py
+  script/str2str_node.py
   script/ublox_converter.py
   script/wireless_rss_localizer_node.py
   script/wireless_rss_localizer.py

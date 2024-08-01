@@ -22,6 +22,7 @@
 
 <robot name="cabot2-gtm">
 
+  <link name="base_control_shift" />
   <link name="base_link" />
   <link name="velodyne" />
   <link name="imu" />
@@ -29,6 +30,12 @@
   <link name="imu_frame_xsens" />
   <link name="imu_link" />
   <link name="gps" />
+
+  <joint name="control_center_joint" type="fixed">
+    <parent link="base_control_shift" />
+    <child link="base_link" />
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+  </joint>
 
   <joint name="velodyne_joint" type="fixed">
     <parent link="base_link" />

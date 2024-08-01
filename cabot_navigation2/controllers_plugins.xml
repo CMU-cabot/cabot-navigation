@@ -26,5 +26,9 @@
 	   base_class_type="nav2_core::Controller">
       <description>Custmozied Rotation Shim Controller</description>
     </class>
+    <class type="cabot_navigation2::CaBotDWBLocalPlanner"
+	   base_class_type="nav2_core::Controller">
+      <description>Custmozied DWB Local Planner</description>
+    </class>
   </library>
 </class_libraries>

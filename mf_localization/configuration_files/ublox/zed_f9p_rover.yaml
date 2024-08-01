@@ -16,3 +16,4 @@ ublox:
       all: false
       nav:
         all: true
+      nmea: true

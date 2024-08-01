@@ -49,6 +49,7 @@ from launch.utilities import normalize_to_list_of_substitutions
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization_mapping')
     robot = LaunchConfiguration('robot')
+    cabot_model = LaunchConfiguration('cabot_model')
     run_cartographer = LaunchConfiguration('run_cartographer')
     record_bag = LaunchConfiguration('record_bag')
     prefix = LaunchConfiguration('prefix')
@@ -77,6 +78,8 @@ def generate_launch_description():
     # launch configurations updated in the launch description
     bag_filename_fullpath = LaunchConfiguration('bag_filename_fullpath')
     saved_location = LaunchConfiguration('saved_location')
+    save_state_directory = LaunchConfiguration('save_state_directory')
+    save_state_filestem = LaunchConfiguration('save_state_filestem')
 
     def configure_ros2_bag_arguments(context, node):
         cmd = node.cmd.copy()
@@ -88,24 +91,33 @@ def generate_launch_description():
         else:
             cmd.append('-a')
         saved_location_temp = []
+        save_state_directory_temp = [EnvironmentVariable('HOME'), '/recordings/']
+        save_state_filestem_temp = []
         if bag_filename.perform(context) == '':
-            saved_location_temp = [EnvironmentVariable('HOME'), '/recordings/', prefix, datetime.datetime.now().strftime("_%Y_%m_%d-%H_%M_%S")]
+            now_string = datetime.datetime.now().strftime("_%Y_%m_%d-%H_%M_%S")
+            save_state_filestem_temp = [prefix, now_string]
+            saved_location_temp = save_state_directory_temp + save_state_filestem_temp
             cmd.extend(['-o', saved_location_temp])
         else:
-            saved_location_temp = [EnvironmentVariable('HOME'), '/recordings/', bag_filename]
+            save_state_filestem_temp = [bag_filename]
+            saved_location_temp = save_state_directory_temp + save_state_filestem_temp
             cmd.extend(['-o', saved_location_temp])
         node.cmd.clear()
         node.cmd.extend([normalize_to_list_of_substitutions(x) for x in cmd])
         return [node,
                 SetLaunchConfiguration('bag_filename_fullpath', saved_location_temp),
                 SetLaunchConfiguration('saved_location', ['./docker/home']+saved_location_temp[1:]),
+                SetLaunchConfiguration('save_state_directory', save_state_directory_temp),
+                SetLaunchConfiguration('save_state_filestem', save_state_filestem_temp),
                 ]
 
     ros2_bag_process = ExecuteProcess(
         cmd=["ros2", "bag", "record"]
     )
+
     return LaunchDescription([
         DeclareLaunchArgument('robot', default_value='rover'),
+        DeclareLaunchArgument('cabot_model', default_value=''),
         DeclareLaunchArgument('run_cartographer', default_value='true'),
         DeclareLaunchArgument('record_bag', default_value='true'),
         DeclareLaunchArgument('prefix', default_value='sensor'),
@@ -183,12 +195,16 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(PathJoinSubstitution([pkg_dir, 'launch', 'cartographer_2d_VLP16.launch.py'])),
                 launch_arguments={
                     "robot": robot,
+                    "cabot_model": cabot_model,
                     "scan": scan,
                     "configuration_basename": configuration_basename,
                     "load_state_filename": load_state_filename,
                     "save_state_filename": save_state_filename,
                     "start_trajectory_with_default_topics": start_trajectory_with_default_topics,
-                    "imu": imu_topic
+                    "imu": imu_topic,
+                    "convert_pbstream": "true",
+                    "save_state_directory": save_state_directory,
+                    "save_stete_filestem": save_state_filestem,
                 }.items(),
                 condition=IfCondition(run_cartographer)
             ),
@@ -225,5 +241,8 @@ def generate_launch_description():
                     ]
                 )
             ),
-        ], condition=UnlessCondition(AndSubstitution(use_xsens, use_arduino)))
+            ],
+            scoped=False,  # disable scoping to allow registered events to have access to locally update launch configurations
+            condition=UnlessCondition(AndSubstitution(use_xsens, use_arduino))
+        )
     ])

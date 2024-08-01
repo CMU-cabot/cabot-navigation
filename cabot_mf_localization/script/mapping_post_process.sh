@@ -51,6 +51,19 @@ if [ "$robot" = "" ]; then
 fi
 blue "using CABOT_MODEL=$CABOT_MODEL in post processing"
 
+# find robot description from cabot_description package
+robot_desc_pkg_share_dir=`ros2 pkg prefix --share cabot_description`
+robot_xacro=$robot_desc_pkg_share_dir/robots/$robot.urdf.xacro.xml
+cabot_model=""
+# if robot_xacro is not found,
+if [ -e $robot_xacro ]; then
+    echo "robot xacro found. use cabot_model:=$robot. (robot_xacro=$robot_xacro)"
+    cabot_model=$robot
+else
+    red "robot xacro NOT found. use robot:=$robot instead. (robot_xacro=$robot_xacro)"
+    cabot_model=""
+fi
+
 if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted ]]; then
     ros2 launch mf_localization_mapping convert_rosbag_for_cartographer.launch.py \
 	      points2:=${points2_topic} \
@@ -68,11 +81,15 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json ]] || [[ ! 
 	      save_state:=true \
 	      points2:=${points2_topic} \
 	      imu:=${imu_topic} \
-	      robot:=${robot} \
 	      delay:=10 \
 	      rate:=${PLAYBAG_RATE_CARTOGRAPHER} \
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
 	      bag_filename:=$WORKDIR/${BAG_FILENAME}.carto-converted"
+    if [ $cabot_model != "" ]; then
+        com="$com cabot_model:=$cabot_model"
+    else
+        com="$com robot:=$robot"
+    fi
     echo $com
     eval $com
 else

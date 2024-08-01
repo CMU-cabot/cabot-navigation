@@ -352,7 +352,7 @@ class MultiFloorManager:
         self.global_map_frame = "map"
         self.local_map_frame = "map"
         self.odom_frame = "odom"
-        self.published_frame = "base_link"
+        self.published_frame = "base_control_shift"
         self.base_link_frame = "base_link"
         self.global_position_frame = "base_link"  # frame_id to compute global position
         # unknown frame to temporarily cut a TF tree
