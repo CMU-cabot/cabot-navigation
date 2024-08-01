@@ -53,6 +53,7 @@ def generate_launch_description():
     convert_imu = LaunchConfiguration('convert_imu')
     convert_esp32 = LaunchConfiguration('convert_esp32')
     robot = LaunchConfiguration('robot')
+    cabot_model = LaunchConfiguration('cabot_model')
     wireless_topics = LaunchConfiguration('wireless_topics')
     rate = LaunchConfiguration('rate')
     start = LaunchConfiguration('start')
@@ -112,6 +113,7 @@ def generate_launch_description():
         DeclareLaunchArgument('convert_imu', default_value='false'),
         DeclareLaunchArgument('convert_esp32', default_value='false'),
         DeclareLaunchArgument('robot', default_value='rover'),
+        DeclareLaunchArgument('cabot_model', default_value='cabot_model'),
         DeclareLaunchArgument('wireless_topics', default_value="['/wireless/beacons','/wireless/wifi','/beacons','/esp32/wifi']"),
         DeclareLaunchArgument('rate', default_value='1.0'),
         DeclareLaunchArgument('start', default_value='0'),
@@ -137,6 +139,7 @@ def generate_launch_description():
             AnyLaunchDescriptionSource(PathJoinSubstitution([pkg_dir, 'launch', 'cartographer_2d_VLP16.launch.py'])),
             launch_arguments={
                 'robot': robot,
+                'cabot_model': cabot_model,
                 'scan': scan,
                 'points2': points2,
                 'imu': imu,
