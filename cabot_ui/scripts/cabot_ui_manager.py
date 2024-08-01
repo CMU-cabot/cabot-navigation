@@ -529,7 +529,11 @@ class CabotUIManager(NavigationInterface, object):
         elif event.subtype == "right":
             self._interface.exploring_direction("right")
             self._exploration.send_query("direction","right")
-        if event.subtype == "switch":
+        elif event.subtype == "auto_mode_switch":
+            self._interface.exploring_auto_mode_switch()
+            self._exploration.send_query("auto_mode_switch","")
+
+        if event.subtype == "wheel_switch":
             pause_control = self._exploration.get_pause_control()
             if pause_control:
                 self._logger.info("NavigationState: Pause control = False")
@@ -603,7 +607,6 @@ class EventMapper(object):
             if event.button == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
             if event.button == cabot_common.button.BUTTON_CENTER:
-                self.mode = "exploration"
                 return None
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
@@ -630,11 +633,10 @@ class EventMapper(object):
             if event.button == cabot_common.button.BUTTON_RIGHT:
                 return ExplorationEvent(subtype="right")
             if event.button == cabot_common.button.BUTTON_CENTER:
-                self.mode = "navigation"
-                return None
+                return ExplorationEvent(subtype="auto_mode_switch")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
-                return ExplorationEvent(subtype="switch")
+                return ExplorationEvent(subtype="wheel_switch")
 
         return None
 
