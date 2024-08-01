@@ -33,7 +33,7 @@ from launch_ros.descriptions import ParameterFile
 
 
 def generate_launch_description():
-    pkg_dir = get_package_share_directory('cabot')
+    pkg_dir = get_package_share_directory('cabot_ui')
 
     gamepad = LaunchConfiguration('gamepad')
 
@@ -41,7 +41,7 @@ def generate_launch_description():
         ParameterFile(PathJoinSubstitution([
                 pkg_dir,
                 'config',
-                'cabot2-common-remote.yaml'
+                'cabot2-common-mapping.yaml'
             ]), allow_substs=True
         ),
     ]
