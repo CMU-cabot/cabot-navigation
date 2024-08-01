@@ -54,9 +54,12 @@ This script will output the current local costmap to `local_costmap.npy` file.
 
 
 class CaBotImageNode(Node):
-    def __init__(self, log_dir: str = ".", is_sim: bool = False, use_left: bool = True, use_right: bool = True):
+    def __init__(self, log_dir: str = ".", is_sim: bool = False, use_left: bool = True, use_right: bool = True, valid_state: str = ""):
         print("Initializing CaBotImageNode...")
+        assert valid_state != "", "Please set the valid state."
         super().__init__("cabot_map_node")
+        
+        self.valid_state = valid_state
         self.log_dir = log_dir
 
         if is_sim:
@@ -128,6 +131,8 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
+        if self.cabot_nav_state != self.valid_state:
+            return
         print(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
@@ -485,7 +490,8 @@ def main(
         semantic_map_mode: bool = False,
         intersection_detection_mode: bool = False,
         surronding_explain_mode: bool = False,
-        should_speak: bool = False
+        should_speak: bool = False,
+        debug: bool = False
     ) -> Dict[str, Any]:
     print("Starting the image node...")
     timestamp = datetime.datetime.now().strftime("%m%d-%H%M%S")
@@ -502,14 +508,22 @@ def main(
     log_dir = f"{log_dir}/{timestamp}{postfix}_images"
     os.makedirs(log_dir, exist_ok=True)
     print(f"Saving images to {log_dir}")
+
+    if surronding_explain_mode or semantic_map_mode:
+        valid_state = "running"
+    elif intersection_detection_mode:
+        valid_state = "paused"
+    else:
+        raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
     
     while True:
-        rclpy.init()
-        rcl_publisher = CaBotImageNode(log_dir=log_dir, is_sim=is_sim)
+        if not rclpy.ok():
+            rclpy.init()
+        rcl_publisher = CaBotImageNode(log_dir=log_dir, is_sim=is_sim, valid_state=valid_state)
         try:
             rclpy.spin(rcl_publisher)
         except SystemExit as e:
-            print(e)
+            print(f"finished rclpy node")
         
         rcl_publisher.destroy_node()
         rclpy.try_shutdown()
@@ -518,11 +532,8 @@ def main(
         if not no_explain_mode:
             # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
             # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
-            if intersection_detection_mode and rcl_publisher.cabot_nav_state != "paused":
-                print(f"current state: {rcl_publisher.cabot_nav_state}; not paused. Skip explaining")
-                time.sleep(1.0)
-            elif (semantic_map_mode or surronding_explain_mode) and rcl_publisher.cabot_nav_state != "running":
-                print(f"current state: {rcl_publisher.cabot_nav_state}; not running. Skip explaining.")
+            if rcl_publisher.cabot_nav_state != valid_state:
+                print(f"current state: {rcl_publisher.cabot_nav_state}; not {valid_state}. Skip explaining")
                 time.sleep(1.0)
             else:
                 gpt_explainer = GPTExplainer(
@@ -531,7 +542,7 @@ def main(
                     intersection_detection_mode=intersection_detection_mode,
                     surronding_explain_mode=surronding_explain_mode,
                     should_speak=should_speak,
-                    dummy=True if is_sim else False
+                    # dummy=True if is_sim else False
                 )
                 gpt_explainer.explain(rcl_publisher.front_image, rcl_publisher.left_image, rcl_publisher.right_image)
 
@@ -544,6 +555,17 @@ def main(
                         print(f"Front available (GPT) : {gpt_explainer.front_available}")
                         print(f"Left available (GPT)  : {gpt_explainer.left_available}")
                         print(f"Right available (GPT) : {gpt_explainer.right_available}")
+                
+                if debug:
+                    # randomly decide the values
+                    print("random mode; setting the values randomly")
+                    rcl_publisher.front_marker_detected = np.random.choice([True, False])
+                    rcl_publisher.left_marker_detected = np.random.choice([True, False])
+                    rcl_publisher.right_marker_detected = np.random.choice([True, False])
+                    gpt_explainer.front_available = np.random.choice([True, False])
+                    gpt_explainer.left_available = np.random.choice([True, False])
+                    gpt_explainer.right_available = np.random.choice([True, False])
+                
                 if once:
                     return {
                         "front_marker": rcl_publisher.front_marker_detected,

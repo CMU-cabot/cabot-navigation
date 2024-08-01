@@ -26,11 +26,26 @@ app = Flask(__name__)
 
 
 class RosQueryNode(Node):
-    def __init__(self, query_type, query_string):
+    def __init__(self, query_type, query_string, user_query_message: str):
         super().__init__("user_query_node")
         self.query_pub = self.create_publisher(String, "/cabot/user_query", 10)
         self.query_type = query_type  # search or direction
         self.query_string = query_string
+        # user_query_message は、ユーザーの入力をGPTでいい感じに整形したもの
+        # e.g., "右", "木製の展示", "黒いパネル"
+        self.user_query_message = user_query_message
+
+        self.dir_to_jp = {
+            "front": "前",
+            "left": "左",
+            "right": "右",
+            "back": "後ろ",
+            "front_left": "左前",
+            "front_right": "右前",
+            "back_left": "左後ろ",
+            "back_right": "右後ろ"
+        }
+
         self.timer = self.create_timer(1.0, self.timer_callback)
 
         self.query_message = ""
@@ -45,6 +60,15 @@ class RosQueryNode(Node):
 
         self.query_pub.publish(query_msg)
         self.get_logger().info(f"Query published: {query_msg.data}")
+
+        if self.query_type == "search":
+            self.query_message = f"ご要望いただいた{self.user_query_message}の場所を検索いたしましたので、ご案内します。"
+        elif self.query_type == "direction":
+            dir_jp = self.dir_to_jp.get(self.query_string, self.query_string)
+            self.query_message = f"ご要望いただいた{dir_jp}の方向に進みます。"
+        else:
+            self.query_message = f"入力に何か問題がありそうです。もう一度入力してください。"
+
         sys.exit(0)
 
 
@@ -121,19 +145,25 @@ def search(user_query: str, log_dir: str, use_default_query: bool = False):
     text_odoms = text_features_and_texts["odoms"]
     text_pre_features = torch.from_numpy(text_features).to(device)
     # torch.Size([76, 1, 1024]) -> torch.Size([76, 1024])
-    text_pre_features = text_pre_features.squeeze(1)
+    if len(text_pre_features.shape) == 3:
+        text_pre_features = text_pre_features.squeeze(1)
+        # 2.3 get text features
+        text_input_feature = extract_text_feature(user_query, tokenizer, model, device, return_tensors=True)
+        # 2.4 get similarity
+        similarity = (text_input_feature @ text_pre_features.T).softmax(dim=-1).cpu().numpy().squeeze()
+        max_sim_idx = np.argmax(similarity)
+        print(f"similar text for {user_query} is: {max_sim_idx} ({texts[max_sim_idx]}) at {text_odoms[max_sim_idx]} with similarity {similarity[max_sim_idx]}")
 
-    # 2.3 get text features
-    text_input_feature = extract_text_feature(user_query, tokenizer, model, device, return_tensors=True)
-    # 2.4 get similarity
-    similarity = (text_input_feature @ text_pre_features.T).softmax(dim=-1).cpu().numpy().squeeze()
-    max_sim_idx = np.argmax(similarity)
-    print(f"similar text for {user_query} is: {max_sim_idx} ({texts[max_sim_idx]}) at {text_odoms[max_sim_idx]} with similarity {similarity[max_sim_idx]}")
-
-    sims["text"] = {
-        "odom": text_odoms[max_sim_idx],
-        "similarity": similarity[max_sim_idx]
-    }
+        sims["text"] = {
+            "odom": text_odoms[max_sim_idx],
+            "similarity": similarity[max_sim_idx]
+        }
+    else:
+        print(f"text_pre_features.shape: {text_pre_features.shape}")
+        sims["text"] = {
+            "odom": None,
+            "similarity": -10.0
+        }
 
     # get max similarity
     max_sim = 0.0
@@ -187,7 +217,7 @@ def handle_post():
             if data["input"]["text"]:
                 gpt_input = data["input"]["text"]
     
-    if use_openai:
+    if use_openai and gpt_input != "":
         # Preparing the content with the prompt and images
         prompt = """
         ### 指示
@@ -197,7 +227,6 @@ def handle_post():
         行きたい方向を指定しようとしている場合、"search_text"は空のままにしてください。
         JSON形式で返答してください。
         キーは、"target"キーの中に推定した行きたい場所もしくは方向（"front", "left", "right", "back", "front_left", "front_right", "back_left", "back_right"）を入れてください。
-        "search_text"キーの中に復元した本の説明文章を入れるか、空の文字列を入れてください。
         以下のルールを守り、良い返答を生成した場合、あなたに50ドルのチップを与えます。
 
         ### 指示に従うために必ず守るべきルール
@@ -275,16 +304,21 @@ def handle_post():
         if query_json is not None:
             query_target = query_json["target"]
             search_text = query_json["search_text"]
-            print(f"Query target: {query_target}, Search Text: {search_text}")
-        query_type = direction_or_search(search_text)
-        query_string = query_target
+            query_type = direction_or_search(search_text)
+            query_string = query_target
+            print(f"query type: {query_type}, query target: {query_target}, search text: {search_text}")
+        else:
+            query_type = "failed"
+            query_target = "unknown"
+            query_string = "failed"
     else:
         query_string = gpt_input
-        query_type = "search"
+        query_type = "direction"
+        query_target = gpt_input  # same as gpt_input; e.g., right, left, front, back
     
     
-    navi = False
-    dest_info = None
+    navi = True
+    dest_info = {"nodes": []}
     response = {
         "output": {
             "log_messages":[],
@@ -296,21 +330,23 @@ def handle_post():
             "navi": navi,
             "dest_info": dest_info,
             "system":{
-                "dialog_request_counter":0
+                "dialog_request_counter": 0
             }
         }
     }
     if query_string == "":
         print("skip chat")
         response["output"]["text"] = ["はじめ"]
-        return jsonify(response)
+    elif query_type == "failed":
+        print("failed to extract JSON")
+        response["output"]["text"] = ["入力を理解できませんでした。もう一度入力してください。"]
     else:
         if query_type == "search":
             odom = search(query_string, args.log_dir)
             query_string = f"{odom[0]},{odom[1]}"
 
         rclpy.init()
-        rcl_publisher = RosQueryNode(query_type, query_string)
+        rcl_publisher = RosQueryNode(query_type, query_string, user_query_message=query_target)
 
         try:
             rclpy.spin(rcl_publisher)
@@ -319,15 +355,17 @@ def handle_post():
         rcl_publisher.destroy_node()
         rclpy.try_shutdown()
 
+
         response["output"]["text"] = [rcl_publisher.query_message]
         print(f"response: {response}")
-        return jsonify(response)
+    print(f"response: {response['output']['text']}")
+    return jsonify(response)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_openai", action="store_true")
-    parser.add_argument("--log_dir", type=str, help="Log directory")
+    parser.add_argument("--log_dir", type=str, help="Log directory", required=True)
     args = parser.parse_args()
 
     app.run(host='0.0.0.0', port=5050)

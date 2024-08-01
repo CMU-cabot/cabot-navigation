@@ -22,22 +22,16 @@ class StateControl:
         # self.node.get_logger().info(f"State received: {self.state_str}")
     
     def timer_callback(self):
-        # self.state_update()
         self.publish_state()
     
     def run(self):
         # self.node.get_logger().info("State control started")
         rclpy.spin(self.node)
     
-    def state_update(self):
-        self.state_idx = (self.state_idx + 1) % 3
-        self.state_str = self.idx_to_state[self.state_idx]
-    
     def publish_state(self):
         msg = String()
         msg.data = self.state_str
         self.state_pub.publish(msg)
-        # self.node.get_logger().info(f"State published: {msg.data}")
 
 
 

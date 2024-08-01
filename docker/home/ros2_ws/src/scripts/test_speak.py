@@ -13,7 +13,7 @@ class Speaker(object):
         self.lang = node.declare_parameter("language", "en").value
         # Comment out for debug
         if debug:
-            self.speak('hello world!hello world!hello world!hello world!hello world!hello world!hello world!こんにちは')
+            self.speak('hello world!こんにちは')
 
     def speak(self, text, force=True, pitch=50, volume=50, rate=50):
         if text is None:
@@ -48,12 +48,19 @@ class Speaker(object):
 
 
 def speak_text(text: str):
-    rclpy.init()
+    if not rclpy.ok():
+        reinit = True
+    else:
+        reinit = False
+    
+    if reinit:
+        rclpy.init()
     node = Node('speaker', start_parameter_services=False)
     speaker = Speaker(node=node)
     speaker.speak(text)
     node.destroy_node()
-    rclpy.shutdown()
+    if reinit:
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
