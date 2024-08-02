@@ -210,13 +210,16 @@ local_costmap:
       low_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
+        min_obstacle_height: -2.0
+        max_obstacle_height: 2.0
         observation_sources: scan
         scan:
           topic: /local/livox_scan
-          min_obstacle_height: -100.0
-          max_obstacle_height: 100.0
-          obstacle_range: 4.0
-          raytrace_range: 5.0
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          obstacle_min_range: 0.05
+          obstacle_max_range: 4.0
+          raytrace_max_range: 5.0
           clearing: True
           marking: True
           inf_is_valid: True # default: False
@@ -265,13 +268,16 @@ global_costmap:
       low_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
+        min_obstacle_height: -2.0
+        max_obstacle_height: 2.0
         observation_sources: scan
         scan:
           topic: /local/livox_scan
-          min_obstacle_height: -100.0
-          max_obstacle_height: 100.0
-          obstacle_range: 8.0
-          raytrace_range: 8.0
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          obstacle_min_range: 0.05
+          obstacle_max_range: 7.5
+          raytrace_max_range: 8.0
           clearing: True
           marking: True
           inf_is_valid: True # default: False

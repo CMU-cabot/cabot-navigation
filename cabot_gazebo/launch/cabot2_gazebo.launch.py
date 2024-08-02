@@ -244,30 +244,41 @@ def generate_launch_description():
                 ]
             ),
 
-            Node(
-                package='pointcloud_to_laserscan',
-                executable='pointcloud_to_laserscan_node',
+            # crop Livox point cloud only for simulator becasue Livox simulator has noise at close area
+            ComposableNodeContainer(
+                name='livox_container',
                 namespace='',
-                name='livox_pointcloud_to_laserscan_node',
-                parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
-                remappings=[
-                    ('/cloud_in', '/livox/lidar_filtered'),
-                    ('/scan', '/livox_scan')
-                ],
-                condition=IfCondition(use_livox)
+                package='rclcpp_components',
+                executable='component_container',
+                composable_node_descriptions=[],
             ),
-
-            Node(
-                package='cabot_navigation2',
-                executable='livox_pointcloud_filter_node',
-                namespace='',
-                name='livox_pointcloud_filter_node',
-                parameters=[{
-                    'use_sim_time': use_sim_time,
-                    'xfer_format': 2,
-                    'input_topic': '/livox/lidar_PointCloud2',
-                    'output_topic': '/livox/lidar_filtered'
-                }],
+            LoadComposableNodes(
+                target_container='/livox_container',
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package='pcl_ros',
+                        plugin='pcl_ros::CropBox',
+                        namespace='',
+                        name='livox_crop_box_node',
+                        parameters=[{
+                            'use_sim_time': use_sim_time,
+                            'min_x': -0.3,
+                            'min_y': -0.3,
+                            'min_z': -0.3,
+                            'max_x': 0.3,
+                            'max_y': 0.3,
+                            'max_z': 0.3,
+                            'keep_organized': False,
+                            'negative': True,
+                            'input_frame': 'livox',
+                            'output_frame': 'livox',
+                        }],
+                        remappings=[
+                            ('/input',  '/livox/lidar_PointCloud2'),
+                            ('/output', '/livox/points')
+                        ]
+                    ),
+                ],
                 condition=IfCondition(use_livox)
             ),
 
