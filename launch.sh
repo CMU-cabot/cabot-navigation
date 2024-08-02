@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Copyright (c) 2021  IBM Corporation
+# Copyright (c) 2024  Miraikan - The National Museum of Emerging Science and Innovation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -110,6 +111,7 @@ function help()
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
+    echo "-i <title>  specify the title for the launch_metadata yaml file"
     echo "-y          do not confirm (deprecated - always launch server if there is no server)"
     echo "-u <options> unittest"
     echo "-v          verbose option"
@@ -131,6 +133,7 @@ debug=0
 log_dmesg=0
 yes=0
 run_test=0
+title=""
 module=tests
 test_regex=
 unittest=
@@ -148,7 +151,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDf:HlLMn:rsS:tT:uvy" arg; do
+while getopts "hDf:HlLMn:rsS:ti:T:uvy" arg; do
     case $arg in
         h)
             help
@@ -186,6 +189,9 @@ while getopts "hDf:HlLMn:rsS:tT:uvy" arg; do
             ;;
         t)
             run_test=1
+            ;;
+        i)
+            title=$OPTARG
             ;;
         T)
             module=$OPTARG
@@ -256,6 +262,9 @@ ln -snf $host_ros_log_dir $host_ros_log/latest
 blue "log dir is : $host_ros_log_dir"
 mkdir -p $host_ros_log_dir
 cp $scriptdir/.env $host_ros_log_dir/env-file
+
+## output launch_metadata yaml file
+./script/output_launch_metadata.sh -i ${title:-$log_name} -o $host_ros_log_dir
 
 ## if network interface name for Cyclone DDS is not specified, set autoselect as true
 if [ ! -z $CYCLONEDDS_URI ]; then

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 ###############################################################################
-# Copyright (c) 2024  Carnegie Mellon University
+# Copyright (c) 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -114,7 +114,7 @@ def wait_test(timeout=60):
 
 
 class Tester:
-    def __init__(self, node, output_dir):
+    def __init__(self, node, output_dir, test_module_name):
         self.node = node
         self.output_dir = output_dir
         self.done = False
@@ -130,6 +130,7 @@ class Tester:
         self.initialpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, '/initialpose', 1)
         self.set_entity_state_client = self.node.create_client(SetEntityState, '/gazebo/set_entity_state')
         self.test_func_name = None
+        self.test_module_name = test_module_name
         self.result = {}
         self.test_summary = {}
         self.evaluator_summary = {}
@@ -219,20 +220,20 @@ class Tester:
 
         with open(test_summary_path, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Test name", "Number of success", "Number of failure", "Success rate"])
+            writer.writerow(["Test module name", "Test case name", "Number of success", "Number of failure", "Success rate"])
             for test_name, counts in self.test_summary.items():
                 success_count = counts['success']
                 fail_count = counts['failure']
                 total_count = success_count + fail_count
                 success_rate = success_count / total_count if total_count > 0 else 0
-                writer.writerow([test_name, success_count, fail_count, f"{success_rate:.2f}"])
+                writer.writerow([self.test_module_name, test_name, success_count, fail_count, f"{success_rate:.2f}"])
 
         with open(test_evaluation_path, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Test name", "evaluator", "value"])
+            writer.writerow(["Test module name", "Test case name", "evaluator", "value"])
             for test_name, results in self.evaluator_summary.items():
                 for result in results:
-                    writer.writerow([test_name, result["name"], result["value"]])
+                    writer.writerow([self.test_module_name, test_name, result["name"], result["value"]])
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
@@ -1122,7 +1123,7 @@ def main():
     evaluator = Evaluator(node)
     evaluator.set_logger(logger)
 
-    tester = Tester(node, options.output_dir)
+    tester = Tester(node, options.output_dir, options.module)
     tester.set_evaluator(evaluator)
     try:
         mod = importlib.import_module(options.module)

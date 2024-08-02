@@ -1,4 +1,5 @@
 # Copyright (c) 2020, 2023  Carnegie Mellon University
+# Copyright (c) 2024  Miraikan - The National Museum of Emerging Science and Innovation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -121,7 +122,9 @@ RUN pip3 install --no-cache-dir \
 
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
-    'pysocialforce[test,plot]'
+    'pysocialforce[test,plot]' \
+    # for test aggregation
+    pandas
 
 # for debug
 # RUN apt update && \
