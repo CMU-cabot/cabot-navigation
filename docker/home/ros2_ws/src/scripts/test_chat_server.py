@@ -328,7 +328,7 @@ def handle_post():
             query_type = query_json.get("classification", "failed")
             if query_type == "search":
                 query_target = query_json["target_location"]
-                query_string = query_json["target"] + "があります"
+                query_string = query_target + "があります"
                 print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
             elif query_type == "direction":
                 query_target = query_json["target_direction"]
