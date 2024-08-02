@@ -65,7 +65,7 @@ def onUpdate(**args):
 
     if robot:
         rx = robot['x']
-        ry = robot['z']
+        ry = robot['y']
         x = args['x']
         y = args['y']
         dx = rx - x
