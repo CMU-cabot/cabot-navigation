@@ -28,12 +28,14 @@ find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(pcl_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io)
 
 # find dependencies for test
@@ -70,7 +72,10 @@ set(dependencies
   angles
   nav_msgs
   pluginlib
+  pcl_conversions
+  pcl_ros
   tf2
+  tf2_ros
   people_msgs
   queue_msgs
   sensor_msgs
@@ -168,6 +173,8 @@ ament_target_dependencies(livox_pointcloud_filter_node
   rclcpp
   sensor_msgs
   pcl_conversions
+  pcl_ros
+  tf2_ros
 )
 
 target_link_libraries(livox_pointcloud_filter_node

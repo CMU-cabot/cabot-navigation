@@ -37,6 +37,7 @@ from launch.event_handlers import OnProcessExit
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
 from launch.conditions import LaunchConfigurationNotEquals
+from launch.substitutions import AndSubstitution
 from launch.substitutions import Command
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import OrSubstitution
@@ -96,6 +97,7 @@ def generate_launch_description():
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
+    low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     gdb = LaunchConfiguration('gdb')
 
     gazebo_params = os.path.join(
@@ -109,6 +111,7 @@ def generate_launch_description():
     )
 
     use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
+    use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, ' > 0'])
 
     xacro_for_cabot_model = PathJoinSubstitution([
         get_package_share_directory('cabot_description'),
@@ -166,6 +169,11 @@ def generate_launch_description():
             'wireless_config_file',
             default_value='',
             description='wireless config file'
+        ),
+        DeclareLaunchArgument(
+            'low_obstacle_detect_version',
+            default_value=EnvironmentVariable('CABOT_LOW_OBSTABLE_DETECT_VERSION', default_value='0'),
+            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC'
         ),
         DeclareLaunchArgument(
             'gdb',
@@ -254,7 +262,7 @@ def generate_launch_description():
                     ('/cloud_in', '/livox/lidar_filtered'),
                     ('/scan', '/livox_scan')
                 ],
-                condition=IfCondition(use_livox)
+                condition=IfCondition(AndSubstitution(use_livox, use_low_obstacle_detect))
             ),
 
             Node(
@@ -264,11 +272,14 @@ def generate_launch_description():
                 name='livox_pointcloud_filter_node',
                 parameters=[{
                     'use_sim_time': use_sim_time,
+                    'low_obstacle_detect_version': low_obstacle_detect_version,
+                    'target_frame': 'livox_footprint',
                     'xfer_format': 2,
                     'input_topic': '/livox/lidar_PointCloud2',
-                    'output_topic': '/livox/lidar_filtered'
+                    'output_topic': '/livox/lidar_filtered',
+                    'clip_height': 0.05
                 }],
-                condition=IfCondition(use_livox)
+                condition=IfCondition(AndSubstitution(use_livox, use_low_obstacle_detect))
             ),
 
             IncludeLaunchDescription(
