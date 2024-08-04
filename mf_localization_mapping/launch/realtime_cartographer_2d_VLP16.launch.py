@@ -174,10 +174,16 @@ def generate_launch_description():
                 }.items(),
                 condition=IfCondition(use_velodyne)
             ),
+            # launch esp32 wifi receiver when esp32 is used as a primary micro controller
             IncludeLaunchDescription(
-                AnyLaunchDescriptionSource(PathJoinSubstitution([get_package_share_directory('wireless_scanner_ros'), 'launch', 'wifi_ble_receiver.launch'])),
-                condition=IfCondition(record_wireless)
+                AnyLaunchDescriptionSource(PathJoinSubstitution([get_package_share_directory('wireless_scanner_ros'), 'launch', 'esp32_receiver.launch.xml'])),
+                condition=IfCondition(AndSubstitution(record_wireless, use_esp32))
             ),
+            # ble_receiver will be launched by ble_scan service
+            # IncludeLaunchDescription(
+            #     AnyLaunchDescriptionSource(PathJoinSubstitution([get_package_share_directory('wireless_scanner_ros'), 'launch', 'ble_receiver.launch.xml'])),
+            #     condition=IfCondition(record_wireless)
+            # ),
 
             OpaqueFunction(
                 function=configure_ros2_bag_arguments,
