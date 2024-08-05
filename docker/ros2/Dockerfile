@@ -107,6 +107,7 @@ RUN apt update && \
     ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     ros-$ROS_DISTRO-rosbag2-storage-mcap \
     xterm \
+    gosu \
     && \
     rm -rf /var/lib/apt/lists/*
 
@@ -256,6 +257,7 @@ RUN apt update && \
     ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     ros-$ROS_DISTRO-rosbag2-storage-mcap \
     xterm \
+    gosu \
     && \
     rm -rf /var/lib/apt/lists/*
 
