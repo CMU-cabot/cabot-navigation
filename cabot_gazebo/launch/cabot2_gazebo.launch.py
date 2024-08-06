@@ -252,6 +252,44 @@ def generate_launch_description():
                 ]
             ),
 
+            # crop Livox point cloud only for simulator becasue Livox simulator has noise at close area
+            ComposableNodeContainer(
+                name='livox_container',
+                namespace='',
+                package='rclcpp_components',
+                executable='component_container',
+                composable_node_descriptions=[],
+            ),
+            LoadComposableNodes(
+                target_container='/livox_container',
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package='pcl_ros',
+                        plugin='pcl_ros::CropBox',
+                        namespace='',
+                        name='livox_crop_box_node',
+                        parameters=[{
+                            'use_sim_time': use_sim_time,
+                            'min_x': -0.3,
+                            'min_y': -0.3,
+                            'min_z': -0.3,
+                            'max_x': 0.3,
+                            'max_y': 0.3,
+                            'max_z': 0.3,
+                            'keep_organized': False,
+                            'negative': True,
+                            'input_frame': 'livox',
+                            'output_frame': 'livox',
+                        }],
+                        remappings=[
+                            ('/input',  '/livox/lidar_PointCloud2'),
+                            ('/output', '/livox/lidar_PointCloud2_cropped')
+                        ]
+                    ),
+                ],
+                condition=IfCondition(AndSubstitution(use_livox, use_low_obstacle_detect))
+            ),
+
             Node(
                 package='pointcloud_to_laserscan',
                 executable='pointcloud_to_laserscan_node',
@@ -275,7 +313,7 @@ def generate_launch_description():
                     'low_obstacle_detect_version': low_obstacle_detect_version,
                     'target_frame': 'livox_footprint',
                     'xfer_format': 2,
-                    'input_topic': '/livox/lidar_PointCloud2',
+                    'input_topic': '/livox/lidar_PointCloud2_cropped',
                     'output_topic': '/livox/lidar_filtered',
                     'clip_height': 0.05
                 }],
@@ -292,7 +330,7 @@ def generate_launch_description():
                     'low_obstacle_detect_version': low_obstacle_detect_version,
                     'target_frame': 'livox_footprint',
                     'xfer_format': 2,
-                    'input_topic': '/livox/lidar_PointCloud2',
+                    'input_topic': '/livox/lidar_PointCloud2_cropped',
                     'output_topic': '/livox/lidar_filtered',
                     'ransac_max_iteration': 1000,
                     'ransac_probability': 0.99,
