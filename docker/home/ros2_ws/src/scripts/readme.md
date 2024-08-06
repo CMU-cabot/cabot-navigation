@@ -15,17 +15,27 @@
 1. dockerコンテナの起動
 
 ```shell
+$ cd cabot-ros2
 cabot-ros2$ docker compose -f docker-compose-nuc-production.yaml up driver people-nuc
 ```
 
 1. jetsonの起動
 ```shell
+$ cd cabot-ros2
 cabot-ros2$ ./jetson-launch.sh -v -u cabot -c "D:192.168.1.50:rs1 D:192.168.1.51:rs2 D:192.168.1.52:rs3" -S " rs1:141322250995 rs2:143322070524 rs3:143422072154" -f 30 -p 15 -r 640 -o 3
+```
+
+or 
+
+```shell
+$ cd /home/cabot/cabot-navigation-exploration/docker/home/ros2_ws/src/scripts
+scripts $ ./jetson_cli.sh
 ```
 
 1. launch.sh起動
 ```shell
-cabot-navigation$ ./launch.sh -e
+cd /home/cabot/cabot-navigation-exploration
+cabot-navigation-exploration$ ./launch.sh -e
 ```
 
 
