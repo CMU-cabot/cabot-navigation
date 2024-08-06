@@ -1,5 +1,5 @@
 # ******************************************************************************
-#  Copyright (c) 2024  IBM Corporation and Miraikan
+#  Copyright (c) 2024  Miraikan - The National Museum of Emerging Science and Innovation
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -20,22 +20,5 @@
 #  SOFTWARE.
 # ******************************************************************************
 
-# types
-uint8 PERSON=1
-uint8 ROBOT=2
-uint8 OBSTACLE=3
-
-# behavior states
-uint8 INACTIVE=0
-uint8 ACTIVE=1
-
 std_msgs/Header header
-uint8 type
-uint8 behavior_state
-string name
-geometry_msgs/Pose position
-float32 yaw
-geometry_msgs/Twist velocity
-float32 radius
-float32 linear_vel
-float32 angular_vel
+pedestrian_plugin_msgs/Obstacle[] obstacles

@@ -1,22 +1,24 @@
-# Copyright (c) 2020, 2022  Carnegie Mellon University
+# ******************************************************************************
+#  Copyright (c) 2024  Carnegie Mellon University and Miraikan
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+#  Permission is hereby granted, free of charge, to any person obtaining a copy
+#  of this software and associated documentation files (the "Software"), to deal
+#  in the Software without restriction, including without limitation the rights
+#  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#  copies of the Software, and to permit persons to whom the Software is
+#  furnished to do so, subject to the following conditions:
 #
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+#  The above copyright notice and this permission notice shall be included in all
+#  copies or substantial portions of the Software.
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#  SOFTWARE.
+# ******************************************************************************
 
 """
 MapService GeoJson mapper
@@ -145,7 +147,8 @@ class Properties(object):
         "hulop_tags": None,
         "hulop_poi_external_category": None,
         "hulop_show_labels_zoomlevel": None,
-        "hulop_road_width": 1.5
+        "hulop_road_width": 1.5,
+        "levDif_max": None
         }
 
     def __getattr__(self, name):
@@ -412,9 +415,15 @@ class NavigationMode(enum.Enum):
     Standard = 0
     Narrow = 1
     Tight = 2
+    ClimbUpStep = 3
+    ClimbDownStep = 4
 
     @classmethod
-    def get_mode(cls, width):
+    def get_mode(cls, width, step_height, is_facing_upward):
+        if step_height is not None:
+            if step_height < 5.0:
+                res_mode = NavigationMode.ClimbUpStep if is_facing_upward else NavigationMode.ClimbDownStep
+                return res_mode
         if width < 1.0:
             return NavigationMode.Tight
         if width < 1.2:
@@ -484,10 +493,6 @@ class Link(Object):
         return self.start_node.is_leaf or self.end_node.is_leaf
 
     @property
-    def navigation_mode(self):
-        return NavigationMode.get_mode(self.properties.hulop_road_width)
-
-    @property
     def length(self):
         """distance from start to end"""
         if self.start_node is None or self.end_node is None:
@@ -546,6 +551,15 @@ class RouteLink(Link):
     @property
     def pose(self):
         return geoutil.Pose.pose_from_points(self.source_node.local_geometry, self.target_node.local_geometry)
+
+    @property
+    def navigation_mode(self):
+        is_facing_upward = self.source_node == self.start_node
+        return NavigationMode.get_mode(
+                width=self.properties.hulop_road_width,
+                step_height=self.properties.levDif_max,
+                is_facing_upward=is_facing_upward
+                )
 
 
 class Node(Object):
