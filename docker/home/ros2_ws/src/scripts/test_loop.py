@@ -84,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument("--trajectory_filter", "-t", action="store_true", help="Apply trajectory filter")
     parser.add_argument("--auto", "-a", action="store_true", help="Automatically select the next point")
     parser.add_argument("--image", "-i", action="store_true", help="Generate explanation from images")
-    parser.add_argument("--log_dir", "-l", type=str, help="Log directory")
+    parser.add_argument("--log_dir", "-l", type=str, help="Log directory; e.g., logs/logs_0123-123456")
     parser.add_argument("--sim", "-s", action="store_true", help="Simulator mode")
     parser.add_argument("--keyboard", "-k", action="store_true", help="Keyboard mode")
     parser.add_argument("--debug", "-db", action="store_true", help="Debug mode")
@@ -118,7 +118,7 @@ if __name__ == "__main__":
             is_already_checked = True
 
     if args.log_dir:
-        log_dir = f"logs/{args.log_dir}"
+        log_dir = f"{args.log_dir}"
     else:
         log_dir = f"logs/logs_{timestamp}"
         print(f"log dir is not specified; using {log_dir}")
