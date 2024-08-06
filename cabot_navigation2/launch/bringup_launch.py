@@ -391,7 +391,7 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'low_obstacle_detect_version': low_obstacle_detect_version,
                 'target_frame': 'livox_footprint',
-                'xfer_format': 2,
+                'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
                 'input_topic': '/livox/lidar_input',
                 'output_topic': '/livox/lidar_filtered',
                 'clip_height': 0.05
@@ -408,7 +408,7 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'low_obstacle_detect_version': low_obstacle_detect_version,
                 'target_frame': 'livox_footprint',
-                'xfer_format': 2,
+                'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
                 'input_topic': '/livox/lidar_input',
                 'output_topic': '/livox/lidar_filtered',
                 'ransac_max_iteration': 1000,
