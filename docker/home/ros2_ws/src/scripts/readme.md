@@ -42,7 +42,7 @@ cabot-navigation-exploration$ ./launch.sh -e
 ## GPT-4oでのテキスト生成関連
 0. docker containerの起動
 ```shell
-cabot-ros2/cabot-navigation$ docker compose exec navigation bash
+cabot-ros2/cabot-navigation-exploration$ docker compose exec navigation bash
 ```
 
 1. ロボットのstate control
@@ -72,10 +72,17 @@ python3 test_image.py --log_dir logs/<exp name> -i [--sim] [--speak]
 - `/cabot/nav_state` が `paused` であるときにのみ説明生成が行われる
 
 
+---
+まとめて起動する場合
+```shell
+python3 run_image.py --log_dir logs/<exp name> -e -s -i [--sim] [--speak]
+```
+
+
 ## 対話システム関連
 0. docker containerの起動
 ```shell
-cabot-ros2/cabot-navigation$ docker compose exec navigation bash
+cabot-ros2/cabot-navigation-exploration$ docker compose exec navigation bash
 ```
 
 1. 対話サーバー（iPhone -> cabot）の起動
@@ -87,7 +94,7 @@ cabot-ros2/cabot-navigation$ docker compose exec navigation bash
 ## navigation関連
 0. docker containerの起動
 ```shell
-cabot-ros2/cabot-navigation$ docker compose exec navigation bash
+cabot-ros2/cabot-navigation-exploration$ docker compose exec navigation bash
 ```
 
 1. trajectory記録スクリプトの起動
@@ -102,7 +109,7 @@ cabot-ros2/cabot-navigation$ docker compose exec navigation bash
 
 3. navigationスクリプトの起動
 ```shell
-~/ros2_ws/src $ python3 test_loop.py -d [-f] -i [-t] --log_dir <exp_name> [--sim] [-a] [-k]
+~/ros2_ws/src $ python3 test_loop.py -d [-f] -i [-t] --log_dir logs/<exp_name> [--sim] [-a] [-k]
 ```
 - `-d` : distance filter; 距離が近すぎる・遠すぎる目的地を除外
 - `-f` : forbidden filter; 禁止エリアを除外。禁止判定は、前・右・左のカメラがとらえた画像をもとに行われる。どれかのカメラにマーカーが写っている、もしくはGPTによる画像説明で「通行不可」判定がなされると、その方向で、ロボットから8m先の場所を中心とする半径4mの円が禁止エリアとして登録される。
@@ -112,7 +119,7 @@ cabot-ros2/cabot-navigation$ docker compose exec navigation bash
 - `-a` : 次の目的地を自動で設定する
 - `-k` : 次の目的地設定をキーボードから行う。これが有効になっていない場合、`/cabot/user_query` トピックに対して、次の目的地を設定するクエリを送信することで次の目的地を設定することができる。このクエリは、`test_chat_server.py` が起動しているときに、iPhoneから送信することができる。
   - その他のクエリの投げ方
-    - curl
+    - curl（`test_chat_server.py`が起動している場合）
       - `curl -X POST http://127.0.0.1:5050/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'` 
       - `curl -X POST http://127.0.0.1:5050/service -H "Content-Type: application/json" -d '{"input":{"text": "right"}}'` 
     - 直接ros2のトピックに対して送信（`std_msgs/String`型のデータを送信）
