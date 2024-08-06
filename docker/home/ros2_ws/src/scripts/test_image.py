@@ -233,6 +233,16 @@ class GPTExplainer:
         self.intersection_detection_mode = intersection_detection_mode
         self.surronding_explain_mode = surronding_explain_mode
 
+        self.mode = ""
+        if self.semantic_map_mode:
+            self.mode = "semantic_map"
+        elif self.intersection_detection_mode:
+            self.mode = "intersection_detection"
+        elif self.surronding_explain_mode:
+            self.mode = "explain"
+        else:
+            raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
+
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
@@ -381,7 +391,7 @@ class GPTExplainer:
         cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
 
         gpt_response = self.query_with_images([front_image_with_text, left_image_with_text, right_image_with_text])
-        print(gpt_response)
+        # print(f"{self.mode}: {gpt_response}")
 
         # get front/left/right availability
         extracted_json = self.extract_json_part(gpt_response["choices"][0]["message"]["content"])
@@ -417,9 +427,7 @@ class GPTExplainer:
             with open(filename, "a") as f:
                 f.write(json.dumps(gpt_response))
         print(f"Explanation is saved to {filename}")
-        print(">>>>>>>")
-        print(gpt_response)
-        print("<<<<<<<")
+        print(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
@@ -599,6 +607,10 @@ if __name__ == "__main__":
     # in semantic map mode, we should not use speak option
     if args.semantic_map and args.speak:
         raise ValueError("In semantic map mode, we should not use the speak option.")
+
+    # check openai api key
+    if not os.environ.get('OPENAI_API_KEY'):
+        raise ValueError("Please set the OPENAI_API_KEY environment")
 
     main(
         no_explain_mode=args.no_explain, 
