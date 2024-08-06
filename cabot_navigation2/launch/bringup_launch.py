@@ -54,7 +54,8 @@ def generate_launch_description():
     footprint_radius = LaunchConfiguration('footprint_radius')
     offset = LaunchConfiguration('offset')
     cabot_side = LaunchConfiguration('cabot_side')
-    use_low_obstacle_detect = LaunchConfiguration('use_low_obstacle_detect')
+    low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
+    use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, ' > 0'])
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -70,26 +71,26 @@ def generate_launch_description():
         source_file=params_file,
         replacements={'<local_costmap_plugins>':
                       PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        " if '", use_low_obstacle_detect, "'=='True' else ",
                                         "['obstacle_layer', 'inflation_layer']"])})
     params_file = ReplaceString(
         source_file=params_file,
         replacements={'<global_costmap_plugins>':
                       PythonExpression(["['static_layer', 'obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        " if '", use_low_obstacle_detect, "'=='True' else ",
                                         "['static_layer', 'obstacle_layer', 'inflation_layer']"])})
 
     params_file2 = ReplaceString(
         source_file=params_file2,
         replacements={'<local_costmap_plugins>':
                       PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        " if '", use_low_obstacle_detect, "'=='True' else ",
                                         "['obstacle_layer', 'inflation_layer']"])})
     params_file2 = ReplaceString(
         source_file=params_file2,
         replacements={'<global_costmap_plugins>':
                       PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='true' else ",
+                                        " if '", use_low_obstacle_detect, "'=='True' else ",
                                         "['obstacle_layer', 'inflation_layer']"])})
 
     # Create our own temporary YAML files that include substitutions
@@ -187,8 +188,8 @@ def generate_launch_description():
             description='cabot side (left -> user stands right) left/right'),
 
         DeclareLaunchArgument(
-            'use_low_obstacle_detect', default_value='true',
-            description='Use low obstacle detection'),
+            'low_obstacle_detect_version', default_value='0',
+            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC'),
 
         # default navigator
         Node(
@@ -345,6 +346,80 @@ def generate_launch_description():
                         {'bond_timeout': 60.0},
                         {'node_names': ['map_server']},
                         ]
+        ),
+
+        # low obstacle detection
+        Node(
+            package='pointcloud_to_laserscan',
+            executable='pointcloud_to_laserscan_node',
+            namespace='',
+            name='livox_pointcloud_to_laserscan_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'target_frame': 'livox_footprint',
+                'transform_tolerance': 0.01,
+                'min_height': -2.0,  # origin is the ground right below the sensor
+                'max_height': 2.0,  # origin is the ground right below the sensor
+                'angle_min': -0.314,  # -M_PI/10
+                'angle_max': 0.314,  # M_PI/10
+                'angle_increment': 0.00087,  # M_PI/360/10
+                'scan_time': 0.1,
+                'range_min': 0.05,
+                'range_max': 5.0,
+                'use_inf': True,
+                'inf_epsilon': 1.0,
+                # Concurrency level affects number of pointclouds queued for
+                # processing and number of threads used
+                # 0 : Detect number of cores
+                # 1 : Single threaded
+                # 2->inf : Parallelism level
+                'concurrency_level': 0
+            }],
+            remappings=[
+                ('/cloud_in', '/livox/lidar_filtered'),
+                ('/scan', '/livox_scan')
+            ],
+            condition=IfCondition(use_low_obstacle_detect)
+        ),
+
+        Node(
+            package='cabot_navigation2',
+            executable='clip_ground_filter_node',
+            namespace='',
+            name='clip_ground_filter_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'low_obstacle_detect_version': low_obstacle_detect_version,
+                'target_frame': 'livox_footprint',
+                'xfer_format': 2,
+                'input_topic': '/livox/lidar_input',
+                'output_topic': '/livox/lidar_filtered',
+                'clip_height': 0.05
+            }],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 1']))
+        ),
+
+        Node(
+            package='cabot_navigation2',
+            executable='ransac_ground_filter_node',
+            namespace='',
+            name='ransac_ground_filter_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'low_obstacle_detect_version': low_obstacle_detect_version,
+                'target_frame': 'livox_footprint',
+                'xfer_format': 2,
+                'input_topic': '/livox/lidar_input',
+                'output_topic': '/livox/lidar_filtered',
+                'ransac_max_iteration': 1000,
+                'ransac_probability': 0.99,
+                'ransac_eps_angle': 30.0,
+                'ransac_min_inlier': 1000,
+                'ransac_input_min_threshold': -0.10,
+                'ransac_input_max_threshold': 0.10,
+                'ransac_inlier_threshold': 0.05,
+            }],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 2']))
         ),
 
         # others

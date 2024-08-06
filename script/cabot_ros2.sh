@@ -95,8 +95,6 @@ export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
 : ${CABOT_USE_HANDLE_SIMULATOR:=0}
 
 : ${CABOT_LOW_OBSTABLE_DETECT_VERSION:=0}
-use_low_obstacle_detect=false
-if [ $CABOT_LOW_OBSTABLE_DETECT_VERSION -gt 0 ]; then use_low_obstacle_detect=true; fi
 
 # optional variables
 # TODO
@@ -237,7 +235,7 @@ com="$command_prefix ros2 launch cabot_navigation2 bringup_launch.py \
     use_sim_time:=$use_sim_time \
     record_bt_log:=false \
     cabot_side:=$CABOT_SIDE \
-    use_low_obstacle_detect:=$use_low_obstacle_detect \
+    low_obstacle_detect_version:=$CABOT_LOW_OBSTABLE_DETECT_VERSION \
     $command_postfix"
 echo $com
 eval $com

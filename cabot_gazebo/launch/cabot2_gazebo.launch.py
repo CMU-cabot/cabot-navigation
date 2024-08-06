@@ -37,7 +37,6 @@ from launch.event_handlers import OnProcessExit
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
 from launch.conditions import LaunchConfigurationNotEquals
-from launch.substitutions import AndSubstitution
 from launch.substitutions import Command
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import OrSubstitution
@@ -97,7 +96,6 @@ def generate_launch_description():
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
-    low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     gdb = LaunchConfiguration('gdb')
 
     gazebo_params = os.path.join(
@@ -111,7 +109,6 @@ def generate_launch_description():
     )
 
     use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
-    use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, ' > 0'])
 
     xacro_for_cabot_model = PathJoinSubstitution([
         get_package_share_directory('cabot_description'),
@@ -169,11 +166,6 @@ def generate_launch_description():
             'wireless_config_file',
             default_value='',
             description='wireless config file'
-        ),
-        DeclareLaunchArgument(
-            'low_obstacle_detect_version',
-            default_value=EnvironmentVariable('CABOT_LOW_OBSTABLE_DETECT_VERSION', default_value='0'),
-            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC'
         ),
         DeclareLaunchArgument(
             'gdb',
@@ -283,64 +275,11 @@ def generate_launch_description():
                         }],
                         remappings=[
                             ('/input',  '/livox/lidar_PointCloud2'),
-                            ('/output', '/livox/lidar_PointCloud2_cropped')
+                            ('/output', '/livox/lidar_input')
                         ]
                     ),
                 ],
-                condition=IfCondition(AndSubstitution(use_livox, use_low_obstacle_detect))
-            ),
-
-            Node(
-                package='pointcloud_to_laserscan',
-                executable='pointcloud_to_laserscan_node',
-                namespace='',
-                name='livox_pointcloud_to_laserscan_node',
-                parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
-                remappings=[
-                    ('/cloud_in', '/livox/lidar_filtered'),
-                    ('/scan', '/livox_scan')
-                ],
-                condition=IfCondition(AndSubstitution(use_livox, use_low_obstacle_detect))
-            ),
-
-            Node(
-                package='cabot_navigation2',
-                executable='clip_ground_filter_node',
-                namespace='',
-                name='clip_ground_filter_node',
-                parameters=[{
-                    'use_sim_time': use_sim_time,
-                    'low_obstacle_detect_version': low_obstacle_detect_version,
-                    'target_frame': 'livox_footprint',
-                    'xfer_format': 2,
-                    'input_topic': '/livox/lidar_PointCloud2_cropped',
-                    'output_topic': '/livox/lidar_filtered',
-                    'clip_height': 0.05
-                }],
-                condition=IfCondition(AndSubstitution(use_livox, PythonExpression([low_obstacle_detect_version, ' == 1'])))
-            ),
-
-            Node(
-                package='cabot_navigation2',
-                executable='ransac_ground_filter_node',
-                namespace='',
-                name='ransac_ground_filter_node',
-                parameters=[{
-                    'use_sim_time': use_sim_time,
-                    'low_obstacle_detect_version': low_obstacle_detect_version,
-                    'target_frame': 'livox_footprint',
-                    'xfer_format': 2,
-                    'input_topic': '/livox/lidar_PointCloud2_cropped',
-                    'output_topic': '/livox/lidar_filtered',
-                    'ransac_max_iteration': 1000,
-                    'ransac_probability': 0.99,
-                    'ransac_eps_angle': 30.0,
-                    'ransac_min_inlier': 1000,
-                    'ransac_input_min_threshold': -0.10,
-                    'ransac_input_max_threshold': 0.10,
-                    'ransac_inlier_threshold': 0.05,
-                }],
-                condition=IfCondition(AndSubstitution(use_livox, PythonExpression([low_obstacle_detect_version, ' == 2'])))
+                condition=IfCondition(use_livox)
             ),
 
             IncludeLaunchDescription(
