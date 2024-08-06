@@ -697,25 +697,21 @@ class Nav2Params:
     CaBot.max_iteration_count: 10
     CaBot.ignore_people: True
 /footprint_publisher:
-    footprint_mode: 1
+    footprint_mode: 0
 /controller_server:
     FollowPath.max_vel_x: 0.3
-    FollowPath.sim_time: 0.5
-    cabot_goal_checker.xy_goal_tolerance: 0.1
+    FollowPath.sim_time: 1.7
+    cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
     people_obstacle_layer.people_enabled: False
-    inflation_layer.inflation_radius: 0.25
+    inflation_layer.inflation_radius: 0.75
 /local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.25
+    inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
-    min_distance: 0.85
+    min_distance: 1.0
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
-/cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
 /can_sender_node:
     motor_pi_gain: [1.0,4.0]
 """
@@ -729,25 +725,21 @@ class Nav2Params:
     CaBot.max_iteration_count: 10
     CaBot.ignore_people: True
 /footprint_publisher:
-    footprint_mode: 1
+    footprint_mode: 0
 /controller_server:
     FollowPath.max_vel_x: 0.3
-    FollowPath.sim_time: 0.5
-    cabot_goal_checker.xy_goal_tolerance: 0.1
+    FollowPath.sim_time: 1.7
+    cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
     people_obstacle_layer.people_enabled: False
-    inflation_layer.inflation_radius: 0.25
+    inflation_layer.inflation_radius: 0.75
 /local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.25
+    inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
-    min_distance: 0.85
+    min_distance: 1.0
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
-/cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
 /can_sender_node:
     motor_pi_gain: [1.0,4.0]
 """
