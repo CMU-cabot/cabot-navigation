@@ -361,3 +361,7 @@ class UserInterface(object):
             self.speak(i18n.localized_string("GO_RIGHT"))
         elif direction == "back":
             self.speak(i18n.localized_string("GO_BACK"))
+
+    def exploring_auto_mode_switch(self):
+        self._activity_log("cabot/interface", "exploration", "auto mode switch")
+        self.speak(i18n.localized_string("AUTO_MODE_SWITCH"))
