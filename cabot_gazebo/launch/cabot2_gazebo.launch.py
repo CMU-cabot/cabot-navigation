@@ -267,9 +267,9 @@ def generate_launch_description():
 
             Node(
                 package='cabot_navigation2',
-                executable='livox_pointcloud_filter_node',
+                executable='clip_ground_filter_node',
                 namespace='',
-                name='livox_pointcloud_filter_node',
+                name='clip_ground_filter_node',
                 parameters=[{
                     'use_sim_time': use_sim_time,
                     'low_obstacle_detect_version': low_obstacle_detect_version,
@@ -279,7 +279,30 @@ def generate_launch_description():
                     'output_topic': '/livox/lidar_filtered',
                     'clip_height': 0.05
                 }],
-                condition=IfCondition(AndSubstitution(use_livox, use_low_obstacle_detect))
+                condition=IfCondition(AndSubstitution(use_livox, PythonExpression([low_obstacle_detect_version, ' == 1'])))
+            ),
+
+            Node(
+                package='cabot_navigation2',
+                executable='ransac_ground_filter_node',
+                namespace='',
+                name='ransac_ground_filter_node',
+                parameters=[{
+                    'use_sim_time': use_sim_time,
+                    'low_obstacle_detect_version': low_obstacle_detect_version,
+                    'target_frame': 'livox_footprint',
+                    'xfer_format': 2,
+                    'input_topic': '/livox/lidar_PointCloud2',
+                    'output_topic': '/livox/lidar_filtered',
+                    'ransac_max_iteration': 1000,
+                    'ransac_probability': 0.99,
+                    'ransac_eps_angle': 30.0,
+                    'ransac_min_inlier': 1000,
+                    'ransac_input_min_threshold': -0.10,
+                    'ransac_input_max_threshold': 0.10,
+                    'ransac_inlier_threshold': 0.05,
+                }],
+                condition=IfCondition(AndSubstitution(use_livox, PythonExpression([low_obstacle_detect_version, ' == 2'])))
             ),
 
             IncludeLaunchDescription(
