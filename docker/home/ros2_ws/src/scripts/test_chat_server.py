@@ -327,11 +327,11 @@ def handle_post():
         if query_json is not None:
             query_type = query_json.get("classification", "failed")
             if query_type == "search":
-                query_target = query_json["target_location"]
+                query_target = query_json.get("target_location", "unknown")
                 query_string = query_target + "があります"
                 print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
             elif query_type == "direction":
-                query_target = query_json["target_direction"]
+                query_target = query_json("target_direction", "unknown")
                 query_string = query_target
                 print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
             else:
@@ -347,7 +347,11 @@ def handle_post():
         query_string = gpt_input
         query_type = "direction"
         query_target = gpt_input  # same as gpt_input; e.g., right, left, front, back
-
+    
+    if query_target == "unknown":
+        query_type = "failed"
+        query_string = "failed"
+    
     navi = False
     dest_info = {}
     if query_type != "failed":
@@ -402,5 +406,11 @@ if __name__ == '__main__':
     parser.add_argument("--use_openai", action="store_true")
     parser.add_argument("--log_dir", type=str, help="Log directory", required=True)
     args = parser.parse_args()
+
+    if args.use_openai:
+        # check if the OPENAI_API_KEY is set
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if api_key is None:
+            raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
     app.run(host='0.0.0.0', port=5050)
