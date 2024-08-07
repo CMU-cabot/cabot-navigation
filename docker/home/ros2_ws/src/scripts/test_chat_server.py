@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import logging
 import requests
 import os
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Tuple
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, UInt8, UInt8MultiArray, Int8, Int16, Float32, String
@@ -19,11 +19,19 @@ import re
 from test_semantic import main as build_semantic_map
 from test_semantic import extract_text_feature
 
+from test_map import CabotRvizPointDrawer
 
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
+
+def draw_destination_on_rviz(coordinates: List[Tuple[float, float]], colors: List[Tuple[float, float, float]]):
+    rclpy.init()
+    point_drawer = CabotRvizPointDrawer(coordinates, colors)
+    rclpy.spin_once(point_drawer)
+    point_drawer.destroy_node()
+    rclpy.shutdown()
 
 class RosQueryNode(Node):
     def __init__(self, query_type, query_string, user_query_message: str):
@@ -384,6 +392,7 @@ def handle_post():
         if query_type == "search":
             odom = search(query_string, args.log_dir)
             query_string = f"{odom[0]},{odom[1]}"
+            draw_destination_on_rviz([odom], [0, 1.0, 0])
 
         rclpy.init()
         rcl_publisher = RosQueryNode(query_type, query_string, user_query_message=query_target)
@@ -401,7 +410,7 @@ def handle_post():
     return jsonify(response)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_openai", action="store_true")
     parser.add_argument("--log_dir", type=str, help="Log directory", required=True)
