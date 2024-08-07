@@ -27,7 +27,4 @@ source "/opt/custom_ws/install/setup.bash"
 
 WORKDIR=$(pwd)
 
-#env | grep -v '^_' > /tmp/envvars
-
-#exec su - developer -c "cd $WORKDIR && set -a && source /tmp/envvars && set +a && exec $*"
 exec gosu developer bash -c "cd $WORKDIR && exec $*"
