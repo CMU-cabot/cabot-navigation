@@ -356,7 +356,7 @@ def handle_post():
     dest_info = {}
     if query_type != "failed":
         navi = True
-        dest_info = {"nodes": []}
+        dest_info = {"nodes": ""}
 
     response = {
         "output": {
