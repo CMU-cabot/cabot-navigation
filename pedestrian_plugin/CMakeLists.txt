@@ -86,6 +86,9 @@ ament_target_dependencies(obstacle_plugin
   gazebo_ros
   people_msgs
   pedestrian_plugin_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
 )
 ament_export_libraries(obstacle_plugin)
 target_link_libraries(obstacle_plugin
