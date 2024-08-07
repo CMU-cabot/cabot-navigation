@@ -164,7 +164,7 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
                 if not os.path.exists(gpt_jsonl):
                     continue
                 with open(gpt_jsonl, "r") as f:
-                    anno = json.load(f)
+                    anno = [json.loads(line) for line in f.readlines()]
                 annos.append(anno)
 
                 odom_path = os.path.join(log_dir, image_dir, "odom.npy")
