@@ -422,11 +422,21 @@ class GPTExplainer:
         filename = f"{self.log_dir}/explanation.jsonl"
         if not os.path.exists(filename):
             with open(filename, "w") as f:
-                f.write(json.dumps(gpt_response))
+                f.write(json.dumps(extracted_json) + "\n")
         else:
             with open(filename, "a") as f:
-                f.write(json.dumps(gpt_response))
+                f.write(json.dumps(extracted_json) + "\n")
         print(f"Explanation is saved to {filename}")
+
+        filename = f"{self.log_dir}/log.jsonl"
+        if not os.path.exists(filename):
+            with open(filename, "w") as f:
+                f.write(json.dumps(gpt_response) + "\n")
+        else:
+            with open(filename, "a") as f:
+                f.write(json.dumps(gpt_response) + "\n")
+        print(f"Log is saved to {filename}")
+
         print(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
     
     def calculate_speak_time(self, text: str) -> float:
