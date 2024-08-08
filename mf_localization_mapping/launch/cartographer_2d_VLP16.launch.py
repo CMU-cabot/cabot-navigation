@@ -55,10 +55,14 @@ def generate_launch_description():
     save_state_filename = LaunchConfiguration('save_state_filename')
     load_state_filename = LaunchConfiguration('load_state_filename')
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
+    grid_resolution = LaunchConfiguration('grid_resolution', default=0.05)
     # config for post processing
     convert_pbstream = LaunchConfiguration('convert_pbstream')
     save_state_directory = LaunchConfiguration('save_state_directory')
     save_state_filestem = LaunchConfiguration('save_state_filestem')
+
+    cartographer_sigterm_timeout = LaunchConfiguration('cartographer_sigterm_timeout', default=300.0)
+    cartographer_sigkill_timeout = LaunchConfiguration('cartographer_sigkill_timeout', default=300.0)
 
     # function to configure a node command argument
     def add_cartographer_arguments(context, node):
@@ -143,10 +147,15 @@ def generate_launch_description():
         DeclareLaunchArgument('save_state_filename', default_value=''),
         DeclareLaunchArgument('load_state_filename', default_value=''),
         DeclareLaunchArgument('start_trajectory_with_default_topics', default_value='true'),
+        DeclareLaunchArgument('grid_resolution', default_value='0.05'),
         # config for post processing
         DeclareLaunchArgument('convert_pbstream', default_value='false'),
         DeclareLaunchArgument('save_state_directory', default_value=''),
         DeclareLaunchArgument('save_state_filestem', default_value=''),
+
+        # sigterm/sigkill timeout
+        DeclareLaunchArgument('cartographer_sigterm_timeout', default_value='300.0'),
+        DeclareLaunchArgument('cartographer_sigkill_timeout', default_value='300.0'),
 
         # use cabot_model argument if specified
         Node(
@@ -206,7 +215,15 @@ def generate_launch_description():
                     ("points2", points2),
                     ("imu", imu),
                     ("fix", fix),
-                ]
+                ],
+                parameters=[{
+                    'qos_overrides': {
+                        PythonExpression(['"/', points2, '"']): {"subscription": {"depth": 10}},
+                        PythonExpression(['"/', imu, '"']): {"subscription": {"depth": 100}}
+                    }
+                }],
+                sigterm_timeout=cartographer_sigterm_timeout,
+                sigkill_timeout=cartographer_sigkill_timeout,
             )]
         ),
 
@@ -224,6 +241,6 @@ def generate_launch_description():
             name="cartographer_occupancy_grid_node",
             package="cartographer_ros",
             executable="cartographer_occupancy_grid_node",
-            arguments=["-resolution", "0.015"]
+            arguments=["-resolution", grid_resolution]
         ),
     ])

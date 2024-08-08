@@ -89,14 +89,18 @@ def generate_launch_description():
             cmd.append(['/', scan])
             cmd.append(['/', imu])
             cmd.append('/beacons')
+            cmd.append('/esp32/wifi')
             cmd.append('/wireless/beacons')
             cmd.append('/wireless/wifi')
+            cmd.append('/ublox/fix')
+            cmd.append('/ublox/fix_velocity')
         if convert_imu.perform(context) == 'true' or convert_points.perform(context) == 'true':
             cmd.append('--remap')
-        if convert_imu.perform(context) == 'true':
-            cmd.append([imu, ':=', imu_temp])
-        if convert_points.perform(context) == 'true':
-            cmd.append([points2, ':=', points2_temp])
+            if convert_imu.perform(context) == 'true':
+                cmd.append([imu, ':=', imu_temp])
+            if convert_points.perform(context) == 'true':
+                cmd.append([points2, ':=', points2_temp])
+        cmd.append('--')
         cmd.append([bag_filename])
         node.cmd.clear()
         # needs to be normalized
@@ -113,7 +117,7 @@ def generate_launch_description():
         DeclareLaunchArgument('convert_imu', default_value='false'),
         DeclareLaunchArgument('convert_esp32', default_value='false'),
         DeclareLaunchArgument('robot', default_value='rover'),
-        DeclareLaunchArgument('cabot_model', default_value='cabot_model'),
+        DeclareLaunchArgument('cabot_model', default_value=''),
         DeclareLaunchArgument('wireless_topics', default_value="['/wireless/beacons','/wireless/wifi','/beacons','/esp32/wifi']"),
         DeclareLaunchArgument('rate', default_value='1.0'),
         DeclareLaunchArgument('start', default_value='0'),

@@ -107,6 +107,8 @@ class BeaconMapper:
                 if d2d < self._position_interval:
                     return
 
+            # convert timestamp to float because timestamp object is not JSON serializable
+            timestamp_sec = timestamp.nanoseconds * 1.0e-9
             fp_data = {
                 "information": {
                     "x": t.transform.translation.x,
@@ -121,7 +123,7 @@ class BeaconMapper:
                     }
                 },
                 "data": {
-                    "timestamp": timestamp,
+                    "timestamp": timestamp_sec,
                     "beacons": []  # empty list
                 }
             }
@@ -129,7 +131,7 @@ class BeaconMapper:
             self._previous_fingerprint_time = timestamp
             self._previous_fingerprint_position = self._current_position
             if self._verbose:
-                self.logger.info(F"dummy fingerprint data created at t={timestamp}, x={t.transform.translation.x}, y={t.transform.translation.y}")
+                self.logger.info(F"dummy fingerprint data created at t={timestamp_sec}, x={t.transform.translation.x}, y={t.transform.translation.y}")
 
 
 def main():
