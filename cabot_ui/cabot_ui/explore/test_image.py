@@ -51,18 +51,42 @@ $ python3 test_image.py
 This script will output the current local costmap to `local_costmap.npy` file.
 """
 
-
-
 class CaBotImageNode(Node):
-    def __init__(self, log_dir: str = ".", is_sim: bool = False, use_left: bool = True, use_right: bool = True, valid_state: str = ""):
+    def __init__(self, log_dir: str = ".", use_left: bool = True, use_right: bool = True):
         print("Initializing CaBotImageNode...")
-        assert valid_state != "", "Please set the valid state."
         super().__init__("cabot_map_node")
+
+        self.mode = self.declare_parameter("mode").value
+        self.should_speak = self.declare_parameter("should_speak").value
+        self.log_dir = self.declare_parameter("log_dir").value
+        self.debug = self.declare_parameter("debug").value
+        self.once = self.declare_parameter("once").value
+        self.no_explain_mode = self.declare_parameter("no_explain_mode").value
+        self.is_sim = self.declare_parameter("sim").value
+        self.logger = self.get_logger()
+
+        if  self.mode == "semantic_map_mode":
+            postfix = "s"
+        elif self.mode == "intersection_detection_mode":
+            postfix = "i"
+        elif self.mode == "surronding_explain_mode":
+            postfix = "e"
+        else:
+            postfix = ""
+            raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
+
+        os.makedirs(log_dir, exist_ok=True)
+        self.log_dir += f"_{postfix}_images"
+        print(f"Saving images to {log_dir}")
+
+        if self.mode == "surronding_explain_mode" or  self.mode =="semantic_map_mode":
+            valid_state = "running"
+        elif self.mode == "intersection_detection_mode":
+            valid_state = "paused"
         
         self.valid_state = valid_state
-        self.log_dir = log_dir
 
-        if is_sim:
+        if self.is_sim:
             print("Using simulation environment")
             self.front_camera_topic_name = "/camera/color/image_raw"
             self.left_camera_topic_name = "/camera/color/image_raw"
@@ -124,6 +148,8 @@ class CaBotImageNode(Node):
         
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
+
+        self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode}")
     
     def cabot_nav_state_callback(self, msg: String):
         self.cabot_nav_state = msg.data
@@ -209,15 +235,68 @@ class CaBotImageNode(Node):
             return True
         return False
 
+    def loop(self):
+
+        while True:
+            # generate explanation
+            if not self.no_explain_mode:
+                # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
+                # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
+                if self.cabot_nav_state != self.valid_state:
+                    self.logger.info(f"mode: {self.mode}current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
+                    time.sleep(1.0)
+                else:
+                    gpt_explainer = GPTExplainer(
+                        log_dir=self.log_dir,
+                        mode=self.mode,
+                        should_speak=self.should_speak,
+                        # dummy=True if is_sim else False
+                    )
+                    gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+
+                    if self.mode == "intersection_detection_mode":
+                        print("Availability of each direction")
+                        print(f"Front marker : {self.front_marker_detected}")
+                        print(f"Left marker  : {self.left_marker_detected}")
+                        print(f"Right marker : {self.right_marker_detected}")
+                        if not self.no_explain_mode:
+                            print(f"Front available (GPT) : {gpt_explainer.front_available}")
+                            print(f"Left available (GPT)  : {gpt_explainer.left_available}")
+                            print(f"Right available (GPT) : {gpt_explainer.right_available}")
+                    
+                    if self.debug:
+                        # randomly decide the values
+                        print("random mode; setting the values randomly")
+                        self.front_marker_detected = np.random.choice([True, False])
+                        self.left_marker_detected = np.random.choice([True, False])
+                        self.right_marker_detected = np.random.choice([True, False])
+                        gpt_explainer.front_available = np.random.choice([True, False])
+                        gpt_explainer.left_available = np.random.choice([True, False])
+                        gpt_explainer.right_available = np.random.choice([True, False])
+                    
+                    if self.once:
+                        return {
+                            "front_marker": self.front_marker_detected,
+                            "left_marker": self.left_marker_detected,
+                            "right_marker": self.right_marker_detected,
+                            "front_available": gpt_explainer.front_available,
+                            "left_available": gpt_explainer.left_available,
+                            "right_available": gpt_explainer.right_available
+                        }
+                    else:
+                        print("Waiting for the next image...")
+                        if self.mode == "surronding_explain_mode":
+                            # we need to avoid overlapping the speaking time
+                            time.sleep(max(gpt_explainer.wait_time, 5.0))
+                        else:
+                            time.sleep(5.0)
 
 
 class GPTExplainer():
     def __init__(
             self, 
             log_dir: str,
-            semantic_map_mode: bool,
-            intersection_detection_mode: bool,
-            surronding_explain_mode: bool,
+            mode: str,
             should_speak: bool = False,
             dummy: bool = False
         ):
@@ -229,25 +308,13 @@ class GPTExplainer():
             if self.api_key is None:
                 raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
-        self.semantic_map_mode = semantic_map_mode
-        self.intersection_detection_mode = intersection_detection_mode
-        self.surronding_explain_mode = surronding_explain_mode
-
-        self.mode = ""
-        if self.semantic_map_mode:
-            self.mode = "semantic_map"
-        elif self.intersection_detection_mode:
-            self.mode = "intersection_detection"
-        elif self.surronding_explain_mode:
-            self.mode = "explain"
-        else:
-            raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
+        self.mode = mode
 
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-        if semantic_map_mode:
+        if self.mode == "semantic_map_mode":
             self.prompt = """
             ### 指示
             画像を説明してください。
@@ -275,7 +342,7 @@ class GPTExplainer():
             }
             ```
             """
-        elif intersection_detection_mode:
+        elif self.mode == "intersection_detection_mode":
             self.prompt = """
             ### 指示1
             与えられた画像から左/前/右に歩行可能か判断してください。
@@ -309,7 +376,7 @@ class GPTExplainer():
             }
             ```
             """
-        elif surronding_explain_mode:
+        elif self.mode == "surronding_explain_mode":
             self.prompt = """
             ### 指示1
             画像を説明してください。
@@ -505,135 +572,12 @@ class GPTExplainer():
             time.sleep(5.0)
 
 
-def main(
-        log_dir: str = ".", 
-        no_explain_mode: bool = False, 
-        once: bool = False, 
-        is_sim: bool = False,
-        semantic_map_mode: bool = False,
-        intersection_detection_mode: bool = False,
-        surronding_explain_mode: bool = False,
-        should_speak: bool = False,
-        debug: bool = False
-    ) -> Dict[str, Any]:
-    print("Starting the image node...")
-    timestamp = datetime.datetime.now().strftime("%m%d-%H%M%S")
-
-    if semantic_map_mode:
-        postfix = "s"
-    elif intersection_detection_mode:
-        postfix = "i"
-    elif surronding_explain_mode:
-        postfix = "e"
-    else:
-        postfix = ""
-
-    log_dir = f"{log_dir}/{timestamp}{postfix}_images"
-    os.makedirs(log_dir, exist_ok=True)
-    print(f"Saving images to {log_dir}")
-
-    if surronding_explain_mode or semantic_map_mode:
-        valid_state = "running"
-    elif intersection_detection_mode:
-        valid_state = "paused"
-    else:
-        raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
-    
-    while True:
-        if not rclpy.ok():
-            rclpy.init()
-        rcl_publisher = CaBotImageNode(log_dir=log_dir, is_sim=is_sim, valid_state=valid_state)
-        try:
-            rclpy.spin(rcl_publisher)
-        except SystemExit as e:
-            print(f"finished rclpy node")
-        
-        rcl_publisher.destroy_node()
-        rclpy.try_shutdown()
-
-        # generate explanation
-        if not no_explain_mode:
-            # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
-            # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
-            if rcl_publisher.cabot_nav_state != valid_state:
-                print(f"current state: {rcl_publisher.cabot_nav_state}; not {valid_state}. Skip explaining")
-                time.sleep(1.0)
-            else:
-                gpt_explainer = GPTExplainer(
-                    log_dir=log_dir,
-                    semantic_map_mode=semantic_map_mode,
-                    intersection_detection_mode=intersection_detection_mode,
-                    surronding_explain_mode=surronding_explain_mode,
-                    should_speak=should_speak,
-                    # dummy=True if is_sim else False
-                )
-                gpt_explainer.explain(rcl_publisher.front_image, rcl_publisher.left_image, rcl_publisher.right_image)
-
-                if intersection_detection_mode:
-                    print("Availability of each direction")
-                    print(f"Front marker : {rcl_publisher.front_marker_detected}")
-                    print(f"Left marker  : {rcl_publisher.left_marker_detected}")
-                    print(f"Right marker : {rcl_publisher.right_marker_detected}")
-                    if not no_explain_mode:
-                        print(f"Front available (GPT) : {gpt_explainer.front_available}")
-                        print(f"Left available (GPT)  : {gpt_explainer.left_available}")
-                        print(f"Right available (GPT) : {gpt_explainer.right_available}")
-                
-                if debug:
-                    # randomly decide the values
-                    print("random mode; setting the values randomly")
-                    rcl_publisher.front_marker_detected = np.random.choice([True, False])
-                    rcl_publisher.left_marker_detected = np.random.choice([True, False])
-                    rcl_publisher.right_marker_detected = np.random.choice([True, False])
-                    gpt_explainer.front_available = np.random.choice([True, False])
-                    gpt_explainer.left_available = np.random.choice([True, False])
-                    gpt_explainer.right_available = np.random.choice([True, False])
-                
-                if once:
-                    return {
-                        "front_marker": rcl_publisher.front_marker_detected,
-                        "left_marker": rcl_publisher.left_marker_detected,
-                        "right_marker": rcl_publisher.right_marker_detected,
-                        "front_available": gpt_explainer.front_available,
-                        "left_available": gpt_explainer.left_available,
-                        "right_available": gpt_explainer.right_available
-                    }
-                else:
-                    print("Waiting for the next image...")
-                    if surronding_explain_mode:
-                        # we need to avoid overlapping the speaking time
-                        time.sleep(max(gpt_explainer.wait_time, 5.0))
-                    else:
-                        time.sleep(5.0)
-
+def main() -> Dict[str, Any]:
+    rclpy.init(args=None)
+    node = CaBotImageNode()
+    result = node.loop()
+    rclpy.shutdown()
+    return result
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--no_explain", action="store_true", help="Do not explain the images")
-    parser.add_argument("--log_dir", type=str, default=".", help="Directory to save the images")
-    parser.add_argument("--once", action="store_true", help="Run only once")
-    parser.add_argument("--semantic_map", "-s", action="store_true", help="generate descriptions for the semantic map")
-    parser.add_argument("--intersection_detection", "-i", action="store_true", help="detect the intersection")
-    parser.add_argument("--surronding_explain", "-e", action="store_true", help="generate descriptions for the surrounding")
-    parser.add_argument("--sim", action="store_true", help="Use the simulation environment")
-    parser.add_argument("--speak", action="store_true", help="Speak the generated text")
-    args = parser.parse_args()
-
-    # in semantic map mode, we should not use speak option
-    if args.semantic_map and args.speak:
-        raise ValueError("In semantic map mode, we should not use the speak option.")
-
-    # check openai api key
-    if not os.environ.get('OPENAI_API_KEY'):
-        raise ValueError("Please set the OPENAI_API_KEY environment")
-
-    main(
-        no_explain_mode=args.no_explain, 
-        log_dir=args.log_dir, 
-        once=args.once, 
-        is_sim=args.sim,
-        semantic_map_mode=args.semantic_map,
-        intersection_detection_mode=args.intersection_detection,
-        surronding_explain_mode=args.surronding_explain,
-        should_speak=args.speak
-    )
+    main()

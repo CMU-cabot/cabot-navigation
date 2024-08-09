@@ -9,22 +9,43 @@ def generate_launch_description():
     exp_name = f'exp_date_{now.strftime("%Y%m%d")}_time_{now.strftime("%H%M")}'
 
     return LaunchDescription([
+        # scemantic map mode
         Node(
             package='cabot_ui',
             executable='exploration_image_explain.py',
-            name='exploration_image_explain',
+            name='exploration_image_explain_scemantic',
             output='screen',
             parameters=[
-                {'no_explain': False},
-                {'log_dir': exp_name},
+                {'mode': 'semantic_map_mode'},
+                {'should_speak': True},
+                {'log_dir': exp_name},                
+                {'debug': False},
                 {'once': False},
-                {'semantic_map': False},
-                {'intersection_detection': False},
-                {'surronding_explain': True},
-                {'sim': False},
-                {'speak': True}
+                {'no_explain_mode': False},
+                {'is_sim': False},
+                
             ]
         ),
+        
+        # surronding explain mode
+        Node(
+            package='cabot_ui',
+            executable='exploration_image_explain.py',
+            name='exploration_image_explain_surronding',
+            output='screen',
+            parameters=[
+                {'mode': 'surronding_explain_mode'},
+                {'should_speak': True},
+                {'log_dir': exp_name},                
+                {'debug': False},
+                {'once': False},
+                {'no_explain_mode': False},
+                {'is_sim': False},
+                
+            ]
+        ),
+
+        # chat server
         Node(
             package='cabot_ui',
             executable='exploration_chat_server.py',
