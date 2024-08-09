@@ -252,7 +252,12 @@ class CaBotImageNode(Node):
                         should_speak=self.should_speak,
                         # dummy=True if is_sim else False
                     )
-                    gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                    try:
+                        gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                    except Exception as e:
+                        self.logger.error(f"Error in explaining: {e}")
+                        time.sleep(1.0)
+                        continue
 
                     if self.mode == "intersection_detection_mode":
                         print("Availability of each direction")
