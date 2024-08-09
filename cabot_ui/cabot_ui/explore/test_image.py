@@ -52,7 +52,7 @@ This script will output the current local costmap to `local_costmap.npy` file.
 """
 
 class CaBotImageNode(Node):
-    def __init__(self, log_dir: str = ".", use_left: bool = True, use_right: bool = True):
+    def __init__(self, use_left: bool = True, use_right: bool = True):
         print("Initializing CaBotImageNode...")
         super().__init__("cabot_map_node")
 
@@ -75,9 +75,9 @@ class CaBotImageNode(Node):
             postfix = ""
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
 
-        os.makedirs(log_dir, exist_ok=True)
+        os.makedirs(self.log_dir, exist_ok=True)
         self.log_dir += f"_{postfix}_images"
-        print(f"Saving images to {log_dir}")
+        print(f"Saving images to {self.log_dir}")
 
         if self.mode == "surronding_explain_mode" or  self.mode =="semantic_map_mode":
             valid_state = "running"
