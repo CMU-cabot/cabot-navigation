@@ -29,5 +29,6 @@ __all__ = [
     "exploration",
     "turn_detector",
     "visualizer",
-    "cabot_rclpy_util"
+    "cabot_rclpy_util",
+    "explore"
 ]
