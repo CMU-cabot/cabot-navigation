@@ -128,7 +128,7 @@ class CaBotImageNode(Node):
 
         self.odom = None
 
-        self.cabot_nav_state = "runnning"
+        self.cabot_nav_state = "running"
         # cabot nav state subscriber
         self.cabot_nav_state_sub = self.create_subscription(String, "/cabot/nav_state", self.cabot_nav_state_callback, 10)
 
