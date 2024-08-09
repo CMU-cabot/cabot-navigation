@@ -86,7 +86,7 @@ RUN apt update && \
 RUN pip install --no-cache-dir \
     requests \
     certifi \
-    orjson \
+    orjson==3.10.6 \
     pyproj \
     rosbags
 
