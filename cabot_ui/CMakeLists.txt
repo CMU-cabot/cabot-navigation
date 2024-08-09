@@ -84,6 +84,8 @@ install(PROGRAMS
   scripts/cabot_keyboard.py
   scripts/cabot_ui_manager.py
   scripts/stop_reasons_node.py
+  scripts/exploration_chat_server.py
+  scripts/exploration_image_explain.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
