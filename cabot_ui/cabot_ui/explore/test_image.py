@@ -64,6 +64,7 @@ class CaBotImageNode(Node):
         self.no_explain_mode = self.declare_parameter("no_explain_mode").value
         self.is_sim = self.declare_parameter("sim").value
         self.logger = self.get_logger()
+        self.cabot_nav_state = "running"
 
         if  self.mode == "semantic_map_mode":
             postfix = "s"
