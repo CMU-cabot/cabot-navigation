@@ -123,6 +123,22 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
 
+RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip3 install --no-cache-dir \
+    flask \
+    transformers \
+    scikit-image \
+    scipy \
+    tqdm \
+    shapely \
+    sentencepiece \
+    timm \
+    fugashi \
+    unidic-lite
+
+RUN pip3 install scikit-learn -U
+
 # for debug
 # RUN apt update && \
 #     apt install -y --no-install-recommends \
