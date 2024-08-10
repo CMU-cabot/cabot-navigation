@@ -158,7 +158,7 @@ class CaBotImageNode(Node):
         self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}, {self.odom_topic_name}")
         self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
         
-        self.create_timer(5.0, self.loop) 
+        self.timer = self.create_timer(5.0, self.loop) 
     
     def activity_callback(self, msg: Log):
         self.logger.info(f"activity log: {msg}")
@@ -253,7 +253,6 @@ class CaBotImageNode(Node):
             # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
             if self.cabot_nav_state != self.valid_state:
                 self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
-                self.schedule_next_loop(interval=1.0)
                 return
             else:
                 gpt_explainer = GPTExplainer(
@@ -269,7 +268,6 @@ class CaBotImageNode(Node):
                 except Exception as e:
                     traceback.print_exc()
                     self.logger.error(f"Error occurred: {e}")
-                    self.schedule_next_loop(interval=1.0)
                     return
 
                 if self.mode == "intersection_detection_mode":
@@ -292,23 +290,12 @@ class CaBotImageNode(Node):
                     gpt_explainer.left_available = np.random.choice([True, False])
                     gpt_explainer.right_available = np.random.choice([True, False])
                 
-                if self.once:
-                    return {
-                        "front_marker": self.front_marker_detected,
-                        "left_marker": self.left_marker_detected,
-                        "right_marker": self.right_marker_detected,
-                        "front_available": gpt_explainer.front_available,
-                        "left_available": gpt_explainer.left_available,
-                        "right_available": gpt_explainer.right_available
-                    }
-                # else:
-                #     
-                    # print("Waiting for the next image...")
-                    # if self.mode == "surronding_explain_mode":
-                    #     # we need to avoid overlapping the speaking time
-                    #     self.schedule_next_loop(interval=max(gpt_explainer.wait_time, 5.0))
-                    # else:
-                    #     self.schedule_next_loop()
+        if self.mode == "surronding_explain_mode":
+            self.change_timer_interval(interval=max(gpt_explainer.wait_time, 5.0))
+
+    def change_timer_interval(self, interval: float):
+        self.timer.cancel()
+        self.timer = self.create_timer(interval, self.loop)
 
 
 class GPTExplainer():
