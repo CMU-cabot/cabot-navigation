@@ -27,6 +27,8 @@ from packaging.version import Version
 from . import test_speak
 import traceback
 import json
+from cabot_msgs.msg import Log
+import threading
 
 
 """
@@ -78,9 +80,9 @@ class CaBotImageNode(Node):
             postfix = ""
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
 
-        os.makedirs(self.log_dir, exist_ok=True)
         self.log_dir += f"_{postfix}_images"
-        print(f"Saving images to {self.log_dir}")
+        os.makedirs(self.log_dir, exist_ok=True)
+        self.logger.info(f"Saving images to {self.log_dir}")
 
         if self.mode == "surronding_explain_mode" or  self.mode =="semantic_map_mode":
             valid_state = "running"
@@ -146,6 +148,7 @@ class CaBotImageNode(Node):
         # self.depth_right_sub = message_filters.Subscriber(self, Image, self.right_depth_topic_name)
         self.odom_sub = message_filters.Subscriber(self, Odometry, self.odom_topic_name)
         
+        self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
         subscribers = [self.odom_sub, self.image_front_sub, self.image_left_sub, self.image_right_sub]
         
@@ -154,10 +157,15 @@ class CaBotImageNode(Node):
 
         self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}, {self.odom_topic_name}")
         self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
+        
+        self.create_timer(5.0, self.loop) 
     
+    def activity_callback(self, msg: Log):
+        self.logger.info(f"activity log: {msg}")
+
     def cabot_nav_state_callback(self, msg: String):
         self.cabot_nav_state = msg.data
-        self.get_logger().info(f"cabot nav state: {self.cabot_nav_state}")
+        self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
@@ -207,18 +215,18 @@ class CaBotImageNode(Node):
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
 
-        self.logger.info("front", type(front_image), front_image.shape)
-        self.logger.info("left", type(left_image), left_image.shape)
-        self.logger.info("right", type(right_image), right_image.shape)
+        self.logger.info(f"front, {type(front_image)}, {front_image.shape}")
+        self.logger.info(f"left, {type(left_image)}, {left_image.shape}")
+        self.logger.info(f"right, {type(right_image)}, {right_image.shape}")
         # save the image
         cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
         cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
         cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
 
+        #save the odom as numpy array
         np.save(f"{self.log_dir}/odom.npy", odom)
         self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
 
-        sys.exit(0)
     
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -239,67 +247,68 @@ class CaBotImageNode(Node):
 
     def loop(self):
 
-        while True:
-            # generate explanation
-            if not self.no_explain_mode:
-                # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
-                # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
-                if self.cabot_nav_state != self.valid_state:
-                    self.logger.info(f"mode: {self.mode}current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
-                    time.sleep(1.0)
-                else:
-                    gpt_explainer = GPTExplainer(
-                        log_dir=self.log_dir,
-                        mode=self.mode,
-                        node=self,
-                        should_speak=self.should_speak,
-                        api_key=self.apikey,
-                        # dummy=True if is_sim else False
-                    )
-                    try:
-                        gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
-                    except Exception as e:
-                        traceback.print_exc()
-                        self.logger.error(f"Error occurred: {e}")
-                        time.sleep(1.0)
-                        continue
+        # generate explanation
+        if not self.no_explain_mode:
+            # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
+            # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
+            if self.cabot_nav_state != self.valid_state:
+                self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
+                self.schedule_next_loop(interval=1.0)
+                return
+            else:
+                gpt_explainer = GPTExplainer(
+                    log_dir=self.log_dir,
+                    mode=self.mode,
+                    node=self,
+                    should_speak=self.should_speak,
+                    api_key=self.apikey,
+                    # dummy=True if is_sim else False
+                )
+                try:
+                    gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                except Exception as e:
+                    traceback.print_exc()
+                    self.logger.error(f"Error occurred: {e}")
+                    self.schedule_next_loop(interval=1.0)
+                    return
 
-                    if self.mode == "intersection_detection_mode":
-                        print("Availability of each direction")
-                        print(f"Front marker : {self.front_marker_detected}")
-                        print(f"Left marker  : {self.left_marker_detected}")
-                        print(f"Right marker : {self.right_marker_detected}")
-                        if not self.no_explain_mode:
-                            print(f"Front available (GPT) : {gpt_explainer.front_available}")
-                            print(f"Left available (GPT)  : {gpt_explainer.left_available}")
-                            print(f"Right available (GPT) : {gpt_explainer.right_available}")
-                    
-                    if self.debug:
-                        # randomly decide the values
-                        print("random mode; setting the values randomly")
-                        self.front_marker_detected = np.random.choice([True, False])
-                        self.left_marker_detected = np.random.choice([True, False])
-                        self.right_marker_detected = np.random.choice([True, False])
-                        gpt_explainer.front_available = np.random.choice([True, False])
-                        gpt_explainer.left_available = np.random.choice([True, False])
-                        gpt_explainer.right_available = np.random.choice([True, False])
-                    
-                    if self.once:
-                        return {
-                            "front_marker": self.front_marker_detected,
-                            "left_marker": self.left_marker_detected,
-                            "right_marker": self.right_marker_detected,
-                            "front_available": gpt_explainer.front_available,
-                            "left_available": gpt_explainer.left_available,
-                            "right_available": gpt_explainer.right_available
-                        }
-                    else:
-                        print("Waiting for the next image...")
-                        if self.mode == "surronding_explain_mode":
-                            # we need to avoid overlapping the speaking time
-                            time.sleep(max(gpt_explainer.wait_time, 5.0))
-                        else:
-                            time.sleep(5.0)
+                if self.mode == "intersection_detection_mode":
+                    print("Availability of each direction")
+                    print(f"Front marker : {self.front_marker_detected}")
+                    print(f"Left marker  : {self.left_marker_detected}")
+                    print(f"Right marker : {self.right_marker_detected}")
+                    if not self.no_explain_mode:
+                        print(f"Front available (GPT) : {gpt_explainer.front_available}")
+                        print(f"Left available (GPT)  : {gpt_explainer.left_available}")
+                        print(f"Right available (GPT) : {gpt_explainer.right_available}")
+                
+                if self.debug:
+                    # randomly decide the values
+                    print("random mode; setting the values randomly")
+                    self.front_marker_detected = np.random.choice([True, False])
+                    self.left_marker_detected = np.random.choice([True, False])
+                    self.right_marker_detected = np.random.choice([True, False])
+                    gpt_explainer.front_available = np.random.choice([True, False])
+                    gpt_explainer.left_available = np.random.choice([True, False])
+                    gpt_explainer.right_available = np.random.choice([True, False])
+                
+                if self.once:
+                    return {
+                        "front_marker": self.front_marker_detected,
+                        "left_marker": self.left_marker_detected,
+                        "right_marker": self.right_marker_detected,
+                        "front_available": gpt_explainer.front_available,
+                        "left_available": gpt_explainer.left_available,
+                        "right_available": gpt_explainer.right_available
+                    }
+                # else:
+                #     
+                    # print("Waiting for the next image...")
+                    # if self.mode == "surronding_explain_mode":
+                    #     # we need to avoid overlapping the speaking time
+                    #     self.schedule_next_loop(interval=max(gpt_explainer.wait_time, 5.0))
+                    # else:
+                    #     self.schedule_next_loop()
 
 
 class GPTExplainer():
@@ -584,18 +593,16 @@ class GPTExplainer():
         cv2.putText(cv2_image, text, (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
         return cv2_image
 
-    def loop_explain(self):
-        while True:
-            self.explain()
-            time.sleep(5.0)
-
-
-def main() -> Dict[str, Any]:
-    rclpy.init(args=None)
+def main(args=None):
+    rclpy.init(args=args)
     node = CaBotImageNode()
-    result = node.loop()
-    rclpy.shutdown()
-    return result
+    try:
+        rclpy.spin(node)  # Keep the node spinning to process callbacks
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
