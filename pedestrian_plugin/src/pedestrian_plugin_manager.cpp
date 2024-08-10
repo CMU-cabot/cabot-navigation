@@ -182,6 +182,11 @@ PedestrianPluginManager::PedestrianPluginManager()
     std::bind(&PedestrianPluginManager::handle_plugin_update, this, std::placeholders::_1, std::placeholders::_2));
   dyn_params_handler_ = node_->add_on_set_parameters_callback(
     std::bind(&PedestrianPluginManager::dynamicParametersCallback, this, std::placeholders::_1));
+
+  // a RayShape for occulusion check
+  gazebo::physics::PhysicsEnginePtr physics = gazebo::physics::get_world()->Physics();
+  ray_ = boost::dynamic_pointer_cast<gazebo::physics::RayShape>(
+    physics->CreateShape("ray", gazebo::physics::CollisionPtr()));
 }
 
 PedestrianPluginManager::~PedestrianPluginManager() {}
@@ -232,27 +237,52 @@ void PedestrianPluginManager::publishPeopleIfReady()
     const auto robot_yaw =
       math::normalizeRad(robotAgent_->yaw + getYawFromTransform(base_to_lidar_tf));
 
-    auto visible_people = getNonOccludedPeople(robot_point, peopleMap_);
-    auto filtered_people = filterByDistanceAndAngle(robot_yaw, robot_point, visible_people);
+    // TODO: options to choose method for occulusion or use one of them
+    if (false) {
+      auto visible_people = getNonOccludedPeople(robot_point, peopleMap_);
+      auto filtered_people = filterByDistanceAndAngle(robot_yaw, robot_point, visible_people);
 
-    msg.header.stamp = *stamp_;
-    msg.header.frame_id = "map_global";
-    msg.people = filtered_people;
-    people_pub_->publish(msg);
+      msg.header.stamp = *stamp_;
+      msg.header.frame_id = "map_global";
+      msg.people = filtered_people;
+      people_pub_->publish(msg);
 
-    // publish robot and human messages
-    robotAgent_->header.stamp = *stamp_;
-    robotAgent_->header.frame_id = "map_global";
-    robot_pub_->publish(*robotAgent_);
-    pedestrian_plugin_msgs::msg::Agents humanAgentsMsg;
-    for (auto it : humanAgentsMap_) {
-      humanAgentsMsg.agents.push_back(it.second);
+      // publish robot and human messages
+      robotAgent_->header.stamp = *stamp_;
+      robotAgent_->header.frame_id = "map_global";
+      robot_pub_->publish(*robotAgent_);
+      pedestrian_plugin_msgs::msg::Agents humanAgentsMsg;
+      for (auto it : humanAgentsMap_) {
+        humanAgentsMsg.agents.push_back(it.second);
+      }
+      humanAgentsMsg.header.stamp = *stamp_;
+      humanAgentsMsg.header.frame_id = "map_global";
+      human_pub_->publish(humanAgentsMsg);
+
+      peopleReadyMap_.clear();
+    } else {
+      auto visible_people = getNonOccludedPeople2(robot_point, peopleMap_);
+      auto filtered_people = filterByDistanceAndAngle(robot_yaw, robot_point, visible_people);
+
+      msg.header.stamp = *stamp_;
+      msg.header.frame_id = "map_global";
+      msg.people = filtered_people;
+      people_pub_->publish(msg);
+
+      // publish robot and human messages
+      robotAgent_->header.stamp = *stamp_;
+      robotAgent_->header.frame_id = "map_global";
+      robot_pub_->publish(*robotAgent_);
+      pedestrian_plugin_msgs::msg::Agents humanAgentsMsg;
+      for (auto it : humanAgentsMap_) {
+        humanAgentsMsg.agents.push_back(it.second);
+      }
+      humanAgentsMsg.header.stamp = *stamp_;
+      humanAgentsMsg.header.frame_id = "map_global";
+      human_pub_->publish(humanAgentsMsg);
+
+      peopleReadyMap_.clear();
     }
-    humanAgentsMsg.header.stamp = *stamp_;
-    humanAgentsMsg.header.frame_id = "map_global";
-    human_pub_->publish(humanAgentsMsg);
-
-    peopleReadyMap_.clear();
   }
 }
 
@@ -509,6 +539,38 @@ std::vector<people_msgs::msg::Person> PedestrianPluginManager::getNonOccludedPeo
     }
   }
 
+  return visible_people;
+}
+
+std::vector<people_msgs::msg::Person> PedestrianPluginManager::getNonOccludedPeople2(
+  const geometry_msgs::msg::Point & robot_point,
+  const std::map<std::string, people_msgs::msg::Person> & people_map)
+{
+  std::vector<people_msgs::msg::Person> visible_people;
+  std::set<std::string> check;
+
+  for (int i = 0; i < 1800; i++) {
+    auto angle = i / 5.0 / 180.0 * M_PI;
+    auto anglec = cos(angle);
+    auto angles = sin(angle);
+    ignition::math::Vector3d start(robot_point.x + anglec * min_range_, robot_point.y + angles * min_range_, robot_point.z);
+    ignition::math::Vector3d end(robot_point.x + anglec * max_range_, robot_point.y + angles * max_range_, robot_point.z);
+    ray_->SetPoints(start, end);
+    double dist;
+    std::string entityName = "";
+    ray_->GetIntersection(dist, entityName);
+    if (dist < std::numeric_limits<double>::infinity()) {
+      std::string key = entityName.substr(0, entityName.find("::"));
+      auto it = people_map.find(key);
+      if (it != people_map.end()) {
+        if (check.find(key) == check.end()) {
+          visible_people.push_back(it->second);
+          check.insert(key);
+        }
+      }
+      // RCLCPP_INFO(node_->get_logger(), "angle(%d), dist=%f, entityName=%s", i, dist, entityName.c_str());
+    }
+  }
   return visible_people;
 }
 

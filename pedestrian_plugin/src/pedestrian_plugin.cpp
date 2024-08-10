@@ -67,10 +67,82 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
   actor_id = manager.addPlugin(this->name, this, this->actor==nullptr);
   RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin for %s...", this->name.c_str());
 
+  if (this->actor) {
+    // TODO: move to a separated class/file
+    // Map of collision scaling factors
+    // equivalent mapping from a actor collision plugin example
+    // https://github.com/gazebosim/gazebo-classic/blob/e4b4d0fb752c7e43e34ab97d0e01a2a3eaca1ed4/examples/plugins/actor_collisions/actor_collisions.world.erb#L128-L239
+    std::map<std::string, ignition::math::Vector3d> scaling;
+    std::map<std::string, ignition::math::Pose3d> offsets;
+    scaling["LHipJoint_LeftUpLeg_collision"] = ignition::math::Vector3d(0.01, 0.001, 0.001);
+    scaling["LeftUpLeg_LeftLeg_collision"] = ignition::math::Vector3d(8.0, 8.0, 1.0);
+    scaling["LeftLeg_LeftFoot_collision"] = ignition::math::Vector3d(8.0, 8.0, 1.0);
+    scaling["LeftFoot_LeftToeBase_collision"] = ignition::math::Vector3d(4.0, 4.0, 1.5);
+    scaling["RHipJoint_RightUpLeg_collision"] = ignition::math::Vector3d(0.01, 0.001, 0.001);
+    scaling["RightUpLeg_RightLeg_collision"] = ignition::math::Vector3d(8.0, 8.0, 1.0);
+    scaling["RightLeg_RightFoot_collision"] = ignition::math::Vector3d(8.0, 8.0, 1.0);
+    scaling["RightFoot_RightToeBase_collision"] = ignition::math::Vector3d(4.0, 4.0, 1.5);
+    scaling["LowerBack_Spine_collision"] = ignition::math::Vector3d(12.0, 20.0, 5.0);
+    offsets["LowerBack_Spine_collision"] = ignition::math::Pose3d(0.05, 0, 0, 0, -0.2, 0);
+    scaling["Spine_Spine1_collision"] = ignition::math::Vector3d(0.01, 0.001, 0.001);
+    scaling["Neck_Neck1_collision"] = ignition::math::Vector3d(0.01, 0.001, 0.001);
+    scaling["Neck1_Head_collision"] = ignition::math::Vector3d(5.0, 5.0, 3.0);
+    scaling["LeftShoulder_LeftArm_collision"] = ignition::math::Vector3d(0.01, 0.001, 0.001);
+    scaling["LeftArm_LeftForeArm_collision"] = ignition::math::Vector3d(5.0, 5.0, 1.0);
+    scaling["LeftForeArm_LeftHand_collision"] = ignition::math::Vector3d(5.0, 5.0, 1.0);
+    scaling["LeftFingerBase_LeftHandIndex1_collision"] = ignition::math::Vector3d(4.0, 4.0, 3.0);
+    scaling["RightShoulder_RightArm_collision"] = ignition::math::Vector3d(0.01, 0.001, 0.001);
+    scaling["RightArm_RightForeArm_collision"] = ignition::math::Vector3d(5.0, 5.0, 1.0);
+    scaling["RightForeArm_RightHand_collision"] = ignition::math::Vector3d(5.0, 5.0, 1.0);
+    scaling["RightFingerBase_RightHandIndex1_collision"] = ignition::math::Vector3d(4.0, 4.0, 3.0);
+
+    // enable links of actor collidable with RayShape
+    for (const auto &link : this->actor->GetLinks())
+    {
+      if (scaling.empty())
+        continue;
+
+      // Init the links, which in turn enables collisions
+      link->Init();
+
+      // Process all the collisions in all the links
+      for (const auto &collision : link->GetCollisions())
+      {
+        auto name = collision->GetName();
+
+        // Set bitmask for collisions so actors won't collide with actors
+        // TODO: maybe option to collide?
+        collision->GetSurface()->collideBitmask = 0x00;
+
+        if (scaling.find(name) != scaling.end())
+        {
+          auto boxShape = boost::dynamic_pointer_cast<gazebo::physics::BoxShape>(
+              collision->GetShape());
+
+          // Make sure we have a box shape.
+          if (boxShape) {
+            boxShape->SetSize(boxShape->Size() * scaling[name]);
+          }
+        }
+
+        if (offsets.find(name) != offsets.end())
+        {
+          collision->SetInitialRelativePose(
+              offsets[name] + collision->InitialRelativePose());
+        }
+      }
+    }
+  }
+
+  // parse other parameters for plugins
   PedestrianPluginParams temp_params;
   sdf::ElementPtr child = this->sdf->GetFirstElement();
   while (child) {
     std::string key = child->GetName();
+    if (key == "scaling") {
+       child = child->GetNextElement();
+       continue;
+    }
     std::string type = "str";
     sdf::ParamPtr typeAttr = child->GetAttribute("type");
     if (typeAttr) {
@@ -303,7 +375,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
         pose.Pos().Y(newY + wPose[1]);
         pose.Pos().Z(newZ + wPose[2]);
         pose.Rot() = ignition::math::Quaterniond(newRoll + wPose[3], newPitch + wPose[4], newYaw + wPose[5]);
-        this->actor->SetWorldPose(pose, false, false);
+        this->actor->SetWorldPose(pose, true, true);
 
         double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
         this->actor->SetScriptTime(this->actor->ScriptTime() + dst);

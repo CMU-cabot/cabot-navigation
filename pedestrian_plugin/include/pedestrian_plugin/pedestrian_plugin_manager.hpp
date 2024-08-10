@@ -159,6 +159,9 @@ private:
   std::vector<people_msgs::msg::Person> getNonOccludedPeople(
     const geometry_msgs::msg::Point & robot_point,
     const std::map<std::string, people_msgs::msg::Person> & people_map);
+  std::vector<people_msgs::msg::Person> getNonOccludedPeople2(
+    const geometry_msgs::msg::Point & robot_point,
+    const std::map<std::string, people_msgs::msg::Person> & people_map);
   std::vector<people_msgs::msg::Person> filterByDistanceAndAngle(
     const double robot_yaw,
     const geometry_msgs::msg::Point & robot_point,
@@ -193,6 +196,7 @@ private:
 
   gazebo::physics::ModelPtr model_;
   gazebo::physics::LinkPtr base_control_shift_link_;
+  gazebo::physics::RayShapePtr ray_;
 
   std::vector<int> offset_table_;
   bool initialized_base_control_shift_link_;
