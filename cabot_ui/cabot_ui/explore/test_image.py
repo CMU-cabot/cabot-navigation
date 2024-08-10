@@ -69,6 +69,7 @@ class CaBotImageNode(Node):
         self.is_sim = self.declare_parameter("is_sim").value
         self.logger = self.get_logger()
         self.apikey = self.declare_parameter("apikey").value
+        self.ready = False
 
         if  self.mode == "semantic_map_mode":
             postfix = "s"
@@ -162,6 +163,8 @@ class CaBotImageNode(Node):
     
     def activity_callback(self, msg: Log):
         self.logger.info(f"activity log: {msg}")
+        if msg.category == "cabot/interface" and msg.memo == "ready":
+            self.ready = True
 
     def cabot_nav_state_callback(self, msg: String):
         self.cabot_nav_state = msg.data
@@ -248,7 +251,7 @@ class CaBotImageNode(Node):
     def loop(self):
 
         # generate explanation
-        if not self.no_explain_mode:
+        if not self.no_explain_mode and self.ready:
             # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
             # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
             if self.cabot_nav_state != self.valid_state:
