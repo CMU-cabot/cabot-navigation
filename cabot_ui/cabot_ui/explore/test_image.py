@@ -25,6 +25,8 @@ import re
 import time
 from packaging.version import Version
 from . import test_speak
+import traceback
+import json
 
 
 """
@@ -62,8 +64,9 @@ class CaBotImageNode(Node):
         self.debug = self.declare_parameter("debug").value
         self.once = self.declare_parameter("once").value
         self.no_explain_mode = self.declare_parameter("no_explain_mode").value
-        self.is_sim = self.declare_parameter("sim").value
+        self.is_sim = self.declare_parameter("is_sim").value
         self.logger = self.get_logger()
+        self.apikey = self.declare_parameter("apikey").value
 
         if  self.mode == "semantic_map_mode":
             postfix = "s"
@@ -87,7 +90,7 @@ class CaBotImageNode(Node):
         self.valid_state = valid_state
 
         if self.is_sim:
-            print("Using simulation environment")
+            self.logger.info("Using simulation environment")
             self.front_camera_topic_name = "/camera/color/image_raw"
             self.left_camera_topic_name = "/camera/color/image_raw"
             self.right_camera_topic_name = "/camera/color/image_raw"
@@ -149,7 +152,8 @@ class CaBotImageNode(Node):
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
 
-        self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode}")
+        self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}, {self.odom_topic_name}")
+        self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
     
     def cabot_nav_state_callback(self, msg: String):
         self.cabot_nav_state = msg.data
@@ -157,9 +161,9 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-        if self.cabot_nav_state != self.valid_state:
-            return
-        print(f"image callback; {self.cabot_nav_state}")
+        # if self.cabot_nav_state != self.valid_state:
+        #     return
+        self.logger.info(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
         left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
@@ -203,20 +207,18 @@ class CaBotImageNode(Node):
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
 
-        # finish the node
-        if self.cabot_nav_state != "":
-            print("front", type(front_image), front_image.shape)
-            print("left", type(left_image), left_image.shape)
-            print("right", type(right_image), right_image.shape)
-            # save the image
-            cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
-            cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
-            cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
+        self.logger.info("front", type(front_image), front_image.shape)
+        self.logger.info("left", type(left_image), left_image.shape)
+        self.logger.info("right", type(right_image), right_image.shape)
+        # save the image
+        cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
+        cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
+        cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
 
-            np.save(f"{self.log_dir}/odom.npy", odom)
-            print(f"odom saved: {self.log_dir}/odom.npy")
+        np.save(f"{self.log_dir}/odom.npy", odom)
+        self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
 
-            sys.exit(0)
+        sys.exit(0)
     
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -249,13 +251,16 @@ class CaBotImageNode(Node):
                     gpt_explainer = GPTExplainer(
                         log_dir=self.log_dir,
                         mode=self.mode,
+                        node=self,
                         should_speak=self.should_speak,
+                        api_key=self.apikey,
                         # dummy=True if is_sim else False
                     )
                     try:
                         gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
                     except Exception as e:
-                        self.logger.error(f"Error in explaining: {e}")
+                        traceback.print_exc()
+                        self.logger.error(f"Error occurred: {e}")
                         time.sleep(1.0)
                         continue
 
@@ -302,18 +307,18 @@ class GPTExplainer():
             self, 
             log_dir: str,
             mode: str,
+            node: Node,
+            api_key: str,
             should_speak: bool = False,
             dummy: bool = False
         ):
         self.dummy = dummy
-        if dummy:
-            self.api_key = "dummy"
-        else:
-            self.api_key = os.environ.get('OPENAI_API_KEY')
-            if self.api_key is None:
-                raise ValueError("Please set the OPENAI_API_KEY environment variable.")
-
+        self.api_key = api_key
         self.mode = mode
+        self.node = node
+        self.logger = self.node.get_logger()
+
+        self.logger.info(f"Initializing GPTExplainer with api_key: {self.api_key}")
 
         self.headers = {
             "Content-Type": "application/json",
@@ -447,23 +452,31 @@ class GPTExplainer():
         if self.dummy:
             print("This is a dummy explanation.")
             return
-        # resize images max width 512
-        front_image = self.resize_images(front_image, max_width=768)
-        left_image = self.resize_images(left_image, max_width=768)
-        right_image = self.resize_images(right_image, max_width=768)
+        
+        try:
+            # resize images max width 512
+            front_image = self.resize_images(front_image, max_width=768)
+            left_image = self.resize_images(left_image, max_width=768)
+            right_image = self.resize_images(right_image, max_width=768)
 
-        # generate explanation from the three-view images
-        front_image_with_text = self.add_text_to_image(front_image, "Front")
-        left_image_with_text = self.add_text_to_image(left_image, "Left")
-        right_image_with_text = self.add_text_to_image(right_image, "Right")
+            # generate explanation from the three-view images
+            front_image_with_text = self.add_text_to_image(front_image, "Front")
+            left_image_with_text = self.add_text_to_image(left_image, "Left")
+            right_image_with_text = self.add_text_to_image(right_image, "Right")
 
-        # save the images for debug
-        cv2.imwrite(f"{self.log_dir}/front_with_text.jpg", front_image_with_text)
-        cv2.imwrite(f"{self.log_dir}/left_with_text.jpg", left_image_with_text)
-        cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
+            # save the images for debug
+            cv2.imwrite(f"{self.log_dir}/front_with_text.jpg", front_image_with_text)
+            cv2.imwrite(f"{self.log_dir}/left_with_text.jpg", left_image_with_text)
+            cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
 
-        gpt_response = self.query_with_images([front_image_with_text, left_image_with_text, right_image_with_text])
-        # print(f"{self.mode}: {gpt_response}")
+            gpt_response = self.query_with_images([front_image_with_text, left_image_with_text, right_image_with_text])
+            # print(f"{self.mode}: {gpt_response}")
+        except Exception as e:
+            self.logger.info(f"Error in GPTExplainer.explain: {e}")
+            gpt_response = self.query_with_images([])
+
+        pretty_response = json.dumps(gpt_response, indent=4)
+        self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
         # get front/left/right availability
         extracted_json = self.extract_json_part(gpt_response["choices"][0]["message"]["content"])
@@ -471,7 +484,7 @@ class GPTExplainer():
             print("Could not extract JSON part from the response.")
             gpt_response["description"] = "不具合が発生しました。"
         else:
-            if self.intersection_detection_mode:
+            if self.mode == "intersection_detection_mode":
                 self.front_available = extracted_json.get("front", True)
                 self.left_available = extracted_json.get("left", True)
                 self.right_available = extracted_json.get("right", True)

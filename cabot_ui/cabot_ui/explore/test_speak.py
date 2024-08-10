@@ -15,7 +15,7 @@ class Speaker(object):
         if debug:
             self.speak('hello world!こんにちは')
 
-    def speak(self, text, force=True, pitch=50, volume=50, rate=50):
+    def speak(self, text, force=False, pitch=50, volume=50, rate=50):
         if text is None:
             return
 

@@ -123,6 +123,11 @@ if [[ $CABOT_TOUCH_ENABLED = 'true' ]] && [[ -z $CABOT_TOUCH_PARAMS ]]; then
     err "CABOT_TOUCH_PARAMS should be configured when CABOT_TOUCH_ENABLED is true"
     error_flag=1
 fi
+# if openai key is not set, do not launch exploration
+if [[ -z $OPENAI_API_KEY ]]; then
+    err "OPENAI_API_KEY is not set, exploration will not be launched"
+    error_flag=1
+fi
 if [[ $error_flag -ne 0 ]]; then
     exit
 fi
@@ -240,11 +245,12 @@ eval $com
 checks+=($!)
 pids+=($!)
 
-export OPENAI_API_KEY=$OPENAI_API_KEY
+echo $OPENAI_API_KEY
 # launch exploration
 blue "launch exploration related nodes"
 com="$command_prefix ros2 launch cabot_ui cabot_explore_exp1.launch.py \
-        $command_postfix"
+    apikey:=$OPENAI_API_KEY \
+    $command_postfix"
 echo $com
 eval $com
 checks+=($!)

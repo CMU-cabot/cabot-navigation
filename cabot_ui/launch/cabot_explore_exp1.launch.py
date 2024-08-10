@@ -1,12 +1,14 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from datetime import datetime
+from launch.substitutions import LaunchConfiguration
 import os
 
 def generate_launch_description():
     # Get the current date and time
     now = datetime.now()
     exp_name = f'exp_date_{now.strftime("%Y%m%d")}_time_{now.strftime("%H%M")}'
+    apikey = LaunchConfiguration('apikey')
 
     return LaunchDescription([
         # scemantic map mode
@@ -22,7 +24,8 @@ def generate_launch_description():
                 {'debug': False},
                 {'once': False},
                 {'no_explain_mode': False},
-                {'is_sim': False},
+                {'is_sim': True},
+                {'apikey': apikey}
                 
             ]
         ),
@@ -35,12 +38,13 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {'mode': 'surronding_explain_mode'},
-                {'should_speak': True},
+                {'should_speak': False},
                 {'log_dir': exp_name},                
                 {'debug': False},
                 {'once': False},
                 {'no_explain_mode': False},
-                {'is_sim': False},
+                {'is_sim': True},
+                {'apikey': apikey}
                 
             ]
         ),
