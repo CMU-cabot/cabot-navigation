@@ -318,7 +318,7 @@ class CaBotImageNode(Node):
                     self.gpt_explainer.right_available = np.random.choice([True, False])
                 
             if self.mode == "surronding_explain_mode":
-                wait_time = max(wait_time, 7.0)
+                # wait_time = max(wait_time, 7.0)
                 self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
                 self.change_timer_interval(interval=wait_time)
         else:
@@ -570,8 +570,8 @@ class GPTExplainer():
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
-        # 1 character takes 0.3 seconds
-        return len(text) * 0.2
+        # 1 character takes 0.1 seconds
+        return len(text) * 0.1
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # Regular expression to match JSON part
