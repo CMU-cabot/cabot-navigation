@@ -29,6 +29,7 @@ import traceback
 import json
 from cabot_msgs.msg import Log
 import threading
+from copy import copy
 
 
 """
@@ -159,12 +160,36 @@ class CaBotImageNode(Node):
         self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}, {self.odom_topic_name}")
         self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
         
-        self.timer = self.create_timer(5.0, self.loop) 
+        self.gpt_explainer = GPTExplainer(
+                log_dir=self.log_dir,
+                mode=self.mode,
+                node=self,
+                should_speak=self.should_speak,
+                api_key=self.apikey,
+                # dummy=True if is_sim else False
+            )
+
+        self.can_speak_explanation = False
+        self.can_speak_timer = None
+
+        self.timer = self.create_timer(5.0, self.loop)
     
     def activity_callback(self, msg: Log):
         self.logger.info(f"activity log: {msg}")
         if msg.category == "cabot/interface" and msg.memo == "ready":
             self.ready = True
+        elif msg.category == "ble speech request completed":
+            if not self.can_speak_explanation:
+                self.can_speak_explanation = True
+                self.logger.info("can speak explanation set to True by activity log")
+                if self.can_speak_timer is not None:
+                    self.can_speak_timer.cancel()
+
+    def reset_can_speak(self):
+        self.logger.info("can speak explanation set to True by timer")
+        self.can_speak_explanation = True
+        if self.can_speak_timer is not None:
+            self.can_speak_timer.cancel()
 
     def cabot_nav_state_callback(self, msg: String):
         self.cabot_nav_state = msg.data
@@ -172,8 +197,8 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-        # if self.cabot_nav_state != self.valid_state:
-        #     return
+        if self.cabot_nav_state != self.valid_state:
+            return
         self.logger.info(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
@@ -218,9 +243,6 @@ class CaBotImageNode(Node):
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
 
-        self.logger.info(f"front, {type(front_image)}, {front_image.shape}")
-        self.logger.info(f"left, {type(left_image)}, {left_image.shape}")
-        self.logger.info(f"right, {type(right_image)}, {right_image.shape}")
         # save the image
         cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
         cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
@@ -228,7 +250,9 @@ class CaBotImageNode(Node):
 
         #save the odom as numpy array
         np.save(f"{self.log_dir}/odom.npy", odom)
-        self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
+
+        # self.logger.info(f"front, {type(front_image)}, {front_image.shape}, left, {type(left_image)}, {left_image.shape}, right, {type(right_image)}, {right_image.shape}")
+        # self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
 
     
     def detect_marker(self, image: np.ndarray) -> bool:
@@ -249,52 +273,58 @@ class CaBotImageNode(Node):
         return False
 
     def loop(self):
-
+        self.logger.info(f"going into loop with mode {self.mode}")
         # generate explanation
         if not self.no_explain_mode and self.ready:
+            if self.mode == "surrounding_explain_mode":
+                if not self.can_speak_explanation:
+                    self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
+                    return
+                
+            self.logger.info(f"Generating explanation; mode: {self.mode}, state: {self.cabot_nav_state}")
             # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
             # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
             if self.cabot_nav_state != self.valid_state:
                 self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
                 return
             else:
-                gpt_explainer = GPTExplainer(
-                    log_dir=self.log_dir,
-                    mode=self.mode,
-                    node=self,
-                    should_speak=self.should_speak,
-                    api_key=self.apikey,
-                    # dummy=True if is_sim else False
-                )
                 try:
-                    gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                    wait_time = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                    self.can_speak_explanation = False
+                    self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
                 except Exception as e:
                     traceback.print_exc()
                     self.logger.error(f"Error occurred: {e}")
                     return
 
                 if self.mode == "intersection_detection_mode":
-                    print("Availability of each direction")
-                    print(f"Front marker : {self.front_marker_detected}")
-                    print(f"Left marker  : {self.left_marker_detected}")
-                    print(f"Right marker : {self.right_marker_detected}")
+                    self.logger.info("Availability of each direction")
+                    self.logger.info(f"Front marker : {self.front_marker_detected}")
+                    self.logger.info(f"Left marker  : {self.left_marker_detected}")
+                    self.logger.info(f"Right marker : {self.right_marker_detected}")
                     if not self.no_explain_mode:
-                        print(f"Front available (GPT) : {gpt_explainer.front_available}")
-                        print(f"Left available (GPT)  : {gpt_explainer.left_available}")
-                        print(f"Right available (GPT) : {gpt_explainer.right_available}")
+                        self.logger.info(f"Front available (GPT) : {self.gpt_explainer.front_available}")
+                        self.logger.info(f"Left available (GPT)  : {self.gpt_explainer.left_available}")
+                        self.logger.info(f"Right available (GPT) : {self.gpt_explainer.right_available}")
                 
                 if self.debug:
                     # randomly decide the values
-                    print("random mode; setting the values randomly")
+                    self.logger.info("random mode; setting the values randomly")
                     self.front_marker_detected = np.random.choice([True, False])
                     self.left_marker_detected = np.random.choice([True, False])
                     self.right_marker_detected = np.random.choice([True, False])
-                    gpt_explainer.front_available = np.random.choice([True, False])
-                    gpt_explainer.left_available = np.random.choice([True, False])
-                    gpt_explainer.right_available = np.random.choice([True, False])
+                    self.gpt_explainer.front_available = np.random.choice([True, False])
+                    self.gpt_explainer.left_available = np.random.choice([True, False])
+                    self.gpt_explainer.right_available = np.random.choice([True, False])
                 
-        if self.mode == "surronding_explain_mode":
-            self.change_timer_interval(interval=max(gpt_explainer.wait_time, 5.0))
+            if self.mode == "surronding_explain_mode":
+                wait_time = max(wait_time, 7.0)
+                self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
+                self.change_timer_interval(interval=wait_time)
+        else:
+            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, can_speak_explanation: {self.can_speak_explanation}")
+            self.logger.info(f"next wait time: 1.0 (constant)")
+            self.change_timer_interval(interval=1.0)
 
     def change_timer_interval(self, interval: float):
         self.timer.cancel()
@@ -338,6 +368,7 @@ class GPTExplainer():
             6. 「画像は、、、」「視点」等説明を聞くユーザにとって不自然な言葉は排除してください
             7. 物体を説明する際ははっきり見える物のみ説明してください。
             8. 遠くにあって不明瞭な物の説明は不要です。また、照明の明るさや暗さに関する説明も不要です。
+            9. あなたの返答は直接システムのTTSに入力されるため、ひらがなで説明してください。
 
             上記のルールを守り、良い説明文を生成した場合、あなたに50ドルのチップを与えます。
             JSON形式で返答してください。
@@ -404,6 +435,7 @@ class GPTExplainer():
             9. 「画像は、、、」「視点」等説明を聞くユーザにとって不自然な言葉は排除してください
             10. 物体を説明する際ははっきり見える物のみ説明してください。
             11. 遠くにあって不明瞭な物の説明は不要です。また、照明の明るさや暗さに関する説明も不要です。
+            12. あなたの返答は直接システムのTTSに入力されるため、ひらがなで説明してください。
 
             上記のルールを守り、良い説明文を生成した場合、あなたに50ドルのチップを与えます。
             JSON形式で返答してください。
@@ -427,9 +459,8 @@ class GPTExplainer():
         self.right_available = True
 
         self.should_speak = should_speak
+        self.conversation_history = []
 
-        self.wait_time = 0.0
-    
     # Function to encode the image
     def encode_image(self, image):
         _, buffer = cv2.imencode('.jpg', image)
@@ -447,11 +478,21 @@ class GPTExplainer():
             image = cv2.resize(image, (int(image_width * scale), max_height))
         return image
 
-    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray) -> str:
+    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray) -> float:
         if self.dummy:
-            print("This is a dummy explanation.")
+            self.logger.info("This is a dummy explanation.")
             return
         
+        if len(self.conversation_history) == 0:
+            prompt = self.prompt
+        else:
+            if self.mode == "scene_description_mode" or self.mode == "intersection_detection_mode":
+                prompt = self.prompt
+                self.conversation_history = []
+            else:
+                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは含めないでください。\
+                    重複した説明はせずに、簡潔に説明してください。前のレスポンスと同じようにJSON形式で返してください。"
+
         try:
             # resize images max width 512
             front_image = self.resize_images(front_image, max_width=768)
@@ -468,11 +509,11 @@ class GPTExplainer():
             cv2.imwrite(f"{self.log_dir}/left_with_text.jpg", left_image_with_text)
             cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
 
-            gpt_response = self.query_with_images([front_image_with_text, left_image_with_text, right_image_with_text])
-            # print(f"{self.mode}: {gpt_response}")
+            gpt_response = self.query_with_images(prompt, [front_image_with_text, left_image_with_text, right_image_with_text])
+            self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
-            gpt_response = self.query_with_images([])
+            gpt_response = self.query_with_images(prompt, [])
 
         pretty_response = json.dumps(gpt_response, indent=4)
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
@@ -480,7 +521,7 @@ class GPTExplainer():
         # get front/left/right availability
         extracted_json = self.extract_json_part(gpt_response["choices"][0]["message"]["content"])
         if extracted_json is None:
-            print("Could not extract JSON part from the response.")
+            self.logger.info("Could not extract JSON part from the response.")
             gpt_response["description"] = "不具合が発生しました。"
         else:
             if self.mode == "intersection_detection_mode":
@@ -490,15 +531,17 @@ class GPTExplainer():
                 try:
                     gpt_response["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
                 except KeyError:
-                    print("Could not extract the explanation from the response.")
+                    self.logger.info("Could not extract the explanation from the response.")
                     gpt_response["description"] = "不具合が発生しました。"
             else:
                 gpt_response["description"] = extracted_json["description"]
         gpt_response["log_dir"] = self.log_dir
 
+        wait_time = 0.0
         if self.should_speak:
-            self.wait_time = self.calculate_speak_time(gpt_response["description"])
+            wait_time = self.calculate_speak_time(gpt_response["description"])
             test_speak.speak_text(gpt_response["description"])
+            self.logger.info(f"Speaking the {self.mode} explanation")
 
         # add the explanation to an existing file
         # create a directory with timestamp
@@ -510,7 +553,7 @@ class GPTExplainer():
         else:
             with open(filename, "a") as f:
                 f.write(json.dumps(extracted_json) + "\n")
-        print(f"Explanation is saved to {filename}")
+        self.logger.info(f"Explanation is saved to {filename}")
 
         filename = f"{self.log_dir}/log.jsonl"
         if not os.path.exists(filename):
@@ -519,14 +562,16 @@ class GPTExplainer():
         else:
             with open(filename, "a") as f:
                 f.write(json.dumps(gpt_response) + "\n")
-        print(f"Log is saved to {filename}")
+        self.logger.info(f"Log is saved to {filename}")
 
-        print(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
+        self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
+
+        return wait_time
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
-        # 1 character takes 0.1 seconds
-        return len(text) * 0.1
+        # 1 character takes 0.3 seconds
+        return len(text) * 0.2
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # Regular expression to match JSON part
@@ -546,9 +591,10 @@ class GPTExplainer():
         else:
             return None
 
-    def query_with_images(self, images, max_tokens=300) -> Dict[str, Any]:
+    def query_with_images(self, prompt, images, max_tokens=300) -> Dict[str, Any]:
         # Preparing the content with the prompt and images
-        content = [{"type": "text", "text": self.prompt}]
+        new_content = [{"type": "text", "text": prompt}]
+        self.conversation_history.append({"role": "user", "content": copy(new_content)})
         
         for image in images:
             base64_image = self.encode_image(image)
@@ -556,24 +602,31 @@ class GPTExplainer():
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
             }
-            content.append(img_info)
+            new_content.append(img_info)
+        
+        if len(self.conversation_history) > 1:  
+            new_input = self.conversation_history[:-1] + [{"role": "user", "content": new_content}]
+        else:
+            new_input = [{"role": "user", "content": new_content}]
 
         payload = {
             "model": "gpt-4o",
-            "messages": [{"role": "user", "content": content}],
+            "messages": new_input,
             "max_tokens": max_tokens
         }
 
         try:
-            print("Sending the request to OpenAI API...")
+            self.logger.info("Sending the request to OpenAI API...")
             request_start = time.time()
             response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
             res_json = response.json()
             request_elapsed = time.time() - request_start
-            print(f"Received response ({request_elapsed:.3f}s)")
+            self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
         except Exception as e:
-            print(f"Error message: {e}")
+            self.logger.info(f"Error message: {e}")
             res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
+        
+        self.conversation_history.append({"role": "system", "content": res_json["choices"][0]["message"]["content"]})
         return res_json
 
     def add_text_to_image(self, image: np.ndarray, text: str):
