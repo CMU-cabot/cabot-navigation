@@ -78,6 +78,7 @@ function signal() {
 : ${CABOT_MODEL:=}
 : ${CABOT_TOUCH_PARAMS:=}
 : ${OPENAI_API_KEY:=}
+# : ${ROS_LOG_DIR:=}
 # variables with default value
 : ${CABOT_GAZEBO:=0}
 : ${CABOT_INITX:=0}
@@ -245,11 +246,11 @@ eval $com
 checks+=($!)
 pids+=($!)
 
-echo $OPENAI_API_KEY
 # launch exploration
 blue "launch exploration related nodes"
 com="$command_prefix ros2 launch cabot_ui cabot_explore_exp1.launch.py \
     apikey:=$OPENAI_API_KEY \
+    log_dir:=$ROS_LOG_DIR \
     $command_postfix"
 echo $com
 eval $com

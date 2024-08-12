@@ -1,16 +1,10 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from datetime import datetime
 from launch.substitutions import LaunchConfiguration
-import os
 
 def generate_launch_description():
-    # Get the current date and time
-    now = datetime.now()
-    os.makedirs(f'logs_explore', exist_ok=True)
-    exp_name = f'logs_explore/exp_date_{now.strftime("%Y%m%d")}_time_{now.strftime("%H%M")}'
+    log_dir = LaunchConfiguration('log_dir')
     apikey = LaunchConfiguration('apikey')
-    
 
     return LaunchDescription([
         # scemantic map mode
@@ -22,7 +16,7 @@ def generate_launch_description():
         #     parameters=[
         #         {'mode': 'semantic_map_mode'},
         #         {'should_speak': False},
-        #         {'log_dir': exp_name},                
+        #         {'log_dir': log_dir},                
         #         {'debug': False},
         #         {'once': False},
         #         {'no_explain_mode': False},
@@ -41,7 +35,7 @@ def generate_launch_description():
             parameters=[
                 {'mode': 'surronding_explain_mode'},
                 {'should_speak': True},
-                {'log_dir': exp_name},                
+                {'log_dir': log_dir},                
                 {'debug': False},
                 {'once': False},
                 {'no_explain_mode': False},
@@ -58,7 +52,7 @@ def generate_launch_description():
             name='exploration_chat_server',
             output='screen',
             parameters=[
-                {'log_dir': exp_name},
+                {'log_dir': log_dir},
                 {'use_openai': True}  # Set this to False if you don't want to use OpenAI
             ],
         )

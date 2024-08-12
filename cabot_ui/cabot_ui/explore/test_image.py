@@ -64,6 +64,7 @@ class CaBotImageNode(Node):
         self.mode = self.declare_parameter("mode").value
         self.should_speak = self.declare_parameter("should_speak").value
         self.log_dir = self.declare_parameter("log_dir").value
+        self.log_dir = os.path.join(self.log_dir, "exploration")
         self.debug = self.declare_parameter("debug").value
         self.once = self.declare_parameter("once").value
         self.no_explain_mode = self.declare_parameter("no_explain_mode").value

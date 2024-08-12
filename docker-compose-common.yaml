@@ -96,6 +96,7 @@ services:
       - CABOT_REMOTE_USE_IMU
       - CABOT_FOOTPRINT_RADIUS
       - OPENAI_API_KEY
+      - ROS_LOG_DIR
     volumes:
 # device, bluetooth
       - /dev:/dev
