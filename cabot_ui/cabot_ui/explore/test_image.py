@@ -30,6 +30,7 @@ import json
 from cabot_msgs.msg import Log
 import threading
 from copy import copy
+from .log_maker import log_image_and_gpt_response
 
 
 """
@@ -200,7 +201,7 @@ class CaBotImageNode(Node):
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
         if self.cabot_nav_state != self.valid_state:
             return
-        self.logger.info(f"image callback; {self.cabot_nav_state}")
+        # self.logger.info(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
         left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
@@ -231,31 +232,30 @@ class CaBotImageNode(Node):
         odom = np.array([msg_odom.pose.pose.position.x, msg_odom.pose.pose.position.y, yaw])
 
         # register as class variables
-        self.front_image = front_image
-        self.left_image = left_image
-        self.right_image = right_image
+        if not front_image is None and not left_image is None and not right_image is None:
+            self.front_image = front_image
+            self.left_image = left_image
+            self.right_image = right_image        
+
+            self.front_marker_detected = self.detect_marker(front_image)
+            self.left_marker_detected = self.detect_marker(left_image)
+            self.right_marker_detected = self.detect_marker(right_image)
+
+            # save the image
+            cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
+            cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
+            cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
         # self.front_depth = front_depth_array
         # self.left_depth = left_depth_array
         # self.right_depth = right_depth_array
-        self.odom = odom
-
-        # detect the marker in the image
-        self.front_marker_detected = self.detect_marker(front_image)
-        self.left_marker_detected = self.detect_marker(left_image)
-        self.right_marker_detected = self.detect_marker(right_image)
-
-        # save the image
-        cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
-        cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
-        cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
-
-        #save the odom as numpy array
-        np.save(f"{self.log_dir}/odom.npy", odom)
+        if not odom is None:
+            self.odom = odom
+            #save the odom as numpy array
+            np.save(f"{self.log_dir}/odom.npy", odom)
 
         # self.logger.info(f"front, {type(front_image)}, {front_image.shape}, left, {type(left_image)}, {left_image.shape}, right, {type(right_image)}, {right_image.shape}")
         # self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
 
-    
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
         # change the process depending on the cv2 version >= 4.6
@@ -289,14 +289,9 @@ class CaBotImageNode(Node):
                 self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
                 return
             else:
-                try:
-                    wait_time = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
-                    self.can_speak_explanation = False
-                    self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
-                except Exception as e:
-                    traceback.print_exc()
-                    self.logger.error(f"Error occurred: {e}")
-                    return
+                wait_time = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                self.can_speak_explanation = False
+                self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
 
                 if self.mode == "intersection_detection_mode":
                     self.logger.info("Availability of each direction")
@@ -454,6 +449,7 @@ class GPTExplainer():
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
         self.prompt = textwrap.dedent(self.prompt).strip()
         self.log_dir = log_dir
+        self.log_dir_img_gpt = os.path.join(self.log_dir, "gpt")
 
         self.front_available = True
         self.left_available = True
@@ -461,6 +457,8 @@ class GPTExplainer():
 
         self.should_speak = should_speak
         self.conversation_history = []
+
+        os.makedirs(self.log_dir_img_gpt, exist_ok=True)
 
     # Function to encode the image
     def encode_image(self, image):
@@ -511,19 +509,23 @@ class GPTExplainer():
             cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
 
             gpt_response = self.query_with_images(prompt, [front_image_with_text, left_image_with_text, right_image_with_text])
+            description = str(gpt_response["choices"][0]["message"]["content"])
+            
+            pretty_response = json.dumps(gpt_response, indent=4)
+            log_image_and_gpt_response([front_image, left_image, right_image], description, self.log_dir_img_gpt)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
-            gpt_response = self.query_with_images(prompt, [])
+            return  1.0
 
-        pretty_response = json.dumps(gpt_response, indent=4)
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
         # get front/left/right availability
-        extracted_json = self.extract_json_part(gpt_response["choices"][0]["message"]["content"])
+        extracted_json = gpt_response["choices"][0]["message"]["content"]
         if extracted_json is None:
             self.logger.info("Could not extract JSON part from the response.")
-            gpt_response["description"] = "不具合が発生しました。"
+            gpt_response["description"] = "" # error so set the description to empty
+            self.logger.info(f"Error in GPTExplainer.explain: extracted_json is None: {gpt_response}")
         else:
             if self.mode == "intersection_detection_mode":
                 self.front_available = extracted_json.get("front", True)
@@ -533,13 +535,20 @@ class GPTExplainer():
                     gpt_response["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
                 except KeyError:
                     self.logger.info("Could not extract the explanation from the response.")
-                    gpt_response["description"] = "不具合が発生しました。"
+                    gpt_response["description"] = "" # error so set the description to empty
+                    self.logger.info(f"Error in GPTExplainer.explain: KeyError: {gpt_response}")
             else:
-                gpt_response["description"] = extracted_json["description"]
+                self.logger.info(f"{gpt_response} {extracted_json}")
+                if extracted_json == "Error":
+                    gpt_response["description"] = ""
+                    self.logger.info(f"Error in GPTExplainer.explain: extracted_json is 'Error': {gpt_response}")
+                else:
+                    gpt_response["description"] = extracted_json["description"]
+
         gpt_response["log_dir"] = self.log_dir
 
-        wait_time = 0.0
-        if self.should_speak:
+        wait_time = 2.0
+        if self.should_speak and not gpt_response["description"] == "":
             wait_time = self.calculate_speak_time(gpt_response["description"])
             test_speak.speak_text(gpt_response["description"])
             self.logger.info(f"Speaking the {self.mode} explanation")
@@ -557,13 +566,14 @@ class GPTExplainer():
         self.logger.info(f"Explanation is saved to {filename}")
 
         filename = f"{self.log_dir}/log.jsonl"
-        if not os.path.exists(filename):
-            with open(filename, "w") as f:
-                f.write(json.dumps(gpt_response) + "\n")
-        else:
-            with open(filename, "a") as f:
-                f.write(json.dumps(gpt_response) + "\n")
-        self.logger.info(f"Log is saved to {filename}")
+        if not extracted_json == "Error":
+            if not os.path.exists(filename):
+                with open(filename, "w") as f:
+                    f.write(json.dumps(gpt_response) + "\n")
+            else:
+                with open(filename, "a") as f:
+                    f.write(json.dumps(gpt_response) + "\n")
+            self.logger.info(f"Log is saved to {filename}")
 
         self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
 
@@ -575,6 +585,9 @@ class GPTExplainer():
         return len(text) * 0.1
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
+        # if json is already in the correct format, return it
+        if type(json_like_string) == dict:
+            return json_like_string
         # Regular expression to match JSON part
         json_pattern = re.compile(r'\{.*?\}', re.DOTALL)
 
@@ -616,18 +629,23 @@ class GPTExplainer():
             "max_tokens": max_tokens
         }
 
+        self.logger.info("Sending the request to OpenAI API...")
+        request_start = time.time()
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
         try:
-            self.logger.info("Sending the request to OpenAI API...")
-            request_start = time.time()
-            response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
             res_json = response.json()
+            extracted_json = self.extract_json_part(res_json["choices"][0]["message"]["content"])
+            res_json["choices"][0]["message"]["content"] = extracted_json
+
             request_elapsed = time.time() - request_start
+            self.logger.info("OpenAI API Request success.")
             self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
+            self.conversation_history.append({"role": "system", "content": str(extracted_json["description"])})
         except Exception as e:
-            self.logger.info(f"Error message: {e}")
-            res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
+            self.logger.info(f"OpenAI API Request failed. Error message: {e}")
+            self.logger.info(f"OpenAI Error Response: {response}")
+            res_json = {"choices": [{"message": {"content": "Error", "role": "assistant"}}]}
         
-        self.conversation_history.append({"role": "system", "content": res_json["choices"][0]["message"]["content"]})
         return res_json
 
     def add_text_to_image(self, image: np.ndarray, text: str):
