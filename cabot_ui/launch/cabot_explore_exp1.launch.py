@@ -43,7 +43,7 @@ def generate_launch_description():
                 {'debug': False},
                 {'once': False},
                 {'no_explain_mode': False},
-                {'is_sim': True},
+                {'is_sim': False},
                 {'apikey': apikey}
                 
             ]
