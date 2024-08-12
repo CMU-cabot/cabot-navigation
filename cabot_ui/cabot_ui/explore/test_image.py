@@ -66,6 +66,7 @@ class CaBotImageNode(Node):
         self.should_speak = self.declare_parameter("should_speak").value
         self.log_dir = self.declare_parameter("log_dir").value
         self.log_dir = os.path.join(self.log_dir, "exploration")
+        self.log_dir_img = os.path.join(self.log_dir, "img")
         self.debug = self.declare_parameter("debug").value
         self.once = self.declare_parameter("once").value
         self.no_explain_mode = self.declare_parameter("no_explain_mode").value
@@ -86,6 +87,7 @@ class CaBotImageNode(Node):
 
         self.log_dir += f"_{postfix}_images"
         os.makedirs(self.log_dir, exist_ok=True)
+        os.makedirs(self.log_dir_img, exist_ok=True)
         self.logger.info(f"Saving images to {self.log_dir}")
 
         if self.mode == "surronding_explain_mode" or  self.mode =="semantic_map_mode":
@@ -114,8 +116,8 @@ class CaBotImageNode(Node):
                 self.right_camera_topic_name = self.front_camera_topic_name
                 self.right_depth_topic_name = self.front_depth_topic_name
             if use_left:
-                self.left_camera_topic_name = "/rs1/color/image_raw"
-                self.left_depth_topic_name = "/rs1/aligned_depth_to_color/image_raw"
+                self.left_camera_topic_name = "/rs3/color/image_raw"
+                self.left_depth_topic_name = "/rs3/aligned_depth_to_color/image_raw"
             else:
                 # if left camera is not used, use the front camera as the left camera
                 self.left_camera_topic_name = self.front_camera_topic_name
@@ -241,10 +243,13 @@ class CaBotImageNode(Node):
             self.left_marker_detected = self.detect_marker(left_image)
             self.right_marker_detected = self.detect_marker(right_image)
 
-            # save the image
-            cv2.imwrite(f"{self.log_dir}/front.jpg", front_image)
-            cv2.imwrite(f"{self.log_dir}/left.jpg", left_image)
-            cv2.imwrite(f"{self.log_dir}/right.jpg", right_image)
+            # current time until sec and make it into a image name
+            current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            folder_name = os.path.join(self.log_dir_img,current_time)
+            os.makedirs(folder_name, exist_ok=True)
+            cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
+            cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
+            cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
         # self.front_depth = front_depth_array
         # self.left_depth = left_depth_array
         # self.right_depth = right_depth_array
@@ -475,6 +480,8 @@ class GPTExplainer():
         if max_height is not None and image_height > max_height:
             scale = max_height / image_height
             image = cv2.resize(image, (int(image_width * scale), max_height))
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
 
     def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray) -> float:
@@ -512,7 +519,7 @@ class GPTExplainer():
             description = str(gpt_response["choices"][0]["message"]["content"])
             
             pretty_response = json.dumps(gpt_response, indent=4)
-            log_image_and_gpt_response([front_image, left_image, right_image], description, self.log_dir_img_gpt)
+            log_image_and_gpt_response([front_image_with_text, left_image_with_text, right_image_with_text], description, self.log_dir_img_gpt)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
@@ -649,11 +656,9 @@ class GPTExplainer():
         return res_json
 
     def add_text_to_image(self, image: np.ndarray, text: str):
-        # add text to the image
-        cv2_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         # putText params: image, text, position, font, fontScale, color, thickness, lineType
-        cv2.putText(cv2_image, text, (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
-        return cv2_image
+        cv2.putText(image, text, (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+        return image
 
 def main(args=None):
     rclpy.init(args=args)
