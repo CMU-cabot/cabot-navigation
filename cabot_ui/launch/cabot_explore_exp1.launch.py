@@ -7,8 +7,10 @@ import os
 def generate_launch_description():
     # Get the current date and time
     now = datetime.now()
-    exp_name = f'exp_date_{now.strftime("%Y%m%d")}_time_{now.strftime("%H%M")}'
+    os.makedirs(f'logs_explore', exist_ok=True)
+    exp_name = f'logs_explore/exp_date_{now.strftime("%Y%m%d")}_time_{now.strftime("%H%M")}'
     apikey = LaunchConfiguration('apikey')
+    
 
     return LaunchDescription([
         # scemantic map mode
