@@ -175,6 +175,7 @@ class CaBotImageNode(Node):
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
+        self.last_saved_images_time = time.time()
 
         self.timer = self.create_timer(5.0, self.loop)
     
@@ -203,6 +204,10 @@ class CaBotImageNode(Node):
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
         if self.cabot_nav_state != self.valid_state:
             return
+        
+        if time.time() - self.last_saved_images_time < 1.0: return
+        
+        self.last_saved_images_time = time.time()
         # self.logger.info(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
@@ -235,6 +240,15 @@ class CaBotImageNode(Node):
 
         # register as class variables
         if not front_image is None and not left_image is None and not right_image is None:
+
+            # flip left_image vertically and then horizontally
+            left_image = cv2.flip(left_image, -1)
+
+            # convert colors from BGR to RGB for all images
+            front_image = cv2.cvtColor(front_image, cv2.COLOR_BGR2RGB)
+            left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
+            right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
+            
             self.front_image = front_image
             self.left_image = left_image
             self.right_image = right_image        
@@ -250,6 +264,7 @@ class CaBotImageNode(Node):
             cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
             cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
             cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+                
         # self.front_depth = front_depth_array
         # self.left_depth = left_depth_array
         # self.right_depth = right_depth_array
@@ -481,7 +496,6 @@ class GPTExplainer():
             scale = max_height / image_height
             image = cv2.resize(image, (int(image_width * scale), max_height))
 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
 
     def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray) -> float:
@@ -515,11 +529,11 @@ class GPTExplainer():
             cv2.imwrite(f"{self.log_dir}/left_with_text.jpg", left_image_with_text)
             cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
 
-            gpt_response = self.query_with_images(prompt, [front_image_with_text, left_image_with_text, right_image_with_text])
+            gpt_response = self.query_with_images(prompt, [left_image_with_text, front_image_with_text, right_image_with_text])
             description = str(gpt_response["choices"][0]["message"]["content"])
             
             pretty_response = json.dumps(gpt_response, indent=4)
-            log_image_and_gpt_response([front_image_with_text, left_image_with_text, right_image_with_text], description, self.log_dir_img_gpt)
+            log_image_and_gpt_response([left_image_with_text, front_image_with_text, right_image_with_text], description, self.log_dir_img_gpt)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
