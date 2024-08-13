@@ -19,6 +19,8 @@ class ExplorationChatServer(Node):
         self.use_openai = self.declare_parameter('use_openai').value
         self.apikey = self.declare_parameter("apikey").value
 
+        self.logger = self.get_logger()
+
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
         flask_thread = threading.Thread(target=self.run_flask_app)
         flask_thread.start()
@@ -35,6 +37,7 @@ class ExplorationChatServer(Node):
             data = request.json
 
             logging.info(data)
+            self.logger.info(f"Received data: {data}")
 
             gpt_input = ""
             if "input" in data:
@@ -173,32 +176,13 @@ class ExplorationChatServer(Node):
             if query_target == "unknown":
                 query_type = "failed"
                 query_string = "failed"
-            
+
             navi = False
             dest_info = {}
-            if query_type != "failed":
-                navi = True
-                dest_info = {"nodes": ""}
-
-            response = {
-                "output": {
-                    "log_messages": [],
-                    "text": []
-                },
-                "intents": [],
-                "entities": [],
-                "context": {
-                    "navi": navi,
-                    "dest_info": dest_info,
-                    "system": {
-                        "dialog_request_counter": 0
-                    }
-                }
-            }
 
             if query_string == "":
                 print("skip chat")
-                response["output"]["text"] = ["はじめ"]
+                response["output"]["text"] = ["はい。行きたい場所や方向を指定してください。"]
             elif query_type == "failed":
                 print("failed to extract JSON")
                 response["output"]["text"] = ["入力を理解できませんでした。もう一度入力してください。"]
@@ -218,9 +202,28 @@ class ExplorationChatServer(Node):
                 rcl_publisher.destroy_node()
                 rclpy.try_shutdown()
 
+                navi = True
+                dest_info = {"nodes": ""}
+
                 response["output"]["text"] = [rcl_publisher.query_message]
                 print(f"response: {response}")
             print(f"response: {response['output']['text']}")
+
+            response = {
+                "output": {
+                    "log_messages": [],
+                    "text": []
+                },
+                "intents": [],
+                "entities": [],
+                "context": {
+                    "navi": navi,
+                    "dest_info": dest_info,
+                    "system": {
+                        "dialog_request_counter": 0
+                    }
+                }
+            }
             return jsonify(response)
         return app
 
