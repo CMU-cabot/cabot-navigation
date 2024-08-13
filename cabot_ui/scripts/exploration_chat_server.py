@@ -182,10 +182,10 @@ class ExplorationChatServer(Node):
 
             if query_string == "":
                 print("skip chat")
-                response["output"]["text"] = ["はい。行きたい場所や方向を指定してください。"]
+                res_text = ["はい。行きたい場所や方向を指定してください。"]
             elif query_type == "failed":
                 print("failed to extract JSON")
-                response["output"]["text"] = ["入力を理解できませんでした。もう一度入力してください。"]
+                res_text = ["入力を理解できませんでした。もう一度入力してください。"]
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir)
@@ -205,14 +205,14 @@ class ExplorationChatServer(Node):
                 navi = True
                 dest_info = {"nodes": ""}
 
-                response["output"]["text"] = [rcl_publisher.query_message]
-                print(f"response: {response}")
-            print(f"response: {response['output']['text']}")
+                res_text = [rcl_publisher.query_message]
+
+            self.logger.info(f"response: {res_text}")
 
             response = {
                 "output": {
                     "log_messages": [],
-                    "text": []
+                    "text": res_text
                 },
                 "intents": [],
                 "entities": [],
@@ -224,6 +224,7 @@ class ExplorationChatServer(Node):
                     }
                 }
             }
+            self.logger.info(f"response: {response}")
             return jsonify(response)
         return app
 
