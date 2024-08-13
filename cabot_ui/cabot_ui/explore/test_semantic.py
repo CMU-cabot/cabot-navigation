@@ -62,7 +62,7 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
     else:
         # get image paths from log_dir
         image_dirs = [x for x in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, x))]
-        image_dirs = [x for x in image_dirs if x.endswith("images")]
+        # image_dirs = [x for x in image_dirs if x.endswith("images")]
         for image_dir in image_dirs:
             log_dir_image = os.path.join(log_dir, image_dir)
             image_files = [x for x in os.listdir(log_dir_image) if x.endswith(".jpg")]
