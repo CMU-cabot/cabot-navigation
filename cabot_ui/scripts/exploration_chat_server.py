@@ -14,7 +14,7 @@ class ExplorationChatServer(Node):
         super().__init__('exploration_chat_server')
 
         self.log_dir = self.declare_parameter('log_dir').value
-        self.log_dir = os.path.join(self.log_dir, "img_and_odom")
+        self.log_dir = os.path.join(self.log_dir, "exploration", "img_and_odom")
 
         self.use_openai = self.declare_parameter('use_openai').value
         self.apikey = self.declare_parameter("apikey").value
