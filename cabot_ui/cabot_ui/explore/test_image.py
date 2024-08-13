@@ -202,15 +202,11 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-        if self.cabot_nav_state != self.valid_state:
-            return
         
+        if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 1.0: return
         self.last_saved_images_time = time.time()
 
-        if front_image is None or left_image is None or right_image is None or odom is None: return
-        
-        
         # self.logger.info(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
 
@@ -232,7 +228,7 @@ class CaBotImageNode(Node):
         # np.save(f"{self.log_dir}/front_depth.npy", front_depth_array)
         # np.save(f"{self.log_dir}/left_depth.npy", left_depth_array)
         # np.save(f"{self.log_dir}/right_depth.npy", right_depth_array)
-        
+
         # current time until sec and make it into a image name
         current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         folder_name = os.path.join(self.log_dir_img_and_odom,current_time)
