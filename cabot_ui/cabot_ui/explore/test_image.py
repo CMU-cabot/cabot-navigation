@@ -202,7 +202,7 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-        
+
         if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 1.0: return
         self.last_saved_images_time = time.time()
@@ -232,6 +232,7 @@ class CaBotImageNode(Node):
         # current time until sec and make it into a image name
         current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         folder_name = os.path.join(self.log_dir_img_and_odom,current_time)
+        os.makedirs(folder_name, exist_ok=True)
 
         # save the odom
         quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
@@ -261,7 +262,6 @@ class CaBotImageNode(Node):
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
 
-        os.makedirs(folder_name, exist_ok=True)
         cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
         cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
         cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
