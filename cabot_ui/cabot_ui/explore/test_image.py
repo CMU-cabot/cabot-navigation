@@ -66,7 +66,7 @@ class CaBotImageNode(Node):
         self.should_speak = self.declare_parameter("should_speak").value
         self.log_dir = self.declare_parameter("log_dir").value
         self.log_dir = os.path.join(self.log_dir, "exploration")
-        self.log_dir_img = os.path.join(self.log_dir, "img")
+        self.log_dir_img_and_odom = os.path.join(self.log_dir, "img_and_odom")
         self.debug = self.declare_parameter("debug").value
         self.once = self.declare_parameter("once").value
         self.no_explain_mode = self.declare_parameter("no_explain_mode").value
@@ -87,7 +87,7 @@ class CaBotImageNode(Node):
 
         self.log_dir += f"_{postfix}_images"
         os.makedirs(self.log_dir, exist_ok=True)
-        os.makedirs(self.log_dir_img, exist_ok=True)
+        os.makedirs(self.log_dir_img_and_odom, exist_ok=True)
         self.logger.info(f"Saving images to {self.log_dir}")
 
         if self.mode == "surronding_explain_mode" or  self.mode =="semantic_map_mode":
@@ -206,13 +206,13 @@ class CaBotImageNode(Node):
             return
         
         if time.time() - self.last_saved_images_time < 1.0: return
-        
         self.last_saved_images_time = time.time()
+
+        if front_image is None or left_image is None or right_image is None or odom is None: return
+        
+        
         # self.logger.info(f"image callback; {self.cabot_nav_state}")
         # convert the images to numpy arrays
-        front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
-        left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
-        right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
 
         # # convert the depth message to image
         # bridge = CvBridge()
@@ -232,46 +232,47 @@ class CaBotImageNode(Node):
         # np.save(f"{self.log_dir}/front_depth.npy", front_depth_array)
         # np.save(f"{self.log_dir}/left_depth.npy", left_depth_array)
         # np.save(f"{self.log_dir}/right_depth.npy", right_depth_array)
+        
+        # current time until sec and make it into a image name
+        current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        folder_name = os.path.join(self.log_dir_img_and_odom,current_time)
 
         # save the odom
         quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
         roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
         odom = np.array([msg_odom.pose.pose.position.x, msg_odom.pose.pose.position.y, yaw])
+        self.odom = odom        
+        #save the odom as numpy array
+        np.save(f"{folder_name}/odom.npy", odom)
 
-        # register as class variables
-        if not front_image is None and not left_image is None and not right_image is None:
+        front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
+        left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
+        right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
 
-            # flip left_image vertically and then horizontally
-            left_image = cv2.flip(left_image, -1)
+        # flip left_image vertically and then horizontally
+        left_image = cv2.flip(left_image, -1)
 
-            # convert colors from BGR to RGB for all images
-            front_image = cv2.cvtColor(front_image, cv2.COLOR_BGR2RGB)
-            left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
-            right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
-            
-            self.front_image = front_image
-            self.left_image = left_image
-            self.right_image = right_image        
+        # convert colors from BGR to RGB for all images
+        front_image = cv2.cvtColor(front_image, cv2.COLOR_BGR2RGB)
+        left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
+        right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
+        
+        self.front_image = front_image
+        self.left_image = left_image
+        self.right_image = right_image        
 
-            self.front_marker_detected = self.detect_marker(front_image)
-            self.left_marker_detected = self.detect_marker(left_image)
-            self.right_marker_detected = self.detect_marker(right_image)
+        self.front_marker_detected = self.detect_marker(front_image)
+        self.left_marker_detected = self.detect_marker(left_image)
+        self.right_marker_detected = self.detect_marker(right_image)
 
-            # current time until sec and make it into a image name
-            current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            folder_name = os.path.join(self.log_dir_img,current_time)
-            os.makedirs(folder_name, exist_ok=True)
-            cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
-            cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
-            cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
-                
+        os.makedirs(folder_name, exist_ok=True)
+        cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
+        cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
+        cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+
         # self.front_depth = front_depth_array
         # self.left_depth = left_depth_array
         # self.right_depth = right_depth_array
-        if not odom is None:
-            self.odom = odom
-            #save the odom as numpy array
-            np.save(f"{self.log_dir}/odom.npy", odom)
 
         # self.logger.info(f"front, {type(front_image)}, {front_image.shape}, left, {type(left_image)}, {left_image.shape}, right, {type(right_image)}, {right_image.shape}")
         # self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
