@@ -53,7 +53,8 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {'log_dir': log_dir},
-                {'use_openai': True}  # Set this to False if you don't want to use OpenAI
+                {'use_openai': True},  # Set this to False if you don't want to use OpenAI
+                {'apikey': apikey}
             ],
         )
     ])
