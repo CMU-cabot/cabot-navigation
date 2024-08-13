@@ -17,6 +17,7 @@ class ExplorationChatServer(Node):
         self.log_dir = os.path.join(self.log_dir, "img_and_odom")
 
         self.use_openai = self.declare_parameter('use_openai').value
+        self.apikey = self.declare_parameter("apikey").value
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
         flask_thread = threading.Thread(target=self.run_flask_app)
@@ -128,12 +129,9 @@ class ExplorationChatServer(Node):
                     "max_tokens": 300
                 }
 
-                api_key = os.environ.get('OPENAI_API_KEY')
-                if api_key is None:
-                    raise ValueError("Please set the OPENAI_API_KEY environment variable.")
                 headers = {
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
+                    "Authorization": f"Bearer {self.apikey}"
                 }
 
                 try:
