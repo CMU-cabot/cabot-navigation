@@ -24,6 +24,18 @@ class ExplorationChatServer(Node):
         self.logger = self.get_logger()
 
         self._eventPub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.query_pub = self.create_publisher(String, "/cabot/user_query", 10)
+
+        self.dir_to_jp = {
+            "front": "前",
+            "left": "左",
+            "right": "右",
+            "back": "後ろ",
+            "front_left": "左前",
+            "front_right": "右前",
+            "back_left": "左後ろ",
+            "back_right": "右後ろ"
+        }
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
         flask_thread = threading.Thread(target=self.run_flask_app)
@@ -33,6 +45,26 @@ class ExplorationChatServer(Node):
 
         app = self.create_app()
         app.run(host='0.0.0.0', port=5050)
+
+    def specify_destination(self, query_type, query_string, user_query_message):
+        self.logger.info("User query is called")
+        
+        query_msg = String()
+        query_msg.data = f"{query_type};{query_string}"
+        self.query_message = query_msg.data
+
+        self.query_pub.publish(query_msg)
+        self.get_logger().info(f"Query published: {query_msg.data}")
+
+        if query_type == "search":
+            query_message = f"ご要望いただいた{user_query_message}の場所を検索いたしましたので、ご案内します。"
+        elif query_type == "direction":
+            dir_jp = self.dir_to_jp.get(query_string, query_string)
+            query_message = f"ご要望いただいた{dir_jp}の方向に進みます。"
+        else:
+            query_message = f"入力に何か問題がありそうです。もう一度入力してください。"
+
+        return query_message
 
     def create_app(self):
         app = Flask(__name__)
@@ -197,22 +229,14 @@ class ExplorationChatServer(Node):
                     self.logger.info(f"searched odom: {query_string}")
                     # draw_destination_on_rviz([odom], [0, 1.0, 0])
 
-                self.logger.info(f"RosQueryNode; Query type: {query_type}, Query string: {query_string}")
-                rclpy.init()
-                rcl_publisher = RosQueryNode(query_type, query_string, user_query_message=query_target)
-
-                try:
-                    rclpy.spin(rcl_publisher)
-                except SystemExit as e:
-                    print(e)
-                rcl_publisher.destroy_node()
-                rclpy.try_shutdown()
+                self.logger.info(f"specify_destination; Query type: {query_type}, Query string: {query_string}")
+                query_message = self.specify_destination(query_type, query_string, query_target)
 
                 navi = True
                 dest_info = {"nodes": ""}
                 self.publish_finish_chat()
 
-                res_text = [rcl_publisher.query_message]
+                res_text = [query_message]
 
             self.logger.info(f"response: {res_text}")
 
