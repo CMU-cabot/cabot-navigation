@@ -39,6 +39,8 @@ class RosQueryNode(Node):
         self.query_pub = self.create_publisher(String, "/cabot/user_query", 10)
         self.query_type = query_type  # search or direction
         self.query_string = query_string
+        self.logger = self.get_logger()
+        self.logger.info(f"RosQueryNode; Query type: {query_type}, Query string: {query_string}")
         # user_query_message は、ユーザーの入力をGPTでいい感じに整形したもの
         # e.g., "右", "木製の展示", "黒いパネル"
         self.user_query_message = user_query_message
@@ -60,7 +62,7 @@ class RosQueryNode(Node):
 
     def timer_callback(self):
         self.timer.cancel()
-        print("User query is called")
+        self.logger.info("User query is called")
         
         query_msg = String()
         query_msg.data = f"{self.query_type};{self.query_string}"

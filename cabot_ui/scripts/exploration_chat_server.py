@@ -194,8 +194,10 @@ class ExplorationChatServer(Node):
                 if query_type == "search":
                     odom = search(query_string, self.log_dir)
                     query_string = f"{odom[0]},{odom[1]}"
-                    draw_destination_on_rviz([odom], [0, 1.0, 0])
+                    self.logger.info(f"searched odom: {query_string}")
+                    # draw_destination_on_rviz([odom], [0, 1.0, 0])
 
+                self.logger.info(f"RosQueryNode; Query type: {query_type}, Query string: {query_string}")
                 rclpy.init()
                 rcl_publisher = RosQueryNode(query_type, query_string, user_query_message=query_target)
 
