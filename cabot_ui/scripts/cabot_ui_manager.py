@@ -523,9 +523,17 @@ class CabotUIManager(NavigationInterface, object):
         elif event.subtype == "back":
             # self._interface.exploring_direction("back")
             # self._exploration.send_query("direction","back")
-            
-            self._interface.start_chat()
-            # self.start_chat()
+            in_conversation = self._exploration.get_conversation_control()
+            if in_conversation:
+                self._logger.info("NavigationState: Finish chat")
+                self._interface.finish_chat()
+                self.publish_event("finishchat")
+                self._exploration.set_conversation_control(False)
+            else:
+                self._logger.info("NavigationState: Start chat")
+                self._interface.start_chat()
+                # self.publish_event("startchat")
+                self._exploration.set_conversation_control(True)
         elif event.subtype == "left":
             self._interface.exploring_direction("left")
             self._exploration.send_query("direction","left")
@@ -549,9 +557,9 @@ class CabotUIManager(NavigationInterface, object):
                 self._navigation.set_pause_control(True)
                 self._exploration.set_pause_control(True)
 
-    def start_chat(self):
+    def publish_event(self, event):
         msg = std_msgs.msg.String()
-        e = NavigationEvent("startchat", None)
+        e = NavigationEvent(event, None)
         msg.data = str(e)
         self._eventPub.publish(msg)
 

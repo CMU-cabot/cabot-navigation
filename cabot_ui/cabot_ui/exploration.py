@@ -29,6 +29,7 @@ class Exploration():
         super(Exploration, self).__init__()
         self.node = node
         self.pause = False
+        self.in_conversation = False
         self.publisher = self.node.create_publisher(String, '/cabot/user_query', 10)
 
     def send_query(self, query_type, query_string):
@@ -42,3 +43,9 @@ class Exploration():
 
     def get_pause_control(self):
         return self.pause
+    
+    def set_conversation_control(self, in_conversation):
+        self.in_conversation = in_conversation
+
+    def get_conversation_control(self):
+        return self.in_conversation

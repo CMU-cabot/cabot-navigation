@@ -8,6 +8,7 @@ import sys
 import os
 from flask import Flask, request, jsonify
 from cabot_ui.explore.test_chat_server import *
+import std_msgs.msg
 
 class ExplorationChatServer(Node):
     def __init__(self):
@@ -20,6 +21,8 @@ class ExplorationChatServer(Node):
         self.apikey = self.declare_parameter("apikey").value
 
         self.logger = self.get_logger()
+
+        self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
         flask_thread = threading.Thread(target=self.run_flask_app)
@@ -204,6 +207,7 @@ class ExplorationChatServer(Node):
 
                 navi = True
                 dest_info = {"nodes": ""}
+                self.publish_finish_chat()
 
                 res_text = [rcl_publisher.query_message]
 
@@ -227,6 +231,11 @@ class ExplorationChatServer(Node):
             self.logger.info(f"response: {response}")
             return jsonify(response)
         return app
+    
+    def publish_finish_chat(self):
+        msg = std_msgs.msg.String()
+        msg.data = "finishchat"
+        self._eventPub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)

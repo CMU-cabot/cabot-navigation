@@ -366,6 +366,10 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "exploration", "start chat")
         self.speak(i18n.localized_string("START_CHAT"))
 
+    def finish_chat(self):
+        self._activity_log("cabot/interface", "exploration", "finish chat")
+        self.speak(i18n.localized_string("FINISH_CHAT"))
+
     def exploring_auto_mode_switch(self):
         self._activity_log("cabot/interface", "exploration", "auto mode switch")
         self.speak(i18n.localized_string("AUTO_MODE_SWITCH"))
