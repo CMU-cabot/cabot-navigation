@@ -123,6 +123,32 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
 
+RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip3 install --no-cache-dir \
+    flask \
+    transformers \
+    scikit-image \
+    scipy \
+    tqdm \
+    shapely \
+    sentencepiece \
+    timm \
+    fugashi \
+    unidic-lite
+
+RUN pip3 install scikit-learn -U
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    fonts-ipafont-gothic \
+    fonts-ipafont-mincho \
+    fonts-takao \
+    fonts-noto-cjk \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+
 # for debug
 # RUN apt update && \
 #     apt install -y --no-install-recommends \

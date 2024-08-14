@@ -15,7 +15,7 @@ class Speaker(object):
         if debug:
             self.speak('hello world!こんにちは')
 
-    def speak(self, text, force=True, pitch=50, volume=50, rate=50):
+    def speak(self, text, force=False, pitch=50, volume=50, rate=50):
         if text is None:
             return
 
@@ -47,7 +47,7 @@ class Speaker(object):
             # CaBotRclpyUtil.error(F"Service call failed: {e}")
 
 
-def speak_text(text: str):
+def speak_text(text: str, force=False):
     if not rclpy.ok():
         reinit = True
     else:
@@ -57,7 +57,7 @@ def speak_text(text: str):
         rclpy.init()
     node = Node('speaker', start_parameter_services=False)
     speaker = Speaker(node=node)
-    speaker.speak(text)
+    speaker.speak(text=text, force=force)
     node.destroy_node()
     if reinit:
         rclpy.shutdown()

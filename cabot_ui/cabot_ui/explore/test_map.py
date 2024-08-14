@@ -120,10 +120,11 @@ class CaBotMapNode(Node):
 
 
 class CabotRvizPointDrawer(Node):
-    def __init__(self, coordinates: List[Tuple[float, float]]):
+    def __init__(self, coordinates: List[Tuple[float, float]], colors: List[Tuple[float, float, float]] = None):
         super().__init__("cabot_rviz_point_drawer")
         self.publisher_ = self.create_publisher(MarkerArray, "/marker", 10)
         self.timer_ = self.create_timer(1.0, self.timer_callback)
+        self.color = colors
         self.coordinates = coordinates
 
     def timer_callback(self):
@@ -150,9 +151,14 @@ class CabotRvizPointDrawer(Node):
             marker_msg.scale.y = 1.0
             marker_msg.scale.z = 1.0
             marker_msg.color.a = 1.0
-            marker_msg.color.r = 1.0 if i != len(self.coordinates) - 1 else 0.0
-            marker_msg.color.g = 0.0
-            marker_msg.color.b = 0.0 if i != len(self.coordinates) - 1 else 1.0
+            if self.color is None:
+                marker_msg.color.r = 1.0 if i != len(self.coordinates) - 1 else 0.0
+                marker_msg.color.g = 0.0
+                marker_msg.color.b = 0.0 if i != len(self.coordinates) - 1 else 1.0
+            else:
+                marker_msg.color.r = self.color[i][0]
+                marker_msg.color.g = self.color[i][1]
+                marker_msg.color.b = self.color[i][2]
             marker_msg.lifetime = rclpy.duration.Duration(seconds=100).to_msg()
             marker.markers.append(marker_msg)
         self.publisher_.publish(marker)
