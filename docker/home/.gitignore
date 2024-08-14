@@ -5,4 +5,3 @@
 !catkin_ws
 !ros2_ws
 !bridge_ws
-!ros2_ws/src/scripts/*.py
