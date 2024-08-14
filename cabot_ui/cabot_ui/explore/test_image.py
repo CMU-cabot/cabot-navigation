@@ -35,6 +35,8 @@ from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
 import torch
 from .log_maker import log_image_and_gpt_response
 from .test_semantic import extract_image_feature, concat_features, extract_text_feature
+import std_msgs.msg
+
 
 
 """
@@ -159,6 +161,7 @@ class CaBotImageNode(Node):
         self.odom_sub = message_filters.Subscriber(self, Odometry, self.odom_topic_name)
         
         self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
+        self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
         subscribers = [self.odom_sub, self.image_front_sub, self.image_left_sub, self.image_right_sub]
         
@@ -179,6 +182,7 @@ class CaBotImageNode(Node):
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
+        self.in_conversation = False
         self.last_saved_images_time = time.time()
 
         self.timer = self.create_timer(5.0, self.loop)
@@ -193,6 +197,13 @@ class CaBotImageNode(Node):
                 self.logger.info("can speak explanation set to True by activity log")
                 if self.can_speak_timer is not None:
                     self.can_speak_timer.cancel()
+
+    def event_callback(self, msg):
+        self.logger.info(f"event log: {msg}")
+        if msg.data == "startchat":
+            self.in_conversation = True
+        elif msg.data == "finishchat":
+            self.in_conversation = False
 
     def reset_can_speak(self):
         self.logger.info("can speak explanation set to True by timer")
@@ -297,7 +308,7 @@ class CaBotImageNode(Node):
     def loop(self):
         self.logger.info(f"going into loop with mode {self.mode}")
         # generate explanation
-        if not self.no_explain_mode and self.ready:
+        if not self.no_explain_mode and self.ready and not self.in_conversation:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
