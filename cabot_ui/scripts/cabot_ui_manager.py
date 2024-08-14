@@ -523,7 +523,9 @@ class CabotUIManager(NavigationInterface, object):
         elif event.subtype == "back":
             # self._interface.exploring_direction("back")
             # self._exploration.send_query("direction","back")
-            self.start_chat()
+            
+            self._interface.start_chat()
+            # self.start_chat()
         elif event.subtype == "left":
             self._interface.exploring_direction("left")
             self._exploration.send_query("direction","left")
