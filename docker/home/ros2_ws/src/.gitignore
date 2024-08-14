@@ -2,6 +2,7 @@
 *
 # Except this file
 !.gitignore
+!scripts
 cabot
 cabot_description
 cabot_gazebo
