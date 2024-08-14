@@ -19,6 +19,7 @@ import textwrap
 import os
 import datetime
 import json
+import pickle
 import cv_bridge
 from cv_bridge import CvBridge
 import re
@@ -30,8 +31,12 @@ import json
 from cabot_msgs.msg import Log
 import threading
 from copy import copy
+from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
+import torch
 from .log_maker import log_image_and_gpt_response
+from .test_semantic import extract_image_feature, concat_features, extract_text_feature
 import std_msgs.msg
+
 
 
 """
@@ -370,6 +375,22 @@ class GPTExplainer():
         self.node = node
         self.logger = self.node.get_logger()
 
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # load vision model
+        HF_MODEL_PATH = 'line-corporation/clip-japanese-base'
+        self.tokenizer = AutoTokenizer.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+        self.processor = AutoImageProcessor.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+        self.model = AutoModel.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+        self.model.to(self.device)
+        self.model.eval()
+
+        # load text model
+        self.text_tokenizer = AutoTokenizer.from_pretrained("cl-nagoya/sup-simcse-ja-large")
+        self.text_model = AutoModel.from_pretrained("cl-nagoya/sup-simcse-ja-large")
+        self.text_model.to(self.device)
+        self.text_model.eval()
+
         self.logger.info(f"Initializing GPTExplainer with api_key: {self.api_key}")
 
         self.headers = {
@@ -572,6 +593,36 @@ class GPTExplainer():
             wait_time = self.calculate_speak_time(gpt_response["description"])
             test_speak.speak_text(gpt_response["description"])
             self.logger.info(f"Speaking the {self.mode} explanation")
+        
+        # extract features from image & text
+        left_feature = extract_image_feature(left_image, self.processor, self.model, self.device)
+        front_feature = extract_image_feature(front_image, self.processor, self.model, self.device)
+        right_feature = extract_image_feature(right_image, self.processor, self.model, self.device)
+
+        # feature dir is the parent directory of the log_dir
+        feature_dir = os.path.dirname(self.log_dir)
+        image_feature_path = os.path.join(feature_dir, "image_features.pickle")
+        # image_file_key is the dir name of self.log_dir
+        image_file_key = os.path.basename(self.log_dir)
+        if os.path.exists(image_feature_path):
+            with open(image_feature_path, "rb") as f:
+                image_features = pickle.load(f)
+            image_features["front"] = concat_features(image_features["front"], front_feature)
+            image_features["left"] = concat_features(image_features["left"], left_feature)
+            image_features["right"] = concat_features(image_features["right"], right_feature)
+            image_features["odoms"] = image_features.get("odoms", []) + [self.node.odom]
+            image_features["image_file_key"] = image_features.get("image_file_key", []) + [image_file_key]
+        else:
+            image_features = {
+                "front": front_feature,
+                "left": left_feature,
+                "right": right_feature,
+                "odoms": self.node.odom,
+                "image_file_key": image_file_key
+            }
+        # save the image features
+        with open(image_feature_path, "wb") as f:
+            pickle.dump(image_features, f)
 
         # add the explanation to an existing file
         # create a directory with timestamp
@@ -584,6 +635,28 @@ class GPTExplainer():
             with open(filename, "a") as f:
                 f.write(json.dumps(extracted_json) + "\n")
         self.logger.info(f"Explanation is saved to {filename}")
+
+        # extract text features
+        text_feature = extract_text_feature(gpt_response["description"], self.text_tokenizer, self.text_model, self.device)
+        text_feature_path = os.path.join(feature_dir, "text_features.pickle")
+        if os.path.exists(text_feature_path):
+            with open(text_feature_path, "rb") as f:
+                text_features = pickle.load(f)
+            # text_features has four keys: "features", "odoms", "text_file_key", "texts"
+            text_features["features"] = concat_features(text_features["features"], text_feature)
+            text_features["odoms"] = text_features.get("odoms", []) + [self.node.odom]
+            text_features["text_file_key"] = text_features.get("text_file_key", []) + [image_file_key]
+            text_features["texts"] = text_features.get("texts", []) + [gpt_response["description"]]
+        else:
+            text_features = {
+                "features": text_feature,
+                "odoms": self.node.odom,
+                "text_file_key": image_file_key,
+                "texts": gpt_response["description"]
+            }
+        # save the text features
+        with open(text_feature_path, "wb") as f:
+            pickle.dump(text_features, f)
 
         filename = f"{self.log_dir}/log.jsonl"
         if not extracted_json == "Error":
