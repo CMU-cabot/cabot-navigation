@@ -9,20 +9,21 @@ import os
 from flask import Flask, request, jsonify
 from cabot_ui.explore.test_chat_server import *
 import std_msgs.msg
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 class ExplorationChatServer(Node):
     def __init__(self):
         super().__init__('exploration_chat_server')
 
         self.log_dir = self.declare_parameter('log_dir').value
-        self.log_dir = os.path.join(self.log_dir, "exploration", "img_and_odom")
+        self.log_dir = os.path.join(self.log_dir, "exploration", "gpt")
 
         self.use_openai = self.declare_parameter('use_openai').value
         self.apikey = self.declare_parameter("apikey").value
 
         self.logger = self.get_logger()
 
-        self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._eventPub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
         flask_thread = threading.Thread(target=self.run_flask_app)

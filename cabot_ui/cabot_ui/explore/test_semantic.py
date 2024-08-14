@@ -83,59 +83,61 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
             x for x in image_paths
               if os.path.dirname(x).split("/")[-1] not in already_extracted_image_paths
         ]
-
-        # set up CLIP image feature extractor
-        HF_MODEL_PATH = 'line-corporation/clip-japanese-base'
-        tokenizer = AutoTokenizer.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
-        processor = AutoImageProcessor.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
-        model = AutoModel.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
-        model.to(device)
-
-        # get image features
-        all_features_front, all_features_left, all_features_right = [], [], []
-        odoms = []
-        image_file_key = []
-        for img_path in tqdm(image_paths, ncols=80):
-            image = Image.open(img_path)
-            image_file_key.append(os.path.dirname(img_path).split("/")[-1])
-            
-            feature = extract_image_feature(image, processor, model, device)
-            if "front" in img_path:
-                all_features_front.append(feature)
-            elif "left" in img_path:
-                all_features_left.append(feature)
-            elif "right" in img_path:
-                all_features_right.append(feature)
-            
-            if "front" in img_path:
-                odom_path = os.path.join(os.path.dirname(img_path), "odom.npy")
-                if os.path.exists(odom_path):
-                    odom = np.load(odom_path)
-                    odoms.append(odom)
-        all_features_front_array = np.array(all_features_front)
-        all_features_left_array = np.array(all_features_left)
-        all_features_right_array = np.array(all_features_right)
-
-        # update features
-        if image_feature_dict is not None:
-            all_features_front_array = concat_features(image_feature_dict["front"], all_features_front_array)
-            all_features_left_array = concat_features(image_feature_dict["left"], all_features_left_array)
-            all_features_right_array = concat_features(image_feature_dict["right"], all_features_right_array)
-            odoms = image_feature_dict.get("odoms", []) + odoms
-            image_file_key = image_feature_dict.get("image_file_key", []) + image_file_key
         
-        with open(image_feature_path, "wb") as f:
-            pickle.dump({
-                "front": all_features_front_array,
-                "left": all_features_left_array,
-                "right": all_features_right_array,
-                "odoms": odoms,
-                "image_file_key": image_file_key
-            }, f)
-        # np.save(image_feature_path, all_features_array)
-        print(f"Features (shape ({all_features_front_array.shape}) x 3) saved to {image_feature_path} !")
-        # release memory
-        del processor, model
+        if not len(image_paths) == 0:    
+            
+            # set up CLIP image feature extractor
+            HF_MODEL_PATH = 'line-corporation/clip-japanese-base'
+            tokenizer = AutoTokenizer.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+            processor = AutoImageProcessor.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+            model = AutoModel.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+            model.to(device)
+
+            # get image features
+            all_features_front, all_features_left, all_features_right = [], [], []
+            odoms = []
+            image_file_key = []
+            for img_path in tqdm(image_paths, ncols=80):
+                image = Image.open(img_path)
+                image_file_key.append(os.path.dirname(img_path).split("/")[-1])
+                
+                feature = extract_image_feature(image, processor, model, device)
+                if "front" in img_path:
+                    all_features_front.append(feature)
+                elif "left" in img_path:
+                    all_features_left.append(feature)
+                elif "right" in img_path:
+                    all_features_right.append(feature)
+                
+                if "front" in img_path:
+                    odom_path = os.path.join(os.path.dirname(img_path), "odom.npy")
+                    if os.path.exists(odom_path):
+                        odom = np.load(odom_path)
+                        odoms.append(odom)
+            all_features_front_array = np.array(all_features_front)
+            all_features_left_array = np.array(all_features_left)
+            all_features_right_array = np.array(all_features_right)
+
+            # update features
+            if image_feature_dict is not None:
+                all_features_front_array = concat_features(image_feature_dict["front"], all_features_front_array)
+                all_features_left_array = concat_features(image_feature_dict["left"], all_features_left_array)
+                all_features_right_array = concat_features(image_feature_dict["right"], all_features_right_array)
+                odoms = image_feature_dict.get("odoms", []) + odoms
+                image_file_key = image_feature_dict.get("image_file_key", []) + image_file_key
+            
+            with open(image_feature_path, "wb") as f:
+                pickle.dump({
+                    "front": all_features_front_array,
+                    "left": all_features_left_array,
+                    "right": all_features_right_array,
+                    "odoms": odoms,
+                    "image_file_key": image_file_key
+                }, f)
+            # np.save(image_feature_path, all_features_array)
+            print(f"Features (shape ({all_features_front_array.shape}) x 3) saved to {image_feature_path} !")
+            # release memory
+            del processor, model
 
     if extract_text:
         # load pre-extracted features
@@ -158,64 +160,67 @@ def main(images_dir: str, gpt_dir: str, extract_images: bool = False, extract_te
             annos = []
             image_dirs = [x for x in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, x))]
             image_dirs = [x for x in image_dirs if x.endswith("images") and x not in already_extracted_text_paths]
-            odoms = []
-            for image_dir in image_dirs:
-                gpt_jsonl = os.path.join(log_dir, image_dir, "explanation.jsonl")
-                if not os.path.exists(gpt_jsonl):
-                    continue
-                with open(gpt_jsonl, "r") as f:
-                    anno = [json.loads(line) for line in f.readlines()]
-                annos.append(anno)
 
-                odom_path = os.path.join(log_dir, image_dir, "odom.npy")
-                if os.path.exists(odom_path):
-                    odom = np.load(odom_path)
-                    odoms.append(odom)
-                else:
-                    odoms.append(None)
-                
+            if not len(image_dirs) == 0:
+                odoms = []
+                for image_dir in image_dirs:
+                    gpt_jsonl = os.path.join(log_dir, image_dir, "explanation.jsonl")
+                    if not os.path.exists(gpt_jsonl):
+                        continue
+                    with open(gpt_jsonl, "r") as f:
+                        anno = [json.loads(line) for line in f.readlines()]
+                    annos.append(anno)
+
+                    odom_path = os.path.join(log_dir, image_dir, "odom.npy")
+                    if os.path.exists(odom_path):
+                        odom = np.load(odom_path)
+                        odoms.append(odom)
+                    else:
+                        odoms.append(None)
+                    
         # load model
         # Load model from HuggingFace Hub
-        tokenizer = AutoTokenizer.from_pretrained("cl-nagoya/sup-simcse-ja-large")
-        model = AutoModel.from_pretrained("cl-nagoya/sup-simcse-ja-large")
-        model.to(device)
+        if not len(image_dirs) == 0:
+            tokenizer = AutoTokenizer.from_pretrained("cl-nagoya/sup-simcse-ja-large")
+            model = AutoModel.from_pretrained("cl-nagoya/sup-simcse-ja-large")
+            model.to(device)
 
-        # get text features
-        all_text_features = []
-        for anno in tqdm(annos, ncols=80):
-            text = anno["description"]
-            text_feature = extract_text_feature(text, tokenizer, model, device)
-            all_text_features.append(text_feature)
-        all_text_features_array = np.array(all_text_features)
+            # get text features
+            all_text_features = []
+            for anno in tqdm(annos, ncols=80):
+                text = anno["description"]
+                text_feature = extract_text_feature(text, tokenizer, model, device)
+                all_text_features.append(text_feature)
+            all_text_features_array = np.array(all_text_features)
 
-        # update features
-        if text_feature_dict is not None:
-            all_text_features_array = concat_features(text_feature_dict["features"], all_text_features_array)
-            odoms = text_feature_dict.get("odoms", []) + odoms
-            text_file_keys = text_feature_dict.get("text_file_key", []) + image_dirs
-            print(image_dirs)
-            texts = text_feature_dict.get("texts", []) + [anno["description"] for anno in annos]
-        else:
-            texts = [anno["description"] for anno in annos]
-            text_file_keys = image_dirs
+            # update features
+            if text_feature_dict is not None:
+                all_text_features_array = concat_features(text_feature_dict["features"], all_text_features_array)
+                odoms = text_feature_dict.get("odoms", []) + odoms
+                text_file_keys = text_feature_dict.get("text_file_key", []) + image_dirs
+                print(image_dirs)
+                texts = text_feature_dict.get("texts", []) + [anno["description"] for anno in annos]
+            else:
+                texts = [anno["description"] for anno in annos]
+                text_file_keys = image_dirs
 
-        if gpt_dir is not None:
-            text_feature_path = f"{gpt_dir}/text_features.pickle"
-        elif log_dir is not None:
-            text_feature_path = f"{log_dir}/text_features.pickle"
-        else:
-            raise ValueError("gpt_dir or log_dir must be specified!")
-        # np.save(text_feature_path, all_text_features_array)
-        with open(text_feature_path, "wb") as f:
-            pickle.dump({
-                "features": all_text_features_array,
-                "texts": texts,
-                "odoms": odoms,
-                "text_file_key": text_file_keys
-            }, f)
-        print(f"Text features (shape ({all_text_features_array.shape})) saved to {text_feature_path} !")
-        # release memory
-        del model
+            if gpt_dir is not None:
+                text_feature_path = f"{gpt_dir}/text_features.pickle"
+            elif log_dir is not None:
+                text_feature_path = f"{log_dir}/text_features.pickle"
+            else:
+                raise ValueError("gpt_dir or log_dir must be specified!")
+            # np.save(text_feature_path, all_text_features_array)
+            with open(text_feature_path, "wb") as f:
+                pickle.dump({
+                    "features": all_text_features_array,
+                    "texts": texts,
+                    "odoms": odoms,
+                    "text_file_key": text_file_keys
+                }, f)
+            print(f"Text features (shape ({all_text_features_array.shape})) saved to {text_feature_path} !")
+            # release memory
+            del model
     return image_feature_path, text_feature_path
 
 

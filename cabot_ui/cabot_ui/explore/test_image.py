@@ -36,7 +36,7 @@ import torch
 from .log_maker import log_image_and_gpt_response
 from .test_semantic import extract_image_feature, concat_features, extract_text_feature
 import std_msgs.msg
-
+from PIL import Image as PILImage
 
 
 """
@@ -72,7 +72,6 @@ class CaBotImageNode(Node):
         self.should_speak = self.declare_parameter("should_speak").value
         self.log_dir = self.declare_parameter("log_dir").value
         self.log_dir = os.path.join(self.log_dir, "exploration")
-        self.log_dir_img_and_odom = os.path.join(self.log_dir, "img_and_odom")
         self.debug = self.declare_parameter("debug").value
         self.once = self.declare_parameter("once").value
         self.no_explain_mode = self.declare_parameter("no_explain_mode").value
@@ -81,19 +80,8 @@ class CaBotImageNode(Node):
         self.apikey = self.declare_parameter("apikey").value
         self.ready = False
 
-        if  self.mode == "semantic_map_mode":
-            postfix = "s"
-        elif self.mode == "intersection_detection_mode":
-            postfix = "i"
-        elif self.mode == "surronding_explain_mode":
-            postfix = "e"
-        else:
-            postfix = ""
-            raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
-
-        self.log_dir += f"_{postfix}_images"
+        self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
-        os.makedirs(self.log_dir_img_and_odom, exist_ok=True)
         self.logger.info(f"Saving images to {self.log_dir}")
 
         if self.mode == "surronding_explain_mode" or  self.mode =="semantic_map_mode":
@@ -245,17 +233,12 @@ class CaBotImageNode(Node):
         # np.save(f"{self.log_dir}/right_depth.npy", right_depth_array)
 
         # current time until sec and make it into a image name
-        current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        folder_name = os.path.join(self.log_dir_img_and_odom,current_time)
-        os.makedirs(folder_name, exist_ok=True)
 
         # save the odom
         quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
         roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
         odom = np.array([msg_odom.pose.pose.position.x, msg_odom.pose.pose.position.y, yaw])
         self.odom = odom        
-        #save the odom as numpy array
-        np.save(f"{folder_name}/odom.npy", odom)
 
         front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
         left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
@@ -276,10 +259,6 @@ class CaBotImageNode(Node):
         self.front_marker_detected = self.detect_marker(front_image)
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
-
-        cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
-        cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
-        cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
 
         # self.front_depth = front_depth_array
         # self.left_depth = left_depth_array
@@ -489,7 +468,6 @@ class GPTExplainer():
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
         self.prompt = textwrap.dedent(self.prompt).strip()
         self.log_dir = log_dir
-        self.log_dir_img_gpt = os.path.join(self.log_dir, "gpt")
 
         self.front_available = True
         self.left_available = True
@@ -498,7 +476,15 @@ class GPTExplainer():
         self.should_speak = should_speak
         self.conversation_history = []
 
-        os.makedirs(self.log_dir_img_gpt, exist_ok=True)
+        if  self.mode == "semantic_map_mode":
+            self.postfix = "s"
+        elif self.mode == "intersection_detection_mode":
+            self.postfix = "i"
+        elif self.mode == "surronding_explain_mode":
+            self.postfix = "e"
+        else:
+            self.postfix = ""
+            raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
 
     # Function to encode the image
     def encode_image(self, image):
@@ -544,16 +530,56 @@ class GPTExplainer():
             left_image_with_text = self.add_text_to_image(left_image, "Left")
             right_image_with_text = self.add_text_to_image(right_image, "Right")
 
-            # save the images for debug
-            cv2.imwrite(f"{self.log_dir}/front_with_text.jpg", front_image_with_text)
-            cv2.imwrite(f"{self.log_dir}/left_with_text.jpg", left_image_with_text)
-            cv2.imwrite(f"{self.log_dir}/right_with_text.jpg", right_image_with_text)
-
             gpt_response = self.query_with_images(prompt, [left_image_with_text, front_image_with_text, right_image_with_text])
-            description = str(gpt_response["choices"][0]["message"]["content"])
-            
+            gpt_response["log_dir"] = self.log_dir
+
+            # get front/left/right availability
+            extracted_json = gpt_response["choices"][0]["message"]["content"]
+            if extracted_json is None:
+                self.logger.info("Could not extract JSON part from the response.")
+                extracted_json["description"] = "" # error so set the description to empty
+                self.logger.info(f"Error in GPTExplainer.explain: extracted_json is None: {gpt_response}")
+            else:
+                if self.mode == "intersection_detection_mode":
+                    self.front_available = extracted_json.get("front", True)
+                    self.left_available = extracted_json.get("left", True)
+                    self.right_available = extracted_json.get("right", True)
+                    try:
+                        extracted_json["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
+                    except KeyError:
+                        self.logger.info("Could not extract the explanation from the response.")
+                        extracted_json["description"] = "" # error so set the description to empty
+                        self.logger.info(f"Error in GPTExplainer.explain: KeyError: {extracted_json}")
+                else:
+                    self.logger.info(f"{extracted_json} {extracted_json}")
+                    if extracted_json == "Error":
+                        extracted_json["description"] = ""
+                        self.logger.info(f"Error in GPTExplainer.explain: extracted_json is 'Error': {extracted_json}")
+                    else:
+                        extracted_json["description"] = extracted_json["description"]
+
+            ##save odom and img
+            current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            folder_name = os.path.join(self.log_dir,current_time + '_' + self.postfix)
+            self.folder_name = folder_name
+            os.makedirs(folder_name, exist_ok=True)
+            #save the odom as numpy array
+            np.save(f"{folder_name}/odom.npy", self.node.odom)
+
+            cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
+            cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
+            cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+
+            with open(os.path.join(folder_name,"explanation.jsonl"), "w") as f:
+                description_json = {"description": extracted_json["description"]}
+                json.dump(description_json, f, ensure_ascii=False)
+
+            with open(os.path.join(folder_name,"log.jsonl"), "w") as f:
+                json.dump(gpt_response, f, ensure_ascii=False)
+
             pretty_response = json.dumps(gpt_response, indent=4)
-            log_image_and_gpt_response([left_image_with_text, front_image_with_text, right_image_with_text], description, self.log_dir_img_gpt)
+
+            log_image_and_gpt_response([left_image_with_text, front_image_with_text, right_image_with_text], str(extracted_json["description"]), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
@@ -561,49 +587,21 @@ class GPTExplainer():
 
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
-        # get front/left/right availability
-        extracted_json = gpt_response["choices"][0]["message"]["content"]
-        if extracted_json is None:
-            self.logger.info("Could not extract JSON part from the response.")
-            gpt_response["description"] = "" # error so set the description to empty
-            self.logger.info(f"Error in GPTExplainer.explain: extracted_json is None: {gpt_response}")
-        else:
-            if self.mode == "intersection_detection_mode":
-                self.front_available = extracted_json.get("front", True)
-                self.left_available = extracted_json.get("left", True)
-                self.right_available = extracted_json.get("right", True)
-                try:
-                    gpt_response["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
-                except KeyError:
-                    self.logger.info("Could not extract the explanation from the response.")
-                    gpt_response["description"] = "" # error so set the description to empty
-                    self.logger.info(f"Error in GPTExplainer.explain: KeyError: {gpt_response}")
-            else:
-                self.logger.info(f"{gpt_response} {extracted_json}")
-                if extracted_json == "Error":
-                    gpt_response["description"] = ""
-                    self.logger.info(f"Error in GPTExplainer.explain: extracted_json is 'Error': {gpt_response}")
-                else:
-                    gpt_response["description"] = extracted_json["description"]
-
-        gpt_response["log_dir"] = self.log_dir
-
         wait_time = 2.0
-        if self.should_speak and not gpt_response["description"] == "":
-            wait_time = self.calculate_speak_time(gpt_response["description"])
-            test_speak.speak_text(gpt_response["description"])
+        if self.should_speak and not extracted_json["description"] == "":
+            wait_time = self.calculate_speak_time(extracted_json["description"])
+            test_speak.speak_text(extracted_json["description"])
             self.logger.info(f"Speaking the {self.mode} explanation")
         
         # extract features from image & text
-        left_feature = extract_image_feature(left_image, self.processor, self.model, self.device)
-        front_feature = extract_image_feature(front_image, self.processor, self.model, self.device)
-        right_feature = extract_image_feature(right_image, self.processor, self.model, self.device)
+        left_feature = extract_image_feature(PILImage.fromarray(left_image), self.processor, self.model, self.device)
+        front_feature = extract_image_feature(PILImage.fromarray(front_image), self.processor, self.model, self.device)
+        right_feature = extract_image_feature(PILImage.fromarray(right_image), self.processor, self.model, self.device)
 
         # feature dir is the parent directory of the log_dir
-        feature_dir = os.path.dirname(self.log_dir)
-        image_feature_path = os.path.join(feature_dir, "image_features.pickle")
+        image_feature_path = os.path.join(self.log_dir, "image_features.pickle")
         # image_file_key is the dir name of self.log_dir
-        image_file_key = os.path.basename(self.log_dir)
+        image_file_key = os.path.basename(self.folder_name)
         if os.path.exists(image_feature_path):
             with open(image_feature_path, "rb") as f:
                 image_features = pickle.load(f)
@@ -617,28 +615,16 @@ class GPTExplainer():
                 "front": front_feature,
                 "left": left_feature,
                 "right": right_feature,
-                "odoms": self.node.odom,
-                "image_file_key": image_file_key
+                "odoms": [self.node.odom],
+                "image_file_key": [image_file_key]
             }
         # save the image features
         with open(image_feature_path, "wb") as f:
             pickle.dump(image_features, f)
 
-        # add the explanation to an existing file
-        # create a directory with timestamp
-        os.makedirs(self.log_dir, exist_ok=True)
-        filename = f"{self.log_dir}/explanation.jsonl"
-        if not os.path.exists(filename):
-            with open(filename, "w") as f:
-                f.write(json.dumps(extracted_json) + "\n")
-        else:
-            with open(filename, "a") as f:
-                f.write(json.dumps(extracted_json) + "\n")
-        self.logger.info(f"Explanation is saved to {filename}")
-
         # extract text features
-        text_feature = extract_text_feature(gpt_response["description"], self.text_tokenizer, self.text_model, self.device)
-        text_feature_path = os.path.join(feature_dir, "text_features.pickle")
+        text_feature = extract_text_feature(extracted_json["description"], self.text_tokenizer, self.text_model, self.device)
+        text_feature_path = os.path.join(self.log_dir, "text_features.pickle")
         if os.path.exists(text_feature_path):
             with open(text_feature_path, "rb") as f:
                 text_features = pickle.load(f)
@@ -646,27 +632,17 @@ class GPTExplainer():
             text_features["features"] = concat_features(text_features["features"], text_feature)
             text_features["odoms"] = text_features.get("odoms", []) + [self.node.odom]
             text_features["text_file_key"] = text_features.get("text_file_key", []) + [image_file_key]
-            text_features["texts"] = text_features.get("texts", []) + [gpt_response["description"]]
+            text_features["texts"] = text_features.get("texts", []) + [extracted_json["description"]]
         else:
             text_features = {
                 "features": text_feature,
-                "odoms": self.node.odom,
-                "text_file_key": image_file_key,
-                "texts": gpt_response["description"]
+                "odoms": [self.node.odom],
+                "text_file_key": [image_file_key],
+                "texts": [extracted_json["description"]]
             }
         # save the text features
         with open(text_feature_path, "wb") as f:
             pickle.dump(text_features, f)
-
-        filename = f"{self.log_dir}/log.jsonl"
-        if not extracted_json == "Error":
-            if not os.path.exists(filename):
-                with open(filename, "w") as f:
-                    f.write(json.dumps(gpt_response) + "\n")
-            else:
-                with open(filename, "a") as f:
-                    f.write(json.dumps(gpt_response) + "\n")
-            self.logger.info(f"Log is saved to {filename}")
 
         self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
 
