@@ -532,7 +532,8 @@ class CabotUIManager(NavigationInterface, object):
             else:
                 self._logger.info("NavigationState: Start chat")
                 self._interface.start_chat()
-                # self.publish_event("startchat")
+                self.publish_event("tmp_startchat") 
+                # self.publish_event("startchat") use this to trigger smartphone conversation UI
                 self._exploration.set_conversation_control(True)
         elif event.subtype == "left":
             self._interface.exploring_direction("left")

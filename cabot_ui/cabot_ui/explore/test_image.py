@@ -79,6 +79,7 @@ class CaBotImageNode(Node):
         self.logger = self.get_logger()
         self.apikey = self.declare_parameter("apikey").value
         self.ready = False
+        self.realsense_ready = False
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
@@ -187,10 +188,10 @@ class CaBotImageNode(Node):
                     self.can_speak_timer.cancel()
 
     def event_callback(self, msg):
-        self.logger.info(f"event log: {msg}")
-        if msg.data == "startchat":
+        self.logger.info(f"event_callback event log: {msg}")
+        if msg.data == "navigation_tmp_startchat":
             self.in_conversation = True
-        elif msg.data == "finishchat":
+        elif msg.data == "navigation_finishchat":
             self.in_conversation = False
 
     def reset_can_speak(self):
@@ -206,8 +207,13 @@ class CaBotImageNode(Node):
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
 
-        if self.cabot_nav_state != self.valid_state: return
-        if time.time() - self.last_saved_images_time < 1.0: return
+        if not self.realsense_ready:
+            self.realsense_ready = True
+            self.logger.info("Realsense ready")
+            test_speak.speak_text("カメラが起動しました")
+
+        # if self.cabot_nav_state != self.valid_state: return
+        if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
         self.last_saved_images_time = time.time()
 
         # self.logger.info(f"image callback; {self.cabot_nav_state}")
@@ -285,9 +291,9 @@ class CaBotImageNode(Node):
         return False
 
     def loop(self):
-        self.logger.info(f"going into loop with mode {self.mode}")
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
         # generate explanation
-        if not self.no_explain_mode and self.ready and not self.in_conversation:
+        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
@@ -329,7 +335,7 @@ class CaBotImageNode(Node):
                 self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
                 self.change_timer_interval(interval=wait_time)
         else:
-            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, can_speak_explanation: {self.can_speak_explanation}")
+            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
             self.logger.info(f"next wait time: 1.0 (constant)")
             self.change_timer_interval(interval=1.0)
 
