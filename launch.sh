@@ -140,7 +140,6 @@ unittest=
 retryoption=
 list_modules=0
 list_functions=0
-no_date=0
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -206,9 +205,6 @@ while getopts "ehDf:HlLMn:rsS:tT:uvyx" arg; do
         y)
             yes=1
             ;;
-        x) 
-            no_date=1
-            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -255,12 +251,7 @@ if [[ $list_functions -eq 1 ]]; then
     exit
 fi
 
-if [[ $no_date -eq 1 ]]; then
-    log_name=${log_prefix}
-else
-    log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
-fi
-
+log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
 export ROS_LOG_DIR="/home/developer/.ros/log/${log_name}"
 export ROS_LOG_DIR_ROOT="/root/.ros/log/${log_name}"
 export CABOT_LOG_NAME=$log_name
