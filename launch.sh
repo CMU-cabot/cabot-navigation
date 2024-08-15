@@ -122,6 +122,7 @@ function help()
     echo "  -l                list test functions"
     echo "  -r                retry test when segmentation fault"
     echo "  -T <module>       specify test module CABOT_SITE.<module> (default=tests)"
+    echo "  -x                do not add date to log name"
 }
 
 
@@ -139,6 +140,7 @@ unittest=
 retryoption=
 list_modules=0
 list_functions=0
+no_date=0
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -150,7 +152,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "ehDf:HlLMn:rsS:tT:uvy" arg; do
+while getopts "ehDf:HlLMn:rsS:tT:uvyx" arg; do
     case $arg in
         e)
             exploration=1
@@ -204,6 +206,9 @@ while getopts "ehDf:HlLMn:rsS:tT:uvy" arg; do
         y)
             yes=1
             ;;
+        x) 
+            no_date=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -250,8 +255,12 @@ if [[ $list_functions -eq 1 ]]; then
     exit
 fi
 
+if [[ $no_date -eq 1 ]]; then
+    log_name=${log_prefix}
+else
+    log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
+fi
 
-log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
 export ROS_LOG_DIR="/home/developer/.ros/log/${log_name}"
 export ROS_LOG_DIR_ROOT="/root/.ros/log/${log_name}"
 export CABOT_LOG_NAME=$log_name
