@@ -27,15 +27,17 @@ app = Flask(__name__)
 
 
 def draw_destination_on_rviz(coordinates: List[Tuple[float, float]], colors: List[Tuple[float, float, float]]):
-    rclpy.init()
+    # rclpy.init()
     point_drawer = CabotRvizPointDrawer(coordinates, colors)
-    rclpy.spin_once(point_drawer)
-    point_drawer.destroy_node()
-    rclpy.shutdown()
+    # rclpy.spin_once(point_drawer)
+    # point_drawer.destroy_node()
+    # rclpy.shutdown()
+    point_drawer.publish_points()
 
 class RosQueryNode(Node):
     def __init__(self, query_type, query_string, user_query_message: str):
         super().__init__("user_query_node")
+        self.logger.info("RosQueryNode is initialized")
         self.query_pub = self.create_publisher(String, "/cabot/user_query", 10)
         self.query_type = query_type  # search or direction
         self.query_string = query_string
@@ -80,7 +82,6 @@ class RosQueryNode(Node):
             self.query_message = f"入力に何か問題がありそうです。もう一度入力してください。"
 
         sys.exit(0)
-
 
 
 def search(user_query: str, log_dir: str, use_default_query: bool = False):

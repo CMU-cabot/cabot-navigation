@@ -227,7 +227,7 @@ class ExplorationChatServer(Node):
                     odom = search(query_string, self.log_dir)
                     query_string = f"{odom[0]},{odom[1]}"
                     self.logger.info(f"searched odom: {query_string}")
-                    # draw_destination_on_rviz([odom], [0, 1.0, 0])
+                    draw_destination_on_rviz([odom], [[0.0, 1.0, 0.0]])
 
                 self.logger.info(f"specify_destination; Query type: {query_type}, Query string: {query_string}")
                 query_message = self.specify_destination(query_type, query_string, query_target)

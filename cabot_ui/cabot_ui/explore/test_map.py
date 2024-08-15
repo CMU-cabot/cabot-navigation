@@ -122,15 +122,18 @@ class CaBotMapNode(Node):
 class CabotRvizPointDrawer(Node):
     def __init__(self, coordinates: List[Tuple[float, float]], colors: List[Tuple[float, float, float]] = None):
         super().__init__("cabot_rviz_point_drawer")
+        self.logger = self.get_logger()
+        self.logger.info("CabotRvizPointDrawer is initialized")
         self.publisher_ = self.create_publisher(MarkerArray, "/marker", 10)
         self.timer_ = self.create_timer(1.0, self.timer_callback)
         self.color = colors
         self.coordinates = coordinates
-
-    def timer_callback(self):
+    
+    def publish_points(self):
         """
         Draw points on rviz for visualization
         """
+        self.logger.info("Publishing points on rviz")
         marker = MarkerArray()
         for i, coord in enumerate(self.coordinates):
             marker_msg = Marker()
@@ -162,6 +165,9 @@ class CabotRvizPointDrawer(Node):
             marker_msg.lifetime = rclpy.duration.Duration(seconds=100).to_msg()
             marker.markers.append(marker_msg)
         self.publisher_.publish(marker)
+
+    def timer_callback(self):
+        self.publish_points()
 
 
 class MapData:
