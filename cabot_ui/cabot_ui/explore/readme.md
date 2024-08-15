@@ -14,6 +14,24 @@
 OPENAI_API_KEY=<apikey>
 を追加する
 
+## 手順（0814 update）
+- `explore_exp1_scripts` にスクリプト群がまとまっている
+
+```
+$ ./explore_exp1_scripts/explore_exp1_setup.sh
+```
+これを実行すると、ターミナルが複数起動して必要なプロセスが起動する
+
+## Trouble shooting
+- 何かがおかしいときは、該当するスクリプトを特定して再起動する
+- 例：
+  - コントローラ
+    - `./explore_exp1_scripts/activate_teleop.sh` を再起動
+- ログの見方
+  - `docker-compose.log` にすべてのtopicのログが出力される
+
+
+
 ## ロボット起動関連
 1. dockerコンテナの起動
 
