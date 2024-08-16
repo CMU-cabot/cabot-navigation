@@ -122,7 +122,6 @@ function help()
     echo "  -l                list test functions"
     echo "  -r                retry test when segmentation fault"
     echo "  -T <module>       specify test module CABOT_SITE.<module> (default=tests)"
-    echo "  -x                do not add date to log name"
 }
 
 
@@ -151,7 +150,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "ehDf:HlLMn:rsS:tT:uvyx" arg; do
+while getopts "ehDf:HlLMn:rsS:tT:uvy" arg; do
     case $arg in
         e)
             exploration=1
