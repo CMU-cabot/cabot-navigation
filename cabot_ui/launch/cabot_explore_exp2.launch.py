@@ -6,7 +6,7 @@ def generate_launch_description():
     log_dir = LaunchConfiguration('log_dir')
     apikey = LaunchConfiguration('apikey')
 
-    return LaunchDescription([
+    return LaunchDescription([        
         # surronding explain mode
         Node(
             package='cabot_ui',
@@ -20,7 +20,7 @@ def generate_launch_description():
                 {'debug': False},
                 {'once': False},
                 {'no_explain_mode': False},
-                {'is_sim': False},
+                {'is_sim': True},
                 {'apikey': apikey}
                 
             ]
