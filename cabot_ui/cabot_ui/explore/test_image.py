@@ -527,12 +527,11 @@ class GPTExplainer():
         if len(self.conversation_history) == 0:
             prompt = self.prompt
         else:
-            if self.mode == "scene_description_mode" or self.mode == "intersection_detection_mode":
+            if self.mode == "semantic_map_mode" or self.mode == "intersection_detection_mode":
                 prompt = self.prompt
                 self.conversation_history = []
             else:
-                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは含めないでください。\
-                    重複した説明はせずに、簡潔に説明してください。前のレスポンスと同じようにJSON形式で返してください。"
+                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは説明に含めないでください。前のレスポンスと同じようにJSON形式で返してください。"
 
         try:
             # resize images max width 512
@@ -724,7 +723,7 @@ class GPTExplainer():
             request_elapsed = time.time() - request_start
             self.logger.info("OpenAI API Request success.")
             self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
-            self.conversation_history.append({"role": "system", "content": str(extracted_json["description"])})
+            self.conversation_history.append({"role": "system", "content": str(res_json["choices"][0]["message"]["content"])})
         except Exception as e:
             self.logger.info(f"OpenAI API Request failed. Error message: {e}")
             self.logger.info(f"OpenAI Error Response: {response}")
