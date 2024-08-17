@@ -306,6 +306,13 @@ else
     ./server-launch.sh -C
 fi
 
+# pushd ../cabot-ros2
+# bag_dccom="docker compose -f docker-compose-bag.yaml"
+# com="bash -c \"setsid $bag_dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose-bag.log &"
+# blue $com
+# eval $com
+# popd
+
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
 else
