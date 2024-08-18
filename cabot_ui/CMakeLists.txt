@@ -86,6 +86,7 @@ install(PROGRAMS
   scripts/stop_reasons_node.py
   scripts/exploration_chat_server.py
   scripts/exploration_image_explain.py
+  scripts/exploration_main_loop.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
