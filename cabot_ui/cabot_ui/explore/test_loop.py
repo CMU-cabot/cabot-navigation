@@ -1,19 +1,21 @@
-from test_map import main as get_next_point
-from test_explore import main as explore
-from test_image import main as generate_from_images
-from test_speak import speak_text
 import psutil
 import argparse
 import datetime
 import os, sys
 import random
-import rclpy
 import numpy as np
-from rclpy.node import Node
-from std_msgs.msg import Bool, UInt8, UInt8MultiArray, Int8, Int16, Float32, String
-from test_state_input import StateInput
 import time
 from typing import List, Dict, Union, Optional, Set, Any
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Bool, UInt8, UInt8MultiArray, Int8, Int16, Float32, String
+
+from .test_map import main as get_next_point
+from .test_explore import main as explore
+from .test_image import main as generate_from_images
+from .test_speak import speak_text
+from .test_state_input import StateInput
 
 
 class CabotQueryNode(Node):
@@ -68,7 +70,8 @@ class CabotQueryNode(Node):
 
 
 def publish_nav_state(state_str):
-    rclpy.init()
+    if not rclpy.ok():
+        rclpy.init()
     node = Node('state_control', start_parameter_services=False)
     state_control = StateInput(node=node)
     time.sleep(1)
@@ -77,19 +80,27 @@ def publish_nav_state(state_str):
     rclpy.shutdown()
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dist_filter", "-d", action="store_true", help="Apply distance filter")
-    parser.add_argument("--forbidden_area_filter", "-f", action="store_true", help="Apply forbidden area filter")
-    parser.add_argument("--trajectory_filter", "-t", action="store_true", help="Apply trajectory filter")
-    parser.add_argument("--auto", "-a", action="store_true", help="Automatically select the next point")
-    parser.add_argument("--image", "-i", action="store_true", help="Generate explanation from images")
-    parser.add_argument("--log_dir", "-l", type=str, help="Log directory; e.g., logs/logs_0123-123456")
-    parser.add_argument("--sim", "-s", action="store_true", help="Simulator mode")
-    parser.add_argument("--keyboard", "-k", action="store_true", help="Keyboard mode")
-    parser.add_argument("--debug", "-db", action="store_true", help="Debug mode")
-    args = parser.parse_args()
-
+def main(
+    dist_filter: bool = False,
+    forbidden_area_filter: bool = False,
+    trajectory_filter: bool = False,
+    auto: bool = False,
+    use_image: bool = False,
+    log_dir: Optional[str] = None,
+    sim: bool = False,
+    keyboard: bool = False,
+    debug: bool = False
+):
+    # print all the parameters
+    print(f"dist_filter: {dist_filter}")
+    print(f"forbidden_area_filter: {forbidden_area_filter}")
+    print(f"trajectory_filter: {trajectory_filter}")
+    print(f"auto: {auto}")
+    print(f"use_image: {use_image}")
+    print(f"log_dir: {log_dir}")
+    print(f"sim: {sim}")
+    print(f"keyboard: {keyboard}")
+    print(f"debug: {debug}")
     maps = []
 
     iter = 0
@@ -100,7 +111,10 @@ if __name__ == "__main__":
     is_already_checked = False
     forbidden_centers = []
 
-    if not args.trajectory_filter:
+    initial_coords: Optional[List[float]] = None
+    initial_orientation: Optional[float] = None
+
+    if not trajectory_filter:
         is_trajectory_running = True
     
     # check if test_trajectory.py is running in trajectory filter mode
@@ -117,8 +131,8 @@ if __name__ == "__main__":
             print("test_trajectory.py is not running. Please run it first.")
             is_already_checked = True
 
-    if args.log_dir:
-        log_dir = f"{args.log_dir}"
+    if log_dir:
+        log_dir = f"{log_dir}"
     else:
         log_dir = f"logs/logs_{timestamp}"
         print(f"log dir is not specified; using {log_dir}")
@@ -131,14 +145,14 @@ if __name__ == "__main__":
         publish_nav_state("paused")
 
         # 1. generate "intersection" explanation from images to check the availability of each direction
-        if args.image:
+        if use_image:
             print("Generating GPT-4o explanation from images...\n")
             availability_from_image = generate_from_images(
-                log_dir=log_dir, once=True, is_sim=args.sim,
+                log_dir=log_dir, once=True, is_sim=sim,
                 intersection_detection_mode=True,
                 surronding_explain_mode=False,
                 semantic_map_mode=False,
-                debug=args.debug
+                debug=debug
             )
             print(f"Availability from image: {availability_from_image}\n")
 
@@ -165,16 +179,21 @@ if __name__ == "__main__":
 
         # 2. get the next point to explore
         print(f"Getting next point...\n")
-        sampled_points, forbidden_centers, current_coords, costmap = get_next_point(
-            do_dist_filter=args.dist_filter, 
-            do_forbidden_area_filter=args.forbidden_area_filter, 
-            do_trajectory_filter=args.trajectory_filter, 
-            auto_mode=args.auto, 
+        sampled_points, forbidden_centers, current_coords, current_orientation, costmap = get_next_point(
+            do_dist_filter=dist_filter, 
+            do_forbidden_area_filter=forbidden_area_filter, 
+            do_trajectory_filter=trajectory_filter, 
+            auto_mode=auto, 
             log_dir=log_dir, 
             availability_from_image=availability_from_image,
-            forbidden_centers=forbidden_centers
+            forbidden_centers=forbidden_centers,
+            initial_coords=initial_coords,
+            initial_orientation=initial_orientation
         )
         maps.append(costmap)
+        if iter == 0:
+            initial_coords = current_coords
+            initial_orientation = current_orientation
 
         # calculate map's highlihgted area's diff 
         if len(maps) > 1:
@@ -191,8 +210,8 @@ if __name__ == "__main__":
         # first, ask user to select the direction
         direction_candidates: List[str] = sorted(list(set([x[1] for x in sampled_points])))
         print(f"Direction candidates: {direction_candidates}")
-        if not args.auto:
-            if args.keyboard:
+        if not auto:
+            if keyboard:
                 abbrv_dirs = ["".join([x[0] for x in dir.split("_")]) for dir in direction_candidates]
                 print(f"Select the direction of the next point from the following directions: {abbrv_dirs}, or 'none'")
                 selected_dir = input("Enter the direction: ")
@@ -201,7 +220,8 @@ if __name__ == "__main__":
                     selected_dir = input("Enter the direction: ")
             else:
                 # accept input from ros topic (user_query_node)
-                rclpy.init()
+                if not rclpy.ok():
+                    rclpy.init()
                 query_node = CabotQueryNode(candidates=direction_candidates)
                 try:
                     rclpy.spin(query_node)
@@ -284,3 +304,29 @@ if __name__ == "__main__":
         iter += 1
     
     publish_nav_state("finished")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dist_filter", "-d", action="store_true", help="Apply distance filter")
+    parser.add_argument("--forbidden_area_filter", "-f", action="store_true", help="Apply forbidden area filter")
+    parser.add_argument("--trajectory_filter", "-t", action="store_true", help="Apply trajectory filter")
+    parser.add_argument("--auto", "-a", action="store_true", help="Automatically select the next point")
+    parser.add_argument("--use_image", "-i", action="store_true", help="Generate explanation from images")
+    parser.add_argument("--log_dir", "-l", type=str, help="Log directory; e.g., logs/logs_0123-123456")
+    parser.add_argument("--sim", "-s", action="store_true", help="Simulator mode")
+    parser.add_argument("--keyboard", "-k", action="store_true", help="Keyboard mode")
+    parser.add_argument("--debug", "-db", action="store_true", help="Debug mode")
+    args = parser.parse_args()
+
+    main(
+        dist_filter=args.dist_filter,
+        forbidden_area_filter=args.forbidden_area_filter,
+        trajectory_filter=args.trajectory_filter,
+        auto=args.auto,
+        use_image=args.use_image,
+        log_dir=args.log_dir,
+        sim=args.sim,
+        keyboard=args.keyboard,
+        debug=args.debug
+    )
