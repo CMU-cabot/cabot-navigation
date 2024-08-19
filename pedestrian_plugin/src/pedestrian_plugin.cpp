@@ -452,6 +452,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
           this->roll = pose.Rot().X();
           this->pitch = pose.Rot().Y();
           this->yaw = pose.Rot().Z();
+          
         } else {
           auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
           auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);

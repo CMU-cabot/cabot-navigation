@@ -170,7 +170,7 @@ class PedestrianManager():
     </actor>
 </sdf>
 """
-        logging.info(actor_xml)
+        # logging.info(actor_xml)
         request = SpawnEntity.Request()
         request.name = name
         request.xml = actor_xml

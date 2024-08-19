@@ -1160,6 +1160,8 @@ def main():
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
 
+    logger.info(f"{options=}")
+
     if options.list_modules:
         module = __import__(options.module)
         modules = [name for _, name, _ in pkgutil.iter_modules(module.__path__)]

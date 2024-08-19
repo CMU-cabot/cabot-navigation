@@ -38,10 +38,7 @@ def obstacle_states_callback(msg):
     last_obstacles_states = msg
     # ros.info(f"obstacle_states={msg}")
 
-try:
-    rclpy.init()
-except:
-    pass
+rclpy.init()
 node = rclpy.create_node('robot_cmd_vel')
 sub = node.create_subscription(Obstacles, '/obstacle', obstacle_states_callback, 10)
 

@@ -97,8 +97,11 @@ class Evaluator:
     def get_evaluation_results(self):
         results = []
         for metric, func in zip(self._metrics_to_compute, self._metrics_func_list):
-            result = func(self.human_list, self.robot_list)
-            results.append({"name": metric, "value": result[0]})
+            try:
+                result = func(self.human_list, self.robot_list)
+                results.append({"name": metric, "value": result[0]})
+            except:
+                self._logger.error(f"Failed to compute metric={metric}, {self.human_list=}, {self.robot_list=}")
         return results
 
     def reset(self):
