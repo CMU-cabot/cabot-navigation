@@ -52,6 +52,25 @@ set(dependencies
 
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(yaml_cpp_vendor REQUIRED)
+  ament_add_gtest(${PROJECT_NAME}_test_check_path
+    plugins/condition/check_path.cpp
+    test/test_check_path.cpp
+  )
+  ament_target_dependencies(${PROJECT_NAME}_test_check_path
+    rcl
+    rclcpp
+    nav2_msgs
+    nav2_util
+    people_msgs
+    queue_msgs
+    behaviortree_cpp_v3
+    nav2_behavior_tree
+    yaml_cpp_vendor
+  )
+  install(DIRECTORY test/data/ DESTINATION share/${PROJECT_NAME}/test/data/)
+
   find_package(ament_cmake_copyright REQUIRED)
   find_package(ament_cmake_cpplint REQUIRED)
   find_package(ament_cmake_flake8 REQUIRED)
