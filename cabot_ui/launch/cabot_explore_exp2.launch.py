@@ -40,15 +40,23 @@ def generate_launch_description():
         # ),
 
         # # chat server
-        # Node(
-        #     package='cabot_ui',
-        #     executable='exploration_chat_server.py',
-        #     name='exploration_chat_server',
-        #     output='screen',
-        #     parameters=[
-        #         {'log_dir': log_dir},
-        #         {'use_openai': True},  # Set this to False if you don't want to use OpenAI
-        #         {'apikey': apikey}
-        #     ],
-        # )
+        Node(
+            package='cabot_ui',
+            executable='exploration_chat_server.py',
+            name='exploration_chat_server',
+            output='screen',
+            parameters=[
+                {'log_dir': log_dir},
+                {'use_openai': True},  # Set this to False if you don't want to use OpenAI
+                {'apikey': apikey}
+            ],
+        ),
+
+        # cancel node
+        Node(
+            package='cabot_ui',
+            executable='exploration_cancel.py',
+            name='exploration_cancel',
+            output='screen',
+        ),
     ])
