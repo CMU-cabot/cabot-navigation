@@ -154,11 +154,11 @@ class PedestrianManager():
     <actor name="{name}">
         <pose>{xx} {yy} 0 0 0 0</pose>
         <skin>
-            <filename>walk.dae</filename>
-            <scale>1.0</scale>
+            <filename>moonwalk.dae</filename>
+            <scale>0.5</scale>
         </skin>
         <animation name="walking">
-            <filename>walk.dae</filename>
+            <filename>moonwalk.dae</filename>
             <scale>1.0</scale>
             <interpolate_x>true</interpolate_x>
         </animation>
