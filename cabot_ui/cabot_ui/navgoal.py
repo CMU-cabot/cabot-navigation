@@ -582,7 +582,6 @@ class Goal(geoutil.TargetPlace):
                 if cancel_callback:
                     cancel_callback()
                 self.delegate._process_queue.append((self.cancel, callback))
-                
             future.add_done_callback(done_callback)
 
             def timeout_watcher(future, timeout_duration):
@@ -590,7 +589,7 @@ class Goal(geoutil.TargetPlace):
                 while not future.done():
                     if time.time() - start_time > timeout_duration:
                         self._logger.error("Timeout occurred while waiting for future to complete")
-                        done_callback(future)
+                        future.cancel()
                         return
                     time.sleep(0.1)
 
@@ -858,8 +857,11 @@ class NavGoal(Goal):
             self.prevent_callback = False
             return
 
-        CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
-        status = future.result().status
+        if future:
+            CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
+        else:
+            CaBotRclpyUtil.info(F"Could not send goal")
+        status = future.result().status if future is not None else None
 
         # TODO(daisuke): needs to change test case conditions
         if status == GoalStatus.STATUS_SUCCEEDED:

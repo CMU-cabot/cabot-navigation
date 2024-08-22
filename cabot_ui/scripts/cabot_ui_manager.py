@@ -341,6 +341,7 @@ class CabotUIManager(NavigationInterface, object):
     def _process_navigation_event(self, event):
         if event.type != NavigationEvent.TYPE:
             return
+        self._logger.info(f"_process_navigation_event {event}")
 
         # operations indepent from the navigation state
         if event.subtype == "language":
@@ -501,8 +502,6 @@ class CabotUIManager(NavigationInterface, object):
                     self._logger.info("NavigationState: resumed (user)")
                 elif self._status_manager.state == State.in_pausing:
                     self._interface.pausing_navigation()
-                    time.sleep(5)
-                    self._navigation.process_event(NavigationEvent(subtype="resume"))
                 else:
                     self._logger.info("NavigationState: state is not in pause state")
             else:
