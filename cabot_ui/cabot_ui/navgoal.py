@@ -37,6 +37,7 @@ from action_msgs.msg import GoalStatus
 
 from cabot_common import util
 
+import threading
 
 class GoalInterface(object):
     def activity_log(self, category="", text="", memo=""):
@@ -570,11 +571,32 @@ class Goal(geoutil.TargetPlace):
             future = handle.cancel_goal_async()
 
             def done_callback(future):
+                if future.cancelled():
+                    self._logger.info("Future was cancelled.")
+                elif future.done():
+                    error = future.exception()
+                    if error:
+                        self._logger.error(f"Future resulted in error: {error}")
+                    else:
+                        self._logger.info(f"cancel future result = {future.result}")
                 if cancel_callback:
                     cancel_callback()
-                self._logger.info(f"cancel future result = {future.result}")
                 self.delegate._process_queue.append((self.cancel, callback))
+                
             future.add_done_callback(done_callback)
+
+            def timeout_watcher(future, timeout_duration):
+                start_time = time.time()
+                while not future.done():
+                    if time.time() - start_time > timeout_duration:
+                        self._logger.error("Timeout occurred while waiting for future to complete")
+                        done_callback(future)
+                        return
+                    time.sleep(0.1)
+
+            timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
+            timeout_tread.start()
+
             self._logger.info(f"sent cancel goal: {len(self._handles)} handles remaining")
         else:
             if callback:

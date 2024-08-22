@@ -38,6 +38,7 @@ import sys
 import threading
 import traceback
 import yaml
+import time
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
@@ -498,6 +499,10 @@ class CabotUIManager(NavigationInterface, object):
                     self._status_manager.set_state(State.in_action)
                     self._navigation.resume_navigation()
                     self._logger.info("NavigationState: resumed (user)")
+                elif self._status_manager.state == State.in_pausing:
+                    self._interface.pausing_navigation()
+                    time.sleep(5)
+                    self._navigation.process_event(NavigationEvent(subtype="resume"))
                 else:
                     self._logger.info("NavigationState: state is not in pause state")
             else:

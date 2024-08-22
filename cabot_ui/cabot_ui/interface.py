@@ -188,6 +188,10 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "navigation", "resume")
         self.speak(i18n.localized_string("RESUME_NAVIGATION"))
 
+    def pausing_navigation(self):
+        self._activity_log("cabot/interface", "navigation", "pausing")
+        self.speak(i18n.localized_string("PLEASE_WAIT_FOR_A_SECOND"))
+
     def start_exploration(self):
         pass  # self.speak(i18n.localized_string("START_EXPLORATION"))
 
