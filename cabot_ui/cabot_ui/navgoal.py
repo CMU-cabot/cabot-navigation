@@ -22,6 +22,7 @@ from typing import List
 import math
 import inspect
 import numpy
+import threading
 import time
 import traceback
 import yaml
@@ -37,7 +38,6 @@ from action_msgs.msg import GoalStatus
 
 from cabot_common import util
 
-import threading
 
 class GoalInterface(object):
     def activity_log(self, category="", text="", memo=""):
@@ -860,7 +860,7 @@ class NavGoal(Goal):
         if future:
             CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
         else:
-            CaBotRclpyUtil.info(F"Could not send goal")
+            CaBotRclpyUtil.info("Could not send goal")
         status = future.result().status if future is not None else None
 
         # TODO(daisuke): needs to change test case conditions

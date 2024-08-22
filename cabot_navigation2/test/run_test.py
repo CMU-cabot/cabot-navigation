@@ -596,6 +596,7 @@ class Tester:
         self.add_subscription(case, sub)
         case['done'] = True
         case['success'] = None
+
         def cancel_func():
             logger.debug(F"cancel {case}")
             self.cancel_subscription(case)

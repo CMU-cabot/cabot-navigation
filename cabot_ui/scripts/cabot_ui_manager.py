@@ -38,7 +38,6 @@ import sys
 import threading
 import traceback
 import yaml
-import time
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy

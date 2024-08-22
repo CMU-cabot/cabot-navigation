@@ -40,7 +40,7 @@ function help()
     echo "-w          wait ready"
 }
 
-blue "Start runnint tests"
+blue "Start running tests"
 
 pwd=`pwd`
 scriptdir=`dirname $0`

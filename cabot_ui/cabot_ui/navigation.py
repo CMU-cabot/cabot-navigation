@@ -1145,7 +1145,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if future.cancelled():
             try:
                 done_cb(None)
-            except:
+            except:  # noqa: E722
                 self._logger.error(traceback.format_exc())
             return
         self._logger.info("_navigate_to_pose_sent_goal")
