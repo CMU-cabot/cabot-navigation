@@ -63,6 +63,11 @@ echo "play $bag"
 
 
 if (( $(echo "$start > 0.01" | bc -l) )); then
+    ros2 run cabot_debug print_topics.py -f $bag -i > /dev/null 2>&1
+    if [[ $? -ne 0 ]]; then
+        red "could not read the bag file, please check if the bag path is correct and the bag has correct metadata.yaml"
+        exit
+    fi
     map=$(ros2 run cabot_debug print_topics.py -f $bag -d $start -r -t /current_map_filename 2> /dev/null | tail -1)
     echo "last current_map_filename = $map"
     temp_str="${map#package://}"
