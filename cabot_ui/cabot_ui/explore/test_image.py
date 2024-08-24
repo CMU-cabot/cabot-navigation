@@ -548,6 +548,7 @@ class GPTExplainer():
             gpt_response["log_dir"] = self.log_dir
 
             # get front/left/right availability
+            self.logger.info(f"Extracting JSON from the response: {gpt_response}")
             extracted_json = gpt_response["choices"][0]["message"]["content"]
             if extracted_json is None:
                 self.logger.info("Could not extract JSON part from the response.")
@@ -737,7 +738,11 @@ class GPTExplainer():
         return image
 
 def main(args=None):
-    rclpy.init(args=args)
+    re_init = False
+    if not rclpy.ok():
+        rclpy.init(args=args)
+        re_init = True
+    
     node = CaBotImageNode()
     try:
         rclpy.spin(node)  # Keep the node spinning to process callbacks
@@ -745,7 +750,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if re_init:
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

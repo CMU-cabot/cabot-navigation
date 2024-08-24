@@ -92,15 +92,21 @@ class CaBotExplorationNode(Node):
         self.get_logger().info(f"Publishing: {coords_msg}")
 
     def stop_timer_callback(self, msg):
-        self.get_logger().info(f"Received: {msg.data}")
+        self.get_logger().info(f"(test_explore) Received: {msg.data}")
         if msg.data == "navigation_arrived" or msg.data == "navigation;cancel":
-            print("Goal is reached (or canceled)")
-            raise SystemExit("Goal is reached")
+            self.get_logger().info("Goal is reached (or canceled)")
+            # raise SystemExit("Goal is reached")
             # self.should_stop = True
             # self.timer.cancel()
             # self.destroy_node()
             # rclpy.shutdown()
-            # sys.exit(0)
+            sys.exit(0)
+        # elif msg.data == "startchat":
+        #     # publish "startchat" to /cabot/event to start chat
+        #     start_chat_msg = String()
+        #     start_chat_msg.data = "navigation;cancel"
+        #     self.goal_coordinate_pub.publish(start_chat_msg)
+        #     raise SystemExit("Start chat")
     
     def odom_callback(self, msg):
         # self.get_logger().info(f"Received: {msg.pose.pose.position.x}, {msg.pose.pose.position.y}")
@@ -136,7 +142,10 @@ def main(x: int, y: int, cancel_mode: bool = False):
         if x is None and y is None:
             raise ValueError("Please provide x and y coordinates")
 
-    rclpy.init()
+    re_init = False
+    if not rclpy.ok():
+        rclpy.init()
+        re_init = True
     rcl_publisher = CaBotExplorationNode(x, y)
     if cancel_mode:
         cancel_pub = rcl_publisher.create_publisher(String, "/cabot/event", 10)
@@ -155,15 +164,17 @@ def main(x: int, y: int, cancel_mode: bool = False):
         finally:
             rcl_publisher.destroy_node()
             print("destroyed nodes")
-            rclpy.shutdown()
-            print("shutdown rclpy")
+            if re_init:
+                rclpy.shutdown()
+                print("shutdown rclpy")
     else:
         try:
             rclpy.spin(rcl_publisher)
         except SystemExit as e:
             print(e)
         rcl_publisher.destroy_node()
-        rclpy.try_shutdown()
+        if re_init:
+            rclpy.try_shutdown()
 
         print("spin done")
         # convert coordinates to map coordinates

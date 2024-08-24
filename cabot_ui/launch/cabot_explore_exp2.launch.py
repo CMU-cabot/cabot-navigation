@@ -6,7 +6,20 @@ def generate_launch_description():
     log_dir = LaunchConfiguration('log_dir')
     apikey = LaunchConfiguration('apikey')
 
-    return LaunchDescription([        
+    return LaunchDescription([    
+        # main code
+        Node(
+            package="cabot_ui",
+            executable="exploration_main_loop.py",
+            name="exploration_main_loop",
+            output="screen",
+            parameters=[
+                {"log_dir": log_dir},
+                {"dist_filter": True},
+                {"is_sim": True},
+            ],
+        ),
+
         # surronding explain mode
         Node(
             package='cabot_ui',
@@ -37,5 +50,24 @@ def generate_launch_description():
                 {'use_openai': True},  # Set this to False if you don't want to use OpenAI
                 {'apikey': apikey}
             ],
-        )
+        ),
+
+        # cancel node
+        Node(
+            package='cabot_ui',
+            executable='exploration_cancel.py',
+            name='exploration_cancel',
+            output='screen',
+        ),
+
+        # chat flag
+        # Node(
+        #     package='cabot_ui',
+        #     executable='exploration_chat_flag.py',
+        #     name='exploration_chat_flag',
+        #     output='screen',
+        #     parameters=[
+        #         {'log_dir': log_dir},
+        #     ],
+        # ),
     ])

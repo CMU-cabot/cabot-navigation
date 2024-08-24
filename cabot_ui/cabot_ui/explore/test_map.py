@@ -234,11 +234,11 @@ def convert_odom_to_map_batch(coords: np.ndarray, map_x: int, map_y: int, map_re
 
 
 def draw_points_on_rviz(coordinates: List[Tuple[float, float]]):
-    rclpy.init()
+    if not rclpy.ok():
+        rclpy.init()
     point_drawer = CabotRvizPointDrawer(coordinates)
     rclpy.spin_once(point_drawer)
     point_drawer.destroy_node()
-    rclpy.shutdown()
 
 
 def get_direction_from_orientation(current_location: np.ndarray, orientation: np.ndarray, coordinates: np.ndarray) -> List[str]:
@@ -317,6 +317,9 @@ class FilterCandidates:
             do_trajectory_filter: bool = True,
             availability_from_image: Optional[Dict[str, bool]] = None,
             forbidden_area_centers: Optional[List[Tuple[float, float]]] = None,
+            initial_pose_filter: bool = True,
+            initial_coords: Optional[Tuple[float, float]] = None,
+            initial_orientation: Optional[float] = None,
             log_dir: str = "."
         ):
         # forbidden_area_centers: [(x, y), ...] in odom coordinates
@@ -333,7 +336,12 @@ class FilterCandidates:
         self.do_dist_filter = do_dist_filter
         self.do_forbidden_area_filter = do_forbidden_area_filter
         self.do_trajectory_filter = do_trajectory_filter
-        print(f"filter: dist: {do_dist_filter}, forbidden: {do_forbidden_area_filter}, trajectory: {do_trajectory_filter}")
+        self.do_initial_pose_filter = initial_pose_filter
+        print(f"filter: dist: {do_dist_filter}, "
+              f"forbidden: {do_forbidden_area_filter}, "
+              f"trajectory: {do_trajectory_filter} "
+              f"initial_pose: {initial_pose_filter}"
+        )
 
         if self.do_forbidden_area_filter:
             self.forbidden_area_checker = CheckForbiddenArea()
@@ -361,10 +369,17 @@ class FilterCandidates:
         
         if self.availability_from_image is not None:
             self.avail_map = np.zeros(map_data.map_data.shape)
-            self.all_avail_points = np.stack(np.meshgrid(np.arange(map_data.map_data.shape[1]), np.arange(map_data.map_data.shape[0]), indexing='ij'), axis=-1).reshape(-1, 2)
+            self.all_avail_points = np.stack(
+                np.meshgrid(
+                    np.arange(map_data.map_data.shape[1]), 
+                    np.arange(map_data.map_data.shape[0]), 
+                    indexing='ij'
+                ), axis=-1
+            ).reshape(-1, 2)
 
-        self.max_dist = 150
+        self.max_dist = 200
         self.min_dist = 50
+        self.corridor_width = 75
     
     def save_traj_map(self, log_dir: str = "."):
         plt.imshow(self.traj_forbidden_map, cmap='gray')
@@ -472,6 +487,23 @@ class FilterCandidates:
         score_map[is_forbidden] = 1
         return score_map
 
+    def initial_pose_filter(self, candidates: np.ndarray, initial_coords: Tuple[float, float], initial_orientation: float) -> np.ndarray:
+        # coords: (n, 2); n: number of coordinates
+        # score 1 for the points that are in the forbidden area
+        score_map = np.zeros(candidates.shape[0])
+        initial_coords_in_map = convert_odom_to_map_batch(np.array([initial_coords]), self.map_x, self.map_y, self.map_resolution, self.map_height)[0]
+        initial_coords_in_map = initial_coords_in_map[::-1].astype(int)
+        initial_orientation = np.pi / 2 + initial_orientation
+        # filter out the points that are too far to the line from the initial point and the orientation
+        # first, calculate the line equation from the initial point and the orientation
+        # i.e., y = ax + b
+        a = np.tan(initial_orientation)
+        b = initial_coords_in_map[1] - a * initial_coords_in_map[0]
+        dists = np.abs(a * candidates[:, 0] - candidates[:, 1] + b) / np.sqrt(a ** 2 + 1)
+        score_map[dists > self.corridor_width] = 10
+        return score_map
+
+
     def filter(self, current_point, candidates, orientation) -> np.ndarray:
         # candidates: (n, 2); n: number of coordinates
         # orientation: (1,); current orientation in radian
@@ -496,7 +528,12 @@ class FilterCandidates:
         else:
             availability_filter = np.zeros(candidates.shape[0])
         
-        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter
+        if self.do_initial_pose_filter:
+            initial_pose_filter = self.initial_pose_filter(candidates, (0, 0), 0)
+        else:
+            initial_pose_filter = np.zeros(candidates.shape[0])
+        
+        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter + initial_pose_filter
         return score_map
         
 
@@ -514,7 +551,10 @@ def set_next_point_based_on_skeleton(
         auto_mode: bool = False,
         log_dir: str = ".",
         availability_from_image: Optional[Dict[str, bool]] = None,
-        forbidden_centers: Optional[List[Tuple[float, float]]] = None
+        forbidden_centers: Optional[List[Tuple[float, float]]] = None,
+        initial_coords: Optional[Tuple[float, float]] = None,
+        initial_orientation: Optional[float] = None,
+        follow_initial_orientation: bool = True
     ):
     print(f"map data: map_x: {map_x}, map_y: {map_y}, map_resolution: {map_resolution}, map_height: {map_height}")
     orientation = np.pi / 2 + orientation  # flip x axis
@@ -541,6 +581,9 @@ def set_next_point_based_on_skeleton(
         #     "right_available": False
         # },
         forbidden_area_centers=forbidden_centers,
+        initial_pose_filter=follow_initial_orientation,
+        initial_coords=initial_coords,
+        initial_orientation=initial_orientation,
         log_dir=log_dir
     )
     if do_trajectory_filter:
@@ -568,10 +611,11 @@ def set_next_point_based_on_skeleton(
     #     print(f"candidate {i}: {cand[::-1]} (x: {cand_coords_odom[i][0]:.2f}, y: {cand_coords_odom[i][1]:.2f})")
     
     # # tmp debug; use all points on the map as candidates
-    # intersection_points = np.argwhere(highlighted_map > -1)
+    # intersection_points = np.argwhere(map_data.highlighted_map > -1)
     # # randomly sample 1000 points
     # if len(intersection_points) > 1000:
     #     intersection_points = intersection_points[np.random.choice(len(intersection_points), 1000)]
+    # map_data.intersection_points = intersection_points
     
     cand_score = cand_filter.filter(
         current_point=coords[-1], candidates=map_data.intersection_points,
@@ -657,62 +701,11 @@ def set_next_point_based_on_skeleton(
 
     # copy local_map.png to upper directory
     os.system(f"cp {log_dir}/local_map.png {log_dir}/../local_map.png")
-
-    # # pick up one direction
-    # # first, ask user to select the direction
-    # if not auto_mode:
-    #     abbrv_dirs = ["".join([y[0] for y in x[1].split("_")]) for x in sampled_points]
-    #     print(f"Select the direction of the next point from the following directions: {abbrv_dirs}, or 'none'")
-    #     selected_dir = input("Enter the direction: ")
-    #     while selected_dir not in abbrv_dirs and selected_dir != "none":
-    #         print(f"Invalid direction; try again (directions: {abbrv_dirs}, or 'none')")
-    #         selected_dir = input("Enter the direction: ")
-    # else:
-    #     selected_dir = "none"
-    
-    # if selected_dir == "none":
-    #     # priority: front > front_left = front_right > others
-    #     cand_directions = [cand[1] for cand in sampled_points]
-    #     if "front" in cand_directions:
-    #         output_direction = "front"
-    #     elif "front_left" in cand_directions and "front_right" in cand_directions:
-    #         output_direction = random.choice(["front_left", "front_right"])
-    #     elif "front_left" in cand_directions:
-    #         output_direction = "front_left"
-    #     elif "front_right" in cand_directions:
-    #         output_direction = "front_right"
-    #     elif "left" in cand_directions and "right" in cand_directions:
-    #         output_direction = random.choice(["left", "right"])
-    #     elif "left" in cand_directions:
-    #         output_direction = "left"
-    #     elif "right" in cand_directions:
-    #         output_direction = "right"
-    #     else:
-    #         if len(cand_directions) == 0:
-    #             print("no candidate directions")
-    #             return None
-    #         else:
-    #             output_direction = random.choice(cand_directions)
-    #     output_point_in_direction = [cand[0] for cand in sampled_points if cand[1] == output_direction]
-    #     if len(output_point_in_direction) == 0:
-    #         print(f"no candidate points in the selected direction ({output_direction})")
-    #         return None
-    #     else:
-    #         output_point = output_point_in_direction[0]
-    # else:
-    #     output_point_and_direction = [cand for cand in sampled_points if "".join([x[0] for x in cand[1].split("_")]) == selected_dir][0]
-    #     output_point = output_point_and_direction[0]
-    #     output_direction = output_point_and_direction[1]
-
-
-    # output_point = convert_map_to_odom(output_point[1], output_point[0], map_x, map_y, map_resolution, map_height)
-    # print(f"Next point: {output_point} ({output_direction})")
-    # return output_point, cand_filter.forbidden_area_centers
     
     sampled_point_in_odom = [convert_map_to_odom(point[0][1], point[0][0], map_x, map_y, map_resolution, map_height) for point in sampled_points]
     sampled_directions = [point[1] for point in sampled_points]
     sampled_points_and_directions = [[[point[0], point[1]], direction] for point, direction in zip(sampled_point_in_odom, sampled_directions)]
-    return sampled_points_and_directions, cand_filter.forbidden_area_centers, current_coords_odom, map_data.costmap
+    return sampled_points_and_directions, cand_filter.forbidden_area_centers, current_coords_odom, orientation[-1], map_data.costmap
 
 
 def main(
@@ -722,7 +715,10 @@ def main(
         auto_mode: bool = False,
         log_dir: str = ".",
         availability_from_image: Optional[Dict[str, bool]] = None,
-        forbidden_centers: Optional[List[Tuple[float, float]]] = None
+        forbidden_centers: Optional[List[Tuple[float, float]]] = None,
+        initial_coords: Optional[Tuple[float, float]] = None,
+        initial_orientation: Optional[float] = None,
+        follow_initial_orientation: bool = True,
     ) -> Optional[Tuple[float, float]]:
     """
     main function to get the next point based on the local map
@@ -742,7 +738,10 @@ def main(
     log_dir = f"{log_dir}/{timestamp}"
     os.makedirs(log_dir, exist_ok=True)
 
-    rclpy.init()
+    re_init = False
+    if not rclpy.ok():
+        rclpy.init()
+        re_init = True
     rcl_publisher = CaBotMapNode()
     
     try:
@@ -751,7 +750,8 @@ def main(
         print(e)
     
     rcl_publisher.destroy_node()
-    rclpy.shutdown()
+    if re_init:
+        rclpy.shutdown()
 
     # save map data
     map_data = np.copy(rcl_publisher.map_data)
@@ -792,7 +792,7 @@ def main(
     map_data = np.load(f"{log_dir}/local_costmap.npy")
     # next_point = set_next_point(map_data, orientation, coordinates, map_resolution, map_x, map_y, map_height)
     # print(f"Next point: {next_point}")
-    output_point, forbidden_centers, current_coords, costmap = set_next_point_based_on_skeleton(
+    output_point, forbidden_centers, current_coords, current_orientation, costmap = set_next_point_based_on_skeleton(
         map_data, orientation, coordinates, 
         map_resolution, map_x, map_y, map_height, 
         do_dist_filter=do_dist_filter, 
@@ -801,9 +801,12 @@ def main(
         auto_mode=auto_mode, 
         log_dir=log_dir, 
         availability_from_image=availability_from_image,
-        forbidden_centers=forbidden_centers
+        forbidden_centers=forbidden_centers,
+        initial_coords=initial_coords,
+        initial_orientation=initial_orientation,
+        follow_initial_orientation=follow_initial_orientation
     )
-    return output_point, forbidden_centers, current_coords, costmap
+    return output_point, forbidden_centers, current_coords, current_orientation, costmap
 
 
 if __name__ == "__main__":    
@@ -815,3 +818,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     _ = main(do_dist_filter=args.dist_filter, do_forbidden_area_filter=args.forbidden_area_filter, do_trajectory_filter=args.trajectory_filter, auto_mode=args.auto)
+    if rclpy.ok():
+        rclpy.shutdown()

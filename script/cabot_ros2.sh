@@ -248,7 +248,7 @@ pids+=($!)
 
 # launch exploration
 blue "launch exploration related nodes"
-com="$command_prefix ros2 launch cabot_ui cabot_explore_exp1.launch.py \
+com="$command_prefix ros2 launch cabot_ui cabot_explore_exp2.launch.py \
     apikey:=$OPENAI_API_KEY \
     log_dir:=$ROS_LOG_DIR \
     $command_postfix"
