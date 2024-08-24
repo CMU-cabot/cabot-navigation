@@ -174,6 +174,12 @@ class CaBotImageNode(Node):
         self.in_conversation = False
         self.last_saved_images_time = time.time()
 
+        if self.is_sim:
+            self.max_loop = 10
+        else:
+            self.max_loop = -1
+        self.loop_count = 0
+
         self.timer = self.create_timer(5.0, self.loop)
     
     def activity_callback(self, msg: Log):
@@ -291,6 +297,11 @@ class CaBotImageNode(Node):
         return False
 
     def loop(self):
+        if self.max_loop > 0 and self.loop_count >= self.max_loop:
+            self.logger.info(f"Max loop count reached. Exiting.")
+            self.timer.cancel()
+            return
+        self.loop_count += 1
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
         # generate explanation
         if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation:
