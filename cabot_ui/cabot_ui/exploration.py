@@ -30,6 +30,7 @@ class Exploration():
         self.node = node
         self.pause = False
         self.in_conversation = False
+        self.in_button_control = False
         self.publisher = self.node.create_publisher(String, '/cabot/user_query', 10)
 
     def send_query(self, query_type, query_string):
@@ -44,8 +45,16 @@ class Exploration():
     def get_pause_control(self):
         return self.pause
     
+    # TODO: either be in conversation or button control. Not both.
+
     def set_conversation_control(self, in_conversation):
         self.in_conversation = in_conversation
 
     def get_conversation_control(self):
         return self.in_conversation
+    
+    def set_button_control(self, in_button_control):
+        self.in_button_control = in_button_control
+
+    def get_button_control(self):
+        return self.in_button_control
