@@ -521,8 +521,15 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.exploring_direction("front")
             self._exploration.send_query("direction","front")
         elif event.subtype == "back":
-            # self._interface.exploring_direction("back")
-            # self._exploration.send_query("direction","back")
+            self._interface.exploring_direction("back")
+            self._exploration.send_query("direction","back")
+        elif event.subtype == "left":
+            self._interface.exploring_direction("left")
+            self._exploration.send_query("direction","left")
+        elif event.subtype == "right":
+            self._interface.exploring_direction("right")
+            self._exploration.send_query("direction","right")
+        elif event.subtype == "auto_mode_switch":
             in_conversation = self._exploration.get_conversation_control()
             if in_conversation:
                 self._logger.info("NavigationState: Finish chat")
@@ -535,16 +542,6 @@ class CabotUIManager(NavigationInterface, object):
                 # self.publish_event("tmp_startchat") 
                 self.publish_event("startchat")  # use this to trigger smartphone conversation UI
                 self._exploration.set_conversation_control(True)
-        elif event.subtype == "left":
-            self._interface.exploring_direction("left")
-            self._exploration.send_query("direction","left")
-        elif event.subtype == "right":
-            self._interface.exploring_direction("right")
-            self._exploration.send_query("direction","right")
-        elif event.subtype == "auto_mode_switch":
-            self._interface.exploring_auto_mode_switch()
-            self._exploration.send_query("auto_mode_switch","")
-            self.publish_event("button_control")
 
         if event.subtype == "wheel_switch":
             pause_control = self._exploration.get_pause_control()
