@@ -35,6 +35,12 @@ class ExplorationMainLoop(Node):
         )
 
     def vibrate(self, pattern=vibration.UNKNOWN):
+        """
+        if pattern == vibration.FRONT:
+        elif pattern == vibration.RIGHT_TURN:
+        elif pattern == vibration.LEFT_TURN:
+        """
+
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
         msg = std_msgs.msg.Int8()
         msg.data = pattern
