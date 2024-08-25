@@ -49,6 +49,7 @@ def getch():
 class CaBotExplorationNode(Node):
     def __init__(self, x: int = 0, y: int = 0):
         super().__init__("cabot_exploration_node")
+        self.logger = self.get_logger()
         self.should_stop = False
 
         self.x = x
@@ -56,7 +57,7 @@ class CaBotExplorationNode(Node):
 
         self.coordinates = []
 
-        self.get_logger().info("cabot exploration can be implemented here")
+        self.logger.info("cabot exploration can be implemented here")
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
@@ -75,26 +76,26 @@ class CaBotExplorationNode(Node):
         self.timer = self.create_timer(1.0, self.timer_callback)
 
     def timer_callback(self):
-        self.get_logger().info("Exploration node is running")
+        self.logger.info("Exploration node is running")
         self.timer.cancel()
         
-        self.get_logger().info("Exploration node is stopped")
+        self.logger.info("Exploration node is stopped")
         
         msg = MFLocalizeStatus()
         msg.status = MFLocalizeStatus.TRACKING
         self.localize_status_pub.publish(msg)
         
-        self.get_logger().info(f"Publishing: {msg}")
+        self.logger.info(f"Publishing: {msg}")
 
         coords_msg = String()
         coords_msg.data = f"navigation;destination;goal:{self.x}:{self.y}"
         self.goal_coordinate_pub.publish(coords_msg)
-        self.get_logger().info(f"Publishing: {coords_msg}")
+        self.logger.info(f"Publishing: {coords_msg}")
 
     def stop_timer_callback(self, msg):
-        self.get_logger().info(f"(test_explore) Received: {msg.data}")
+        self.logger.info(f"(test_explore) Received: {msg.data}")
         if msg.data == "navigation_arrived" or msg.data == "navigation;cancel":
-            self.get_logger().info("Goal is reached (or canceled)")
+            self.logger.info("Goal is reached (or canceled)")
             # raise SystemExit("Goal is reached")
             # self.should_stop = True
             # self.timer.cancel()
@@ -109,7 +110,7 @@ class CaBotExplorationNode(Node):
         #     raise SystemExit("Start chat")
     
     def odom_callback(self, msg):
-        # self.get_logger().info(f"Received: {msg.pose.pose.position.x}, {msg.pose.pose.position.y}")
+        # self.logger.info(f"Received: {msg.pose.pose.position.x}, {msg.pose.pose.position.y}")
         self.coordinates.append((msg.pose.pose.position.x, msg.pose.pose.position.y))
 
     def map_callback(self, msg):
@@ -123,16 +124,17 @@ class CaBotExplorationNode(Node):
 class CancelNode(Node):
     def __init__(self):
         super().__init__("cancel_node")
+        self.logger = self.get_logger()
         self.cancel_pub = self.create_publisher(String, "/cabot/event", 10)
         self.timer = self.create_timer(1.0, self.timer_callback)
 
     def timer_callback(self):
         self.timer.cancel()
-        print("Canceling navigation is called")
+        self.logger.info("Canceling navigation is called")
         cancel_msg = String()
         cancel_msg.data = "navigation;cancel"
         self.cancel_pub.publish(cancel_msg)
-        self.get_logger().info(f"Canceling navigation by publishing: {cancel_msg}")
+        self.logger.info(f"Canceling navigation by publishing: {cancel_msg}")
 
 
 def main(x: int, y: int, cancel_mode: bool = False):
@@ -149,32 +151,33 @@ def main(x: int, y: int, cancel_mode: bool = False):
     rcl_publisher = CaBotExplorationNode(x, y)
     if cancel_mode:
         cancel_pub = rcl_publisher.create_publisher(String, "/cabot/event", 10)
-        print("Press 'c' to cancel navigation")
+        rcl_publisher.logger.info("Press 'c' to cancel navigation")
         try:
             while True:
                 key = getch()
                 if key == 'c':
-                    print("Cancelling navigation")
+                    rcl_publisher.logger.info("Cancelling navigation")
                     cancel_pub.publish(String(data="navigation;cancel"))
                     raise KeyboardInterrupt
                 elif key == '\x03':  # Handle Ctrl+C
                     raise KeyboardInterrupt
         except KeyboardInterrupt:
-            print("ctrl+c is pressed")
+            rcl_publisher.logger.info("ctrl+c is pressed")
         finally:
             rcl_publisher.destroy_node()
-            print("destroyed nodes")
-            if re_init:
-                rclpy.shutdown()
-                print("shutdown rclpy")
+            rcl_publisher.logger.info("destroyed nodes")
+            # if re_init:
+            #     rclpy.shutdown()
+            #     rcl_publisher.logger.info("shutdown rclpy")
     else:
         try:
             rclpy.spin(rcl_publisher)
         except SystemExit as e:
             print(e)
         rcl_publisher.destroy_node()
-        if re_init:
-            rclpy.try_shutdown()
+        # if re_init:
+        #     rcl_publisher.logger.info("test_explore; shutdown rclpy")
+        #     rclpy.try_shutdown()
 
         print("spin done")
         # convert coordinates to map coordinates
