@@ -182,6 +182,8 @@ def main(
     # if test_trajectory.py is not running, run it
     is_trajectory_running = False
     is_already_checked = False
+    has_left_initial_area = False
+    
     forbidden_centers = []
 
     initial_coords: Optional[List[float]] = None
@@ -270,6 +272,16 @@ def main(
         if iter == 0:
             initial_coords = current_coords
             initial_orientation = current_orientation
+        # if current coords is close to the initial coords, stop the exploration
+        dist_from_initial = np.linalg.norm(np.array(current_coords) - np.array(initial_coords))
+        state_client.logger.info(f"Distance from the initial coords: {dist_from_initial:.2f}")
+        if has_left_initial_area is False and dist_from_initial > 3.0:
+            has_left_initial_area = True
+            state_client.logger.info("Left the initial area")
+        if has_left_initial_area is True and dist_from_initial < 3.0:
+            state_client.logger.info("Initial coords reached; stopping the exploration")
+            speak_text("一周しました。探索を終了します。")
+            break
 
         # calculate map's highlihgted area's diff 
         if len(maps) > 1:
