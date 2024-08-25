@@ -5,6 +5,10 @@ import rclpy
 
 from cabot_ui.explore.test_loop import main as main_loop
 
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from cabot_common import vibration
+import std_msgs.msg
+
 
 class ExplorationMainLoop(Node):
     def __init__(self):
@@ -30,6 +34,17 @@ class ExplorationMainLoop(Node):
             debug=False
         )
 
+    def vibrate(self, pattern=vibration.UNKNOWN):
+        """
+        if pattern == vibration.FRONT:
+        elif pattern == vibration.RIGHT_TURN:
+        elif pattern == vibration.LEFT_TURN:
+        """
+
+        self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
+        msg = std_msgs.msg.Int8()
+        msg.data = pattern
+        self.note_pub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
