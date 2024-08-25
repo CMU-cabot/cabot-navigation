@@ -750,8 +750,8 @@ def main(
         print(e)
     
     rcl_publisher.destroy_node()
-    if re_init:
-        rclpy.shutdown()
+    # if re_init:
+    #     rclpy.shutdown()
 
     # save map data
     map_data = np.copy(rcl_publisher.map_data)

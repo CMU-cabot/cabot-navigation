@@ -761,8 +761,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        if re_init:
-            rclpy.shutdown()
+        # if re_init:
+        #     rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

@@ -26,16 +26,16 @@ class CabotQueryNode(Node):
     """
     def __init__(self, candidates: List[str]):
         super().__init__("cabot_query_node")
-        print("CabotQueryNode initialized; waiting for /cabot/user_query topic with 'data: direction;front' format")
+        self.logger = self.get_logger()
+        self.logger.info("CabotQueryNode initialized; waiting for /cabot/user_query topic with 'data: direction;front' format")
         self.query_sub = self.create_subscription(String, "/cabot/user_query", self.query_callback, 10)
 
-        self.event_sub = self.create_subscription(String, "/cabot/event", self.event_callback, 10)
+        # self.event_sub = self.create_subscription(String, "/cabot/event", self.event_callback, 10)
         self.query_type = None
         self.query_string = None
         self.candidates = set(candidates)
 
         self.cancel_pub = self.create_publisher(String, "/cabot/event", 10)
-        self.logger = self.get_logger()
 
         self.dir_to_jp = {
             "front": "前",
@@ -47,18 +47,19 @@ class CabotQueryNode(Node):
             "back_left": "左後ろ",
             "back_right": "右後ろ"
         }
-    
-    def event_callback(self, msg):
-        # TODO!!!!
-        pass
+
+        # create service client
+        self.client = self.create_client(Trigger, 'trigger_navigation_cancel')
+        
+        # wait until service client is ready
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.logger.info('Service not available, waiting...')
+
+        # activate timer for checking cancel state
+        self.timer = self.create_timer(5.0, self.check_cancel_state)
 
     def query_callback(self, msg):
         self.logger.info(f"(test_loop) Received: {msg.data}")
-        # if msg.data == "startchat":
-        #     self.logger.info("(test_loop) Canceling the exploration...")
-        #     cancel_msg = String()
-        #     cancel_msg.data = "navigation;cancel"
-        #     self.cancel_pub.publish(cancel_msg)
         if msg.data == "navigation;cancel":
             self.logger.info("(test_loop) Canceling the exploration...")
             sys.exit(0)
@@ -88,6 +89,31 @@ class CabotQueryNode(Node):
             sys.exit(0)
         else:
             self.logger.info(f"query type '{self.query_type}' is not supported in this script currently; please use 'data: direction;front' format instead")
+    
+    def check_cancel_state(self):
+        self.logger.info("CabotQueryNode; check_cancel_state; Checking cancel state...")
+        req = Trigger.Request()
+        future = self.client.call_async(req)
+
+        def callback(future):
+            try:
+                response = future.result()
+                if response.success:
+                    self.logger.info(f"CabotQueryNode; check_cancel_state; Service call succeeded: {response.message}")
+                    if response.message == "running_state":
+                        # change the query type to "auto" and exit the node
+                        self.query_type = "auto"
+                        self.logger.info("CabotQueryNode; check_cancel_state; Query type set to 'auto'. Exiting node.")
+                        sys.exit(0)
+                    elif response.message == "cancelled_state":
+                        # if message is "cancelled_state", do nothing
+                        self.logger.info("CabotQueryNode; check_cancel_state; Exploration is cancelled. No action taken.")
+                else:
+                    self.logger.warn(f"CabotQueryNode; check_cancel_state; Service call failed: {response.message}")
+            except Exception as e:
+                self.logger.error(f"CabotQueryNode; check_cancel_state; Service call failed: {e}")
+
+        future.add_done_callback(callback)
 
 
 class PersistentCancelClient(Node):
@@ -95,22 +121,11 @@ class PersistentCancelClient(Node):
         super().__init__('persistent_cancel_client')
         self.cli = self.create_client(Trigger, 'trigger_navigation_cancel')
         self.logger = self.get_logger()
+
+        self.auto_mode_state = True
         
         while not self.cli.wait_for_service(timeout_sec=1.0):
             self.logger.info('PersistentCancelClient; Service not available, waiting...')
-
-    def send_request(self):
-        self.logger.info("PersistentCancelClient; Sending request to get current state")
-        req = Trigger.Request()
-        future = self.cli.call_async(req)
-        # rclpy.spin_until_future_complete(self, future)
-        # return future.result()
-        while rclpy.ok():
-            self.logger.info("PersistentCancelClient; trying to get the result...")
-            rclpy.spin_once(self)
-            if future.done():
-                self.logger.info("PersistentCancelClient; future is done")
-                return future.result()
     
     def send_request_and_wait(self):
         self.logger.info("PersistentCancelClient; Sending request to get current state (blocking)")
@@ -130,29 +145,6 @@ class PersistentCancelClient(Node):
                     self.get_logger().error(f"PersistentCancelClient; Service call failed: {str(e)}")
                     return None
         self.logger.error(f"PersistentCancelClient; Service call failed: No response received or rclpy is not ok (rclpy.ok()={rclpy.ok()})")
-
-    def run(self):
-        self.logger.info("PersistentCancelClient started and running")
-        while rclpy.ok():
-            self.logger.info("PersistentCancelClient; Sending request...")
-            response = self.send_request()
-            if response.success:
-                self.logger.info(f"PersistentCancelClient; Service call succeeded: {response.message}")
-            else:
-                self.logger.warn(f"PersistentCancelClient; Service call failed: {response.message}")
-
-            time.sleep(10)
-
-
-def publish_nav_state(state_str):
-    if not rclpy.ok():
-        rclpy.init()
-    node = Node('state_control', start_parameter_services=False)
-    state_control = StateInput(node=node)
-    time.sleep(1)
-    state_control.set_state(state_str)
-    node.destroy_node()
-    rclpy.shutdown()
 
 
 def main(
@@ -227,8 +219,6 @@ def main(
             state_client.logger.info("rclpy is not ok; initializing...")
             rclpy.init()
         state_client.logger.info(f"\nIteration: {iter}")
-        # set up state control node
-        # publish_nav_state("paused")
 
         # 1. generate "intersection" explanation from images to check the availability of each direction
         if use_image:
@@ -312,6 +302,7 @@ def main(
         else:
             auto = False
 
+        query_node = None
         if not auto:
             if keyboard:
                 abbrv_dirs = ["".join([x[0] for x in dir.split("_")]) for dir in direction_candidates]
@@ -339,8 +330,12 @@ def main(
                 elif query_node.query_type == "search":
                     selected_dir = "coordinates"
                     y, x = query_node.query_string.split(",")
+                elif query_node.query_type == "auto":
+                    selected_dir = "none"
                 else:
+                    # do nothing
                     state_client.logger.info(f"query type '{query_node.query_type}' is not supported!")
+                state_client.logger.info(f"Selected direction: {selected_dir} (received: {query_node.query_type}, {query_node.query_string})")
         else:
             selected_dir = "none"
 
@@ -399,10 +394,13 @@ def main(
             speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
         # return output_point, cand_filter.forbidden_area_centers
         
-        print(f"Exploring next point: {output_point}\n")
-        # publish_nav_state("running")
+        state_client.logger.info(f"Exploring next point: {output_point}\n")
         x, y = output_point
-        explore(x, y)
+        if query_node is not None:
+            query_type = query_node.query_type
+        else:
+            query_type = "none"
+        explore(x, y, query_type=query_type)
         state_client.logger.info(f"Exploration {iter} done\n")
         iter += 1
 
@@ -410,8 +408,6 @@ def main(
         should_finish = False
         if should_finish:
             break
-    
-    # publish_nav_state("finished")
 
 
 if __name__ == "__main__":

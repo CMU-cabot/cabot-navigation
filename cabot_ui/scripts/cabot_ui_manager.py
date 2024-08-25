@@ -255,6 +255,7 @@ class CabotUIManager(NavigationInterface, object):
     # endregion NavigationInterface
 
     def _event_callback(self, msg):
+        self._logger.info(f"event received: {msg.data}")
         event = BaseEvent.parse(msg.data)
         if event is None:
             self._logger.error("cabot event %s cannot be parsed", msg.data)
@@ -289,7 +290,7 @@ class CabotUIManager(NavigationInterface, object):
         '''
         all events go through this method
         '''
-        # self._logger.info(f"process_event {str(event)}")
+        self._logger.info(f"process_event {str(event)}")
 
         self._event_mapper.push(event)
         self._process_menu_event(event)
@@ -339,6 +340,10 @@ class CabotUIManager(NavigationInterface, object):
             self._navigation.pause_navigation()
 
     def _process_navigation_event(self, event):
+        try:
+            self._logger.info(f"[CabotUIManager] event type: {event.type}; subtype: {event.subtype}")
+        except Exception as e:
+            self._logger.error(f"[CabotUIManager] event {event}")
         if event.type != NavigationEvent.TYPE:
             return
 
@@ -389,6 +394,7 @@ class CabotUIManager(NavigationInterface, object):
             return
 
         if event.subtype == "destination":
+            self._logger.info(f"NavigationState: {self._status_manager.state}")
             if self._status_manager.state != State.idle:
                 self.activity_log("cabot_ui/navigation", "destination", "need to cancel")
 

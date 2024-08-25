@@ -24,10 +24,8 @@ class CancelNode:
                 self.state = "navigation;cancel"
             else:
                 self.state = "auto_mode"
-        # elif msg.data == "navigation;event;navigation_start":
-        #     self.logger.info(f"Received navigation start event: {msg.data}")
-        #     self.state = msg.data
-        #     self.cancel_state_published = False
+        elif msg.data == "navigation_search":
+            self.state = ""
         else:
             self.logger.info(f"Received event: {msg.data}")
         self.logger.info(f"Current state: {self.state}")
@@ -69,7 +67,7 @@ def main():
         print(e)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

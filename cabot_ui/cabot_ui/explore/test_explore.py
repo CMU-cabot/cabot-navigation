@@ -8,6 +8,7 @@ from nav_msgs.msg import Odometry, OccupancyGrid
 import sys
 import numpy as np
 import tty, termios
+import time
 
 
 """
@@ -47,13 +48,14 @@ def getch():
 
 
 class CaBotExplorationNode(Node):
-    def __init__(self, x: int = 0, y: int = 0):
+    def __init__(self, x: int = 0, y: int = 0, query_type: str = "goal"):
         super().__init__("cabot_exploration_node")
         self.logger = self.get_logger()
         self.should_stop = False
 
         self.x = x
         self.y = y
+        self.query_type = query_type
 
         self.coordinates = []
 
@@ -85,12 +87,16 @@ class CaBotExplorationNode(Node):
         msg.status = MFLocalizeStatus.TRACKING
         self.localize_status_pub.publish(msg)
         
-        self.logger.info(f"Publishing: {msg}")
+        self.logger.info(f"[CabotExplorationNode] Publishing: {msg}")
 
         coords_msg = String()
+        
+        if self.query_type == "search":
+            self.goal_coordinate_pub.publish(String(data="navigation_search"))
+        time.sleep(0.5)
         coords_msg.data = f"navigation;destination;goal:{self.x}:{self.y}"
         self.goal_coordinate_pub.publish(coords_msg)
-        self.logger.info(f"Publishing: {coords_msg}")
+        self.logger.info(f"[CabotExplorationNode] Publishing: {coords_msg}")
 
     def stop_timer_callback(self, msg):
         self.logger.info(f"(test_explore) Received: {msg.data}")
@@ -137,7 +143,7 @@ class CancelNode(Node):
         self.logger.info(f"Canceling navigation by publishing: {cancel_msg}")
 
 
-def main(x: int, y: int, cancel_mode: bool = False):
+def main(x: int, y: int, query_type: str, cancel_mode: bool = False):
     # set log level to debug
     # rclpy.logging._root_logger.set_level(rclpy.logging.LoggingSeverity.DEBUG)
     if not cancel_mode:
@@ -148,7 +154,7 @@ def main(x: int, y: int, cancel_mode: bool = False):
     if not rclpy.ok():
         rclpy.init()
         re_init = True
-    rcl_publisher = CaBotExplorationNode(x, y)
+    rcl_publisher = CaBotExplorationNode(x, y, query_type)
     if cancel_mode:
         cancel_pub = rcl_publisher.create_publisher(String, "/cabot/event", 10)
         rcl_publisher.logger.info("Press 'c' to cancel navigation")
@@ -171,6 +177,7 @@ def main(x: int, y: int, cancel_mode: bool = False):
             #     rcl_publisher.logger.info("shutdown rclpy")
     else:
         try:
+            rcl_publisher.logger.info("[test_explore; main] start spin")
             rclpy.spin(rcl_publisher)
         except SystemExit as e:
             print(e)
