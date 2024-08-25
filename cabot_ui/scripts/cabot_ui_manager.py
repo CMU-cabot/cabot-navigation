@@ -61,6 +61,8 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
+from cabot_common import vibration
+
 
 
 class CabotUIManager(NavigationInterface, object):
@@ -516,23 +518,29 @@ class CabotUIManager(NavigationInterface, object):
     def _process_exploration_event(self, event):
         if event.type != ExplorationEvent.TYPE:
             return
-
+        in_conversation = self._exploration.get_conversation_control()
+        in_button_control = self._exploration.get_button_control()
+        
         if event.subtype == "front":
-            self._interface.exploring_direction("front")
-            self._exploration.send_query("direction","front")
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("front")
+                self._interface.vibrate(vibration.FRONT)
+                self._exploration.send_query("direction","front")
         elif event.subtype == "back":
-            self._interface.exploring_direction("back")
-            self._exploration.send_query("direction","back")
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("back")
+                self._exploration.send_query("direction","back")
         elif event.subtype == "left":
-            self._interface.exploring_direction("left")
-            self._exploration.send_query("direction","left")
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("left")
+                self._interface.vibrate(vibration.LEFT_TURN)
+                self._exploration.send_query("direction","left")
         elif event.subtype == "right":
-            self._interface.exploring_direction("right")
-            self._exploration.send_query("direction","right")
-        elif event.subtype == "button_control" or event.subtype == "startchat":
-            in_conversation = self._exploration.get_conversation_control()
-            in_button_control = self._exploration.get_button_control()
-
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("right")
+                self._interface.vibrate(vibration.RIGHT_TURN)
+                self._exploration.send_query("direction","right")
+        elif event.subtype == "button_control" or event.subtype == "startchat": 
             if event.subtype == "startchat":
                 if in_conversation:
                     self._logger.info("NavigationState: Finish chat")
