@@ -117,16 +117,6 @@ class PersistentCancelClient(Node):
         req = Trigger.Request()
         future = self.cli.call_async(req)
         
-        # # リクエストが完了するまで待つ
-        # rclpy.spin_until_future_complete(self, future)
-        
-        # # 結果が成功したかどうかをチェック
-        # if future.result() is not None:
-        #     self.logger.info(f"Service call succeeded: {future.result().message}")
-        #     return future.result()
-        # else:
-        #     self.logger.error("Service call failed: No response received")
-        #     return None
         # 非同期リクエストを処理
         while rclpy.ok():
             self.logger.info("PersistentCancelClient; trying to get the result...")
@@ -307,13 +297,13 @@ def main(
         direction_candidates: List[str] = sorted(list(set([x[1] for x in sampled_points])))
         state_client.logger.info(f"Direction candidates: {direction_candidates}")
 
-        request_result = state_client.send_request_and_wait()
-        state_client.logger.info(f"test_loop; Service call result: {request_result}")
-        if request_result.success:
-            state_client.logger.info(f"test_loop; Service call succeeded: {request_result.message}")
-            current_state = request_result.message  # "running_state" or "cancelled_state"
+        state_checked_result = state_client.send_request_and_wait()
+        state_client.logger.info(f"test_loop; Service call result: {state_checked_result}")
+        if state_checked_result.success:
+            state_client.logger.info(f"test_loop; Service call succeeded: {state_checked_result.message}")
+            current_state = state_checked_result.message  # "running_state" or "cancelled_state"
         else:
-            state_client.logger.info(f"test_loop; Service call failed: {request_result.message}")
+            state_client.logger.info(f"test_loop; Service call failed: {state_checked_result.message}")
             current_state = "running_state"
         
         state_client.logger.info(f"test_loop; Current state: {current_state}")
