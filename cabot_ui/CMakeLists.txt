@@ -87,6 +87,8 @@ install(PROGRAMS
   scripts/exploration_chat_server.py
   scripts/exploration_image_explain.py
   scripts/exploration_main_loop.py
+  scripts/exploration_cancel.py
+  scripts/exploration_chat_flag.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

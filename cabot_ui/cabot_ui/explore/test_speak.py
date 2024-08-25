@@ -59,8 +59,8 @@ def speak_text(text: str, force=False):
     speaker = Speaker(node=node)
     speaker.speak(text=text, force=force)
     node.destroy_node()
-    if reinit:
-        rclpy.shutdown()
+    # if reinit:
+    #     rclpy.shutdown()
 
 
 if __name__ == '__main__':

@@ -366,6 +366,14 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "exploration", "start chat")
         self.speak(i18n.localized_string("START_CHAT"))
 
+    
+    def set_button_control(self, flag):
+        self._activity_log("cabot/interface", "button_control", str(flag))
+        if flag:
+            self.speak(i18n.localized_string("BUTTON_CONTROL_START"))
+        else:
+            self.speak(i18n.localized_string("BUTTON_CONTROL_END"))
+
     def finish_chat(self):
         self._activity_log("cabot/interface", "exploration", "finish chat")
         self.speak(i18n.localized_string("FINISH_CHAT"))

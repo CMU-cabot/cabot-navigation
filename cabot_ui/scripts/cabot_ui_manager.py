@@ -255,6 +255,7 @@ class CabotUIManager(NavigationInterface, object):
     # endregion NavigationInterface
 
     def _event_callback(self, msg):
+        self._logger.info(f"event received: {msg.data}")
         event = BaseEvent.parse(msg.data)
         if event is None:
             self._logger.error("cabot event %s cannot be parsed", msg.data)
@@ -289,7 +290,7 @@ class CabotUIManager(NavigationInterface, object):
         '''
         all events go through this method
         '''
-        # self._logger.info(f"process_event {str(event)}")
+        self._logger.info(f"process_event {str(event)}")
 
         self._event_mapper.push(event)
         self._process_menu_event(event)
@@ -339,6 +340,10 @@ class CabotUIManager(NavigationInterface, object):
             self._navigation.pause_navigation()
 
     def _process_navigation_event(self, event):
+        try:
+            self._logger.info(f"[CabotUIManager] event type: {event.type}; subtype: {event.subtype}")
+        except Exception as e:
+            self._logger.error(f"[CabotUIManager] event {event}")
         if event.type != NavigationEvent.TYPE:
             return
 
@@ -389,6 +394,7 @@ class CabotUIManager(NavigationInterface, object):
             return
 
         if event.subtype == "destination":
+            self._logger.info(f"NavigationState: {self._status_manager.state}")
             if self._status_manager.state != State.idle:
                 self.activity_log("cabot_ui/navigation", "destination", "need to cancel")
 
@@ -521,29 +527,40 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.exploring_direction("front")
             self._exploration.send_query("direction","front")
         elif event.subtype == "back":
-            # self._interface.exploring_direction("back")
-            # self._exploration.send_query("direction","back")
-            in_conversation = self._exploration.get_conversation_control()
-            if in_conversation:
-                self._logger.info("NavigationState: Finish chat")
-                self._interface.finish_chat()
-                self.publish_event("finishchat")
-                self._exploration.set_conversation_control(False)
-            else:
-                self._logger.info("NavigationState: Start chat")
-                self._interface.start_chat()
-                self.publish_event("tmp_startchat") 
-                # self.publish_event("startchat") use this to trigger smartphone conversation UI
-                self._exploration.set_conversation_control(True)
+            self._interface.exploring_direction("back")
+            self._exploration.send_query("direction","back")
         elif event.subtype == "left":
             self._interface.exploring_direction("left")
             self._exploration.send_query("direction","left")
         elif event.subtype == "right":
             self._interface.exploring_direction("right")
             self._exploration.send_query("direction","right")
-        elif event.subtype == "auto_mode_switch":
-            self._interface.exploring_auto_mode_switch()
-            self._exploration.send_query("auto_mode_switch","")
+        elif event.subtype == "button_control" or event.subtype == "startchat":
+            in_conversation = self._exploration.get_conversation_control()
+            in_button_control = self._exploration.get_button_control()
+
+            if event.subtype == "startchat":
+                if in_conversation:
+                    self._logger.info("NavigationState: Finish chat")
+                    self._interface.finish_chat()
+                    self.publish_event("finishchat")
+                    self._exploration.set_conversation_control(False)
+                else:
+                    self._logger.info("NavigationState: Start chat")
+                    self._interface.start_chat()
+                    self.publish_event("startchat")  # use this to trigger smartphone conversation UI
+                    self._exploration.set_conversation_control(True)
+            else:
+                if in_button_control:
+                    self._logger.info("NavigationState: Finish button control")
+                    self._interface.set_button_control(False)
+                    self.publish_event("button_control")
+                    self._exploration.set_button_control(False)
+                else:
+                    self._logger.info("NavigationState: Start button control")
+                    self._interface.set_button_control(True)
+                    self.publish_event("button_control")
+                    self._exploration.set_button_control(True)
 
         if event.subtype == "wheel_switch":
             pause_control = self._exploration.get_pause_control()
@@ -650,10 +667,15 @@ class EventMapper(object):
             if event.button == cabot_common.button.BUTTON_RIGHT:
                 return ExplorationEvent(subtype="right")
             if event.button == cabot_common.button.BUTTON_CENTER:
-                return ExplorationEvent(subtype="auto_mode_switch")
+                return ExplorationEvent(subtype="button_control")
+            if event.button == cabot_common.button.BUTTON_DEBUG:
+                return ExplorationEvent(subtype="startchat")
+            
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return ExplorationEvent(subtype="wheel_switch")
+            elif event.button == cabot_common.button.BUTTON_CENTER:
+                return ExplorationEvent(subtype="startchat")
 
         return None
 

@@ -234,11 +234,11 @@ def convert_odom_to_map_batch(coords: np.ndarray, map_x: int, map_y: int, map_re
 
 
 def draw_points_on_rviz(coordinates: List[Tuple[float, float]]):
-    rclpy.init()
+    if not rclpy.ok():
+        rclpy.init()
     point_drawer = CabotRvizPointDrawer(coordinates)
     rclpy.spin_once(point_drawer)
     point_drawer.destroy_node()
-    rclpy.shutdown()
 
 
 def get_direction_from_orientation(current_location: np.ndarray, orientation: np.ndarray, coordinates: np.ndarray) -> List[str]:
@@ -377,8 +377,9 @@ class FilterCandidates:
                 ), axis=-1
             ).reshape(-1, 2)
 
-        self.max_dist = 150
+        self.max_dist = 200
         self.min_dist = 50
+        self.corridor_width = 75
     
     def save_traj_map(self, log_dir: str = "."):
         plt.imshow(self.traj_forbidden_map, cmap='gray')
@@ -499,7 +500,7 @@ class FilterCandidates:
         a = np.tan(initial_orientation)
         b = initial_coords_in_map[1] - a * initial_coords_in_map[0]
         dists = np.abs(a * candidates[:, 0] - candidates[:, 1] + b) / np.sqrt(a ** 2 + 1)
-        score_map[dists > 60] = 10
+        score_map[dists > self.corridor_width] = 10
         return score_map
 
 
@@ -737,7 +738,10 @@ def main(
     log_dir = f"{log_dir}/{timestamp}"
     os.makedirs(log_dir, exist_ok=True)
 
-    rclpy.init()
+    re_init = False
+    if not rclpy.ok():
+        rclpy.init()
+        re_init = True
     rcl_publisher = CaBotMapNode()
     
     try:
@@ -746,7 +750,8 @@ def main(
         print(e)
     
     rcl_publisher.destroy_node()
-    rclpy.shutdown()
+    # if re_init:
+    #     rclpy.shutdown()
 
     # save map data
     map_data = np.copy(rcl_publisher.map_data)
@@ -813,3 +818,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     _ = main(do_dist_filter=args.dist_filter, do_forbidden_area_filter=args.forbidden_area_filter, do_trajectory_filter=args.trajectory_filter, auto_mode=args.auto)
+    if rclpy.ok():
+        rclpy.shutdown()

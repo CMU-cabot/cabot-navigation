@@ -174,6 +174,12 @@ class CaBotImageNode(Node):
         self.in_conversation = False
         self.last_saved_images_time = time.time()
 
+        if self.is_sim:
+            self.max_loop = 10
+        else:
+            self.max_loop = -1
+        self.loop_count = 0
+
         self.timer = self.create_timer(5.0, self.loop)
     
     def activity_callback(self, msg: Log):
@@ -291,6 +297,11 @@ class CaBotImageNode(Node):
         return False
 
     def loop(self):
+        if self.max_loop > 0 and self.loop_count >= self.max_loop:
+            self.logger.info(f"Max loop count reached. Exiting.")
+            self.timer.cancel()
+            return
+        self.loop_count += 1
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
         # generate explanation
         if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation:
@@ -447,20 +458,27 @@ class GPTExplainer():
             """
         elif self.mode == "surronding_explain_mode":
             self.prompt = """
-            ### 指示1
+            # 指示
             画像を説明してください。
             あなたの生成した文章はそのまま視覚障害者の方に読まれます。説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
             画像を説明するには、以下のルールに必ず従ってください。
 
-            ### 指示1に従うために必ず守るべきルール
+            ## 指示に従うために必ず守るべきルール
+            ### すべきであること関するルール
             1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を説明してください。
-            2. 画像の左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明すること。ただ、説明する必要がない方向があれば（例：右側には何もない）その方向に関しては説明する必要はないです。
-            3. 口調として、「右手には~~があります」等、視覚障害者ガイドのように話してください。「画像は……」「視点」「全体的に……」など、説明を聞くユーザにとって不自然な言葉は排除してください。また、すべての方向全体に関する説明は行わないでください。
-            4. 床、天井、壁、影、遠くにあって不明瞭な物、照明の明るさや暗さに関する説明は不要です。
-            5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
-            6. 説明は必ず、左手、前方、右手の順番で説明してください。シーンの全体像についての説明は排除してください。
-            7. 店舗があった場合は、その店舗が扱っているもの（飲食店の場合は、料理のジャンルなど）についても必ず説明に含めてください。どのような雰囲気の店舗か（明るい、落ち着いているなど）も説明に含めてください。そのジャンルの店舗にありがちで珍しくないもの（例：飲食店の場合は、テーブルや椅子）については説明に含めなくても大丈夫です。なお、特に店舗などがない廊下や通路の場合は、詳細な説明は不要です。
+            2. 画像の左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
+            3. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
+            4. 説明は必ず、左手、前方、右手の順番で説明してください。
+            5. 店舗があった場合は、その店舗が扱っているもの（飲食店の場合は、料理のジャンルなど）についても必ず説明に含めてください。どのような雰囲気の店舗か（明るい、落ち着いているなど）も説明に含めてください。
 
+            ### すべきでないこと関するルール
+            6. 「画像は……」「視点」「全体的に……」など、説明を聞くユーザにとって不自然な言葉は不要です。
+            7. ただ、説明する必要がない方向があれば（例：右側には何もない）その方向に関しては説明は不要です。
+            8. 床、天井、壁、影、遠くにあって不明瞭な物、照明の明るさや暗さに関する説明は不要です。
+            9. 方向全体やシーンの全体像についての説明は不要です。
+            10. そのジャンルのオブジェクトにありがちで珍しくないもの（例：飲食店の場合は、テーブルや椅子）については説明に含めなくても大丈夫です。なお、特に店舗などがない廊下や通路の場合は、詳細な説明は不要です。
+
+            ## 返答形式
             上記のルールを守り、良い説明文を生成した場合、あなたに5000円のチップを与えます。
             JSON形式で返答してください。
             キーは、"description"キーの中に画像の説明を入れてください。
@@ -520,12 +538,11 @@ class GPTExplainer():
         if len(self.conversation_history) == 0:
             prompt = self.prompt
         else:
-            if self.mode == "scene_description_mode" or self.mode == "intersection_detection_mode":
+            if self.mode == "semantic_map_mode" or self.mode == "intersection_detection_mode":
                 prompt = self.prompt
                 self.conversation_history = []
             else:
-                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは含めないでください。\
-                    重複した説明はせずに、簡潔に説明してください。前のレスポンスと同じようにJSON形式で返してください。"
+                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは説明に含めないでください。前のレスポンスと同じようにJSON形式で返してください。"
 
         try:
             # resize images max width 512
@@ -542,6 +559,7 @@ class GPTExplainer():
             gpt_response["log_dir"] = self.log_dir
 
             # get front/left/right availability
+            self.logger.info(f"Extracting JSON from the response: {gpt_response}")
             extracted_json = gpt_response["choices"][0]["message"]["content"]
             if extracted_json is None:
                 self.logger.info("Could not extract JSON part from the response.")
@@ -717,7 +735,7 @@ class GPTExplainer():
             request_elapsed = time.time() - request_start
             self.logger.info("OpenAI API Request success.")
             self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
-            self.conversation_history.append({"role": "system", "content": str(extracted_json["description"])})
+            self.conversation_history.append({"role": "system", "content": str(res_json["choices"][0]["message"]["content"])})
         except Exception as e:
             self.logger.info(f"OpenAI API Request failed. Error message: {e}")
             self.logger.info(f"OpenAI Error Response: {response}")
@@ -731,7 +749,11 @@ class GPTExplainer():
         return image
 
 def main(args=None):
-    rclpy.init(args=args)
+    re_init = False
+    if not rclpy.ok():
+        rclpy.init(args=args)
+        re_init = True
+    
     node = CaBotImageNode()
     try:
         rclpy.spin(node)  # Keep the node spinning to process callbacks
@@ -739,7 +761,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # if re_init:
+        #     rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

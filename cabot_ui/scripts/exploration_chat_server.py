@@ -261,7 +261,7 @@ class ExplorationChatServer(Node):
     
     def publish_finish_chat(self):
         msg = std_msgs.msg.String()
-        msg.data = "finishchat"
+        msg.data = "navigation_finishchat"
         self._eventPub.publish(msg)
 
 def main(args=None):
