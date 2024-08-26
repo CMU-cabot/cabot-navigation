@@ -204,8 +204,7 @@ class CaBotImageNode(Node):
             self.touching = True
         else:
             self.touching = False
-
-
+            test_speak.speak_text("", force=True)
 
     def publish_latest_explained_info(self):
         if self.latest_explained_front_image is not None:
