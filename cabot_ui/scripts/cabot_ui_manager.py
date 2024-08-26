@@ -532,10 +532,28 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.exploring_direction("front")
                 self._interface.vibrate(vibration.FRONT)
                 self._exploration.send_query("direction","front")
+            else:
+                # speed up
+                self.speed_menu.prev()
+                self._interface.menu_changed(menu=self.speed_menu)
+                e = NavigationEvent("sound", "SpeedUp")
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
+                
         elif event.subtype == "back":
             if in_conversation or in_button_control:
                 self._interface.exploring_direction("back")
                 self._exploration.send_query("direction","back")
+            else:
+                # speed down
+                self.speed_menu.next()
+                self._interface.menu_changed(menu=self.speed_menu)
+                e = NavigationEvent("sound", "SpeedDown")
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
+                
         elif event.subtype == "left":
             if in_conversation or in_button_control:
                 self._interface.exploring_direction("left")
