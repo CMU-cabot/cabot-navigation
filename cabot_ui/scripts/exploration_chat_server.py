@@ -134,6 +134,13 @@ class ExplorationChatServer(Node):
                 "classification": "question",
             }
 
+            入力：周りに何があるか教えて。
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "question",
+            }
+
             <あなたが考察したこと>の中には、入力に対しての考察を入れてください。例えば、入力が"木製の展示に行きたいわ"の場合、"木製の展示"が目的地であると考察してください。
             JSONの始まりである{から返答を開始してください。
 
