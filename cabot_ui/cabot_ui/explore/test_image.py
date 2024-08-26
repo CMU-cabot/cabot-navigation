@@ -199,12 +199,14 @@ class CaBotImageNode(Node):
             self.consequtive_touch_count -= 1
 
         self.consequtive_touch_count = max(0, self.consequtive_touch_count)
+        self.consequtive_touch_count = min(10, self.consequtive_touch_count)
 
         if self.consequtive_touch_count > 5:
             self.touching = True
         else:
+            if self.touching:
+                test_speak.speak_text("", force=True)
             self.touching = False
-            test_speak.speak_text("", force=True)
 
     def publish_latest_explained_info(self):
         if self.latest_explained_front_image is not None:
