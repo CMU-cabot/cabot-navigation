@@ -161,14 +161,14 @@ if __name__ == "__main__":
     parser.add_argument("--debug", "-db", action="store_true", help="Debug mode")
     args = parser.parse_args()
 
-    main(
-        dist_filter=args.dist_filter,
-        forbidden_area_filter=args.forbidden_area_filter,
-        trajectory_filter=args.trajectory_filter,
-        auto=args.auto,
-        use_image=args.use_image,
-        log_dir=args.log_dir,
-        sim=args.sim,
-        keyboard=args.keyboard,
-        debug=args.debug
-    )
+    # main(
+    #     dist_filter=args.dist_filter,
+    #     forbidden_area_filter=args.forbidden_area_filter,
+    #     trajectory_filter=args.trajectory_filter,
+    #     auto=args.auto,
+    #     use_image=args.use_image,
+    #     log_dir=args.log_dir,
+    #     sim=args.sim,
+    #     keyboard=args.keyboard,
+    #     debug=args.debug
+    # )
