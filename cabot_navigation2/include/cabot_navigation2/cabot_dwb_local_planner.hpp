@@ -29,6 +29,11 @@ class CaBotDWBLocalPlanner : public dwb_core::DWBLocalPlanner
 public:
   CaBotDWBLocalPlanner();
 
+  virtual nav_2d_msgs::msg::Twist2DStamped computeVelocityCommands(
+    const nav_2d_msgs::msg::Pose2DStamped & pose,
+    const nav_2d_msgs::msg::Twist2D & velocity,
+    std::shared_ptr<dwb_msgs::msg::LocalPlanEvaluation> & results);
+
 protected:
   virtual nav_2d_msgs::msg::Path2D transformGlobalPlan(
     const nav_2d_msgs::msg::Pose2DStamped & pose);

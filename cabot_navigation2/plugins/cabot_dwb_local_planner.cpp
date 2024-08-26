@@ -21,6 +21,7 @@
 #include <cabot_navigation2/cabot_dwb_local_planner.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <dwb_core/exceptions.hpp>
+#include <dwb_core/illegal_trajectory_tracker.hpp>
 #include <nav_2d_utils/tf_help.hpp>
 #include <nav2_core/exceptions.hpp>
 #include <nav2_util/geometry_utils.hpp>
@@ -71,6 +72,75 @@ CaBotDWBLocalPlanner::CaBotDWBLocalPlanner()
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
+nav_2d_msgs::msg::Twist2DStamped
+CaBotDWBLocalPlanner::computeVelocityCommands(
+  const nav_2d_msgs::msg::Pose2DStamped & pose,
+  const nav_2d_msgs::msg::Twist2D & velocity,
+  std::shared_ptr<dwb_msgs::msg::LocalPlanEvaluation> & results)
+{
+  if (results) {
+    results->header.frame_id = pose.header.frame_id;
+    results->header.stamp = clock_->now();
+  }
+
+  nav_2d_msgs::msg::Path2D transformed_plan;
+  nav_2d_msgs::msg::Pose2DStamped goal_pose;
+
+  // adjust forward_prune_distance based on the current speed
+  auto node = node_.lock();
+  double temp = forward_prune_distance_;
+  double current_speed = std::hypot(velocity.x, velocity.y);
+  double max_speed_xy;
+  node->get_parameter(dwb_plugin_name_ + ".max_speed_xy", max_speed_xy);
+  forward_prune_distance_ = temp * std::max(0.25, std::min(1.0, (current_speed + 0.25) / max_speed_xy));
+  prepareGlobalPlan(pose, transformed_plan, goal_pose);
+  forward_prune_distance_ = temp;
+
+  nav2_costmap_2d::Costmap2D * costmap = costmap_ros_->getCostmap();
+  std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap->getMutex()));
+
+  for (dwb_core::TrajectoryCritic::Ptr & critic : critics_) {
+    if (!critic->prepare(pose.pose, velocity, goal_pose.pose, transformed_plan)) {
+      RCLCPP_WARN(rclcpp::get_logger("DWBLocalPlanner"), "A scoring function failed to prepare");
+    }
+  }
+
+  try {
+    dwb_msgs::msg::TrajectoryScore best = coreScoringAlgorithm(pose.pose, velocity, results);
+
+    // Return Value
+    nav_2d_msgs::msg::Twist2DStamped cmd_vel;
+    cmd_vel.header.stamp = clock_->now();
+    cmd_vel.velocity = best.traj.velocity;
+
+    // debrief stateful scoring functions
+    for (dwb_core::TrajectoryCritic::Ptr & critic : critics_) {
+      critic->debrief(cmd_vel.velocity);
+    }
+
+    lock.unlock();
+
+    pub_->publishLocalPlan(pose.header, best.traj);
+    pub_->publishCostGrid(costmap_ros_, critics_);
+
+    return cmd_vel;
+  } catch (const dwb_core::NoLegalTrajectoriesException & e) {
+    nav_2d_msgs::msg::Twist2D empty_cmd;
+    dwb_msgs::msg::Trajectory2D empty_traj;
+    // debrief stateful scoring functions
+    for (dwb_core::TrajectoryCritic::Ptr & critic : critics_) {
+      critic->debrief(empty_cmd);
+    }
+
+    lock.unlock();
+
+    pub_->publishLocalPlan(pose.header, empty_traj);
+    pub_->publishCostGrid(costmap_ros_, critics_);
+
+    throw;
+  }
+}
+
 nav_2d_msgs::msg::Path2D
 CaBotDWBLocalPlanner::transformGlobalPlan(
   const nav_2d_msgs::msg::Pose2DStamped & pose)
@@ -119,6 +189,7 @@ CaBotDWBLocalPlanner::transformGlobalPlan(
     transform_end_threshold = dist_threshold;
   }
 
+  // customize begin
   // Customized: Find the closest point from the robot pose
   auto nearest_point_from_robot = std::min_element(
     global_plan_.poses.begin(), global_plan_.poses.end(),
@@ -170,6 +241,7 @@ CaBotDWBLocalPlanner::transformGlobalPlan(
     RCLCPP_ERROR(logger_, "transformation_begin should be lower than transformation_end");
     transformation_begin = transformation_end;
   }
+  // customize end
 
   // Transform the near part of the global plan into the robot's frame of reference.
   nav_2d_msgs::msg::Path2D transformed_plan;
