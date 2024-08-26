@@ -676,10 +676,6 @@ class Tester:
     @wait_test()
     def delete_door(self, case, test_action):
         self.delete_obstacle(case, test_action)
-        
-    @wait_test()
-    def delete_schoolbus(self, case, test_action):
-        self.delete_obstacle(case, test_action)
 
     @wait_test()
     def delete_obstacle(self, case, test_action):
@@ -836,15 +832,26 @@ class Tester:
         self.futures[uuid].add_done_callback(done_callback)
         
     @wait_test()
+    def spawn_obstacle(self, case, test_action):
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().spawn_obstacle(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+        
+    @wait_test()
     def spawn_schoolbus(self, case, test_action):
         """
         Spawns a school bus in the Gazebo simulation.
-        
-        :param case: The test case being run.
-        :param test_action: A dictionary containing parameters like uuid, name, and position.
+
+        Parameters:
+            case: The test case being run.
+            test_action: A dictionary containing parameters like uuid, name, and position.
         """
         uuid = test_action['uuid']
-        # Call the spawn_schoolbus method from ObstacleManager
         self.futures[uuid] = ObstacleManager.instance().spawn_schoolbus(**test_action)
 
         def done_callback(future):
@@ -855,14 +862,22 @@ class Tester:
         self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
-    def spawn_obstacle(self, case, test_action):
+    def delete_schoolbus(self, case, test_action):
+        """
+        Deletes a school bus from the Gazebo simulation.
+
+        Parameters:
+            case: The test case being run.
+            test_action: A dictionary containing parameters like uuid, name.
+        """
         uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().spawn_obstacle(**test_action)
+        self.futures[uuid] = ObstacleManager.instance().delete_schoolbus(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
             case['done'] = True
             case['success'] = True
+
         self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
@@ -1025,8 +1040,6 @@ class ObstacleManager:
     def delete_door(self, **kwargs):
         return self.delete_obstacle(**kwargs)
     
-    def delete_schoolbus(self,):
-        return self.delete_obstacle(name="SCHOOL_BUS")
 
     def delete_obstacle(self, **kwargs):
         """
@@ -1121,16 +1134,23 @@ class ObstacleManager:
         future.add_done_callback(callback)
         return future
     
-    def spawn_schoolbus(self, name="SCHOOL_BUS", x=0, y=0, z=0, yaw=0):
+    def spawn_schoolbus(self, **kwargs):
         """
-        Spawns a school bus at the given position.
-        
-        :param name: Name of the school bus model
-        :param x: X position
-        :param y: Y position
-        :param z: Z position
-        :param yaw: Rotation about the Z-axis (yaw)
+        Spawns a school bus at the given position in the Gazebo simulation.
+
+        Parameters:
+            name (str): Name of the school bus model.
+            x (float): X position.
+            y (float): Y position.
+            z (float): Z position.
+            yaw (float): Rotation about the Z-axis (yaw).
         """
+        name = kwargs.get("name", "SCHOOL_BUS")
+        x = kwargs.get("x", 0)
+        y = kwargs.get("y", 0)
+        z = kwargs.get("z", 0)
+        yaw = kwargs.get("yaw", 0)
+
         schoolbus_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.7">
@@ -1186,18 +1206,36 @@ class ObstacleManager:
 </sdf>
 """
 
-        # Create the SpawnEntity request
         request = SpawnEntity.Request()
         request.name = name
         request.xml = schoolbus_xml
         request.reference_frame = "world"
-        
+
         # Call the service asynchronously
         future = self.spawn_entity_client.call_async(request)
 
         # Handle the callback once the future completes
         def callback(future):
             logger.debug(f"Spawn result for {name}: {future.result()}")
+
+        future.add_done_callback(callback)
+        return future
+
+    def delete_schoolbus(self, **kwargs):
+        """
+        Deletes the school bus from the simulation.
+
+        Parameters:
+            name (str): Name of the school bus model to delete.
+        """
+        name = kwargs.get("name", "SCHOOL_BUS")
+        request = DeleteEntity.Request()
+        request.name = name
+
+        future = self.delete_entity_client.call_async(request)
+
+        def callback(future):
+            logger.debug(f"Delete result for {name}: {future.result()}")
         
         future.add_done_callback(callback)
         return future
