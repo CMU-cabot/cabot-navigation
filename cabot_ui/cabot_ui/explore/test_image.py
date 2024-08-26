@@ -343,6 +343,8 @@ class CaBotImageNode(Node):
                 return
             else:
                 wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                if self.touching:
+                    test_speak.speak_text(explain)
 
                 self.latest_explained_front_image = self.front_image
                 self.latest_explained_left_image = self.left_image
@@ -768,7 +770,6 @@ class GPTExplainer():
         wait_time = 2.0
         if self.should_speak and not extracted_json["description"] == "":
             wait_time = self.calculate_speak_time(extracted_json["description"])
-            test_speak.speak_text(extracted_json["description"])
             self.logger.info(f"Speaking the {self.mode} explanation")
         
         # extract features from image & text
