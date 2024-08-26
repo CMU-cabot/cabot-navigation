@@ -684,7 +684,7 @@ class EventMapper(object):
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return ExplorationEvent(subtype="wheel_switch")
-            elif event.button == cabot_common.button.BUTTON_CENTER:
+            elif event.holddown == cabot_common.button.BUTTON_CENTER:
                 return ExplorationEvent(subtype="startchat")
 
         return None
