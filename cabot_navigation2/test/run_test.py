@@ -676,6 +676,10 @@ class Tester:
     @wait_test()
     def delete_door(self, case, test_action):
         self.delete_obstacle(case, test_action)
+        
+    @wait_test()
+    def delete_schoolbus(self, case, test_action):
+        self.delete_obstacle(case, test_action)
 
     @wait_test()
     def delete_obstacle(self, case, test_action):
@@ -829,6 +833,25 @@ class Tester:
             logger.debug(future.result())
             case['done'] = True
             case['success'] = True
+        self.futures[uuid].add_done_callback(done_callback)
+        
+    @wait_test()
+    def spawn_schoolbus(self, case, test_action):
+        """
+        Spawns a school bus in the Gazebo simulation.
+        
+        :param case: The test case being run.
+        :param test_action: A dictionary containing parameters like uuid, name, and position.
+        """
+        uuid = test_action['uuid']
+        # Call the spawn_schoolbus method from ObstacleManager
+        self.futures[uuid] = ObstacleManager.instance().spawn_schoolbus(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+
         self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
@@ -1001,8 +1024,17 @@ class ObstacleManager:
 
     def delete_door(self, **kwargs):
         return self.delete_obstacle(**kwargs)
+    
+    def delete_schoolbus(self,):
+        return self.delete_obstacle(name="SCHOOL_BUS")
 
     def delete_obstacle(self, **kwargs):
+        """
+        Delete a generatic obstacle (school bus, etc.) from the simulation
+        # Deleting a school bus
+        obstacle_manager = ObstacleManager.instance()
+        obstacle_manager.delete_obstacle(name="SCHOOL_BUS_1") 
+        """
         name = kwargs['name']
         request = DeleteEntity.Request()
         request.name = name
@@ -1013,7 +1045,7 @@ class ObstacleManager:
             logger.debug(F"delete result = {future.result()}, {name}, {len(self.remaining)}")
         future.add_done_callback(callback)
         return future
-
+    
     def spawn_door(self, **kwargs):
         return self.spawn_obstacle(**dict(
             dict(
@@ -1024,6 +1056,7 @@ class ObstacleManager:
             **kwargs)
         )
 
+    # added aug 24
     def spawn_obstacle(self, **kwargs):
         rclpy.spin_once(node, timeout_sec=1) # wait until topic /obstacle_states ready
         door = Door.from_dict(**kwargs)
@@ -1073,6 +1106,8 @@ class ObstacleManager:
     </model>
 </sdf>
 """
+        
+        
         logging.debug(door_xml)
         request = SpawnEntity.Request()
         request.name = name
@@ -1085,6 +1120,88 @@ class ObstacleManager:
             logger.debug(F"spawn result = {future.result()}, {door}, {len(self.remaining)}")
         future.add_done_callback(callback)
         return future
+    
+    def spawn_schoolbus(self, name="SCHOOL_BUS", x=0, y=0, z=0, yaw=0):
+        """
+        Spawns a school bus at the given position.
+        
+        :param name: Name of the school bus model
+        :param x: X position
+        :param y: Y position
+        :param z: Z position
+        :param yaw: Rotation about the Z-axis (yaw)
+        """
+        schoolbus_xml = f"""
+<?xml version="1.0" ?>
+<sdf version="1.7">
+    <model name="{name}">
+        <pose>{x} {y} {z} 0 0 {yaw}</pose>
+        <link name="link_0">
+            <visual name="visual">
+                <geometry>
+                    <mesh>
+                        <uri>file:///home/developer/models/SCHOOL_BUS/meshes/model.obj</uri>
+                        <scale>100 100 100</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="collision_0">
+                <geometry>
+                    <mesh>
+                        <uri>file:///home/developer/models/SCHOOL_BUS/meshes/model.obj</uri>
+                        <scale>100 100 100</scale>
+                    </mesh>
+                </geometry>
+                <max_contacts>10</max_contacts>
+                <surface>
+                    <contact>
+                        <ode/>
+                    </contact>
+                    <bounce/>
+                    <friction>
+                        <torsional>
+                            <ode/>
+                        </torsional>
+                        <ode/>
+                    </friction>
+                </surface>
+            </collision>
+            <self_collide>0</self_collide>
+            <inertial>
+                <pose>0 0 0 0 -0 0</pose>
+                <inertia>
+                    <ixx>1</ixx>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyy>1</iyy>
+                    <iyz>0</iyz>
+                    <izz>1</izz>
+                </inertia>
+                <mass>1</mass>
+            </inertial>
+            <enable_wind>0</enable_wind>
+            <kinematic>0</kinematic>
+        </link>
+    </model>
+</sdf>
+"""
+
+        # Create the SpawnEntity request
+        request = SpawnEntity.Request()
+        request.name = name
+        request.xml = schoolbus_xml
+        request.reference_frame = "world"
+        
+        # Call the service asynchronously
+        future = self.spawn_entity_client.call_async(request)
+
+        # Handle the callback once the future completes
+        def callback(future):
+            logger.debug(f"Spawn result for {name}: {future.result()}")
+        
+        future.add_done_callback(callback)
+        return future
+  
 
 class LogColors:
     DEBUG = '\033[94m'       # Blue

@@ -148,17 +148,17 @@ class PedestrianManager():
         self.actorMap[name] = actor
         xx = len(self.actorMap)
         yy = 10
-        actor_xml = f"""
+        actor_xml =         f"""
 <?xml version="1.0" ?>
 <sdf version="1.6">
     <actor name="{name}">
         <pose>{xx} {yy} 0 0 0 0</pose>
         <skin>
-            <filename>walk.dae</filename>
+            <filename>run.dae</filename>
             <scale>1.0</scale>
         </skin>
         <animation name="walking">
-            <filename>walk.dae</filename>
+            <filename>run.dae</filename>
             <scale>1.0</scale>
             <interpolate_x>true</interpolate_x>
         </animation>
@@ -170,6 +170,28 @@ class PedestrianManager():
     </actor>
 </sdf>
 """
+#         f"""
+# <?xml version="1.0" ?>
+# <sdf version="1.6">
+#     <actor name="{name}">
+#         <pose>{xx} {yy} 0 0 0 0</pose>
+#         <skin>
+#             <filename>walk.dae</filename>
+#             <scale>1.0</scale>
+#         </skin>
+#         <animation name="walking">
+#             <filename>walk.dae</filename>
+#             <scale>1.0</scale>
+#             <interpolate_x>true</interpolate_x>
+#         </animation>
+#         <plugin name="pedestrian_plugin_{name}" filename="libpedestrian_plugin.so">
+#           <module>{module}</module>
+#           <robot>mobile_base</robot>
+#           {params_xml}
+#         </plugin>
+#     </actor>
+# </sdf>
+# """
         # logging.info(actor_xml)
         request = SpawnEntity.Request()
         request.name = name
