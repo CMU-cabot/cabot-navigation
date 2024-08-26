@@ -85,6 +85,7 @@ class CaBotImageNode(Node):
         self.latest_explained_front_image_pub = self.create_publisher(Image, "/cabot/latest_explained_front_image", 10)
         self.latest_explained_left_image_pub = self.create_publisher(Image, "/cabot/latest_explained_left_image", 10)
         self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
+        self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
@@ -140,6 +141,8 @@ class CaBotImageNode(Node):
         self.odom = None
 
         self.cabot_nav_state = "running"
+        self.touching = False
+        self.consequtive_touch_count = 0
         # cabot nav state subscriber
         self.cabot_nav_state_sub = self.create_subscription(String, "/cabot/nav_state", self.cabot_nav_state_callback, 10)
 
@@ -156,6 +159,7 @@ class CaBotImageNode(Node):
         
         self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
+        self.touch_sub = self.create_subscription(std_msgs.msg.Int16, "/cabot/touch", self.touch_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
         subscribers = [self.odom_sub, self.image_front_sub, self.image_left_sub, self.image_right_sub]
         
@@ -187,6 +191,21 @@ class CaBotImageNode(Node):
         self.loop_count = 0
 
         self.timer = self.create_timer(5.0, self.loop)
+
+    def touch_callback(self, msg: std_msgs.msg.Int16):
+        if msg.data == 1:
+            self.consequtive_touch_count += 1
+        else:
+            self.consequtive_touch_count -= 1
+
+        self.consequtive_touch_count = max(0, self.consequtive_touch_count)
+
+        if self.consequtive_touch_count > 5:
+            self.touching = True
+        else:
+            self.touching = False
+
+
 
     def publish_latest_explained_info(self):
         if self.latest_explained_front_image is not None:
@@ -283,6 +302,7 @@ class CaBotImageNode(Node):
             self.logger.info("Realsense ready")
             test_speak.speak_text("カメラが起動しました")
             self.publish_latest_explained_info()
+            self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -307,9 +327,9 @@ class CaBotImageNode(Node):
             self.timer.cancel()
             return
         self.loop_count += 1
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, touching: {self.touching}")
         # generate explanation
-        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready:
+        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready and self.touching:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
