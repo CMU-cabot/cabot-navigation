@@ -38,8 +38,8 @@ class ExplorationChatServer(Node):
         self.latest_explained_front_image_sub = self.create_subscription(Image, "/cabot/latest_explained_front_image", self.latest_explained_front_image_callback, 10)
         self.latest_explained_front_image = None
 
-        self.latest_explained_back_image_sub = self.create_subscription(Image, "/cabot/latest_explained_right_image", self.latest_explained_right_image_callback, 10)
-        self.latest_explained_back_image = None
+        self.latest_explained_right_image_sub = self.create_subscription(Image, "/cabot/latest_explained_right_image", self.latest_explained_right_image_callback, 10)
+        self.latest_explained_right_image = None
 
         self.latest_explained_left_image_sub = self.create_subscription(Image, "/cabot/latest_explained_left_image", self.latest_explained_left_image_callback, 10)
         self.latest_explained_left_image = None
@@ -150,6 +150,7 @@ class ExplorationChatServer(Node):
         self.prompt_question = """
         視覚障害者の方からの質問に対して、適切な返答を生成してください。
         これまであなたが伝えたことは次のようになってます。%s
+        ユーザの質問：%s
         JSON形式で返答してください。
         "answer"キーに返答を入れてください。
         """
@@ -167,18 +168,21 @@ class ExplorationChatServer(Node):
         bridge = CvBridge()
         cv_image = bridge.imgmsg_to_cv2(msg, "rgb8")
         self.latest_explained_front_image = cv_image
+        cv2.imwrite(os.path.join(self.log_dir, "latest_explained_front_image.jpg"), cv_image)
         self.logger.info("latest_explained_front_image is received")
 
     def latest_explained_right_image_callback(self, msg):
         bridge = CvBridge()
         cv_image = bridge.imgmsg_to_cv2(msg, "rgb8")
         self.latest_explained_right_image = cv_image
+        cv2.imwrite(os.path.join(self.log_dir, "latest_explained_right_image.jpg"), cv_image)
         self.logger.info("latest_explained_right_image is received")
 
     def latest_explained_left_image_callback(self, msg):
         bridge = CvBridge()
         cv_image = bridge.imgmsg_to_cv2(msg, "rgb8")
         self.latest_explained_left_image = cv_image
+        cv2.imwrite(os.path.join(self.log_dir, "latest_explained_left_image.jpg"), cv_image)
         self.logger.info("latest_explained_left_image is received")
 
     def run_flask_app(self):
@@ -292,10 +296,13 @@ class ExplorationChatServer(Node):
                 print("failed to extract JSON")
                 res_text = ["入力を理解できませんでした。もう一度入力してください。"]
             elif query_type == "question":
-                prompt_question = self.prompt_question % self.latest_explained_info
-                prompt_question = prompt_question + query_string
+                prompt_question = self.prompt_question % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer("question", self.apikey)
-                res_json = gpt_explainer.query_with_images(prompt_question, [self.latest_explained_front_image, self.latest_explained_back_image, self.latest_explained_left_image])
+                # load just in case
+                # latest_explained_left_image = cv2.imread(os.path.join(self.log_dir, "latest_explained_left_image.jpg"))
+                # latest_explained_front_image = cv2.imread(os.path.join(self.log_dir, "latest_explained_front_image.jpg"))
+                # latest_explained_right_image = cv2.imread(os.path.join(self.log_dir, "latest_explained_right_image.jpg"))
+                res_json = gpt_explainer.query_with_images(prompt_question, [self.latest_explained_left_image, self.latest_explained_front_image, self.latest_explained_right_image])
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 res_text = [answer]
             else:
