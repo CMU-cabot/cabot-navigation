@@ -255,6 +255,7 @@ class ExplorationChatServer(Node):
                     elif query_type == "question":
                         # make user input quert string
                         query_type = "question"
+                        query_target = "question"
                         query_string = gpt_input
                     else:
                         query_type = "failed"
