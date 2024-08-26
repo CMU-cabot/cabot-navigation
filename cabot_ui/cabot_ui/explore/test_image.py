@@ -833,7 +833,7 @@ class GPTExplainer():
         else:
             return None
 
-    def query_with_images(self, prompt, images, max_tokens=300) -> Dict[str, Any]:
+    def query_with_images(self, prompt, images, max_tokens=2000) -> Dict[str, Any]:
         # Preparing the content with the prompt and images
         new_content = [{"type": "text", "text": prompt}]
         self.conversation_history.append({"role": "user", "content": copy(new_content)})
