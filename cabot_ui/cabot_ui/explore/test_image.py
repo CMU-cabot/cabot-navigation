@@ -1,13 +1,9 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, UInt8, UInt8MultiArray, Int8, Int16, Float32, String
-import argparse
-from mf_localization_msgs.msg import MFLocalizeStatus
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
 import tf_transformations
-import sys
 import numpy as np
 import cv2
 from cv2 import aruco
@@ -20,16 +16,13 @@ import os
 import datetime
 import json
 import pickle
-import cv_bridge
 from cv_bridge import CvBridge
 import re
 import time
 from packaging.version import Version
 from . import test_speak
-import traceback
 import json
 from cabot_msgs.msg import Log
-import threading
 from copy import copy
 from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
 import torch
@@ -81,6 +74,16 @@ class CaBotImageNode(Node):
         self.ready = False
         self.realsense_ready = False
         self.explore_main_loop_ready = False
+
+        self.latest_explained_front_image = None
+        self.latest_explained_left_image = None
+        self.latest_explained_right_image = None
+        self.latest_explain = "None"
+
+        self.latest_explained_info_pub = self.create_publisher(String, "/cabot/latest_explained_info", 10)
+        self.latest_explained_front_image_pub = self.create_publisher(Image, "/cabot/latest_explained_front_image", 10)
+        self.latest_explained_left_image_pub = self.create_publisher(Image, "/cabot/latest_explained_left_image", 10)
+        self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
@@ -182,6 +185,24 @@ class CaBotImageNode(Node):
         self.loop_count = 0
 
         self.timer = self.create_timer(5.0, self.loop)
+
+    def publish_latest_explained_info(self):
+        if self.latest_explained_front_image is not None:
+            self.logger.info("Publishing latest explained info")
+            msg = String()
+            msg.data = self.latest_explain
+            self.latest_explained_info_pub.publish(msg)
+
+            # publish the images
+            bridge = CvBridge()
+            front_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_front_image, encoding="rgb8")
+            left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
+            right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
+            self.latest_explained_front_image_pub.publish(front_image_msg)
+            self.latest_explained_left_image_pub.publish(left_image_msg)
+            self.latest_explained_right_image_pub.publish(right_image_msg)
+
+            self.logger.info("Published latest explained info")
     
     def activity_callback(self, msg: Log):
         self.logger.info(f"activity log: {msg}")
@@ -226,38 +247,9 @@ class CaBotImageNode(Node):
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
 
-        if not self.realsense_ready:
-            self.realsense_ready = True
-            self.logger.info("Realsense ready")
-            test_speak.speak_text("カメラが起動しました")
-
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
         self.last_saved_images_time = time.time()
-
-        # self.logger.info(f"image callback; {self.cabot_nav_state}")
-        # convert the images to numpy arrays
-
-        # # convert the depth message to image
-        # bridge = CvBridge()
-        # front_depth = bridge.imgmsg_to_cv2(msg_front_depth, desired_encoding="passthrough")
-        # front_depth_array = np.asarray(front_depth)
-        # print("front depth", front_depth_array.shape)
-
-        # left_depth = bridge.imgmsg_to_cv2(msg_left_depth, desired_encoding="passthrough")
-        # left_depth_array = np.asarray(left_depth)
-        # print("left depth", left_depth_array.shape)
-
-        # right_depth = bridge.imgmsg_to_cv2(msg_right_depth, desired_encoding="passthrough")
-        # right_depth_array = np.asarray(right_depth)
-        # print("right depth", right_depth_array.shape)
-
-        # # save the depth image
-        # np.save(f"{self.log_dir}/front_depth.npy", front_depth_array)
-        # np.save(f"{self.log_dir}/left_depth.npy", left_depth_array)
-        # np.save(f"{self.log_dir}/right_depth.npy", right_depth_array)
-
-        # current time until sec and make it into a image name
 
         # save the odom
         quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
@@ -285,12 +277,11 @@ class CaBotImageNode(Node):
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
 
-        # self.front_depth = front_depth_array
-        # self.left_depth = left_depth_array
-        # self.right_depth = right_depth_array
-
-        # self.logger.info(f"front, {type(front_image)}, {front_image.shape}, left, {type(left_image)}, {left_image.shape}, right, {type(right_image)}, {right_image.shape}")
-        # self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
+        if not self.realsense_ready:
+            self.realsense_ready = True
+            self.logger.info("Realsense ready")
+            test_speak.speak_text("カメラが起動しました")
+            self.publish_latest_explained_info()
 
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -330,7 +321,15 @@ class CaBotImageNode(Node):
                 self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
                 return
             else:
-                wait_time = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+
+                self.latest_explained_front_image = self.front_image
+                self.latest_explained_left_image = self.left_image
+                self.latest_explained_right_image = self.right_image
+                self.latest_explain = explain
+
+                self.publish_latest_explained_info()
+
                 self.can_speak_explanation = False
                 self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
 
@@ -622,7 +621,7 @@ class GPTExplainer():
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
-            return  1.0
+            return  1.0, "No explanation"
 
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
@@ -685,7 +684,7 @@ class GPTExplainer():
 
         self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
 
-        return wait_time
+        return wait_time, extracted_json["description"]
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
