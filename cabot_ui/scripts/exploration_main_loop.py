@@ -3,8 +3,6 @@
 from rclpy.node import Node
 import rclpy
 
-from cabot_ui.explore.test_loop import main as main_loop
-
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from cabot_common import vibration
 import std_msgs.msg
@@ -41,6 +39,7 @@ class ExplorationMainLoop(Node):
         is_sim = self.declare_parameter('is_sim').value
 
         self.event_pub = self.create_publisher(std_msgs.msg.String, '/cabot/event', 10)
+        self.note_pub = self.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.main(
             dist_filter=dist_filter,
@@ -122,8 +121,9 @@ class ExplorationMainLoop(Node):
         print(f"Logs will be saved in {log_dir}")
         
         # 0. run exploration loop!
-        time.sleep(20)
+        time.sleep(10)
         self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_start"))
+        self.logger.info("Exploration loop started")
         while True:
             # check rclpy is ok
             if not rclpy.ok():
@@ -177,6 +177,7 @@ class ExplorationMainLoop(Node):
                 initial_coords=initial_coords,
                 initial_orientation=initial_orientation
             )
+            state_client.logger.info(f"Sampled points: {sampled_points}")
             maps.append(costmap)
             if iter == 0:
                 initial_coords = current_coords
@@ -190,7 +191,7 @@ class ExplorationMainLoop(Node):
             if has_left_initial_area is True and dist_from_initial < 3.0:
                 state_client.logger.info("Initial coords reached; stopping the exploration")
                 speak_text("一周しました。探索を終了します。")
-                break
+                # break
 
             # calculate map's highlihgted area's diff 
             if len(maps) > 1:
@@ -198,7 +199,7 @@ class ExplorationMainLoop(Node):
                 prev_map_area = np.sum(maps[-2] > 0)
                 diff = current_map_area - prev_map_area
                 print("=====================")
-                self.logger(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
+                self.logger.info(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
                 # speak_text(f"前回から、新たに探索されたエリアが{diff / prev_map_area * 100:.2f}%増加しました。")
                 print("=====================")
 
@@ -348,8 +349,7 @@ class ExplorationMainLoop(Node):
         elif pattern == vibration.RIGHT_TURN:
         elif pattern == vibration.LEFT_TURN:
         """
-
-        self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
+        self.logger.info(f"Vibrating with pattern: {pattern}")
         msg = std_msgs.msg.Int8()
         msg.data = pattern
         self.note_pub.publish(msg)
