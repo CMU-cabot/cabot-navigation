@@ -20,6 +20,7 @@
 
 #ifndef CABOT_NAVIGATION2__CABOT_DWB_LOCAL_PLANNER_HPP_
 #define CABOT_NAVIGATION2__CABOT_DWB_LOCAL_PLANNER_HPP_
+#include <memory>
 #include <dwb_core/dwb_local_planner.hpp>
 
 namespace cabot_navigation2
