@@ -80,6 +80,7 @@ class CaBotImageNode(Node):
         self.apikey = self.declare_parameter("apikey").value
         self.ready = False
         self.realsense_ready = False
+        self.explore_main_loop_ready = False
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
@@ -199,6 +200,18 @@ class CaBotImageNode(Node):
             self.in_conversation = True
         elif msg.data == "navigation_finishchat":
             self.in_conversation = False
+        elif msg.data == "explore_main_loop_start":
+            self.explore_main_loop_ready = True
+        elif "navigation;destination;goal" in msg.data:
+            self.explore_main_loop_ready = True
+        elif msg.data == "navigation_arrived":
+            self.explore_main_loop_ready = False
+        elif msg.data == "navigation;cancel":
+            self.explore_main_loop_ready = False
+            test_speak.speak_text("", force=True)
+        elif msg.data == "explore_main_loop_pause":
+            self.explore_main_loop_ready = False
+        
 
     def reset_can_speak(self):
         self.logger.info("can speak explanation set to True by timer")
@@ -304,7 +317,7 @@ class CaBotImageNode(Node):
         self.loop_count += 1
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
         # generate explanation
-        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation:
+        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
