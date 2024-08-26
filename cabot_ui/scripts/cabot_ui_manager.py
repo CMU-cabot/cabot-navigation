@@ -555,12 +555,14 @@ class CabotUIManager(NavigationInterface, object):
                     self._exploration.set_conversation_control(False)
                 else:
                     self._logger.info("NavigationState: Start chat")
+                    self._interface.speak("")
                     self._interface.start_chat()
                     self.publish_event("startchat")  # use this to trigger smartphone conversation UI
                     self._exploration.set_conversation_control(True)
             else:
                 if in_button_control:
                     self._logger.info("NavigationState: Finish button control")
+                    self._interface.speak("")
                     self._interface.set_button_control(False)
                     self.publish_event("button_control")
                     self._exploration.set_button_control(False)
