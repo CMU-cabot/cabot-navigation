@@ -287,7 +287,7 @@ class ExplorationChatServer(Node):
             elif query_type == "question":
                 prompt_question = self.prompt_question % self.latest_explained_info
                 prompt_question = prompt_question + query_string
-                gpt_explainer = GPTExplainer("question", self, self.apikey)
+                gpt_explainer = GPTExplainer("question", self.apikey)
                 res_json = gpt_explainer.query_with_images(prompt_question, [self.latest_explained_front_image, self.latest_explained_back_image, self.latest_explained_left_image])
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 res_text = [answer]
@@ -342,11 +342,7 @@ class GPTExplainer():
         ):
         self.dummy = dummy
         self.api_key = api_key
-        self.node = node
-        self.logger = self.node.get_logger()
         self.conversation_history = []
-
-        self.logger.info(f"Initializing GPTExplainer with api_key: {self.api_key}")
 
         self.headers = {
             "Content-Type": "application/json",
