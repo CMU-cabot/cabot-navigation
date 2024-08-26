@@ -218,7 +218,6 @@ class CaBotImageNode(Node):
                     self.can_speak_timer.cancel()
 
     def event_callback(self, msg):
-        self.logger.info(f"event_callback event log: {msg}")
         if msg.data == "navigation_tmp_startchat":
             self.in_conversation = True
         elif msg.data == "navigation_finishchat":
