@@ -40,6 +40,8 @@ class ExplorationMainLoop(Node):
         dist_filter = self.declare_parameter('dist_filter').value
         is_sim = self.declare_parameter('is_sim').value
 
+        self.event_pub = self.create_publisher(std_msgs.msg.String, '/cabot/event', 10)
+
         self.main(
             dist_filter=dist_filter,
             forbidden_area_filter=False,
@@ -121,6 +123,7 @@ class ExplorationMainLoop(Node):
         
         # 0. run exploration loop!
         time.sleep(20)
+        self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_start"))
         while True:
             # check rclpy is ok
             if not rclpy.ok():
@@ -195,8 +198,8 @@ class ExplorationMainLoop(Node):
                 prev_map_area = np.sum(maps[-2] > 0)
                 diff = current_map_area - prev_map_area
                 print("=====================")
-                print(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
-                speak_text(f"前回から、新たに探索されたエリアが{diff / prev_map_area * 100:.2f}%増加しました。")
+                self.logger(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
+                # speak_text(f"前回から、新たに探索されたエリアが{diff / prev_map_area * 100:.2f}%増加しました。")
                 print("=====================")
 
 
@@ -234,6 +237,7 @@ class ExplorationMainLoop(Node):
                     # if not rclpy.ok():
                     #     rclpy.init()
                     query_node = CabotQueryNode(candidates=direction_candidates)
+                    self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_pause"))
                     try:
                         rclpy.spin(query_node)
                     except SystemExit as e:
@@ -241,6 +245,7 @@ class ExplorationMainLoop(Node):
                     finally:
                         query_node.destroy_node()
                     # rclpy.try_shutdown()
+                    self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_start"))
                     state_client.logger.info(f"Query received: {query_node.query_type}, {query_node.query_string}")
                     if query_node.query_type == "direction":
                         selected_dir = query_node.query_string
@@ -293,6 +298,15 @@ class ExplorationMainLoop(Node):
                     output_point = output_point_and_direction[0]
                     output_direction = output_point_and_direction[1]
 
+            if "front" in output_direction:
+                self.vibrate(vibration.FRONT)
+            elif "left" in output_direction:
+                self.vibrate(vibration.LEFT_TURN)
+            elif "right" in output_direction:
+                self.vibrate(vibration.RIGHT_TURN)
+            else:
+                self.vibrate(vibration.UNKNOWN)
+
             state_client.logger.info(f"Next point: {output_point} ({output_direction})")
             dist = np.linalg.norm(np.array(output_point) - np.array(current_coords))
 
@@ -307,10 +321,10 @@ class ExplorationMainLoop(Node):
                 "back_right": "右後ろ"
             }
 
-            if output_direction == "coordinates":
-                speak_text(f"次は、指定された座標、およそ{dist:.2f}メートル先に進みます。")
-            else:
-                speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
+            # if output_direction == "coordinates":
+            #     speak_text(f"次は、指定された座標、およそ{dist:.2f}メートル先に進みます。")
+            # else:
+            #     speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
             # return output_point, cand_filter.forbidden_area_centers
             
             state_client.logger.info(f"Exploring next point: {output_point}\n")
