@@ -405,21 +405,15 @@ class GPTExplainer():
             "max_tokens": max_tokens
         }
 
-        self.logger.info("Sending the request to OpenAI API...")
         request_start = time.time()
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
         try:
             res_json = response.json()
             extracted_json = extract_json_part(res_json["choices"][0]["message"]["content"])
             res_json["choices"][0]["message"]["content"] = extracted_json
-
             request_elapsed = time.time() - request_start
-            self.logger.info("OpenAI API Request success.")
-            self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
             self.conversation_history.append({"role": "system", "content": str(res_json["choices"][0]["message"]["content"])})
         except Exception as e:
-            self.logger.info(f"OpenAI API Request failed. Error message: {e}")
-            self.logger.info(f"OpenAI Error Response: {response}")
             res_json = {"choices": [{"message": {"content": "Error", "role": "assistant"}}]}
         
         return res_json
