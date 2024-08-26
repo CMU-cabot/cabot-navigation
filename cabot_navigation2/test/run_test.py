@@ -597,6 +597,11 @@ class Tester:
         case['done'] = True
         case['success'] = None
 
+        def cancel_func():
+            logger.debug(F"cancel {case}")
+            self.cancel_subscription(case)
+        return cancel_func
+
     @wait_test(1)
     def check_topic_error(self, case, test_action):
         logger.debug(f"{callee_name()} {test_action}")

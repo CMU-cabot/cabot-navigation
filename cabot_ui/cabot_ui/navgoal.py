@@ -22,6 +22,7 @@ from typing import List
 import math
 import inspect
 import numpy
+import threading
 import time
 import traceback
 import yaml
@@ -570,11 +571,31 @@ class Goal(geoutil.TargetPlace):
             future = handle.cancel_goal_async()
 
             def done_callback(future):
+                if future.cancelled():
+                    self._logger.info("Future was cancelled.")
+                elif future.done():
+                    error = future.exception()
+                    if error:
+                        self._logger.error(f"Future resulted in error: {error}")
+                    else:
+                        self._logger.info(f"cancel future result = {future.result}")
                 if cancel_callback:
                     cancel_callback()
-                self._logger.info(f"cancel future result = {future.result}")
                 self.delegate._process_queue.append((self.cancel, callback))
             future.add_done_callback(done_callback)
+
+            def timeout_watcher(future, timeout_duration):
+                start_time = time.time()
+                while not future.done():
+                    if time.time() - start_time > timeout_duration:
+                        self._logger.error("Timeout occurred while waiting for future to complete")
+                        future.cancel()
+                        return
+                    time.sleep(0.1)
+
+            timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
+            timeout_tread.start()
+
             self._logger.info(f"sent cancel goal: {len(self._handles)} handles remaining")
         else:
             if callback:
@@ -836,8 +857,11 @@ class NavGoal(Goal):
             self.prevent_callback = False
             return
 
-        CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
-        status = future.result().status
+        if future:
+            CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
+        else:
+            CaBotRclpyUtil.info("Could not send goal")
+        status = future.result().status if future is not None else None
 
         # TODO(daisuke): needs to change test case conditions
         if status == GoalStatus.STATUS_SUCCEEDED:

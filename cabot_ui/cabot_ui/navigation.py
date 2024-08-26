@@ -635,9 +635,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.delegate.activity_log("cabot/navigation", "retry")
         self.turns = []
 
-        if self._current_goal:
-            self._goal_index -= 1
-            self._navigate_next_sub_goal()
+        self._logger.info(f"{self._current_goal=}, {self._goal_index}")
+        self._navigate_next_sub_goal()
 
     # wrap execution by a queue
     def pause_navigation(self, callback):
@@ -1058,6 +1057,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             self._stop_loop()
             self._current_goal = None
+            self._goal_index = max(-1, self._goal_index - 1)
             return
 
         if not goal.is_completed:
@@ -1127,9 +1127,27 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("add done callback")
         future.add_done_callback(lambda future: self._navigate_to_pose_sent_goal(goal, future, gh_cb, done_cb))
         self._logger.info("added done callback")
+
+        def timeout_watcher(future, timeout_duration):
+            start_time = time.time()
+            while not future.done():
+                if time.time() - start_time > timeout_duration:
+                    self._logger.error("Timeout occurred while waiting for sending goal future to be completed")
+                    future.cancel()
+                    return
+                time.sleep(0.1)
+
+        timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
+        timeout_tread.start()
         return future
 
     def _navigate_to_pose_sent_goal(self, goal, future, gh_cb, done_cb):
+        if future.cancelled():
+            try:
+                done_cb(None)
+            except:  # noqa: E722
+                self._logger.error(traceback.format_exc())
+            return
         self._logger.info("_navigate_to_pose_sent_goal")
         self._logger.info(F"navigate to pose, threading.get_ident {threading.get_ident()}")
         goal_handle = future.result()
