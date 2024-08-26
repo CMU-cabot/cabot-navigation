@@ -113,20 +113,6 @@ class ExplorationChatServer(Node):
                 "target_direction": "front_left",
             }
 
-            入力：うーん、どうしようかなぁ。木製の展示はさっき行ったしなぁ。
-            出力：
-            {
-                "thought": "<あなたが考察したこと>",
-                "classification": "failed",
-            }
-
-            入力：右と左どっちに行けばいいかなぁ
-            出力：
-            {
-                "thought": "<あなたが考察したこと>",
-                "classification": "failed",
-            }
-
             入力：その展示は何色？
             出力：
             {
@@ -139,6 +125,27 @@ class ExplorationChatServer(Node):
             {
                 "thought": "<あなたが考察したこと>",
                 "classification": "question",
+            }
+
+            入力：さっきのことについてもっと詳しく教えて。
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "question",
+            }
+
+            入力：うーん、どうしようかなぁ。木製の展示はさっき行ったしなぁ。
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "failed",
+            }
+
+            入力：右と左どっちに行けばいいかなぁ
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "failed",
             }
 
             <あなたが考察したこと>の中には、入力に対しての考察を入れてください。例えば、入力が"木製の展示に行きたいわ"の場合、"木製の展示"が目的地であると考察してください。
@@ -298,10 +305,6 @@ class ExplorationChatServer(Node):
             elif query_type == "question":
                 prompt_question = self.prompt_question % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer("question", self.apikey)
-                # load just in case
-                # latest_explained_left_image = cv2.imread(os.path.join(self.log_dir, "latest_explained_left_image.jpg"))
-                # latest_explained_front_image = cv2.imread(os.path.join(self.log_dir, "latest_explained_front_image.jpg"))
-                # latest_explained_right_image = cv2.imread(os.path.join(self.log_dir, "latest_explained_right_image.jpg"))
                 res_json = gpt_explainer.query_with_images(prompt_question, [self.latest_explained_left_image, self.latest_explained_front_image, self.latest_explained_right_image])
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 res_text = [answer]
