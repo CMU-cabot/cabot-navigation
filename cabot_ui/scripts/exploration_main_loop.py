@@ -279,11 +279,14 @@ class ExplorationMainLoop(Node):
                         state_client.logger.info("no candidate directions")
                     else:
                         output_direction = random.choice(cand_directions)
-                output_point_in_direction = [cand[0] for cand in sampled_points if cand[1] == output_direction]
-                if len(output_point_in_direction) == 0:
-                    state_client.logger.info(f"no candidate points in the selected direction ({output_direction})")
+                if len(sampled_points) > 0:
+                    output_point_in_direction = [cand[0] for cand in sampled_points if cand[1] == output_direction]
+                    if len(output_point_in_direction) == 0:
+                        state_client.logger.info(f"no candidate points in the selected direction ({output_direction})")
+                    else:
+                        output_point = output_point_in_direction[0]
                 else:
-                    output_point = output_point_in_direction[0]
+                    state_client.logger.info("no candidate points is found")
             else:
                 if selected_dir == "coordinates":
                     output_point = (float(x), float(y))
