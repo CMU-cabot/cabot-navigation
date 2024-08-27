@@ -18,12 +18,14 @@ class CancelNode:
         self.srv = self.node.create_service(Trigger, 'trigger_navigation_cancel', self.handle_service_request)
     
     def event_callback(self, msg):
+        # called when /cabot/event is subscribed
         if msg.data == "navigation_startchat" or msg.data == "navigation_button_control":
             if self.state != "navigation;cancel":
                 self.logger.info("Received startchat event")
                 self.state = "navigation;cancel"
             else:
                 self.state = "auto_mode"
+                self.cancel_state_published = False
         elif msg.data == "navigation_search":
             self.state = ""
         else:
@@ -52,7 +54,7 @@ class CancelNode:
             self.logger.info(f"State published: {msg.data}")
             self.cancel_state_published = True
         else:
-            pass
+            self.logger.info(f"[test_navigation_cancel; CancelNode - publish_state] State: {self.state}, cancel_state_published: {self.cancel_state_published}")
 
 
 def main():

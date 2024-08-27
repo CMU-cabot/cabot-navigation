@@ -193,7 +193,8 @@ class CaBotImageNode(Node):
         self.last_saved_images_time = time.time()
 
         if self.is_sim:
-            self.max_loop = 100
+            # to save OpenAI API cost, set the max loop to 10
+            self.max_loop = 10
         else:
             self.max_loop = -1
         self.loop_count = 0
