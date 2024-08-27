@@ -783,6 +783,8 @@ class GPTExplainer():
             cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
             cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
             cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+            if not webcamera_image is None:
+                cv2.imwrite(os.path.join(folder_name,"webcamera.jpg"), webcamera_image)
 
             with open(os.path.join(folder_name,"explanation.jsonl"), "w") as f:
                 description_json = {"description": extracted_json["description"]}
@@ -793,7 +795,11 @@ class GPTExplainer():
 
             pretty_response = json.dumps(gpt_response, indent=4)
 
-            log_image_and_gpt_response([left_image_with_text, front_image_with_text, right_image_with_text], str(extracted_json["description"]), self.folder_name)
+            images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
+            if not webcamera_image is None:
+                images_with_text.append(webcamera_image_with_text)
+
+            log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
