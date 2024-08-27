@@ -329,7 +329,7 @@ class ExplorationChatServer(Node):
                         query_string = query_target + "があります"
                         print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif query_type == "direction":
-                        query_target = query_json("target_direction", "unknown")
+                        query_target = query_json.get("target_direction", "unknown")
                         query_string = query_target
                         print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif "conversation" in query_type:
