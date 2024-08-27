@@ -41,6 +41,8 @@ class ExplorationMainLoop(Node):
 
         self.timer = self.create_timer(1.0, self.check_camera_ready_and_start)
 
+        self.marker_a, self.marker_b = None, None
+
 
     def check_camera_ready_and_start(self):
         if self.camera_ready:
@@ -166,8 +168,9 @@ class ExplorationMainLoop(Node):
                 availability_from_image = None
 
             # 2. get the next point to explore
+            self.logger.info(f"availability_from_image: {availability_from_image}")
             state_client.logger.info(f"Getting next point...\n")
-            sampled_points, forbidden_centers, current_coords, current_orientation, costmap = get_next_point(
+            sampled_points, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = get_next_point(
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
                 do_trajectory_filter=trajectory_filter, 
@@ -176,8 +179,14 @@ class ExplorationMainLoop(Node):
                 availability_from_image=availability_from_image,
                 forbidden_centers=forbidden_centers,
                 initial_coords=initial_coords,
-                initial_orientation=initial_orientation
+                initial_orientation=initial_orientation,
+                marker_a=self.marker_a,
+                marker_b=self.marker_b
             )
+
+            self.marker_a = marker_a
+            self.marker_b = marker_b
+
             maps.append(costmap)
             if iter == 0:
                 initial_coords = current_coords

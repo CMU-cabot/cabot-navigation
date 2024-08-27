@@ -318,15 +318,18 @@ class FilterCandidates:
             availability_from_image: Optional[Dict[str, bool]] = None,
             forbidden_area_centers: Optional[List[Tuple[float, float]]] = None,
             initial_pose_filter: bool = True,
-            initial_coords: Optional[Tuple[float, float]] = None,
-            initial_orientation: Optional[float] = None,
-            log_dir: str = "."
+            log_dir: str = ".",
+            marker_a: Optional[float] = None,
+            marker_b: Optional[float] = None
         ):
         # forbidden_area_centers: [(x, y), ...] in odom coordinates
         self.map_x = map_data.map_x
         self.map_y = map_data.map_y
         self.map_resolution = map_data.map_resolution
         self.map_height = map_data.map_height
+
+        self.initial_coords = (0, 0)
+        self.initial_orientation = 0
 
         self.availability_from_image = availability_from_image
         self.forbidden_area_centers = [] if forbidden_area_centers is None else forbidden_area_centers
@@ -380,6 +383,10 @@ class FilterCandidates:
         self.max_dist = 200
         self.min_dist = 50
         self.corridor_width = 75
+
+        # for marker filter
+        self.marker_a = marker_a
+        self.marker_b = marker_b
     
     def save_traj_map(self, log_dir: str = "."):
         plt.imshow(self.traj_forbidden_map, cmap='gray')
@@ -398,6 +405,55 @@ class FilterCandidates:
             score_map[distances < self.min_dist] = 10
         score_map[distances > self.max_dist * 2] = 10
         return score_map
+    
+    def marker_filter(
+            self, 
+            current_point: np.ndarray, 
+            orientation, 
+            candidates: np.ndarray, 
+            initial_orientation: float
+        ) -> np.ndarray:
+        # if marker is detected, set the area defined by the following conditions as forbidden area
+        # the area behind the marker
+        # i.e., the area that is in front of the current point and behind the marker
+        # behind the marker: parallel to the initial pose of the robot and 3m away from the marker
+
+        # debug; 900 < x < 1200 -> consider marker is detected
+        # if 900 < current_point[0] < 1200:
+        #     self.availability_from_image = {
+        #         "front_marker": True,
+        #         "left_marker": False,
+        #         "right_marker": False,
+        #         "front_available": False,
+        #         "left_available": False,
+        #         "right_available": False,
+        #     }
+
+        if self.availability_from_image is None:
+            return np.zeros(candidates.shape[0])
+        
+        if self.availability_from_image["front_marker"]:
+            if self.marker_a is None:
+                # get the point 3m away from the current point in the direction of the initial orientation
+                dist_to_marker = 100
+                marker_point = np.array([current_point[0] + dist_to_marker * np.sin(initial_orientation), current_point[1] + dist_to_marker * np.cos(initial_orientation)])
+                # get the direction of the marker
+                marker_direction = initial_orientation + np.pi
+                
+                # calculate the line equation of the boundary of the forbidden area
+                # y = ax + b
+                self.marker_a = np.tan(marker_direction)
+                self.marker_b = marker_point[1] - self.marker_a * marker_point[0]
+        if self.marker_a is not None and self.marker_b is not None:
+            # set the area behind the marker as forbidden area
+            # i.e., set 100 for the points that are in the forbidden area in the self.avail_map
+            scores = np.zeros(candidates.shape[0])
+            for i, candidate in enumerate(candidates):
+                if candidate[1] > self.marker_a * candidate[0] + self.marker_b:
+                    scores[i] = 10
+            return scores
+        else:
+            return np.zeros(candidates.shape[0])
     
     def availability_filter(
             self, current_point: np.ndarray, orientation, candidates: np.ndarray
@@ -490,6 +546,9 @@ class FilterCandidates:
     def initial_pose_filter(self, candidates: np.ndarray, initial_coords: Tuple[float, float], initial_orientation: float) -> np.ndarray:
         # coords: (n, 2); n: number of coordinates
         # score 1 for the points that are in the forbidden area
+        self.initial_coords = initial_coords
+        self.initial_orientation = initial_orientation
+
         score_map = np.zeros(candidates.shape[0])
         initial_coords_in_map = convert_odom_to_map_batch(np.array([initial_coords]), self.map_x, self.map_y, self.map_resolution, self.map_height)[0]
         initial_coords_in_map = initial_coords_in_map[::-1].astype(int)
@@ -533,7 +592,9 @@ class FilterCandidates:
         else:
             initial_pose_filter = np.zeros(candidates.shape[0])
         
-        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter + initial_pose_filter
+        marker_filter = self.marker_filter(current_point, orientation, candidates, self.initial_orientation)
+        
+        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter + initial_pose_filter + marker_filter
         return score_map
         
 
@@ -554,7 +615,9 @@ def set_next_point_based_on_skeleton(
         forbidden_centers: Optional[List[Tuple[float, float]]] = None,
         initial_coords: Optional[Tuple[float, float]] = None,
         initial_orientation: Optional[float] = None,
-        follow_initial_orientation: bool = True
+        follow_initial_orientation: bool = True,
+        marker_a: Optional[float] = None,
+        marker_b: Optional[float] = None
     ):
     print(f"map data: map_x: {map_x}, map_y: {map_y}, map_resolution: {map_resolution}, map_height: {map_height}")
     orientation = np.pi / 2 + orientation  # flip x axis
@@ -582,9 +645,9 @@ def set_next_point_based_on_skeleton(
         # },
         forbidden_area_centers=forbidden_centers,
         initial_pose_filter=follow_initial_orientation,
-        initial_coords=initial_coords,
-        initial_orientation=initial_orientation,
-        log_dir=log_dir
+        log_dir=log_dir,
+        marker_a=marker_a,
+        marker_b=marker_b
     )
     if do_trajectory_filter:
         cand_filter.save_traj_map(log_dir)
@@ -621,6 +684,9 @@ def set_next_point_based_on_skeleton(
         current_point=coords[-1], candidates=map_data.intersection_points,
         orientation=orientation[-1]
     )
+    # save current coords as txt
+    np.savetxt(f"{log_dir}/current_coords.txt", coords[-1])
+    
     cand_score = (cand_score + 1) * 100
     filtered_map = np.zeros(map_data.highlighted_map.shape)
     filtered_map[map_data.intersection_points[:, 0], map_data.intersection_points[:, 1]] = cand_score
@@ -705,7 +771,7 @@ def set_next_point_based_on_skeleton(
     sampled_point_in_odom = [convert_map_to_odom(point[0][1], point[0][0], map_x, map_y, map_resolution, map_height) for point in sampled_points]
     sampled_directions = [point[1] for point in sampled_points]
     sampled_points_and_directions = [[[point[0], point[1]], direction] for point, direction in zip(sampled_point_in_odom, sampled_directions)]
-    return sampled_points_and_directions, cand_filter.forbidden_area_centers, current_coords_odom, orientation[-1], map_data.costmap
+    return sampled_points_and_directions, cand_filter.forbidden_area_centers, current_coords_odom, orientation[-1], map_data.costmap, cand_filter.marker_a, cand_filter.marker_b
 
 
 def main(
@@ -719,6 +785,8 @@ def main(
         initial_coords: Optional[Tuple[float, float]] = None,
         initial_orientation: Optional[float] = None,
         follow_initial_orientation: bool = True,
+        marker_a: Optional[float] = None,
+        marker_b: Optional[float] = None
     ) -> Optional[Tuple[float, float]]:
     """
     main function to get the next point based on the local map
@@ -792,7 +860,7 @@ def main(
     map_data = np.load(f"{log_dir}/local_costmap.npy")
     # next_point = set_next_point(map_data, orientation, coordinates, map_resolution, map_x, map_y, map_height)
     # print(f"Next point: {next_point}")
-    output_point, forbidden_centers, current_coords, current_orientation, costmap = set_next_point_based_on_skeleton(
+    output_point, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = set_next_point_based_on_skeleton(
         map_data, orientation, coordinates, 
         map_resolution, map_x, map_y, map_height, 
         do_dist_filter=do_dist_filter, 
@@ -804,9 +872,11 @@ def main(
         forbidden_centers=forbidden_centers,
         initial_coords=initial_coords,
         initial_orientation=initial_orientation,
-        follow_initial_orientation=follow_initial_orientation
+        follow_initial_orientation=follow_initial_orientation,
+        marker_a=marker_a,
+        marker_b=marker_b
     )
-    return output_point, forbidden_centers, current_coords, current_orientation, costmap
+    return output_point, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b
 
 
 if __name__ == "__main__":    
