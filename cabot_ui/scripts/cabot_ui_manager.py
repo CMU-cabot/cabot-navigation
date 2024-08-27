@@ -61,6 +61,8 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
+from cabot_common import vibration
+
 
 
 class CabotUIManager(NavigationInterface, object):
@@ -522,23 +524,45 @@ class CabotUIManager(NavigationInterface, object):
     def _process_exploration_event(self, event):
         if event.type != ExplorationEvent.TYPE:
             return
-
+        in_conversation = self._exploration.get_conversation_control()
+        in_button_control = self._exploration.get_button_control()
+        
         if event.subtype == "front":
-            self._interface.exploring_direction("front")
-            self._exploration.send_query("direction","front")
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("front")
+                self._interface.vibrate(vibration.FRONT)
+                self._exploration.send_query("direction","front")
+            else:
+                # speed up
+                self.speed_menu.prev()
+                e = NavigationEvent("sound", "SpeedUp")
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
+                
         elif event.subtype == "back":
-            self._interface.exploring_direction("back")
-            self._exploration.send_query("direction","back")
-        elif event.subtype == "left":
-            self._interface.exploring_direction("left")
-            self._exploration.send_query("direction","left")
-        elif event.subtype == "right":
-            self._interface.exploring_direction("right")
-            self._exploration.send_query("direction","right")
-        elif event.subtype == "button_control" or event.subtype == "startchat":
-            in_conversation = self._exploration.get_conversation_control()
-            in_button_control = self._exploration.get_button_control()
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("back")
+                self._exploration.send_query("direction","back")
+            else:
+                # speed down
+                self.speed_menu.next()
+                e = NavigationEvent("sound", "SpeedDown")
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
 
+        elif event.subtype == "left":
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("left")
+                self._interface.vibrate(vibration.LEFT_TURN)
+                self._exploration.send_query("direction","left")
+        elif event.subtype == "right":
+            if in_conversation or in_button_control:
+                self._interface.exploring_direction("right")
+                self._interface.vibrate(vibration.RIGHT_TURN)
+                self._exploration.send_query("direction","right")
+        elif event.subtype == "button_control" or event.subtype == "startchat": 
             if event.subtype == "startchat":
                 if in_conversation:
                     self._logger.info("NavigationState: Finish chat")
@@ -547,12 +571,14 @@ class CabotUIManager(NavigationInterface, object):
                     self._exploration.set_conversation_control(False)
                 else:
                     self._logger.info("NavigationState: Start chat")
+                    self._interface.speak("")
                     self._interface.start_chat()
                     self.publish_event("startchat")  # use this to trigger smartphone conversation UI
                     self._exploration.set_conversation_control(True)
             else:
                 if in_button_control:
                     self._logger.info("NavigationState: Finish button control")
+                    self._interface.speak("")
                     self._interface.set_button_control(False)
                     self.publish_event("button_control")
                     self._exploration.set_button_control(False)
@@ -674,7 +700,7 @@ class EventMapper(object):
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return ExplorationEvent(subtype="wheel_switch")
-            elif event.button == cabot_common.button.BUTTON_CENTER:
+            elif event.holddown == cabot_common.button.BUTTON_CENTER:
                 return ExplorationEvent(subtype="startchat")
 
         return None

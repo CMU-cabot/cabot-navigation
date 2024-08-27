@@ -45,15 +45,15 @@ class Exploration():
     def get_pause_control(self):
         return self.pause
     
-    # TODO: either be in conversation or button control. Not both.
-
     def set_conversation_control(self, in_conversation):
+        self.in_button_control = False
         self.in_conversation = in_conversation
 
     def get_conversation_control(self):
         return self.in_conversation
     
     def set_button_control(self, in_button_control):
+        self.in_conversation = False
         self.in_button_control = in_button_control
 
     def get_button_control(self):

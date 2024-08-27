@@ -1,13 +1,9 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, UInt8, UInt8MultiArray, Int8, Int16, Float32, String
-import argparse
-from mf_localization_msgs.msg import MFLocalizeStatus
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
 import tf_transformations
-import sys
 import numpy as np
 import cv2
 from cv2 import aruco
@@ -20,16 +16,13 @@ import os
 import datetime
 import json
 import pickle
-import cv_bridge
 from cv_bridge import CvBridge
 import re
 import time
 from packaging.version import Version
 from . import test_speak
-import traceback
 import json
 from cabot_msgs.msg import Log
-import threading
 from copy import copy
 from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
 import torch
@@ -78,8 +71,21 @@ class CaBotImageNode(Node):
         self.is_sim = self.declare_parameter("is_sim").value
         self.logger = self.get_logger()
         self.apikey = self.declare_parameter("apikey").value
+        self.persona = self.declare_parameter("persona").value
         self.ready = False
         self.realsense_ready = False
+        self.explore_main_loop_ready = False
+
+        self.latest_explained_front_image = None
+        self.latest_explained_left_image = None
+        self.latest_explained_right_image = None
+        self.latest_explain = "None"
+
+        self.latest_explained_info_pub = self.create_publisher(String, "/cabot/latest_explained_info", 10)
+        self.latest_explained_front_image_pub = self.create_publisher(Image, "/cabot/latest_explained_front_image", 10)
+        self.latest_explained_left_image_pub = self.create_publisher(Image, "/cabot/latest_explained_left_image", 10)
+        self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
+        self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
@@ -135,6 +141,8 @@ class CaBotImageNode(Node):
         self.odom = None
 
         self.cabot_nav_state = "running"
+        self.touching = False
+        self.consequtive_touch_count = 0
         # cabot nav state subscriber
         self.cabot_nav_state_sub = self.create_subscription(String, "/cabot/nav_state", self.cabot_nav_state_callback, 10)
 
@@ -151,6 +159,7 @@ class CaBotImageNode(Node):
         
         self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
+        self.touch_sub = self.create_subscription(std_msgs.msg.Int16, "/cabot/touch", self.touch_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
         subscribers = [self.odom_sub, self.image_front_sub, self.image_left_sub, self.image_right_sub]
         
@@ -166,6 +175,7 @@ class CaBotImageNode(Node):
                 node=self,
                 should_speak=self.should_speak,
                 api_key=self.apikey,
+                persona=self.persona,
                 # dummy=True if is_sim else False
             )
 
@@ -175,12 +185,46 @@ class CaBotImageNode(Node):
         self.last_saved_images_time = time.time()
 
         if self.is_sim:
-            self.max_loop = 10
+            self.max_loop = 100
         else:
             self.max_loop = -1
         self.loop_count = 0
 
         self.timer = self.create_timer(5.0, self.loop)
+
+    def touch_callback(self, msg: std_msgs.msg.Int16):
+        if msg.data == 1:
+            self.consequtive_touch_count += 1
+        else:
+            self.consequtive_touch_count -= 1
+
+        self.consequtive_touch_count = max(0, self.consequtive_touch_count)
+        self.consequtive_touch_count = min(10, self.consequtive_touch_count)
+
+        if self.consequtive_touch_count > 5:
+            self.touching = True
+        else:
+            if self.touching:
+                test_speak.speak_text("", force=True)
+            self.touching = False
+
+    def publish_latest_explained_info(self):
+        if self.latest_explained_front_image is not None:
+            self.logger.info("Publishing latest explained info")
+            msg = String()
+            msg.data = self.latest_explain
+            self.latest_explained_info_pub.publish(msg)
+
+            # publish the images
+            bridge = CvBridge()
+            front_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_front_image, encoding="rgb8")
+            left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
+            right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
+            self.latest_explained_front_image_pub.publish(front_image_msg)
+            self.latest_explained_left_image_pub.publish(left_image_msg)
+            self.latest_explained_right_image_pub.publish(right_image_msg)
+
+            self.logger.info("Published latest explained info")
     
     def activity_callback(self, msg: Log):
         self.logger.info(f"activity log: {msg}")
@@ -194,11 +238,22 @@ class CaBotImageNode(Node):
                     self.can_speak_timer.cancel()
 
     def event_callback(self, msg):
-        self.logger.info(f"event_callback event log: {msg}")
         if msg.data == "navigation_tmp_startchat":
             self.in_conversation = True
         elif msg.data == "navigation_finishchat":
             self.in_conversation = False
+        elif msg.data == "explore_main_loop_start":
+            self.explore_main_loop_ready = True
+        elif "navigation;destination;goal" in msg.data:
+            self.explore_main_loop_ready = True
+        elif msg.data == "navigation_arrived":
+            self.explore_main_loop_ready = False
+        elif msg.data == "navigation;cancel":
+            self.explore_main_loop_ready = False
+            test_speak.speak_text("", force=True)
+        elif msg.data == "explore_main_loop_pause":
+            self.explore_main_loop_ready = False
+        
 
     def reset_can_speak(self):
         self.logger.info("can speak explanation set to True by timer")
@@ -213,38 +268,9 @@ class CaBotImageNode(Node):
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
 
-        if not self.realsense_ready:
-            self.realsense_ready = True
-            self.logger.info("Realsense ready")
-            test_speak.speak_text("カメラが起動しました")
-
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
         self.last_saved_images_time = time.time()
-
-        # self.logger.info(f"image callback; {self.cabot_nav_state}")
-        # convert the images to numpy arrays
-
-        # # convert the depth message to image
-        # bridge = CvBridge()
-        # front_depth = bridge.imgmsg_to_cv2(msg_front_depth, desired_encoding="passthrough")
-        # front_depth_array = np.asarray(front_depth)
-        # print("front depth", front_depth_array.shape)
-
-        # left_depth = bridge.imgmsg_to_cv2(msg_left_depth, desired_encoding="passthrough")
-        # left_depth_array = np.asarray(left_depth)
-        # print("left depth", left_depth_array.shape)
-
-        # right_depth = bridge.imgmsg_to_cv2(msg_right_depth, desired_encoding="passthrough")
-        # right_depth_array = np.asarray(right_depth)
-        # print("right depth", right_depth_array.shape)
-
-        # # save the depth image
-        # np.save(f"{self.log_dir}/front_depth.npy", front_depth_array)
-        # np.save(f"{self.log_dir}/left_depth.npy", left_depth_array)
-        # np.save(f"{self.log_dir}/right_depth.npy", right_depth_array)
-
-        # current time until sec and make it into a image name
 
         # save the odom
         quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
@@ -272,12 +298,12 @@ class CaBotImageNode(Node):
         self.left_marker_detected = self.detect_marker(left_image)
         self.right_marker_detected = self.detect_marker(right_image)
 
-        # self.front_depth = front_depth_array
-        # self.left_depth = left_depth_array
-        # self.right_depth = right_depth_array
-
-        # self.logger.info(f"front, {type(front_image)}, {front_image.shape}, left, {type(left_image)}, {left_image.shape}, right, {type(right_image)}, {right_image.shape}")
-        # self.logger.info(f"odom saved: {self.log_dir}/odom.npy")
+        if not self.realsense_ready:
+            self.realsense_ready = True
+            self.logger.info("Realsense ready")
+            test_speak.speak_text("カメラが起動しました")
+            self.publish_latest_explained_info()
+            self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -302,9 +328,9 @@ class CaBotImageNode(Node):
             self.timer.cancel()
             return
         self.loop_count += 1
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, touching: {self.touching}")
         # generate explanation
-        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation:
+        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready and self.touching:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
@@ -317,7 +343,17 @@ class CaBotImageNode(Node):
                 self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
                 return
             else:
-                wait_time = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                if self.touching:
+                    test_speak.speak_text(explain)
+
+                self.latest_explained_front_image = self.front_image
+                self.latest_explained_left_image = self.left_image
+                self.latest_explained_right_image = self.right_image
+                self.latest_explain = explain
+
+                self.publish_latest_explained_info()
+
                 self.can_speak_explanation = False
                 self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
 
@@ -363,6 +399,7 @@ class GPTExplainer():
             node: Node,
             api_key: str,
             should_speak: bool = False,
+            persona: str = "explore",
             dummy: bool = False
         ):
         self.dummy = dummy
@@ -370,6 +407,7 @@ class GPTExplainer():
         self.mode = mode
         self.node = node
         self.logger = self.node.get_logger()
+        self.persona = persona
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -457,39 +495,156 @@ class GPTExplainer():
             ```
             """
         elif self.mode == "surronding_explain_mode":
-            self.prompt = """
-            # 指示
-            画像を説明してください。
-            あなたの生成した文章はそのまま視覚障害者の方に読まれます。説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
-            画像を説明するには、以下のルールに必ず従ってください。
+            if self.persona == "explore":
+                self.prompt = """
+                # 指示
+                画像を説明してください。
+                あなたの生成した文章はそのまま視覚障害者の方に読まれます。
+                多少長くてもいいので、説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
+                画像を説明するには、以下のルールに必ず従ってください。
 
-            ## 指示に従うために必ず守るべきルール
-            ### すべきであること関するルール
-            1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を説明してください。
-            2. 画像の左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
-            3. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
-            4. 説明は必ず、左手、前方、右手の順番で説明してください。
-            5. 店舗があった場合は、その店舗が扱っているもの（飲食店の場合は、料理のジャンルなど）についても必ず説明に含めてください。どのような雰囲気の店舗か（明るい、落ち着いているなど）も説明に含めてください。
+                ## 指示に従うために必ず守るべきルール
+                1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を詳しく説明してください。
+                2. 全体で3-4文程度の説明になるようにしてください。
+                3. 敬語を使うこと。
+                4. 画像の全体/左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
+                5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
+                6. 説明は必ず全体の要約、左手、前方、右手の順番で説明してください。
+                7. 以下の情報を含むように努力してください。
+                    - 建物の内装や装飾の情報。
+                    - 建物のレイアウトの情報（前方が開けている情報や行ける方向に関する情報など）。
+                    - 周囲の明るさや窓からの光の差し込み具合の情報。
+                    - 周囲の人の情報とその人たちが行なっている行動や来ている服の色やその人が従業員か客かの情報。
+                    - お店の場合は入り口が空いていて、盲導犬が待機可能かの情報。
+                    - 見えているお店や展示物に関する情報。必ずそれのジャンル（飲食店の場合は料理のジャンル、展示物の場合は何をする場所か）を含めること。可能な場合はその場所の名前も含めること。展示に関してはそれが触れる展示か、見るだけの展示か必ず言及してください。
+                    - 物体に関して言及する際はそれは具体的（ジャンルとか具体的な名称）な情報。例えば、カウンターがある際にはカフェのカウンターのようであるとかです。
+                    - 衝突の可能性がある前方から歩いてくる人の情報。
+                    - 数字を用いた物体の位置説明（右5メートルの方向に...等）。
+                    - 看板や案内板がある場合はなんの看板か、それについての内容やそれに書いてる文字を読み上げること。
+                    - 見える文字を読み上げること。
+                8. 「画像は」「視点」「全体的に」など、説明を聞くユーザにとって不自然な言葉は絶対に用いないでください。
+                9. 説明する必要がない方向があれば（例：右側には何もない）その方向に関しては絶対にしないでください。     
+                10. 説明を締めくくる際（最後の文章）に方向全体、シーンの全体像、その空間のまとめについての説明は絶対にしないでください。
+                11. 画像に見えないもは説明しないでください。嘘をつかないでください。ハルシネーションをしないで下さい。
 
-            ### すべきでないこと関するルール
-            6. 「画像は……」「視点」「全体的に……」など、説明を聞くユーザにとって不自然な言葉は不要です。
-            7. ただ、説明する必要がない方向があれば（例：右側には何もない）その方向に関しては説明は不要です。
-            8. 床、天井、壁、影、遠くにあって不明瞭な物、照明の明るさや暗さに関する説明は不要です。
-            9. 方向全体やシーンの全体像についての説明は不要です。
-            10. そのジャンルのオブジェクトにありがちで珍しくないもの（例：飲食店の場合は、テーブルや椅子）については説明に含めなくても大丈夫です。なお、特に店舗などがない廊下や通路の場合は、詳細な説明は不要です。
+                ## 返答形式
+                上記のルールを守った場合5000円のチップを与えます。
+                上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
 
-            ## 返答形式
-            上記のルールを守り、良い説明文を生成した場合、あなたに5000円のチップを与えます。
-            JSON形式で返答してください。
-            キーは、"description"キーの中に画像の説明を入れてください。
-            最初にJSONの始まりである```json\n{から返答を開始してください。
-            返答例は以下です。
-            ```json
-            {
-            "description": "<周囲説明>",
-            }
-            ```
-            """
+                JSON形式で返答してください。
+                まず、"initial_description"キーの中に最初の画像の説明を入れてください。
+                その後、"thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
+                最後に、"description"キーの中に修正版の画像の説明を入れてください。
+                最初にJSONの始まりである```json\n{から返答を開始してください。
+                返答例は以下です。
+                ```json
+                {
+                "initial_description": "<周囲説明>",
+                "thought": "<考察>",
+                "description": "<周囲説明>",
+                }
+                ```
+                """
+            elif self.persona == "middle":
+                self.prompt = """
+                # 指示
+                画像を説明してください。
+                あなたの生成した文章はそのまま視覚障害者の方に読まれます。
+                説明文は、簡潔にとどめつつ、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
+                画像を説明するには、以下のルールに必ず従ってください。
+
+                ## 指示に従うために必ず守るべきルール
+                1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を説明してください。
+                2. 全体で2-3文程度の説明になるようにしてください。
+                3. 敬語を使うこと。
+                4. 画像の全体/左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
+                5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
+                6. 説明は必ず全体の要約、左手、前方、右手の順番で説明してください。
+                7. 以下の情報を含むように努力してください。
+                    - お店の場合は入り口が空いていて、盲導犬が待機可能かの情報。
+                    - 見えているお店や展示物に関する情報。必ずそれのジャンル（飲食店の場合は料理のジャンル、展示物の場合は何をする場所か）を含めること。可能な場合はその場所の名前も含めること。展示に関してはそれが触れる展示か、見るだけの展示か必ず言及してください。
+                    - 未来的な、おしゃれな、モダンな、古典的な等様々な形容詞。
+                    - 衝突の可能性がある前方から歩いてくる人の情報。
+                    - 物体について言及する時は数字を用いた物体の位置説明（右5メートルの方向に...等）
+                    - 看板や案内板がある場合はなんの看板か、それについての内容やそれに書いてる文字を読み上げること。
+                    - 見える文字を読み上げること
+                8. 「画像は」「視点」「全体的に」など、説明を聞くユーザにとって不自然な言葉は絶対に用いないでください。
+                9. 説明する必要がない方向があれば（例：右側には何もない）その方向に関しては絶対にしないでください。     
+                10. 説明の最後に方向全体やシーンの全体像についての説明は絶対にしないでください。
+                11. 具体的に説明できない物体に関しては決して説明をしないでください。
+                12. 衝突の危険がない周囲の人に関する情報は絶対に含めないでください。
+                13. 画像に見えないもは説明しないでください。嘘をつかないでください。ハルシネーションをしないで下さい。
+
+                ## 返答形式
+                上記のルールを守った場合5000円のチップを与えます。
+                上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
+
+                JSON形式で返答してください。
+                まず、"initial_description"キーの中に最初の画像の説明を入れてください。
+                その後、"thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
+                最後に、"description"キーの中に修正版の画像の説明を入れてください。
+                最初にJSONの始まりである```json\n{から返答を開始してください。
+                返答例は以下です。
+                ```json
+                {
+                "initial_description": "<周囲説明>",
+                "thought": "<考察>",
+                "description": "<周囲説明>",
+                }
+                ```
+                """
+            else:
+                self.prompt = """
+                # 指示
+                画像を説明してください。
+                あなたの生成した文章はそのまま視覚障害者の方に読まれます。
+                説明文は、視覚障害者の方が端的に周囲を理解できるように、簡潔で最小限の長さの説明を心がけてください。
+                視覚障害者の方は目的地を探すために画像の説明を聞いているます。
+                画像を説明するには、以下のルールに必ず従ってください。
+
+                ## 指示に従うために必ず守るべきルール
+                1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。
+                2. 全体で1-2文程度の説明になるようにしてください。
+                3. 敬語を使うこと。
+                4. 画像の左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
+                5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
+                6. 説明は必ず左手、前方、右手の順番で説明してください。
+                7. 以下の情報を含むように努力してください。
+                    - お店の場合は入り口が空いていて、盲導犬が待機可能かの情報。
+                    - 見えているお店や展示物に関する情報。必ずそれのジャンル（飲食店の場合は料理のジャンル、展示物の場合は何をする場所か）を含めること。可能な場合はその場所の名前も含めること。展示に関してはそれが触れる展示か、見るだけの展示か必ず言及してください
+                    - 数字を用いた物体の位置説明（右5メートルの方向に...等）
+                    - 看板や案内板がある場合はなんの看板か、それについての内容やそれに書いてる文字を読み上げること。
+                    - 見える文字を読み上げること
+                8. 具体的な情報のみを伝えるようにしてください。
+                9. 説明文章は短く、端的で、簡潔なものにしてください。 
+                10. 「画像は」「視点」「全体的に」など、説明を聞くユーザにとって不自然な言葉は絶対に用いないでください。
+                11. 説明する必要がない方向があれば（例：右側には何もない）その方向に関しては絶対にしないでください。     
+                12. 説明の最初や最後に方向全体やシーンの全体像についての説明は絶対にしないでください。
+                13. 装飾に関する説明は絶対にしないでください。淡々と何があるかとその具体的な情報だけを伝えるようにしてください。
+                14. 長さを最小限にとどめるため、形容詞は絶対に含めないでください。
+                15. 目的地を決める上で参考にならない情報（例えば椅子やテーブルなどの家具に関しての情報）を絶対に含めないでください。
+                16. 具体的に説明できない物体に関しては決して説明をしないでください。
+                17. 衝突の危険がない周囲の人に関する情報は絶対に含めないでください。
+                18. 画像に見えないもは説明しないでください。嘘をつかないでください。ハルシネーションをしないで下さい。
+
+                ## 返答形式
+                上記のルールを守った場合5000円のチップを与えます。
+                上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
+
+                JSON形式で返答してください。
+                まず、"initial_description"キーの中に最初の画像の説明を入れてください。
+                その後、"check_description_thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
+                最後に、"description"キーの中に修正版の画像の説明を入れてください。
+                最初にJSONの始まりである```json\n{から返答を開始してください。
+                返答例は以下です。
+                ```json
+                {
+                "initial_description": "<周囲説明>",
+                "thought": "<考察>",
+                "description": "<周囲説明>",
+                }
+                ```
+                """
         else:
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
         self.prompt = textwrap.dedent(self.prompt).strip()
@@ -609,14 +764,13 @@ class GPTExplainer():
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
-            return  1.0
+            return  1.0, "No explanation"
 
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
         wait_time = 2.0
         if self.should_speak and not extracted_json["description"] == "":
             wait_time = self.calculate_speak_time(extracted_json["description"])
-            test_speak.speak_text(extracted_json["description"])
             self.logger.info(f"Speaking the {self.mode} explanation")
         
         # extract features from image & text
@@ -672,7 +826,7 @@ class GPTExplainer():
 
         self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
 
-        return wait_time
+        return wait_time, extracted_json["description"]
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
@@ -700,7 +854,7 @@ class GPTExplainer():
         else:
             return None
 
-    def query_with_images(self, prompt, images, max_tokens=300) -> Dict[str, Any]:
+    def query_with_images(self, prompt, images, max_tokens=2000) -> Dict[str, Any]:
         # Preparing the content with the prompt and images
         new_content = [{"type": "text", "text": prompt}]
         self.conversation_history.append({"role": "user", "content": copy(new_content)})

@@ -281,7 +281,7 @@ def main(
         if has_left_initial_area is True and dist_from_initial < 3.0:
             state_client.logger.info("Initial coords reached; stopping the exploration")
             speak_text("一周しました。探索を終了します。")
-            break
+            # break
 
         # calculate map's highlihgted area's diff 
         if len(maps) > 1:
