@@ -80,9 +80,9 @@ class ExplorationChatServer(Node):
             4. "search"の場合、"target_location"キーにユーザがいきたい場所を入れてください。
             5. "direction"の場合、"target_direction"キーにユーザがいきたい方向を入れてください。
             6. "simple_conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
-            7. "image_conversation"のばあい、"target_location"と"target_direction"のキーは入れないでください。
-            7. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
-            8. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
+            7. "image_conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
+            8. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
+            9. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
 
             例：
             入力：木製の展示に行きたいわ
@@ -168,7 +168,7 @@ class ExplorationChatServer(Node):
         self.prompt_conversation = """
         視覚障害者の方からの質問に対して、適切な返答を生成してください。
         これまであなたが伝えたことは次のようになってます。：%s
-        ユーザが言ったこと：%s
+
         JSON形式で返答してください。
         "answer"キーに返答を入れてください。
         "finish"キーには会話が終わったかどうかを入れてください。例えば相手が「ありがとう」と言った場合には"finish"にtrueを入れてください。
@@ -207,6 +207,9 @@ class ExplorationChatServer(Node):
             "answer": "<あなた返答>",
             "finish": true,
         }
+
+        ユーザが言ったこと：%s
+        これからJSON形式で返答してください。
 
         """
 
@@ -310,6 +313,9 @@ class ExplorationChatServer(Node):
                 except Exception as e:
                     print(f"Error: {e}")
                     res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
+
+                self.logger.info("input: " + gpt_input)
+                self.logger.info(f"openai response: {res_json}")
 
                 # $ curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'
                 # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerprint":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
