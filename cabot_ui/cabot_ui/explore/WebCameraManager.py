@@ -1,5 +1,6 @@
 import cv2
 import os
+import time
 
 class WebCameraManager:
     def __init__(self, id=0, logger=None, log_dir=None):
@@ -19,6 +20,7 @@ class WebCameraManager:
         for i in range(10):
             frame = self.get_frame()
             cv2.imwrite(os.path.join(log_dir, f"frame_{i}.jpg"), frame)
+            time.sleep(2)
 
     def get_frame(self):
         ret, frame = self.cap.read()
