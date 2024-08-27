@@ -229,6 +229,8 @@ class CaBotImageNode(Node):
             left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
             right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
             if self.webcamera_image is not None:
+                # make the resolution smaller
+                self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
                 webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
             self.latest_explained_front_image_pub.publish(front_image_msg)
             self.latest_explained_left_image_pub.publish(left_image_msg)
@@ -253,7 +255,7 @@ class CaBotImageNode(Node):
             self.in_conversation = True
         elif msg.data == "navigation_finishchat":
             self.in_conversation = False
-        elif msg.data == "explore_main_loop_start":
+        elif msg.data == "navigation_main_loop_start":
             self.explore_main_loop_ready = True
         elif "navigation;destination;goal" in msg.data:
             self.explore_main_loop_ready = True

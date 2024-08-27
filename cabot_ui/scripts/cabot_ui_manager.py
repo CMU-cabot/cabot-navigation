@@ -522,12 +522,17 @@ class CabotUIManager(NavigationInterface, object):
             self._navigation.set_pause_control(False)
 
     def _process_exploration_event(self, event):
+        self._logger.info(f"process_exploration_event {str(event)}")
         if event.type != ExplorationEvent.TYPE:
             return
         in_conversation = self._exploration.get_conversation_control()
         in_button_control = self._exploration.get_button_control()
+
+        try:
+            self._logger.info(f"[CabotUIManager] event type: {event.type}; subtype: {event.subtype}, State: in_conversation={in_conversation}, in_button_control={in_button_control}")
+        except Exception as e:
+            self._logger.error(f"[CabotUIManager] event {event}")
         
-        self._logger.info(f"[CabotUIManager] event type: {event.type}; subtype: {event.subtype}, State: in_conversation={in_conversation}, in_button_control={in_button_control}")
         if event.subtype == "front":
             if in_conversation or in_button_control:
                 self._interface.exploring_direction("front")

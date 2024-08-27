@@ -64,7 +64,7 @@ class ExplorationMainLoop(Node):
         keyboard = False
         debug = False
 
-        self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_start")) # TODO: move this inside main_loop
+        self.event_pub.publish(std_msgs.msg.String(data="navigation_main_loop_start")) # TODO: move this inside main_loop
         # print all the parameters
         self.logger.info(f"dist_filter: {dist_filter}")
         self.logger.info(f"forbidden_area_filter: {forbidden_area_filter}")
