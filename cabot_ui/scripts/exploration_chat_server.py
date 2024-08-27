@@ -44,6 +44,9 @@ class ExplorationChatServer(Node):
         self.latest_explained_left_image_sub = self.create_subscription(Image, "/cabot/latest_explained_left_image", self.latest_explained_left_image_callback, 10)
         self.latest_explained_left_image = None
 
+        self.latest_explained_webcam_image_sub = self.create_subscription(Image, "/cabot/latest_web_camera_image", self.latest_explained_webcam_image_callback, 10)
+        self.latest_explained_webcam_image = None
+
         self.dir_to_jp = {
             "front": "前",
             "left": "左",
@@ -192,6 +195,13 @@ class ExplorationChatServer(Node):
         cv2.imwrite(os.path.join(self.log_dir, "latest_explained_left_image.jpg"), cv_image)
         self.logger.info("latest_explained_left_image is received")
 
+    def latest_explained_webcam_image_callback(self, msg):
+        bridge = CvBridge()
+        cv_image = bridge.imgmsg_to_cv2(msg, "rgb8")
+        self.latest_explained_webcam_image = cv_image
+        cv2.imwrite(os.path.join(self.log_dir, "latest_explained_webcam_image.jpg"), cv_image)
+        self.logger.info("latest_explained_webcam_image is received")
+
     def run_flask_app(self):
 
         app = self.create_app()
@@ -305,7 +315,16 @@ class ExplorationChatServer(Node):
             elif query_type == "question":
                 prompt_question = self.prompt_question % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer("question", self.apikey)
-                res_json = gpt_explainer.query_with_images(prompt_question, [self.latest_explained_left_image, self.latest_explained_front_image, self.latest_explained_right_image])
+                images = []
+                if self.latest_explained_front_image is not None:
+                    images.append(self.latest_explained_front_image)
+                if self.latest_explained_right_image is not None:
+                    images.append(self.latest_explained_right_image)
+                if self.latest_explained_left_image is not None:
+                    images.append(self.latest_explained_left_image)
+                if self.latest_explained_webcam_image is not None:
+                    images.append(self.latest_explained_webcam_image)
+                res_json = gpt_explainer.query_with_images(prompt_question, images)
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 res_text = [answer]
             else:
