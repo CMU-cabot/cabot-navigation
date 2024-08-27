@@ -722,13 +722,15 @@ class GPTExplainer():
             front_image = self.resize_images(front_image, max_width=768)
             left_image = self.resize_images(left_image, max_width=768)
             right_image = self.resize_images(right_image, max_width=768)
+            if not webcamera_image is None:
+                webcamera_image = self.resize_images(webcamera_image, max_width=768)
 
             # generate explanation from the three-view images
             front_image_with_text = self.add_text_to_image(front_image, "Front")
             left_image_with_text = self.add_text_to_image(left_image, "Left")
             right_image_with_text = self.add_text_to_image(right_image, "Right")
             if not webcamera_image is None:
-                webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View")
+                webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
 
             images = [front_image_with_text, left_image_with_text, right_image_with_text]
 
@@ -927,9 +929,9 @@ class GPTExplainer():
         
         return res_json
 
-    def add_text_to_image(self, image: np.ndarray, text: str):
+    def add_text_to_image(self, image: np.ndarray, text: str, fontscale=1):
         # putText params: image, text, position, font, fontScale, color, thickness, lineType
-        cv2.putText(image, text, (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.putText(image, text, (25, 25), cv2.FONT_HERSHEY_SIMPLEX, fontscale, (0, 0, 255), 2, cv2.LINE_AA)
         return image
 
 def main(args=None):
