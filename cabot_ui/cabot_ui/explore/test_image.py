@@ -724,7 +724,8 @@ class GPTExplainer():
             left_image = self.resize_images(left_image, max_width=768)
             right_image = self.resize_images(right_image, max_width=768)
             if not webcamera_image is None:
-                webcamera_image = self.resize_images(webcamera_image, max_width=768)
+                pass
+                # webcamera_image = self.resize_images(webcamera_image, max_width=768)
 
             # generate explanation from the three-view images
             front_image_with_text = self.add_text_to_image(front_image, "Front")
