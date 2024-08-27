@@ -336,7 +336,7 @@ class ExplorationChatServer(Node):
                 print("failed to extract JSON")
                 res_text = ["すみません、もう一度言っていただいても良いですか。"]
             elif query_type == "conversation":
-                prompt_conversation = self.prompt_conversation % (self.latest_explained_info, query_string)
+                prompt_conversation = copy(self.prompt_conversation) % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer(self.apikey)
                 images = []
                 if self.latest_explained_front_image is not None:
@@ -351,6 +351,9 @@ class ExplorationChatServer(Node):
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 finish = res_json["choices"][0]["message"]["content"]["finish"]
                 res_text = [answer]
+
+                self.latest_explained_info += "AIアシスタント: " + answer
+                self.logger.info(f"query_string: {prompt_conversation}")
 
                 if finish:
                     navi = True
