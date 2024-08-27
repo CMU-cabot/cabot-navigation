@@ -288,10 +288,7 @@ def main(
             current_map_area = np.sum(maps[-1] > 0)
             prev_map_area = np.sum(maps[-2] > 0)
             diff = current_map_area - prev_map_area
-            print("=====================")
-            print(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
-            speak_text(f"前回から、新たに探索されたエリアが{diff / prev_map_area * 100:.2f}%増加しました。")
-            print("=====================")
+            state_client.logger.info(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
 
 
         # pick up one direction
