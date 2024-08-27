@@ -5,6 +5,7 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     log_dir = LaunchConfiguration('log_dir')
     apikey = LaunchConfiguration('apikey')
+    is_sim = False
 
     return LaunchDescription([    
         # main code
@@ -16,7 +17,7 @@ def generate_launch_description():
             parameters=[
                 {"log_dir": log_dir},
                 {"dist_filter": True},
-                {"is_sim": True},
+                {"is_sim": is_sim},
             ],
         ),
 
@@ -33,7 +34,7 @@ def generate_launch_description():
                 {'debug': False},
                 {'once': False},
                 {'no_explain_mode': False},
-                {'is_sim': False},
+                {'is_sim': is_sim},
                 {'apikey': apikey},
                 {'persona': 'explore'}
                 
