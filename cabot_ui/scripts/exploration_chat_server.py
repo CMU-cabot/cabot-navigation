@@ -60,10 +60,11 @@ class ExplorationChatServer(Node):
 
         self.prompt = """
             ### 指示
-            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"conversation"、です。
+            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"simple_conversation"、"image_conversation"です。
             ユーザが特定の場所に行きたい場合、"search"として分類してください。
             ユーザが特定の方向に行きたい場合、"direction"として分類してください。
-            どちらにも当てはまらない場合や、どちらかに分類されるけれども行く場所や方向が特定できない場合、"failed"として分類してください。
+            ユーザが簡単な会話をしたい場合、"simple_conversation"として分類してください。単にカジュアルな会話や「ありがとう」などの挨拶が含まれます。
+            ユーザが画像を使って会話をしたい場合、"image_conversation"として分類してください。周囲の状況に関して質問された場合、"simple_conversation"として分類してください。
 
             次に、"search"として分類された場合、ユーザから与えられた文字列からユーザがいきたい場所("target_location")を抽出してください。
 
@@ -78,7 +79,8 @@ class ExplorationChatServer(Node):
             3. その後"classification"キーに"search"、"direction"、"conversation"のいずれかを入れてください。
             4. "search"の場合、"target_location"キーにユーザがいきたい場所を入れてください。
             5. "direction"の場合、"target_direction"キーにユーザがいきたい方向を入れてください。
-            6. "conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
+            6. "simple_conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
+            7. "image_conversation"のばあい、"target_location"と"target_direction"のキーは入れないでください。
             7. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
             8. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
 
@@ -119,21 +121,42 @@ class ExplorationChatServer(Node):
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "conversation",
+                "classification": "image_conversation",
             }
 
             入力：周りに何があるか教えて。
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "conversation",
+                "classification": "image_conversation",
             }
 
             入力：さっきのことについてもっと詳しく教えて。
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "conversation",
+                "classification": "image_conversation",
+            }
+
+            入力：ありがとう
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "simple_conversation",
+            }
+
+            入力：もういいよ
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "simple_conversation",
+            }
+
+            入力：あなたは誰
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "simple_conversation",
             }
 
             <あなたが考察したこと>の中には、入力に対しての考察を入れてください。例えば、入力が"木製の展示に行きたいわ"の場合、"木製の展示"が目的地であると考察してください。
@@ -303,9 +326,8 @@ class ExplorationChatServer(Node):
                         query_target = query_json("target_direction", "unknown")
                         query_string = query_target
                         print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
-                    elif query_type == "conversation":
+                    elif "conversation" in query_type:
                         # make user input quert string
-                        query_type = "conversation"
                         query_target = "conversation"
                         query_string = gpt_input
                     else:
@@ -335,18 +357,19 @@ class ExplorationChatServer(Node):
             elif query_type == "failed":
                 print("failed to extract JSON")
                 res_text = ["すみません、もう一度言っていただいても良いですか。"]
-            elif query_type == "conversation":
+            elif "conversation" in query_type:
                 prompt_conversation = copy(self.prompt_conversation) % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer(self.apikey)
                 images = []
-                if self.latest_explained_front_image is not None:
-                    images.append(self.latest_explained_front_image)
-                if self.latest_explained_right_image is not None:
-                    images.append(self.latest_explained_right_image)
-                if self.latest_explained_left_image is not None:
-                    images.append(self.latest_explained_left_image)
-                if self.latest_explained_webcam_image is not None:
-                    images.append(self.latest_explained_webcam_image)
+                if query_type == "image_conversation":
+                    if self.latest_explained_front_image is not None:
+                        images.append(self.latest_explained_front_image)
+                    if self.latest_explained_right_image is not None:
+                        images.append(self.latest_explained_right_image)
+                    if self.latest_explained_left_image is not None:
+                        images.append(self.latest_explained_left_image)
+                    if self.latest_explained_webcam_image is not None:
+                        images.append(self.latest_explained_webcam_image)
                 res_json = gpt_explainer.query_with_images(prompt_conversation, images)
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 finish = bool(res_json["choices"][0]["message"]["content"]["finish"])
