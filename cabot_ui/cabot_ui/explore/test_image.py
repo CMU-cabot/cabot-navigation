@@ -342,9 +342,9 @@ class CaBotImageNode(Node):
             self.timer.cancel()
             return
         self.loop_count += 1
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, touching: {self.touching}")
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         # generate explanation
-        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready and self.touching:
+        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
