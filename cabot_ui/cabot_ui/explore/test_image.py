@@ -30,6 +30,7 @@ from .log_maker import log_image_and_gpt_response
 from .test_semantic import extract_image_feature, concat_features, extract_text_feature
 import std_msgs.msg
 from PIL import Image as PILImage
+from .WebCameraManager import WebCameraManager
 
 
 """
@@ -85,6 +86,7 @@ class CaBotImageNode(Node):
         self.latest_explained_front_image_pub = self.create_publisher(Image, "/cabot/latest_explained_front_image", 10)
         self.latest_explained_left_image_pub = self.create_publisher(Image, "/cabot/latest_explained_left_image", 10)
         self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
+        self.latest_web_camera_image_pub = self.create_publisher(Image, "/cabot/latest_web_camera_image", 10)
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
@@ -134,6 +136,8 @@ class CaBotImageNode(Node):
         self.right_image = None
         self.right_depth = None
 
+        self.webcamera_image = None
+
         self.front_marker_detected = False
         self.left_marker_detected = False
         self.right_marker_detected = False
@@ -142,6 +146,8 @@ class CaBotImageNode(Node):
 
         self.cabot_nav_state = "running"
         self.touching = False
+        if self.is_sim:
+            self.touching = True
         self.consequtive_touch_count = 0
         # cabot nav state subscriber
         self.cabot_nav_state_sub = self.create_subscription(String, "/cabot/nav_state", self.cabot_nav_state_callback, 10)
@@ -178,6 +184,8 @@ class CaBotImageNode(Node):
                 persona=self.persona,
                 # dummy=True if is_sim else False
             )
+        
+        self.web_camera_manager = WebCameraManager(logger=self.logger)
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
@@ -220,14 +228,17 @@ class CaBotImageNode(Node):
             front_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_front_image, encoding="rgb8")
             left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
             right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
+            if self.webcamera_image is not None:
+                webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
             self.latest_explained_front_image_pub.publish(front_image_msg)
             self.latest_explained_left_image_pub.publish(left_image_msg)
             self.latest_explained_right_image_pub.publish(right_image_msg)
+            if self.webcamera_image is not None:
+                self.latest_web_camera_image_pub.publish(webcamera_image_msg)
 
             self.logger.info("Published latest explained info")
     
     def activity_callback(self, msg: Log):
-        self.logger.info(f"activity log: {msg}")
         if msg.category == "cabot/interface" and msg.memo == "ready":
             self.ready = True
         elif msg.category == "ble speech request completed":
@@ -292,7 +303,8 @@ class CaBotImageNode(Node):
         
         self.front_image = front_image
         self.left_image = left_image
-        self.right_image = right_image        
+        self.right_image = right_image  
+        self.webcamera_image = self.web_camera_manager.get_frame()     
 
         self.front_marker_detected = self.detect_marker(front_image)
         self.left_marker_detected = self.detect_marker(left_image)
@@ -303,7 +315,8 @@ class CaBotImageNode(Node):
             self.logger.info("Realsense ready")
             test_speak.speak_text("カメラが起動しました")
             self.publish_latest_explained_info()
-            self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
+        
+        self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
@@ -343,7 +356,7 @@ class CaBotImageNode(Node):
                 self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
                 return
             else:
-                wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+                wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
                 if self.touching:
                     test_speak.speak_text(explain)
 
@@ -435,6 +448,7 @@ class GPTExplainer():
             self.prompt = """
             ### 指示
             画像を説明してください。
+            %s
             画像を説明するには、以下のルールに必ず従ってください。
 
             ### 指示に従うために必ず守るべきルール
@@ -464,6 +478,7 @@ class GPTExplainer():
             self.prompt = """
             ### 指示1
             与えられた画像から左/前/右に歩行可能か判断してください。
+            %s
             歩行可能かそうでないかの判断基準として以下を使用してください。
             また、いけるか行けないかの判断をする際には一度考えを口に出して言って、整理してください。
 
@@ -499,6 +514,7 @@ class GPTExplainer():
                 self.prompt = """
                 # 指示
                 画像を説明してください。
+                %s
                 あなたの生成した文章はそのまま視覚障害者の方に読まれます。
                 多少長くてもいいので、説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
                 画像を説明するには、以下のルールに必ず従ってください。
@@ -685,16 +701,18 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray) -> float:
+    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray, webcamera_image: np.ndarray) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
-        
+        use_initial_prompt = False
         if len(self.conversation_history) == 0:
             prompt = self.prompt
+            use_initial_prompt = True
         else:
             if self.mode == "semantic_map_mode" or self.mode == "intersection_detection_mode":
                 prompt = self.prompt
+                use_initial_prompt = True
                 self.conversation_history = []
             else:
                 prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは説明に含めないでください。前のレスポンスと同じようにJSON形式で返してください。"
@@ -709,8 +727,20 @@ class GPTExplainer():
             front_image_with_text = self.add_text_to_image(front_image, "Front")
             left_image_with_text = self.add_text_to_image(left_image, "Left")
             right_image_with_text = self.add_text_to_image(right_image, "Right")
+            if not webcamera_image is None:
+                webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View")
 
-            gpt_response = self.query_with_images(prompt, [left_image_with_text, front_image_with_text, right_image_with_text])
+            images = [front_image_with_text, left_image_with_text, right_image_with_text]
+
+            if not webcamera_image is None:
+                images.append(webcamera_image_with_text)
+                if use_initial_prompt:
+                    prompt = prompt % "画像は4枚あります。順番に左、前、右の画像と上の視点から撮影した広角の画像です。"
+            else:
+                if use_initial_prompt:
+                    prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
+
+            gpt_response = self.query_with_images(prompt, images)
             gpt_response["log_dir"] = self.log_dir
 
             # get front/left/right availability
