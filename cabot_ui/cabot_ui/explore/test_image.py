@@ -184,7 +184,7 @@ class CaBotImageNode(Node):
                 # dummy=True if is_sim else False
             )
         
-        self.web_camera_manager = WebCameraManager(logger=self.logger)
+        self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir)
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
