@@ -1,8 +1,8 @@
 import cv2
-
+import os
 
 class WebCameraManager:
-    def __init__(self, id=0, logger=None):
+    def __init__(self, id=0, logger=None, log_dir=None):
         # Initialize the camera
         self.cap = cv2.VideoCapture(id)  # 0 is usually the default camera
         if logger is not None:
@@ -15,6 +15,10 @@ class WebCameraManager:
             self.logger.info(f"Camera {id} is opened")
         else:
             self.logger.error(f"Camera {id} is not opened")
+
+        for i in range(10):
+            frame = self.get_frame()
+            cv2.imwrite(os.path.join(log_dir, f"frame_{i}.jpg"), frame)
 
     def get_frame(self):
         ret, frame = self.cap.read()
