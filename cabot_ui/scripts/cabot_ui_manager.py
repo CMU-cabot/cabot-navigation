@@ -527,6 +527,7 @@ class CabotUIManager(NavigationInterface, object):
         in_conversation = self._exploration.get_conversation_control()
         in_button_control = self._exploration.get_button_control()
         
+        self._logger.info(f"[CabotUIManager] event type: {event.type}; subtype: {event.subtype}, State: in_conversation={in_conversation}, in_button_control={in_button_control}")
         if event.subtype == "front":
             if in_conversation or in_button_control:
                 self._interface.exploring_direction("front")
@@ -563,7 +564,9 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.vibrate(vibration.RIGHT_TURN)
                 self._exploration.send_query("direction","right")
         elif event.subtype == "button_control" or event.subtype == "chat": 
+            self._logger.info(f"received event: {event.subtype}")
             if event.subtype == "chat":
+                self._logger.info("Processing Chat event")
                 if in_conversation:
                     self._logger.info("NavigationState: Finish chat")
                     self._interface.finish_chat()
@@ -576,6 +579,7 @@ class CabotUIManager(NavigationInterface, object):
                     self.publish_event("startchat")  # use this to trigger smartphone conversation UI
                     self._exploration.set_conversation_control(True)
             else:
+                self._logger.info("Processing Button Control event")
                 if in_button_control:
                     self._logger.info("NavigationState: Finish button control")
                     self._interface.speak("")
