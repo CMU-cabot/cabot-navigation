@@ -562,8 +562,8 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.exploring_direction("right")
                 self._interface.vibrate(vibration.RIGHT_TURN)
                 self._exploration.send_query("direction","right")
-        elif event.subtype == "button_control" or event.subtype == "startchat": 
-            if event.subtype == "startchat":
+        elif event.subtype == "button_control" or event.subtype == "chat": 
+            if event.subtype == "chat":
                 if in_conversation:
                     self._logger.info("NavigationState: Finish chat")
                     self._interface.finish_chat()
@@ -695,13 +695,13 @@ class EventMapper(object):
             if event.button == cabot_common.button.BUTTON_CENTER:
                 return ExplorationEvent(subtype="button_control")
             if event.button == cabot_common.button.BUTTON_DEBUG:
-                return ExplorationEvent(subtype="startchat")
+                return ExplorationEvent(subtype="chat")
             
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return ExplorationEvent(subtype="wheel_switch")
             elif event.holddown == cabot_common.button.BUTTON_CENTER:
-                return ExplorationEvent(subtype="startchat")
+                return ExplorationEvent(subtype="chat")
 
         return None
 

@@ -148,6 +148,43 @@ class ExplorationChatServer(Node):
         ユーザの質問：%s
         JSON形式で返答してください。
         "answer"キーに返答を入れてください。
+        "finish"キーには会話が終わったかどうかを入れてください。例えば相手が「ありがとう」と言った場合には"finish"にtrueを入れてください。
+
+        入力：さっきのことについてもっと詳しく教えて。
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": false,
+        }
+
+        入力：その展示は何色？
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": false,
+        }
+
+        入力：近くに飲食店ある？
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": false,
+        }
+
+        入力：ありがとう
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": True,
+        }
+
+        入力：またね
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": True,
+        }
+
         """
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
@@ -294,10 +331,10 @@ class ExplorationChatServer(Node):
 
             if query_string == "":
                 print("skip chat")
-                res_text = ["はい。行きたい場所や方向を指定してください。"]
+                res_text = ["はい。ご用件は何でしょう。"]
             elif query_type == "failed":
                 print("failed to extract JSON")
-                res_text = ["入力を理解できませんでした。もう一度入力してください。"]
+                res_text = ["すみません、もう一度言っていただいても良いですか。"]
             elif query_type == "conversation":
                 prompt_conversation = self.prompt_conversation % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer(self.apikey)
@@ -312,7 +349,13 @@ class ExplorationChatServer(Node):
                     images.append(self.latest_explained_webcam_image)
                 res_json = gpt_explainer.query_with_images(prompt_conversation, images)
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
+                finish = res_json["choices"][0]["message"]["content"]["finish"]
                 res_text = [answer]
+
+                if finish:
+                    navi = True
+                    dest_info = {"nodes": ""}
+                    self.publish_finish_chat()
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir_search)
