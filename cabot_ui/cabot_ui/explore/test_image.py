@@ -59,7 +59,6 @@ This script will output the current local costmap to `local_costmap.npy` file.
 
 class CaBotImageNode(Node):
     def __init__(self, use_left: bool = True, use_right: bool = True):
-        print("Initializing CaBotImageNode...")
         super().__init__("cabot_map_node")
 
         self.mode = self.declare_parameter("mode").value
@@ -279,6 +278,7 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
+        self.logger.info("[test_image; CaBotImageNode - image_callback] Image received")
 
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
@@ -439,7 +439,7 @@ class GPTExplainer():
         self.text_model.to(self.device)
         self.text_model.eval()
 
-        self.logger.info(f"Initializing GPTExplainer with api_key: {self.api_key}")
+        self.logger.info(f"Initializing GPTExplainer with api_key: {self.api_key[:3]}...{self.api_key[-3:]}")
 
         self.headers = {
             "Content-Type": "application/json",
@@ -943,10 +943,12 @@ def main(args=None):
     
     node = CaBotImageNode()
     try:
+        node.logger.info("Starting CaBotImageNode...")
         rclpy.spin(node)  # Keep the node spinning to process callbacks
     except KeyboardInterrupt:
         pass
     finally:
+        node.logger.info("Shutting down CaBotImageNode...")
         node.destroy_node()
         # if re_init:
         #     rclpy.shutdown()
