@@ -144,8 +144,8 @@ class ExplorationChatServer(Node):
         
         self.prompt_conversation = """
         視覚障害者の方からの質問に対して、適切な返答を生成してください。
-        これまであなたが伝えたことは次のようになってます。%s
-        ユーザの質問：%s
+        これまであなたが伝えたことは次のようになってます。：%s
+        ユーザが言ったこと：%s
         JSON形式で返答してください。
         "answer"キーに返答を入れてください。
         "finish"キーには会話が終わったかどうかを入れてください。例えば相手が「ありがとう」と言った場合には"finish"にtrueを入れてください。
@@ -175,14 +175,14 @@ class ExplorationChatServer(Node):
         出力：
         {
             "answer": "<あなた返答>",
-            "finish": True,
+            "finish": true,
         }
 
         入力：またね
         出力：
         {
             "answer": "<あなた返答>",
-            "finish": True,
+            "finish": true,
         }
 
         """
@@ -349,11 +349,12 @@ class ExplorationChatServer(Node):
                     images.append(self.latest_explained_webcam_image)
                 res_json = gpt_explainer.query_with_images(prompt_conversation, images)
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
-                finish = res_json["choices"][0]["message"]["content"]["finish"]
+                finish = bool(res_json["choices"][0]["message"]["content"]["finish"])
                 res_text = [answer]
 
-                self.latest_explained_info += "AIアシスタント: " + answer
+                self.latest_explained_info += answer
                 self.logger.info(f"query_string: {prompt_conversation}")
+                self.logger.info(f"finish: {finish}")
 
                 if finish:
                     navi = True
