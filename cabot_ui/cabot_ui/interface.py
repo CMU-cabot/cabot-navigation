@@ -203,7 +203,7 @@ class UserInterface(object):
 
     def start_navigation(self):
         self._activity_log("cabot/interface", "navigation", "start")
-        self.vibrate(vibration.FRONT)
+        # self.vibrate(vibration.FRONT)
         self.read_aloud_vibration(vibration.FRONT)
 
     def update_pose(self, **kwargs):
@@ -240,7 +240,7 @@ class UserInterface(object):
         self.last_notify_turn = self._node.get_clock().now()
         self._activity_log("cabot/interface", "turn angle", str(turn.angle))
         self._activity_log("cabot/interface", "notify", text)
-        self.vibrate(pattern)
+        # self.vibrate(pattern)
         self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
@@ -249,7 +249,7 @@ class UserInterface(object):
             vib = vibration.LEFT_DEV
 
         self._activity_log("cabot/interface", "human")
-        self.vibrate(pattern=vib)
+        # self.vibrate(pattern=vib)
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"))
 
     def have_arrived(self, goal):
@@ -319,7 +319,7 @@ class UserInterface(object):
 
     def elevator_opening(self):
         self._activity_log("cabot/interface", "navigation", "elevator opening")
-        self.vibrate(vibration.FRONT)
+        # self.vibrate(vibration.FRONT)
         self.speak(i18n.localized_string("ELEVATOR_IS_OPENING"))
 
     def floor_changed(self, floor):
@@ -332,7 +332,7 @@ class UserInterface(object):
 
     def queue_proceed(self):
         self._activity_log("cabot/interface", "queue", "proceed")
-        self.vibrate(vibration.FRONT)
+        # self.vibrate(vibration.FRONT)
 
     def please_pass_door(self):
         self._activity_log("cabot/interface", "navigation", "manual door")

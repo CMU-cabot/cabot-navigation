@@ -60,7 +60,7 @@ class ExplorationChatServer(Node):
 
         self.prompt = """
             ### 指示
-            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"question"、"failed"です。
+            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"conversation"、です。
             ユーザが特定の場所に行きたい場合、"search"として分類してください。
             ユーザが特定の方向に行きたい場合、"direction"として分類してください。
             どちらにも当てはまらない場合や、どちらかに分類されるけれども行く場所や方向が特定できない場合、"failed"として分類してください。
@@ -75,13 +75,12 @@ class ExplorationChatServer(Node):
             ### 指示に従うために必ず守るべきルール
             1. JSON形式で返答してください。
             2. まず一番最初に"thought"キーの中に入力に対しての考察を入れてください。
-            3. その後"classification"キーに"search"、"direction"、"question"、"failed"のいずれかを入れてください。
+            3. その後"classification"キーに"search"、"direction"、"conversation"のいずれかを入れてください。
             4. "search"の場合、"target_location"キーにユーザがいきたい場所を入れてください。
             5. "direction"の場合、"target_direction"キーにユーザがいきたい方向を入れてください。
-            6. "question"の場合、"target_location"と"target_direction"のキーは入れないでください。
-            7. "failed"の場合、"target_location"と"target_direction"のキーは入れないでください。
-            8. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
-            9. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
+            6. "conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
+            7. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
+            8. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
 
             例：
             入力：木製の展示に行きたいわ
@@ -120,35 +119,21 @@ class ExplorationChatServer(Node):
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "question",
+                "classification": "conversation",
             }
 
             入力：周りに何があるか教えて。
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "question",
+                "classification": "conversation",
             }
 
             入力：さっきのことについてもっと詳しく教えて。
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "question",
-            }
-
-            入力：うーん、どうしようかなぁ。木製の展示はさっき行ったしなぁ。
-            出力：
-            {
-                "thought": "<あなたが考察したこと>",
-                "classification": "failed",
-            }
-
-            入力：右と左どっちに行けばいいかなぁ
-            出力：
-            {
-                "thought": "<あなたが考察したこと>",
-                "classification": "failed",
+                "classification": "conversation",
             }
 
             <あなたが考察したこと>の中には、入力に対しての考察を入れてください。例えば、入力が"木製の展示に行きたいわ"の場合、"木製の展示"が目的地であると考察してください。
@@ -157,7 +142,7 @@ class ExplorationChatServer(Node):
             入力：
             """
         
-        self.prompt_question = """
+        self.prompt_conversation = """
         視覚障害者の方からの質問に対して、適切な返答を生成してください。
         これまであなたが伝えたことは次のようになってます。%s
         ユーザの質問：%s
@@ -171,6 +156,7 @@ class ExplorationChatServer(Node):
 
     def latest_explained_info_callback(self, msg):
         self.latest_explained_info = msg.data
+
         self.logger.info(f"latest_explained_info: {self.latest_explained_info}")
 
     def latest_explained_front_image_callback(self, msg):
@@ -280,10 +266,10 @@ class ExplorationChatServer(Node):
                         query_target = query_json("target_direction", "unknown")
                         query_string = query_target
                         print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
-                    elif query_type == "question":
+                    elif query_type == "conversation":
                         # make user input quert string
-                        query_type = "question"
-                        query_target = "question"
+                        query_type = "conversation"
+                        query_target = "conversation"
                         query_string = gpt_input
                     else:
                         query_type = "failed"
@@ -312,9 +298,9 @@ class ExplorationChatServer(Node):
             elif query_type == "failed":
                 print("failed to extract JSON")
                 res_text = ["入力を理解できませんでした。もう一度入力してください。"]
-            elif query_type == "question":
-                prompt_question = self.prompt_question % (self.latest_explained_info, query_string)
-                gpt_explainer = GPTExplainer("question", self.apikey)
+            elif query_type == "conversation":
+                prompt_conversation = self.prompt_conversation % (self.latest_explained_info, query_string)
+                gpt_explainer = GPTExplainer(self.apikey)
                 images = []
                 if self.latest_explained_front_image is not None:
                     images.append(self.latest_explained_front_image)
@@ -324,7 +310,7 @@ class ExplorationChatServer(Node):
                     images.append(self.latest_explained_left_image)
                 if self.latest_explained_webcam_image is not None:
                     images.append(self.latest_explained_webcam_image)
-                res_json = gpt_explainer.query_with_images(prompt_question, images)
+                res_json = gpt_explainer.query_with_images(prompt_conversation, images)
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 res_text = [answer]
             else:
@@ -372,11 +358,8 @@ class ExplorationChatServer(Node):
 class GPTExplainer():
     def __init__(
             self, 
-            node: Node,
             api_key: str,
-            dummy: bool = False
         ):
-        self.dummy = dummy
         self.api_key = api_key
         self.conversation_history = []
 
