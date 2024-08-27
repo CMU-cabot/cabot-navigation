@@ -39,31 +39,31 @@ class ExplorationMainLoop(Node):
 
         self.camera_ready = False
 
-        self.main(
-            dist_filter=self.dist_filter,
-            forbidden_area_filter=False,
-            trajectory_filter=False,
-            auto=True,
-            use_image=False,
-            log_dir=self.log_dir,
-            sim=self.is_sim,
-            keyboard=False,
-            debug=False
-        )
+        self.timer = self.create_timer(1.0, self.check_camera_ready_and_start)
+
+
+    def check_camera_ready_and_start(self):
+        if self.camera_ready:
+            self.timer.cancel()
+            self.main_callback()
+        else:
+            self.logger.info("Camera is not ready yet; waiting...")
     
-    def main(
-            self,
-            dist_filter: bool = True,
-            forbidden_area_filter: bool = False,
-            trajectory_filter: bool = False,
-            auto: bool = True,
-            use_image: bool = False,
-            log_dir: str = "",
-            sim: bool = False,
-            keyboard: bool = False,
-            debug: bool = False
-        ):
+
+    def main_callback(self):
+        self.timer.cancel()
         self.logger.info("Exploration main loop started")
+
+        dist_filter = self.dist_filter
+        forbidden_area_filter = False
+        trajectory_filter = False
+        auto = True
+        use_image = False
+        log_dir = self.log_dir
+        sim = self.is_sim
+        keyboard = False
+        debug = False
+
         self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_start")) # TODO: move this inside main_loop
         # print all the parameters
         self.logger.info(f"dist_filter: {dist_filter}")
@@ -121,7 +121,10 @@ class ExplorationMainLoop(Node):
         print(f"Logs will be saved in {log_dir}")
         
         # 0. run exploration loop!
-        time.sleep(20)
+        self.logger.info("[ExplorationMainLoop] Waiting for 20 seconds before starting exploration loop...")
+        time.sleep(10)
+        self.logger.info("[ExplorationMainLoop] Starting exploration loop!")
+
         while True:
             # check rclpy is ok
             if not rclpy.ok():
@@ -315,6 +318,9 @@ class ExplorationMainLoop(Node):
                     self.vibrate(vibration.RIGHT_TURN)
                 elif output_direction == "back":
                     self.vibrate(vibration.UNKNOWN)
+                else:
+                    self.logger.info(f"Unknown direction: {output_direction}")
+                    self.vibrate(vibration.UNKNOWN)
 
             # return output_point, cand_filter.forbidden_area_centers
             
@@ -348,15 +354,21 @@ class ExplorationMainLoop(Node):
         self.camera_ready = msg.data
         self.logger.info(f"Camera ready at exploration main loop: {self.camera_ready}")
 
+
 def main(args=None):
     rclpy.init(args=args)
 
     node = ExplorationMainLoop()
 
-    rclpy.spin(node)
+    # use MultiThreadedExecutor to run multiple nodes in the same process
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
 
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        executor.spin()
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
