@@ -367,6 +367,50 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
         if (progress == 0.0) {
           dd = 0.0;
         }
+
+        // little hack to adjust animation rotation
+        auto newDist = this->dist + dd;
+        auto skelAnims = this->actor->SkeletonAnimations();
+        auto it = skelAnims.find(WALKING_ANIMATION);
+        if (it != skelAnims.end()) {
+          auto skelAnim = it->second;
+          auto first_frame = skelAnim->PoseAt(0);
+          auto last_frame = skelAnim->PoseAt(skelAnim->GetLength());
+          auto first_trans = first_frame["Hips"].Translation();
+          auto last_trans = last_frame["Hips"].Translation();
+
+          double dst = (newDist - this->dist) / (last_trans.X() - first_trans.Y()) * (skelAnim->GetLength());
+          this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
+
+          auto frame = skelAnim->PoseAt(this->actor->ScriptTime());
+
+          ignition::math::Matrix4d rootTrans = ignition::math::Matrix4d::Identity;
+
+          // "Hips" is hardcoded and needs to be fixed
+          auto iter = frame.find("Hips");
+          if (iter != frame.end())
+          {
+            rootTrans = frame["Hips"];
+          }
+
+          ignition::math::Vector3d rootPos = rootTrans.Translation();
+          ignition::math::Quaterniond rootRot = rootTrans.Rotation();
+
+          ignition::math::Pose3d actorPose;
+          ignition::math::Pose3d pose;
+          pose.Pos().X(newX);
+          pose.Pos().Y(newY);
+          pose.Pos().Z(newZ);
+          pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
+
+          rootPos.X(0);
+          rootPos *= this->actor->Scale();
+          pose.Pos() = pose.Pos() + pose.Rot().RotateVector(rootPos);
+          pose.Rot() = pose.Rot() * rootRot;
+          this->actor->SetWorldPose(pose, true, true);
+        }
+
+        /*
         auto newDist = this->dist + dd;
         double *wPose = get_walking_pose(newDist);
 
@@ -379,6 +423,7 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
 
         double dst = (newDist - this->dist) / walking_dist_factor * walking_time_factor;
         this->actor->SetScriptTime(this->actor->ScriptTime() + dst);
+        */
 
         this->x = newX;
         this->y = newY;
