@@ -31,6 +31,7 @@ from .test_semantic import extract_image_feature, concat_features, extract_text_
 import std_msgs.msg
 from PIL import Image as PILImage
 from .WebCameraManager import WebCameraManager
+import traceback
 
 
 """
@@ -184,7 +185,7 @@ class CaBotImageNode(Node):
                 # dummy=True if is_sim else False
             )
         
-        self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir)
+        self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
@@ -675,6 +676,7 @@ class GPTExplainer():
 
         self.should_speak = should_speak
         self.conversation_history = []
+        test_inference = self.query_with_images(prompt="test", images=[])
 
         if  self.mode == "semantic_map_mode":
             self.postfix = "s"
@@ -713,12 +715,9 @@ class GPTExplainer():
             prompt = self.prompt
             use_initial_prompt = True
         else:
-            if self.mode == "semantic_map_mode" or self.mode == "intersection_detection_mode":
-                prompt = self.prompt
-                use_initial_prompt = True
-                self.conversation_history = []
-            else:
-                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは説明に含めないでください。前のレスポンスと同じようにJSON形式で返してください。"
+            prompt = self.prompt
+            use_initial_prompt = True
+            self.conversation_history = []
 
         try:
             # resize images max width 512
@@ -731,6 +730,8 @@ class GPTExplainer():
             left_image_with_text = self.add_text_to_image(left_image, "Left")
             right_image_with_text = self.add_text_to_image(right_image, "Right")
             if not webcamera_image is None:
+                # resize to 1080p
+                webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
 
             images = []
@@ -806,7 +807,8 @@ class GPTExplainer():
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
-            return  1.0, "No explanation"
+            self.logger.info(traceback.format_exc())
+            return  1.0, "エラー"
 
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
