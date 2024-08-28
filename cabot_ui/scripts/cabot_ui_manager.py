@@ -701,10 +701,12 @@ class EventMapper(object):
                 return ExplorationEvent(subtype="left")
             if event.button == cabot_common.button.BUTTON_RIGHT:
                 return ExplorationEvent(subtype="right")
-            if event.button == cabot_common.button.BUTTON_CENTER:
-                return ExplorationEvent(subtype="button_control")
             if event.button == cabot_common.button.BUTTON_DEBUG:
                 return ExplorationEvent(subtype="chat")
+            
+        if event.type == "click":
+            if event.buttons == cabot_common.button.BUTTON_CENTER and event.count == 1:
+                return ExplorationEvent(subtype="button_control")
             
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
