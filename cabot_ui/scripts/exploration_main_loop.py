@@ -371,7 +371,6 @@ class ExplorationMainLoop(Node):
             explore(x, y, query_type=query_type)
             state_client.logger.info(f"Exploration {self.iter} done\n")
             self.iter += 1
-            break
 
             # finish check
             should_finish = False
