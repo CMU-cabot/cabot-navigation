@@ -946,6 +946,19 @@ class Door:
         filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
         return Door(**filtered_kwargs)
 
+@dataclass
+class Gazebo_obj:
+    name: str
+    x: float
+    y: float
+    z: float
+    yaw: float
+
+    @staticmethod
+    def from_dict(**kwargs):
+        valid_fields = {field.name for field in fields(Gazebo_obj)}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
+        return Gazebo_obj(**filtered_kwargs)
 
 class ObstacleManager:
     _instance = None
@@ -1150,7 +1163,8 @@ class ObstacleManager:
         y = kwargs.get("y", 0)
         z = kwargs.get("z", 0)
         yaw = kwargs.get("yaw", 0)
-
+        
+        obj = Gazebo_obj.from_dict(**kwargs)
         schoolbus_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.7">
@@ -1161,7 +1175,7 @@ class ObstacleManager:
                 <geometry>
                     <mesh>
                         <uri>file:///home/developer/models/SCHOOL_BUS/meshes/model.obj</uri>
-                        <scale>100 100 100</scale>
+                        <scale>100 100 100</scale> <!-- adjust the scale -->
                     </mesh>
                 </geometry>
             </visual>
@@ -1190,18 +1204,19 @@ class ObstacleManager:
             <inertial>
                 <pose>0 0 0 0 -0 0</pose>
                 <inertia>
-                    <ixx>1</ixx>
+                    <ixx>2</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>1</iyy>
+                    <iyy>2</iyy>
                     <iyz>0</iyz>
-                    <izz>1</izz>
+                    <izz>2</izz>
                 </inertia>
-                <mass>1</mass>
+                <mass>2</mass> <!-- adjust the mass -->
             </inertial>
             <enable_wind>0</enable_wind>
             <kinematic>0</kinematic>
         </link>
+        <static>1</static> <!-- make the object statics -->
     </model>
 </sdf>
 """
@@ -1216,6 +1231,7 @@ class ObstacleManager:
 
         # Handle the callback once the future completes
         def callback(future):
+            self.remaining.append(obj)
             logger.debug(f"Spawn result for {name}: {future.result()}")
 
         future.add_done_callback(callback)
