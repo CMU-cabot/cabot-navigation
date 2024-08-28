@@ -568,34 +568,42 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.exploring_direction("right")
                 self._interface.vibrate(vibration.RIGHT_TURN)
                 self._exploration.send_query("direction","right")
-        elif event.subtype == "button_control" or event.subtype == "chat": 
+
+        elif event.subtype == "chat": 
             self._logger.info(f"received event: {event.subtype}")
-            if event.subtype == "chat":
-                self._logger.info("Processing Chat event")
-                if in_conversation:
-                    self._logger.info("NavigationState: Finish chat")
-                    self._interface.finish_chat()
-                    self.publish_event("finishchat")
-                    self._exploration.set_conversation_control(False)
-                else:
-                    self._logger.info("NavigationState: Start chat")
-                    self._interface.speak("")
-                    self._interface.start_chat()
-                    self.publish_event("startchat")  # use this to trigger smartphone conversation UI
-                    self._exploration.set_conversation_control(True)
+            self._logger.info("Processing Chat event")
+            if in_conversation:
+                self._logger.info("NavigationState: Finish chat")
+                self._interface.finish_chat()
+                self.publish_event("finishchat")
+                self._exploration.set_conversation_control(False)
             else:
-                self._logger.info("Processing Button Control event")
-                if in_button_control:
-                    self._logger.info("NavigationState: Finish button control")
-                    self._interface.speak("")
-                    self._interface.set_button_control(False)
-                    self.publish_event("button_control")
-                    self._exploration.set_button_control(False)
-                else:
-                    self._logger.info("NavigationState: Start button control")
-                    self._interface.set_button_control(True)
-                    self.publish_event("button_control")
-                    self._exploration.set_button_control(True)
+                self._logger.info("NavigationState: Start chat")
+                self._interface.speak("")
+                self._interface.start_chat()
+                self.publish_event("startchat")  # use this to trigger smartphone conversation UI
+                self._exploration.set_conversation_control(True)
+
+        elif event.subtype == "button_control":
+            self._logger.info("Processing Button Control event")
+            if in_conversation:
+                self._logger.info("Switching from conversation to button control")
+                self._interface.finish_chat()  
+                self.publish_event("finishchat")
+                self._exploration.set_conversation_control(False)
+                return
+
+            if in_button_control:
+                self._logger.info("NavigationState: Finish button control")
+                self._interface.speak("")
+                self._interface.set_button_control(False)
+                # self.publish_event("button_control")
+                self._exploration.set_button_control(False)
+            else:
+                self._logger.info("NavigationState: Start button control")
+                self._interface.set_button_control(True)
+                # self.publish_event("button_control")
+                self._exploration.set_button_control(True)
 
         if event.subtype == "wheel_switch":
             pause_control = self._exploration.get_pause_control()

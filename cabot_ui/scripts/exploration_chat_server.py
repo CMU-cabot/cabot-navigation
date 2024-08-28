@@ -359,7 +359,7 @@ class ExplorationChatServer(Node):
 
             if query_string == "":
                 print("skip chat")
-                res_text = ["はい。ご用件は何でしょう。"]
+                res_text = ["対話を開始します。はい。ご用件は何でしょう。"]
             elif query_type == "failed":
                 print("failed to extract JSON")
                 res_text = ["すみません、もう一度言っていただいても良いですか。"]
