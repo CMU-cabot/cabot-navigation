@@ -53,12 +53,15 @@ class ExplorationMainLoop(Node):
 
     def event_callback(self, msg):
         self.logger.info(f"[Main Loop] Received event: {msg.data}")
-        current_time = time.time()
-        # Remove events older than 5 seconds from the list
-        self.planning_events = [t for t in self.planning_events if current_time - t < self.planning_time_threshold]
 
+
+        # TODO: Maybe reset the planning events when the robot is stopped
         if msg.data == "navigation;exploration;compute_path_to_pose":
+            current_time = time.time()
+            self.planning_events = [t for t in self.planning_events if current_time - t < self.planning_time_threshold]
             self.logger.info(f"[Main Loop] Planning detected at {current_time}")
+            if len(self.planning_events) > 0:
+                self.logger.info(f"[Main Loop] Time from the last planning event: {current_time - self.planning_events[-1]} seconds")
             self.logger.info(f"[Main Loop] Planning events in last {self.planning_time_threshold} seconds: {len(self.planning_events)}")
             self.planning_events.append(current_time)
             if len(self.planning_events) >= self.planning_count_threshold:
@@ -368,6 +371,7 @@ class ExplorationMainLoop(Node):
             explore(x, y, query_type=query_type)
             state_client.logger.info(f"Exploration {self.iter} done\n")
             self.iter += 1
+            break
 
             # finish check
             should_finish = False
