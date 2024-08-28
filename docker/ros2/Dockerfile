@@ -121,7 +121,8 @@ RUN pip3 install --no-cache-dir \
 
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
-    'pysocialforce[test,plot]'
+    'pysocialforce[test,plot]' \
+    parameterized
 
 # for debug
 # RUN apt update && \
