@@ -519,12 +519,12 @@ class GPTExplainer():
                 画像を説明してください。
                 %s
                 あなたの生成した文章はそのまま視覚障害者の方に読まれます。
-                多少長くてもいいので、説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
+                説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
                 画像を説明するには、以下のルールに必ず従ってください。
 
                 ## 指示に従うために必ず守るべきルール
                 1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を詳しく説明してください。
-                2. 全体で3-4文程度の説明になるようにしてください。
+                2. 最大で3文の説明になるようにしてください。
                 3. 敬語を使うこと。
                 4. 画像の全体/左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
                 5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
@@ -704,7 +704,7 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray, webcamera_image: np.ndarray) -> float:
+    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray, webcamera_image: Optional[np.ndarray]) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
@@ -725,9 +725,6 @@ class GPTExplainer():
             front_image = self.resize_images(front_image, max_width=768)
             left_image = self.resize_images(left_image, max_width=768)
             right_image = self.resize_images(right_image, max_width=768)
-            if not webcamera_image is None:
-                pass
-                # webcamera_image = self.resize_images(webcamera_image, max_width=768)
 
             # generate explanation from the three-view images
             front_image_with_text = self.add_text_to_image(front_image, "Front")
@@ -736,13 +733,16 @@ class GPTExplainer():
             if not webcamera_image is None:
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
 
-            images = [front_image_with_text, left_image_with_text, right_image_with_text]
-
+            images = []
             if not webcamera_image is None:
                 images.append(webcamera_image_with_text)
                 if use_initial_prompt:
-                    prompt = prompt % "画像は4枚あります。順番に左、前、右の画像と上の視点から撮影した広角の画像です。"
+                    prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
             else:
+                
+                images.append(left_image_with_text)
+                images.append(front_image_with_text)
+                images.append(right_image_with_text)
                 if use_initial_prompt:
                     prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
 
@@ -799,8 +799,8 @@ class GPTExplainer():
             pretty_response = json.dumps(gpt_response, indent=4)
 
             images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
-            if not webcamera_image is None:
-                images_with_text.append(webcamera_image_with_text)
+            # if not webcamera_image is None:
+            #     images_with_text.append(webcamera_image_with_text)
 
             log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
