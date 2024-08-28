@@ -62,6 +62,7 @@
 							service_name="global_costmap/clear_entirely_global_costmap"/>
 						<WaitFloat wait_duration_float="0.5"/>
 						<CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
+						<PublishTopic topic="/cabot/event" value="navigation;exploration;compute_path_to_pose"/>
 						<ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
 						<PublishTopicPath topic="plan" value="{path}"/>
 					</Sequence>
@@ -80,6 +81,7 @@
 										service_name="global_costmap/clear_entirely_global_costmap"/>
 									<WaitFloat wait_duration_float="0.5"/>
 									<CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
+									<PublishTopic topic="/cabot/event" value="navigation;exploration;compute_path_to_pose"/>
 									<ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
 									<PublishTopicPath topic="plan" value="{path}"/>
 								</Sequence>
@@ -107,6 +109,7 @@
 								service_name="global_costmap/clear_entirely_global_costmap"/>
 							<WaitFloat wait_duration_float="0.5"/>
 							<CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
+							<PublishTopic topic="/cabot/event" value="navigation;exploration;compute_path_to_pose"/>
 							<ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot"/>
 							<PublishTopicPath topic="plan" value="{path}"/>
 						</Sequence>

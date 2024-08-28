@@ -48,6 +48,7 @@
               <Fallback>
                 <Sequence>
                   <WaitFloat wait_duration_float="0.5"/>
+                  <PublishTopic topic="/cabot/event" value="navigation;exploration;compute_path_to_pose"/>
                   <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" />
                   <Fallback>
                     <BlackboardCheckString value_A="{first_time}" value_B="true">
