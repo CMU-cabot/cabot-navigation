@@ -597,12 +597,12 @@ class CabotUIManager(NavigationInterface, object):
                 self._logger.info("NavigationState: Finish button control")
                 self._interface.speak("")
                 self._interface.set_button_control(False)
-                # self.publish_event("button_control")
+                self.publish_event("finish_button_control")
                 self._exploration.set_button_control(False)
             else:
                 self._logger.info("NavigationState: Start button control")
                 self._interface.set_button_control(True)
-                # self.publish_event("button_control")
+                self.publish_event("button_control")
                 self._exploration.set_button_control(True)
 
         if event.subtype == "wheel_switch":
