@@ -81,6 +81,7 @@ private:
 
   PedestrianPluginParams plugin_params;
   bool needs_to_apply_params;
+  int needs_to_reset_robot;
 
   // Need to be separated
   static double walking_time_factor;

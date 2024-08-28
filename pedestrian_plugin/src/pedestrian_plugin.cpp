@@ -199,6 +199,7 @@ void PedestrianPlugin::update_parameters(PedestrianPluginParams params)
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   plugin_params = params;
   needs_to_apply_params = true;
+  needs_to_reset_robot = 20;
 }
 
 void PedestrianPlugin::Reset()
@@ -239,16 +240,26 @@ void PedestrianPlugin::OnUpdate(const common::UpdateInfo & _info)
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   IGN_PROFILE("PedestrianPlugin::Update");
   IGN_PROFILE_BEGIN("Update");
-
-  if (needs_to_apply_params) {
-    apply_parameters();
-    if (!this->actor) {
-      ignition::math::Pose3d pose;
-      pose.Pos().X(this->x);
-      pose.Pos().Y(this->y);
-      pose.Pos().Z(this->z);
-      pose.Rot() = ignition::math::Quaterniond(0, 0, this->yaw);
-      this->model->SetWorldPose(pose, true, true);
+  if (needs_to_reset_robot > 0) {
+      needs_to_reset_robot--;
+      manager.publish_cmd_vel(0, 0, 0, 0, 0, 0);
+      // work around to fix base_joint
+      auto base_joint = this->model->GetJoint("base_joint");
+      if (base_joint) {
+        base_joint->SetPosition(0, 0, false);
+      }
+      return;
+  } else {
+    if (needs_to_apply_params) {
+      apply_parameters();
+      if (!this->actor) {
+        ignition::math::Pose3d pose;
+        pose.Pos().X(this->x);
+        pose.Pos().Y(this->y);
+        pose.Pos().Z(this->z);
+        pose.Rot() = ignition::math::Quaterniond(0, 0, this->yaw);
+        this->model->SetWorldPose(pose, true, true);
+      }
     }
   }
 
