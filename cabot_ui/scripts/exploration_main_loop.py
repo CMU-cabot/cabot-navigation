@@ -33,16 +33,27 @@ class ExplorationMainLoop(Node):
         self.note_pub = self.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.event_pub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10)
         self.camera_ready_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/camera_ready", self.camera_ready_callback, 10)
+        self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
 
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
 
         self.camera_ready = False
+        self.iter = 0
 
         self.timer = self.create_timer(1.0, self.check_camera_ready_and_start)
 
         self.marker_a, self.marker_b = None, None
+        self.logger.info("ExplorationMainLoop initialized")
 
+    def event_callback(self, msg):
+        self.logger.info(f"[Main Loop] Received event: {msg.data}")
+        if msg.data == "navigation;exploration;compute_path_to_pose":
+            self.logger.info(f"[Main Loop] Planning detected")
+
+    def change_timer_interval(self, interval: float):
+        self.timer.cancel()
+        self.timer = self.create_timer(interval, self.main_loop)
 
     def check_camera_ready_and_start(self):
         if self.camera_ready:
@@ -85,7 +96,6 @@ class ExplorationMainLoop(Node):
         executor = MultiThreadedExecutor()
         executor.add_node(state_client)
 
-        iter = 0
         timestamp = datetime.datetime.now().strftime("%m%d-%H%M%S")
 
         # if test_trajectory.py is not running, run it
@@ -132,7 +142,7 @@ class ExplorationMainLoop(Node):
             if not rclpy.ok():
                 state_client.logger.info("rclpy is not ok; initializing...")
                 rclpy.init()
-            state_client.logger.info(f"\nIteration: {iter}")
+            state_client.logger.info(f"\nIteration: {self.iter}")
 
             # 1. generate "intersection" explanation from images to check the availability of each direction
             if use_image:
@@ -188,7 +198,7 @@ class ExplorationMainLoop(Node):
             self.marker_b = marker_b
 
             maps.append(costmap)
-            if iter == 0:
+            if self.iter == 0:
                 initial_coords = current_coords
                 initial_orientation = current_orientation
             # if current coords is close to the initial coords, stop the exploration
@@ -343,8 +353,8 @@ class ExplorationMainLoop(Node):
             else:
                 query_type = "none"
             explore(x, y, query_type=query_type)
-            state_client.logger.info(f"Exploration {iter} done\n")
-            iter += 1
+            state_client.logger.info(f"Exploration {self.iter} done\n")
+            self.iter += 1
 
             # finish check
             should_finish = False
@@ -363,9 +373,9 @@ class ExplorationMainLoop(Node):
         self.note_pub.publish(msg)
 
     def camera_ready_callback(self, msg):
+        if not self.camera_ready:
+            self.logger.info(f"Camera ready at exploration main loop: {self.camera_ready}")
         self.camera_ready = msg.data
-        self.logger.info(f"Camera ready at exploration main loop: {self.camera_ready}")
-
 
 def main(args=None):
     rclpy.init(args=args)
