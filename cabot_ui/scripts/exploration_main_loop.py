@@ -19,6 +19,7 @@ from cabot_ui.explore.test_image import main as generate_from_images
 from cabot_ui.explore.test_loop import PersistentCancelClient, CabotQueryNode
 from cabot_ui.explore.test_map import main as get_next_point
 from cabot_ui.explore.test_speak import speak_text
+import threading
 
 
 
@@ -44,12 +45,24 @@ class ExplorationMainLoop(Node):
         self.timer = self.create_timer(1.0, self.check_camera_ready_and_start)
 
         self.marker_a, self.marker_b = None, None
+        self.planning_events = []
+        self.planning_time_threshold = 10
+        self.planning_count_threshold = 10
+
         self.logger.info("ExplorationMainLoop initialized")
 
     def event_callback(self, msg):
         self.logger.info(f"[Main Loop] Received event: {msg.data}")
+        current_time = time.time()
+        # Remove events older than 5 seconds from the list
+        self.planning_events = [t for t in self.planning_events if current_time - t < self.planning_time_threshold]
+
         if msg.data == "navigation;exploration;compute_path_to_pose":
-            self.logger.info(f"[Main Loop] Planning detected")
+            self.logger.info(f"[Main Loop] Planning detected at {current_time}")
+            self.logger.info(f"[Main Loop] Planning events in last {self.planning_time_threshold} seconds: {len(self.planning_events)}")
+            self.planning_events.append(current_time)
+            if len(self.planning_events) >= self.planning_count_threshold:
+                self.logger.warning(f"[Main Loop] WARNING: More than {self.planning_count_threshold} planning events detected within {self.planning_time_threshold} seconds!")
 
     def change_timer_interval(self, interval: float):
         self.timer.cancel()
@@ -58,7 +71,7 @@ class ExplorationMainLoop(Node):
     def check_camera_ready_and_start(self):
         if self.camera_ready:
             self.timer.cancel()
-            self.main_callback()
+            threading.Thread(target=self.main_callback).start()
         else:
             self.logger.info("Camera is not ready yet; waiting...")
     
