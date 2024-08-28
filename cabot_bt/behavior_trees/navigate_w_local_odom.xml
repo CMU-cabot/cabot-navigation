@@ -37,6 +37,7 @@
             <!-- clear costmap intentionally to get a path go through the door -->
             <ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000" service_name="/local/global_costmap/clear_entirely_global_costmap"/>
             <ClearEntireCostmap name="ClearLocalCostmap-context" server_timeout="5000" service_name="/local/local_costmap/clear_entirely_local_costmap"/>
+            <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
             <ComputePathToPose goal="{goal}" path="{path_temp}" planner_id="GridBased"/>
             <CheckPath path="{path_temp}" path_topic="/path" plan_topic="/plan" path_out="{path}" average_threshold="0.3"/>
             <!-- front vibration -->
