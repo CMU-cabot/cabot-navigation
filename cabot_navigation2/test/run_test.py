@@ -843,35 +843,16 @@ class Tester:
         self.futures[uuid].add_done_callback(done_callback)
         
     @wait_test()
-    def spawn_schoolbus(self, case, test_action):
+    def spawn_model(self, case, test_action):
         """
-        Spawns a school bus in the Gazebo simulation.
+        Spawns a model in the Gazebo simulation.
 
         Parameters:
             case: The test case being run.
             test_action: A dictionary containing parameters like uuid, name, and position.
         """
         uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().spawn_schoolbus(**test_action)
-
-        def done_callback(future):
-            logger.debug(future.result())
-            case['done'] = True
-            case['success'] = True
-
-        self.futures[uuid].add_done_callback(done_callback)
-
-    @wait_test()
-    def delete_schoolbus(self, case, test_action):
-        """
-        Deletes a school bus from the Gazebo simulation.
-
-        Parameters:
-            case: The test case being run.
-            test_action: A dictionary containing parameters like uuid, name.
-        """
-        uuid = test_action['uuid']
-        self.futures[uuid] = ObstacleManager.instance().delete_schoolbus(**test_action)
+        self.futures[uuid] = ObstacleManager.instance().spawn_model(**test_action)
 
         def done_callback(future):
             logger.debug(future.result())
@@ -1147,83 +1128,41 @@ class ObstacleManager:
         future.add_done_callback(callback)
         return future
     
-    def spawn_schoolbus(self, **kwargs):
+    def spawn_model(self, **kwargs):
         """
-        Spawns a school bus at the given position in the Gazebo simulation.
+        Spawns a general sdf model
 
         Parameters:
-            name (str): Name of the school bus model.
+            name (str): Name of the model
             x (float): X position.
             y (float): Y position.
             z (float): Z position.
             yaw (float): Rotation about the Z-axis (yaw).
         """
-        name = kwargs.get("name", "SCHOOL_BUS")
+        name = kwargs.get("name", "model")
+        uri = kwargs.get("uri", "")
         x = kwargs.get("x", 0)
         y = kwargs.get("y", 0)
         z = kwargs.get("z", 0)
         yaw = kwargs.get("yaw", 0)
         
         obj = Gazebo_obj.from_dict(**kwargs)
-        schoolbus_xml = f"""
+        model_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.7">
     <model name="{name}">
         <pose>{x} {y} {z} 0 0 {yaw}</pose>
-        <link name="link_0">
-            <visual name="visual">
-                <geometry>
-                    <mesh>
-                        <uri>file:///home/developer/models/SCHOOL_BUS/meshes/model.obj</uri>
-                        <scale>100 100 100</scale> <!-- adjust the scale -->
-                    </mesh>
-                </geometry>
-            </visual>
-            <collision name="collision_0">
-                <geometry>
-                    <mesh>
-                        <uri>file:///home/developer/models/SCHOOL_BUS/meshes/model.obj</uri>
-                        <scale>100 100 100</scale>
-                    </mesh>
-                </geometry>
-                <max_contacts>10</max_contacts>
-                <surface>
-                    <contact>
-                        <ode/>
-                    </contact>
-                    <bounce/>
-                    <friction>
-                        <torsional>
-                            <ode/>
-                        </torsional>
-                        <ode/>
-                    </friction>
-                </surface>
-            </collision>
-            <self_collide>0</self_collide>
-            <inertial>
-                <pose>0 0 0 0 -0 0</pose>
-                <inertia>
-                    <ixx>2</ixx>
-                    <ixy>0</ixy>
-                    <ixz>0</ixz>
-                    <iyy>2</iyy>
-                    <iyz>0</iyz>
-                    <izz>2</izz>
-                </inertia>
-                <mass>2</mass> <!-- adjust the mass -->
-            </inertial>
-            <enable_wind>0</enable_wind>
-            <kinematic>0</kinematic>
-        </link>
-        <static>1</static> <!-- make the object statics -->
+        <include merge="1">
+            <uri>{uri}</uri>
+        </include>
+        <static>1</static>
     </model>
 </sdf>
 """
-
+        logger.info(f"spawning a model {model_xml=}")
         request = SpawnEntity.Request()
         request.name = name
-        request.xml = schoolbus_xml
+        request.xml = model_xml
         request.reference_frame = "world"
 
         # Call the service asynchronously
@@ -1232,30 +1171,10 @@ class ObstacleManager:
         # Handle the callback once the future completes
         def callback(future):
             self.remaining.append(obj)
-            logger.debug(f"Spawn result for {name}: {future.result()}")
+            logger.info(f"Spawn result for {name}: {future.result()}")
 
         future.add_done_callback(callback)
         return future
-
-    def delete_schoolbus(self, **kwargs):
-        """
-        Deletes the school bus from the simulation.
-
-        Parameters:
-            name (str): Name of the school bus model to delete.
-        """
-        name = kwargs.get("name", "SCHOOL_BUS")
-        request = DeleteEntity.Request()
-        request.name = name
-
-        future = self.delete_entity_client.call_async(request)
-
-        def callback(future):
-            logger.debug(f"Delete result for {name}: {future.result()}")
-        
-        future.add_done_callback(callback)
-        return future
-  
 
 class LogColors:
     DEBUG = '\033[94m'       # Blue
