@@ -30,6 +30,7 @@ find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
+find_package(lidar_process_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
@@ -70,6 +71,7 @@ set(dependencies
   tf2
   people_msgs
   queue_msgs
+  lidar_process_msgs
   sensor_msgs
   diagnostic_updater
   yaml_cpp_vendor
@@ -116,6 +118,7 @@ ament_target_dependencies(cabot_layers
   nav2_costmap_2d
   nav2_core
   people_msgs
+  lidar_process_msgs
   pluginlib
 )
 
@@ -136,6 +139,7 @@ ament_target_dependencies(cabot_planners
   people_msgs
   pluginlib
   queue_msgs
+  lidar_process_msgs
   rclcpp
   tf2
 )
@@ -262,6 +266,7 @@ set(dependencies_test
   sensor_msgs
   people_msgs
   queue_msgs
+  lidar_process_msgs
   rclcpp
   nav2_lifecycle_manager
   nav2_navfn_planner
