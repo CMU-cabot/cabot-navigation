@@ -22,7 +22,7 @@ class CancelNode:
         if msg.data == "navigation_startchat" or msg.data == "navigation_button_control":
             self.logger.info("Received startchat event")
             self.state = "navigation;cancel"
-        elif msg.data == "navigation_finishchat" or msg.data == "navigation_finish_button_control":
+        elif msg.data == "navigation_tmp_finishchat" or msg.data == "navigation_finishchat" or msg.data == "navigation_finish_button_control":
             self.state = "auto_mode"
             self.cancel_state_published = False
         elif msg.data == "navigation_search":
