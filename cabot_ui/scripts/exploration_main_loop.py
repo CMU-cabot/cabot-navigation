@@ -159,6 +159,7 @@ class ExplorationMainLoop(Node):
             if not rclpy.ok():
                 state_client.logger.info("rclpy is not ok; initializing...")
                 rclpy.init()
+            start_all = time.time()
             state_client.logger.info(f"\nIteration: {self.iter}")
             self.state_control.set_state("paused")
             # 1. generate "intersection" explanation from images to check the availability of each direction
@@ -197,6 +198,7 @@ class ExplorationMainLoop(Node):
             # 2. get the next point to explore
             self.logger.info(f"availability_from_image: {availability_from_image}")
             state_client.logger.info(f"Getting next point...\n")
+            start = time.time()
             sampled_points, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = get_next_point(
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
@@ -210,6 +212,7 @@ class ExplorationMainLoop(Node):
                 marker_a=self.marker_a,
                 marker_b=self.marker_b
             )
+            state_client.logger.info(f"Took {time.time() - start:.2f} seconds to get the next point\n")
 
             self.marker_a = marker_a
             self.marker_b = marker_b
@@ -370,8 +373,11 @@ class ExplorationMainLoop(Node):
             else:
                 query_type = "none"
             self.state_control.set_state("running")
+            start = time.time()
             explore(x, y, query_type=query_type)
+            state_client.logger.info(f"Took {time.time() - start:.2f} seconds to explore the next point\n")
             state_client.logger.info(f"Exploration {self.iter} done\n")
+            state_client.logger.info(f"Took {time.time() - start_all:.2f} seconds for all\n")
             self.iter += 1
 
             # finish check

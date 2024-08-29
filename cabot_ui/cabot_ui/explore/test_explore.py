@@ -75,7 +75,7 @@ class CaBotExplorationNode(Node):
         self.map_height = 0
         self.map_resolution = 0
 
-        self.timer = self.create_timer(1.0, self.timer_callback)
+        self.timer = self.create_timer(0.01, self.timer_callback)
 
     def timer_callback(self):
         self.logger.info("Exploration node is running")
@@ -93,7 +93,7 @@ class CaBotExplorationNode(Node):
         
         if self.query_type == "search":
             self.goal_coordinate_pub.publish(String(data="navigation_search"))
-        time.sleep(0.5)
+        # time.sleep(0.5)
         coords_msg.data = f"navigation;destination;goal:{self.x}:{self.y}"
         self.goal_coordinate_pub.publish(coords_msg)
         self.logger.info(f"[CabotExplorationNode] Publishing: {coords_msg}")
