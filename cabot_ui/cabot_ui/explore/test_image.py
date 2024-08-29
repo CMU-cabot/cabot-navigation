@@ -32,6 +32,7 @@ import std_msgs.msg
 from PIL import Image as PILImage
 from .WebCameraManager import WebCameraManager
 import traceback
+import threading
 
 
 """
@@ -210,9 +211,13 @@ class CaBotImageNode(Node):
             self.publish_camera_ready()
 
     def publish_camera_ready(self):
-        for i in range(10):
-            # publish the camera ready status after i seconds
-            self.create_timer(i, self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True)))
+        def _publish_camera_ready():
+            for i in range(10):
+                # publish the camera ready status after i seconds
+                self.logger.info(f"Publishing camera ready status after {i} seconds")
+                self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
+        thread = threading.Thread(target=_publish_camera_ready)
+        thread.start()
 
     def touch_callback(self, msg: std_msgs.msg.Int16):
         if msg.data == 1:
@@ -337,6 +342,7 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is open")
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
+            self.publish_latest_explained_info()
         
         self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
