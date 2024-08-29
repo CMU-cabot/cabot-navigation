@@ -280,6 +280,7 @@ class ExplorationChatServer(Node):
         app = Flask(__name__)
         @app.route('/service', methods=['POST'])
         def handle_post():
+            self.publish_tmp_start_chat()
             data = request.json
 
             logging.info(data)
@@ -299,7 +300,7 @@ class ExplorationChatServer(Node):
                 payload = {
                     "model": "gpt-4o",
                     "messages": [{"role": "user", "content": content}],
-                    "max_tokens": 300
+                    "max_tokens": 2000
                 }
 
                 headers = {
@@ -388,7 +389,7 @@ class ExplorationChatServer(Node):
                 if finish:
                     navi = True
                     dest_info = {"nodes": ""}
-                    # self.publish_finish_chat()
+                    self.publish_tmp_finish_chat()
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir_search)
@@ -401,7 +402,7 @@ class ExplorationChatServer(Node):
 
                 navi = True
                 dest_info = {"nodes": ""}
-                # self.publish_finish_chat()
+                self.publish_tmp_finish_chat()
 
                 res_text = [query_message]
 
@@ -426,10 +427,16 @@ class ExplorationChatServer(Node):
             return jsonify(response)
         return app
     
-    def publish_finish_chat(self):
+    def publish_tmp_finish_chat(self):
         msg = std_msgs.msg.String()
-        msg.data = "navigation_finishchat"
+        msg.data = "navigation_tmp_finishchat"
         self._eventPub.publish(msg)
+
+    def publish_tmp_start_chat(self):
+        msg = std_msgs.msg.String()
+        msg.data = "navigation_tmp_startchat"
+        self._eventPub.publish(msg)
+
 
 class GPTExplainer():
     def __init__(

@@ -270,21 +270,17 @@ class CaBotImageNode(Node):
                     self.can_speak_timer.cancel()
 
     def event_callback(self, msg):
-        if msg.data == "navigation_tmp_startchat":
+        if msg.data == "navigation_startchat" or msg.data == "navigation_tmp_startchat": # if we start conversation on iPhone this does not get called
             self.in_conversation = True
-        elif msg.data == "navigation_finishchat":
+        elif msg.data == "navigation_finishchat" or msg.data == "navigation_tmp_finishchat":
             self.in_conversation = False
         elif msg.data == "navigation_main_loop_start":
             self.explore_main_loop_ready = True
         elif "navigation;destination;goal" in msg.data:
             self.explore_main_loop_ready = True
-        elif msg.data == "navigation_arrived":
-            self.explore_main_loop_ready = False
         elif msg.data == "navigation;cancel":
-            self.explore_main_loop_ready = False
+            # self.explore_main_loop_ready = False
             test_speak.speak_text("", force=True)
-        elif msg.data == "explore_main_loop_pause":
-            self.explore_main_loop_ready = False
         
 
     def reset_can_speak(self):
@@ -368,65 +364,66 @@ class CaBotImageNode(Node):
             self.logger.info(f"Max loop count reached. Exiting.")
             self.timer.cancel()
             return
+        is_in_valid_state = self.cabot_nav_state == self.valid_state
+        self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
         self.loop_count += 1
         camera_ready = self.realsense_ready or self.web_camera_ready
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
-        # generate explanation
         if not self.no_explain_mode and self.ready and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
+                    self.logger.info(f"next wait time: 0.5 (constant)")
+                    self.change_timer_interval(interval=0.5)
                     return
-                
-            self.logger.info(f"Generating explanation; mode: {self.mode}, state: {self.cabot_nav_state}")
-            # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
-            # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
-            if self.cabot_nav_state != self.valid_state:
-                self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
-                return
+
+            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
+
+            is_in_valid_state = self.cabot_nav_state == self.valid_state
+            if self.touching and not self.in_conversation and is_in_valid_state:
+                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
+                test_speak.speak_text(explain)
             else:
-                wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
-                if self.touching:
-                    test_speak.speak_text(explain)
+                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
+                wait_time = 0.1
 
-                self.latest_explained_front_image = self.front_image
-                self.latest_explained_left_image = self.left_image
-                self.latest_explained_right_image = self.right_image
-                self.latest_explain = explain
+            self.latest_explained_front_image = self.front_image
+            self.latest_explained_left_image = self.left_image
+            self.latest_explained_right_image = self.right_image
+            self.latest_explain = explain
 
-                self.publish_latest_explained_info()
+            self.publish_latest_explained_info()
 
-                self.can_speak_explanation = False
-                self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
+            self.can_speak_explanation = False
+            self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
 
-                if self.mode == "intersection_detection_mode":
-                    self.logger.info("Availability of each direction")
-                    self.logger.info(f"Front marker : {self.front_marker_detected}")
-                    self.logger.info(f"Left marker  : {self.left_marker_detected}")
-                    self.logger.info(f"Right marker : {self.right_marker_detected}")
-                    if not self.no_explain_mode:
-                        self.logger.info(f"Front available (GPT) : {self.gpt_explainer.front_available}")
-                        self.logger.info(f"Left available (GPT)  : {self.gpt_explainer.left_available}")
-                        self.logger.info(f"Right available (GPT) : {self.gpt_explainer.right_available}")
-                
-                if self.debug:
-                    # randomly decide the values
-                    self.logger.info("random mode; setting the values randomly")
-                    self.front_marker_detected = np.random.choice([True, False])
-                    self.left_marker_detected = np.random.choice([True, False])
-                    self.right_marker_detected = np.random.choice([True, False])
-                    self.gpt_explainer.front_available = np.random.choice([True, False])
-                    self.gpt_explainer.left_available = np.random.choice([True, False])
-                    self.gpt_explainer.right_available = np.random.choice([True, False])
+            if self.mode == "intersection_detection_mode":
+                self.logger.info("Availability of each direction")
+                self.logger.info(f"Front marker : {self.front_marker_detected}")
+                self.logger.info(f"Left marker  : {self.left_marker_detected}")
+                self.logger.info(f"Right marker : {self.right_marker_detected}")
+                if not self.no_explain_mode:
+                    self.logger.info(f"Front available (GPT) : {self.gpt_explainer.front_available}")
+                    self.logger.info(f"Left available (GPT)  : {self.gpt_explainer.left_available}")
+                    self.logger.info(f"Right available (GPT) : {self.gpt_explainer.right_available}")
+            
+            if self.debug:
+                # randomly decide the values
+                self.logger.info("random mode; setting the values randomly")
+                self.front_marker_detected = np.random.choice([True, False])
+                self.left_marker_detected = np.random.choice([True, False])
+                self.right_marker_detected = np.random.choice([True, False])
+                self.gpt_explainer.front_available = np.random.choice([True, False])
+                self.gpt_explainer.left_available = np.random.choice([True, False])
+                self.gpt_explainer.right_available = np.random.choice([True, False])
                 
             if self.mode == "surronding_explain_mode":
-                # wait_time = max(wait_time, 7.0)
                 self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
                 self.change_timer_interval(interval=wait_time)
         else:
-            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
-            self.logger.info(f"next wait time: 1.0 (constant)")
-            self.change_timer_interval(interval=1.0)
+            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
+            self.logger.info(f"next wait time: 0.5 (constant)")
+            self.change_timer_interval(interval=0.5)
 
     def change_timer_interval(self, interval: float):
         self.timer.cancel()
@@ -900,7 +897,7 @@ class GPTExplainer():
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
         # 1 character takes 0.1 seconds
-        return len(text) * 0.1
+        return len(text) * 0.075
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it

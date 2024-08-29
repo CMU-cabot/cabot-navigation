@@ -12,6 +12,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 import std_msgs.msg
+from cabot_ui.explore.test_state_control import StateControl
 
 from cabot_common import vibration
 from cabot_ui.explore.test_explore import main as explore
@@ -35,7 +36,7 @@ class ExplorationMainLoop(Node):
         self.event_pub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10)
         self.camera_ready_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/camera_ready", self.camera_ready_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
-
+        self.state_control = StateControl(self)
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
 
@@ -159,7 +160,7 @@ class ExplorationMainLoop(Node):
                 state_client.logger.info("rclpy is not ok; initializing...")
                 rclpy.init()
             state_client.logger.info(f"\nIteration: {self.iter}")
-
+            self.state_control.set_state("paused")
             # 1. generate "intersection" explanation from images to check the availability of each direction
             if use_image:
                 state_client.logger.info("Generating GPT-4o explanation from images...\n")
@@ -368,6 +369,7 @@ class ExplorationMainLoop(Node):
                 query_type = query_node.query_type
             else:
                 query_type = "none"
+            self.state_control.set_state("running")
             explore(x, y, query_type=query_type)
             state_client.logger.info(f"Exploration {self.iter} done\n")
             self.iter += 1
