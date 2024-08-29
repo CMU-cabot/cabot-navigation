@@ -54,9 +54,10 @@ class ExplorationMainLoop(Node):
 
         self.plan_events = []
         self.plan_time_threshold = 10
-        self.plan_count_threshold = 10
+        self.plan_count_threshold = 4
 
         self.poses = None
+        self.nDTW_threshold = 1.5
 
         self.logger.info("ExplorationMainLoop initialized")
 
@@ -73,6 +74,7 @@ class ExplorationMainLoop(Node):
             self.logger.info(f"[Main Loop] Planning events in last {self.planning_time_threshold} seconds: {len(self.planning_events)}")
             self.planning_events.append(current_time)
             if len(self.planning_events) >= self.planning_count_threshold:
+                # Robot may be stuck in planning
                 self.logger.warning(f"[Main Loop] WARNING: More than {self.planning_count_threshold} planning events detected within {self.planning_time_threshold} seconds!")
 
     def plan_callback(self, msg):
@@ -85,7 +87,7 @@ class ExplorationMainLoop(Node):
             nDTW = self.calculate_nDTW(self.poses, poses)
             self.logger.info(f"[Main Loop] nDTW = {nDTW}")
 
-            if nDTW > 10:
+            if nDTW > self.nDTW_threshold:
                 self.logger.info("[Main Loop] Plan has changed! (Replanning)")
                 self.plan_events = [t for t in self.plan_events if current_time - t < self.plan_time_threshold]
                 if len(self.plan_events) > 0:
