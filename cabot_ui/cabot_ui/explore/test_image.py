@@ -717,6 +717,7 @@ class GPTExplainer():
         self.should_speak = should_speak
         self.conversation_history = []
         test_inference = self.query_with_images(prompt="test", images=[])
+        self.okay_images = False
 
         if  self.mode == "semantic_map_mode":
             self.postfix = "s"
@@ -763,6 +764,11 @@ class GPTExplainer():
             images = []
 
             if webcamera_image is not None:
+                if not self.okay_images:
+                    self.logger.info("Okay")
+                    self.okay_images = True
+                    test_speak.speak_text("実験準備ができました")
+                    
                 # resize to 1080p
                 webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
@@ -773,6 +779,10 @@ class GPTExplainer():
                 images_with_text = [webcamera_image_with_text]
 
             elif (front_image is not None) and (left_image is not None) and (right_image is not None):
+                if not self.okay_images:
+                    self.logger.info("Okay")
+                    self.okay_images = True
+                    test_speak.speak_text("実験準備ができました")
 
                 left_image = self.resize_images(left_image, max_width=768)
                 left_image_with_text = self.add_text_to_image(left_image, "Left")
@@ -922,7 +932,8 @@ class GPTExplainer():
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
         # 1 character takes 0.1 seconds
-        return len(text) * 0.075
+        # but we make it shorter by 0.05 seconds beacause we want to keep doing the inference
+        return len(text) * 0.05
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it
