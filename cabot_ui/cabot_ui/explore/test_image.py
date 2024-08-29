@@ -762,7 +762,7 @@ class GPTExplainer():
         try:
             images = []
 
-            if not webcamera_image is None:
+            if webcamera_image is not None:
                 # resize to 1080p
                 webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
@@ -772,7 +772,7 @@ class GPTExplainer():
 
                 images_with_text = [webcamera_image_with_text]
 
-            elif (not front_image is None) and (not left_image is None) and (not right_image is None):
+            elif (front_image is not None) and (left_image is not None) and (right_image is not None):
 
                 left_image = self.resize_images(left_image, max_width=768)
                 left_image_with_text = self.add_text_to_image(left_image, "Left")
