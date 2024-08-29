@@ -95,7 +95,7 @@ class ExplorationMainLoop(Node):
                 self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}")
                 self.plan_events.append(current_time)
                 if len(self.plan_events) >= self.plan_count_threshold:
-                    self.logger.warning(f"[Main Loop] WARNING: More than {self.plan_count_threshold} plan events detected within {self.plan_time_threshold} seconds!")
+                    self.logger.warning(f"[Main Loop] WARNING: {len(self.plan_events)} plan events detected within {self.plan_time_threshold} seconds!")
 
         self.poses = poses
 

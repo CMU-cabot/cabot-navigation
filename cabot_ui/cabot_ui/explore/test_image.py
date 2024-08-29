@@ -386,6 +386,8 @@ class CaBotImageNode(Node):
         self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
         self.loop_count += 1
         camera_ready = self.realsense_ready or self.web_camera_ready
+        if camera_ready: # dirty fix
+            self.ready = True
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         if not self.no_explain_mode and self.ready and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
