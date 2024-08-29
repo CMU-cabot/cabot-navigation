@@ -386,10 +386,8 @@ class CaBotImageNode(Node):
         self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
         self.loop_count += 1
         camera_ready = self.realsense_ready or self.web_camera_ready
-        if camera_ready: # dirty fix
-            self.ready = True
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
-        if not self.no_explain_mode and self.ready and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
+        if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
@@ -749,7 +747,7 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray, webcamera_image: Optional[np.ndarray]) -> float:
+    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], webcamera_image: Optional[np.ndarray]) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
@@ -803,6 +801,10 @@ class GPTExplainer():
                 if use_initial_prompt:
                     prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
             else:
+                self.logger.info(f"Webcamera image: {webcamera_image}")
+                self.logger.info(f"Front image: {front_image}")
+                self.logger.info(f"Left image: {left_image}")
+                self.logger.info(f"Right image: {right_image}")
                 self.logger.info("Error in GPTExplainer.explain: Images are None.")
                 return 1.0, "エラー"
 
@@ -814,8 +816,8 @@ class GPTExplainer():
             extracted_json = gpt_response["choices"][0]["message"]["content"]
             
             if extracted_json is None:
+                extracted_json = {"description": ""}
                 self.logger.info("Could not extract JSON part from the response.")
-                extracted_json["description"] = "" # error so set the description to empty
                 self.logger.info(f"Error in GPTExplainer.explain: extracted_json is None: {gpt_response}")
             else:
                 if self.mode == "intersection_detection_mode":
