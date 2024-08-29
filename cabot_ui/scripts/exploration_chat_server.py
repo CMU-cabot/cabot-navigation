@@ -388,7 +388,7 @@ class ExplorationChatServer(Node):
                 if finish:
                     navi = True
                     dest_info = {"nodes": ""}
-                    self.publish_finish_chat()
+                    # self.publish_finish_chat()
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir_search)
@@ -401,7 +401,7 @@ class ExplorationChatServer(Node):
 
                 navi = True
                 dest_info = {"nodes": ""}
-                self.publish_finish_chat()
+                # self.publish_finish_chat()
 
                 res_text = [query_message]
 
