@@ -184,8 +184,13 @@ class CaBotImageNode(Node):
                 persona=self.persona,
                 # dummy=True if is_sim else False
             )
-        
+        self.web_camera_ready  = False
+
         self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
+        if self.web_camera_manager.is_open():
+            self.logger.info("Web camera is open")
+            test_speak.speak_text("Webカメラが起動しました")
+            self.web_camera_ready = True
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
@@ -200,6 +205,14 @@ class CaBotImageNode(Node):
         self.loop_count = 0
 
         self.timer = self.create_timer(5.0, self.loop)
+
+        if self.web_camera_ready:
+            self.publish_camera_ready()
+
+    def publish_camera_ready(self):
+        for i in range(10):
+            # publish the camera ready status after i seconds
+            self.create_timer(i, self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True)))
 
     def touch_callback(self, msg: std_msgs.msg.Int16):
         if msg.data == 1:
@@ -319,6 +332,11 @@ class CaBotImageNode(Node):
             self.logger.info("Realsense ready")
             test_speak.speak_text("カメラが起動しました")
             self.publish_latest_explained_info()
+
+        if not self.web_camera_ready and self.web_camera_manager.is_open():
+            self.logger.info("Web camera is open")
+            test_speak.speak_text("Webカメラが起動しました")
+            self.web_camera_ready = True
         
         self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
@@ -345,9 +363,10 @@ class CaBotImageNode(Node):
             self.timer.cancel()
             return
         self.loop_count += 1
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
+        camera_ready = self.realsense_ready or self.web_camera_ready
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         # generate explanation
-        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready:
+        if not self.no_explain_mode and self.ready and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
@@ -399,7 +418,7 @@ class CaBotImageNode(Node):
                 self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
                 self.change_timer_interval(interval=wait_time)
         else:
-            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
+            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
             self.logger.info(f"next wait time: 1.0 (constant)")
             self.change_timer_interval(interval=1.0)
 
