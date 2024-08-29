@@ -187,13 +187,14 @@ class CaBotImageNode(Node):
             )
         self.web_camera_ready  = False
 
+        self.logger.info("Opening web camera")
         self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
         if self.web_camera_manager.is_open():
             self.logger.info("Web camera is open")
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
         else:
-            self.logger.info("Web camera is not open")
+            self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
             self.open_webcam_loop()
 
         self.can_speak_explanation = False
@@ -222,6 +223,7 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is open")
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
+            self.publish_camera_ready()
             self.publish_latest_explained_info()
         thread = threading.Thread(target=_open_webcam_loop)
         thread.start()
@@ -768,6 +770,8 @@ class GPTExplainer():
                 if use_initial_prompt:
                     prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
 
+                images_with_text = [webcamera_image_with_text]
+
             elif (not front_image is None) and (not left_image is None) and (not right_image is None):
 
                 left_image = self.resize_images(left_image, max_width=768)
@@ -781,6 +785,8 @@ class GPTExplainer():
                 right_image = self.resize_images(right_image, max_width=768)
                 right_image_with_text = self.add_text_to_image(right_image, "Right")
                 images.append(right_image_with_text)
+
+                images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
 
                 if use_initial_prompt:
                     prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
@@ -841,7 +847,6 @@ class GPTExplainer():
 
             pretty_response = json.dumps(gpt_response, indent=4)
 
-            images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
             # if not webcamera_image is None:
             #     images_with_text.append(webcamera_image_with_text)
 

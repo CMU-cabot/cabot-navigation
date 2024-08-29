@@ -85,15 +85,15 @@ class ExplorationMainLoop(Node):
             nDTW = self.calculate_nDTW(self.poses, poses)
             self.logger.info(f"[Main Loop] nDTW = {nDTW}")
 
-        if nDTW > 10:
-            self.logger.info("[Main Loop] Plan has changed! (Replanning)")
-            self.plan_events = [t for t in self.plan_events if current_time - t < self.plan_time_threshold]
-            if len(self.plan_events) > 0:
-                self.logger.info(f"[Main Loop] Time from the last plan event: {current_time - self.plan_events[-1]} seconds")
-            self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}")
-            self.plan_events.append(current_time)
-            if len(self.plan_events) >= self.plan_count_threshold:
-                self.logger.warning(f"[Main Loop] WARNING: More than {self.plan_count_threshold} plan events detected within {self.plan_time_threshold} seconds!")
+            if nDTW > 10:
+                self.logger.info("[Main Loop] Plan has changed! (Replanning)")
+                self.plan_events = [t for t in self.plan_events if current_time - t < self.plan_time_threshold]
+                if len(self.plan_events) > 0:
+                    self.logger.info(f"[Main Loop] Time from the last plan event: {current_time - self.plan_events[-1]} seconds")
+                self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}")
+                self.plan_events.append(current_time)
+                if len(self.plan_events) >= self.plan_count_threshold:
+                    self.logger.warning(f"[Main Loop] WARNING: More than {self.plan_count_threshold} plan events detected within {self.plan_time_threshold} seconds!")
 
         self.poses = poses
 
