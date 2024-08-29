@@ -267,12 +267,12 @@ class ExplorationChatServer(Node):
         self.get_logger().info(f"Query published: {query_msg.data}")
 
         if query_type == "search":
-            query_message = f"ご要望いただいた{user_query_message}の場所を検索いたしましたので、ご案内します。"
+            query_message = f"{user_query_message}の場所までご案内します。"
         elif query_type == "direction":
             dir_jp = self.dir_to_jp.get(query_string, query_string)
-            query_message = f"ご要望いただいた{dir_jp}の方向に進みます。"
+            query_message = f"" # let test loop handle this
         else:
-            query_message = f"入力に何か問題がありそうです。もう一度入力してください。"
+            query_message = f"すみません、もう一度言ってください。"
 
         return query_message
 
