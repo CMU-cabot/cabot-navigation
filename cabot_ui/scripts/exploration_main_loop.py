@@ -21,6 +21,7 @@ from cabot_ui.explore.test_loop import PersistentCancelClient, CabotQueryNode
 from cabot_ui.explore.test_map import main as get_next_point
 from cabot_ui.explore.test_speak import speak_text
 import threading
+import nav_msgs
 
 
 
@@ -36,6 +37,7 @@ class ExplorationMainLoop(Node):
         self.event_pub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10)
         self.camera_ready_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/camera_ready", self.camera_ready_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
+        self.plan_sub = self.create_subscription(nav_msgs.msg.Path, "/plan", self.plan_callback, 10)
         self.state_control = StateControl(self)
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
@@ -50,11 +52,16 @@ class ExplorationMainLoop(Node):
         self.planning_time_threshold = 10
         self.planning_count_threshold = 10
 
+        self.plan_events = []
+        self.plan_time_threshold = 10
+        self.plan_count_threshold = 10
+
+        self.poses = None
+
         self.logger.info("ExplorationMainLoop initialized")
 
     def event_callback(self, msg):
         self.logger.info(f"[Main Loop] Received event: {msg.data}")
-
 
         # TODO: Maybe reset the planning events when the robot is stopped
         if msg.data == "navigation;exploration;compute_path_to_pose":
@@ -67,6 +74,61 @@ class ExplorationMainLoop(Node):
             self.planning_events.append(current_time)
             if len(self.planning_events) >= self.planning_count_threshold:
                 self.logger.warning(f"[Main Loop] WARNING: More than {self.planning_count_threshold} planning events detected within {self.planning_time_threshold} seconds!")
+
+    def plan_callback(self, msg):
+        self.logger.info(f"[Main Loop] Received plan message")
+        current_time = time.time()
+        poses = msg.poses
+
+        if self.poses is not None:
+            #calculate nDTW
+            nDTW = self.calculate_nDTW(self.poses, poses)
+            self.logger.info(f"[Main Loop] nDTW = {nDTW}")
+
+        if nDTW > 10:
+            self.logger.info("[Main Loop] Plan has changed! (Replanning)")
+            self.plan_events = [t for t in self.plan_events if current_time - t < self.plan_time_threshold]
+            if len(self.plan_events) > 0:
+                self.logger.info(f"[Main Loop] Time from the last plan event: {current_time - self.plan_events[-1]} seconds")
+            self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}")
+            self.plan_events.append(current_time)
+            if len(self.plan_events) >= self.plan_count_threshold:
+                self.logger.warning(f"[Main Loop] WARNING: More than {self.plan_count_threshold} plan events detected within {self.plan_time_threshold} seconds!")
+
+        self.poses = poses
+
+    def calculate_path_length(self, poses):
+        path_length = 0
+        for i in range(1, len(poses)):
+            x1, y1 = poses[i-1].pose.position.x, poses[i-1].pose.position.y
+            x2, y2 = poses[i].pose.position.x, poses[i].pose.position.y
+            path_length += np.linalg.norm(np.array([x1, y1]) - np.array([x2, y2]))
+        return path_length
+
+    def dtw_distance(self, path1, path2):
+        n, m = len(path1), len(path2)
+        dtw_matrix = np.zeros((n+1, m+1))
+        dtw_matrix[1:, 0] = np.inf
+        dtw_matrix[0, 1:] = np.inf
+
+        for i in range(1, n+1):
+            for j in range(1, m+1):
+                x1, y1 = path1[i-1].pose.position.x, path1[i-1].pose.position.y
+                x2, y2 = path2[j-1].pose.position.x, path2[j-1].pose.position.y
+                cost = np.linalg.norm(np.array([x1, y1]) - np.array([x2, y2]))
+                dtw_matrix[i, j] = cost + min(dtw_matrix[i-1, j],    # insertion
+                                            dtw_matrix[i, j-1],    # deletion
+                                            dtw_matrix[i-1, j-1])  # match
+
+        return dtw_matrix[n, m]
+
+    def calculate_nDTW(self, path1, path2):
+        dtw_cost = self.dtw_distance(path1, path2)
+        path_length_1 = self.calculate_path_length(path1)
+        path_length_2 = self.calculate_path_length(path2)
+        total_path_length = path_length_1 + path_length_2
+        nDTW = dtw_cost / total_path_length
+        return nDTW
 
     def change_timer_interval(self, interval: float):
         self.timer.cancel()
@@ -150,8 +212,8 @@ class ExplorationMainLoop(Node):
         print(f"Logs will be saved in {log_dir}")
         
         # 0. run exploration loop!
-        self.logger.info("[ExplorationMainLoop] Waiting for 20 seconds before starting exploration loop...")
-        time.sleep(10)
+        self.logger.info("[ExplorationMainLoop] Waiting for 5 seconds before starting exploration loop...")
+        time.sleep(5)
         self.logger.info("[ExplorationMainLoop] Starting exploration loop!")
 
         while True:
