@@ -192,6 +192,9 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is open")
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
+        else:
+            self.logger.info("Web camera is not open")
+            self.open_webcam_loop()
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
@@ -209,6 +212,19 @@ class CaBotImageNode(Node):
 
         if self.web_camera_ready:
             self.publish_camera_ready()
+
+    def open_webcam_loop(self):
+        # open the webcam in different thread until it is opened
+        def _open_webcam_loop():
+            while not self.web_camera_manager.is_open():
+                self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
+                time.sleep(1)
+            self.logger.info("Web camera is open")
+            test_speak.speak_text("Webカメラが起動しました")
+            self.web_camera_ready = True
+            self.publish_latest_explained_info()
+        thread = threading.Thread(target=_open_webcam_loop)
+        thread.start()
 
     def publish_camera_ready(self):
         def _publish_camera_ready():
