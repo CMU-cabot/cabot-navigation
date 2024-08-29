@@ -742,32 +742,35 @@ class GPTExplainer():
             self.conversation_history = []
 
         try:
-            # resize images max width 512
-            front_image = self.resize_images(front_image, max_width=768)
-            left_image = self.resize_images(left_image, max_width=768)
-            right_image = self.resize_images(right_image, max_width=768)
+            images = []
 
-            # generate explanation from the three-view images
-            front_image_with_text = self.add_text_to_image(front_image, "Front")
-            left_image_with_text = self.add_text_to_image(left_image, "Left")
-            right_image_with_text = self.add_text_to_image(right_image, "Right")
             if not webcamera_image is None:
                 # resize to 1080p
                 webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
-
-            images = []
-            if not webcamera_image is None:
                 images.append(webcamera_image_with_text)
                 if use_initial_prompt:
                     prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
-            else:
-                
+
+            elif (not front_image is None) and (not left_image is None) and (not right_image is None):
+
+                left_image = self.resize_images(left_image, max_width=768)
+                left_image_with_text = self.add_text_to_image(left_image, "Left")
                 images.append(left_image_with_text)
+
+                front_image = self.resize_images(front_image, max_width=768)
+                front_image_with_text = self.add_text_to_image(front_image, "Front")
                 images.append(front_image_with_text)
+
+                right_image = self.resize_images(right_image, max_width=768)
+                right_image_with_text = self.add_text_to_image(right_image, "Right")
                 images.append(right_image_with_text)
+
                 if use_initial_prompt:
                     prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
+            else:
+                self.logger.info("Error in GPTExplainer.explain: Images are None.")
+                return 1.0, "エラー"
 
             gpt_response = self.query_with_images(prompt, images)
             gpt_response["log_dir"] = self.log_dir
@@ -775,6 +778,7 @@ class GPTExplainer():
             # get front/left/right availability
             self.logger.info(f"Extracting JSON from the response: {gpt_response}")
             extracted_json = gpt_response["choices"][0]["message"]["content"]
+            
             if extracted_json is None:
                 self.logger.info("Could not extract JSON part from the response.")
                 extracted_json["description"] = "" # error so set the description to empty
