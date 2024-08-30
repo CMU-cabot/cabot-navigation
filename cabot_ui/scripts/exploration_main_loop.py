@@ -267,14 +267,15 @@ class ExplorationMainLoop(Node):
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
                 do_trajectory_filter=trajectory_filter, 
-                auto_mode=auto, 
+                auto_mode=auto,
                 log_dir=log_dir, 
                 availability_from_image=availability_from_image,
                 forbidden_centers=forbidden_centers,
                 initial_coords=initial_coords,
                 initial_orientation=initial_orientation,
                 marker_a=self.marker_a,
-                marker_b=self.marker_b
+                marker_b=self.marker_b,
+                logger=state_client.logger
             )
             state_client.logger.info(f"Took {time.time() - start:.2f} seconds to get the next point\n")
 
