@@ -9,6 +9,7 @@ import sys
 import numpy as np
 import tty, termios
 import time
+from typing import Optional
 
 
 """
@@ -48,13 +49,14 @@ def getch():
 
 
 class CaBotExplorationNode(Node):
-    def __init__(self, x: int = 0, y: int = 0, query_type: str = "goal"):
+    def __init__(self, x: int = 0, y: int = 0, query_type: str = "goal", pose: Optional[float] = None):
         super().__init__("cabot_exploration_node")
         self.logger = self.get_logger()
         self.should_stop = False
 
         self.x = x
         self.y = y
+        self.pose = pose
         self.query_type = query_type
 
         self.coordinates = []
@@ -78,45 +80,35 @@ class CaBotExplorationNode(Node):
         self.timer = self.create_timer(1.0, self.timer_callback)
 
     def timer_callback(self):
-        self.logger.info("Exploration node is running")
+        self.logger.info("[CabotExplorationNode] Exploration node started")
         self.timer.cancel()
-        
-        self.logger.info("Exploration node is stopped")
         
         msg = MFLocalizeStatus()
         msg.status = MFLocalizeStatus.TRACKING
         self.localize_status_pub.publish(msg)
-        
-        self.logger.info(f"[CabotExplorationNode] Publishing: {msg}")
 
-        coords_msg = String()
-        
         if self.query_type == "search":
             self.goal_coordinate_pub.publish(String(data="navigation_search"))
         time.sleep(0.5)
+        
+        coords_msg = String()
         coords_msg.data = f"navigation;destination;goal:{self.x}:{self.y}"
-        self.goal_coordinate_pub.publish(coords_msg)
         self.logger.info(f"[CabotExplorationNode] Publishing: {coords_msg}")
+        self.goal_coordinate_pub.publish(coords_msg)
+        self.logger.info(f"[CabotExplorationNode] Published: {coords_msg}")
 
     def stop_timer_callback(self, msg):
         self.logger.info(f"(test_explore) Received: {msg.data}")
         if msg.data == "navigation_arrived" or msg.data == "navigation;cancel":
-            self.logger.info("Goal is reached (or canceled)")
-            # raise SystemExit("Goal is reached")
-            # self.should_stop = True
-            # self.timer.cancel()
-            # self.destroy_node()
-            # rclpy.shutdown()
+            self.logger.info("[CabotExplorationNode] Goal is reached (or canceled)")
+
+            if self.pose is not None:
+                self.logger.info("[CabotExplorationNode] Pose is provided, so rotate the robot to the given pose")
+                
+
             sys.exit(0)
-        # elif msg.data == "startchat":
-        #     # publish "startchat" to /cabot/event to start chat
-        #     start_chat_msg = String()
-        #     start_chat_msg.data = "navigation;cancel"
-        #     self.goal_coordinate_pub.publish(start_chat_msg)
-        #     raise SystemExit("Start chat")
     
     def odom_callback(self, msg):
-        # self.logger.info(f"Received: {msg.pose.pose.position.x}, {msg.pose.pose.position.y}")
         self.coordinates.append((msg.pose.pose.position.x, msg.pose.pose.position.y))
 
     def map_callback(self, msg):
