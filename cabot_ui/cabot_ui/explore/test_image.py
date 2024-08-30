@@ -738,9 +738,12 @@ class GPTExplainer():
             #save the odom as numpy array
             np.save(f"{folder_name}/odom.npy", self.node.odom)
 
-            cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
-            cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
-            cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+            if not front_image is None:
+                cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
+            if not left_image is None:
+                cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
+            if not right_image is None:
+                cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
             if not webcamera_image is None:
                 cv2.imwrite(os.path.join(folder_name,"webcamera.jpg"), webcamera_image)
 
