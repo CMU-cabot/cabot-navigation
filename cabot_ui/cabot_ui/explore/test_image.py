@@ -194,6 +194,7 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is open")
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
+            self.webcamera_image = self.web_camera_manager.get_frame()
         else:
             self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
             self.open_webcam_loop()
@@ -212,8 +213,20 @@ class CaBotImageNode(Node):
 
         self.timer = self.create_timer(5.0, self.loop)
 
+        self.webcam_timer = None
+
         if self.web_camera_ready:
             self.publish_camera_ready()
+            self.get_web_camera_image()
+
+    def get_web_camera_image(self):
+        # Function to capture and schedule the next image capture
+        def _capture_and_schedule():
+            self.webcamera_image = self.web_camera_manager.get_frame()
+            self.logger.info("Captured web camera image")
+            # Schedule the next capture 1 second later
+
+        self.webcam_timer = threading.Timer(1.0, _capture_and_schedule).start()
 
     def persona_callback(self, msg: std_msgs.msg.String):
         self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
@@ -260,28 +273,32 @@ class CaBotImageNode(Node):
             self.touching = False
 
     def publish_latest_explained_info(self):
+        self.logger.info("Publishing latest explained info")
+        msg = String()
+        msg.data = self.latest_explain
+        self.latest_explained_info_pub.publish(msg)
+
+        # publish the images
+        bridge = CvBridge()
         if self.latest_explained_front_image is not None:
-            self.logger.info("Publishing latest explained info")
-            msg = String()
-            msg.data = self.latest_explain
-            self.latest_explained_info_pub.publish(msg)
-
-            # publish the images
-            bridge = CvBridge()
             front_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_front_image, encoding="rgb8")
-            left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
-            right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
-            if self.webcamera_image is not None:
-                # make the resolution smaller
-                self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
-                webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
             self.latest_explained_front_image_pub.publish(front_image_msg)
+        
+        if self.latest_explained_left_image is not None:
+            left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
             self.latest_explained_left_image_pub.publish(left_image_msg)
-            self.latest_explained_right_image_pub.publish(right_image_msg)
-            if self.webcamera_image is not None:
-                self.latest_web_camera_image_pub.publish(webcamera_image_msg)
 
-            self.logger.info("Published latest explained info")
+        if self.latest_explained_right_image is not None:
+            right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
+            self.latest_explained_right_image_pub.publish(right_image_msg)
+
+        if self.webcamera_image is not None:
+            # make the resolution smaller
+            self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
+            webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
+            self.latest_web_camera_image_pub.publish(webcamera_image_msg)
+
+        self.logger.info("Published latest explained info")
     
     def activity_callback(self, msg: Log):
         if msg.category == "cabot/interface" and msg.memo == "ready":
@@ -345,8 +362,9 @@ class CaBotImageNode(Node):
         
         self.front_image = front_image
         self.left_image = left_image
-        self.right_image = right_image  
-        self.webcamera_image = self.web_camera_manager.get_frame()     
+        self.right_image = right_image
+        if self.web_camera_manager.is_open():
+            self.webcamera_image = self.web_camera_manager.get_frame()     
 
         self.front_marker_detected = self.detect_marker(front_image)
         self.left_marker_detected = self.detect_marker(left_image)
@@ -363,6 +381,9 @@ class CaBotImageNode(Node):
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
             self.publish_latest_explained_info()
+
+        if self.webcam_timer is not None:
+            self.webcam_timer.cancel()
         
         self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
