@@ -9,6 +9,8 @@ import sys
 import numpy as np
 import tty, termios
 import time
+from typing import Optional
+from message_filters import ApproximateTimeSynchronizer, Subscriber
 
 
 """
@@ -48,13 +50,14 @@ def getch():
 
 
 class CaBotExplorationNode(Node):
-    def __init__(self, x: int = 0, y: int = 0, query_type: str = "goal"):
+    def __init__(self, x: int = 0, y: int = 0, query_type: str = "goal", pose: Optional[float] = None):
         super().__init__("cabot_exploration_node")
         self.logger = self.get_logger()
         self.should_stop = False
 
         self.x = x
         self.y = y
+        self.pose = pose
         self.query_type = query_type
 
         self.coordinates = []
@@ -66,8 +69,12 @@ class CaBotExplorationNode(Node):
         self.goal_coordinate_pub = self.create_publisher(String, "/cabot/event", 10)
         self.sub = self.create_subscription(String, "/cabot/event", self.stop_timer_callback, 10)
 
-        self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
-        self.map_sub = self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
+        # Subscriber for odom and map; use ApproximateTimeSynchronizer to sync the messages
+        self.odom_sub = Subscriber(self, Odometry, "/odom")
+        self.map_sub = Subscriber(self, OccupancyGrid, "/map")
+
+        self.ts = ApproximateTimeSynchronizer([self.odom_sub, self.map_sub], queue_size=10, slop=0.1)
+        self.ts.registerCallback(self.sync_callback)
 
         self.map_x = 0
         self.map_y = 0
@@ -76,55 +83,44 @@ class CaBotExplorationNode(Node):
         self.map_resolution = 0
 
         self.timer = self.create_timer(0.01, self.timer_callback)
+    
+    def sync_callback(self, odom_msg, map_msg):
+        self.logger.info("[CaBotExplorationNode] Synced callback called")
+
+        self.coordinates.append((odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y))
+
+        self.map_x = map_msg.info.origin.position.x
+        self.map_y = map_msg.info.origin.position.y
+        self.map_width = map_msg.info.width
+        self.map_height = map_msg.info.height
+        self.map_resolution = map_msg.info.resolution
 
     def timer_callback(self):
-        self.logger.info("Exploration node is running")
+        self.logger.info("[CabotExplorationNode] Exploration node started")
         self.timer.cancel()
-        
-        self.logger.info("Exploration node is stopped")
         
         msg = MFLocalizeStatus()
         msg.status = MFLocalizeStatus.TRACKING
         self.localize_status_pub.publish(msg)
-        
-        self.logger.info(f"[CabotExplorationNode] Publishing: {msg}")
 
-        coords_msg = String()
-        
         if self.query_type == "search":
             self.goal_coordinate_pub.publish(String(data="navigation_search"))
         # time.sleep(0.5)
+        
+        coords_msg = String()
         coords_msg.data = f"navigation;destination;goal:{self.x}:{self.y}"
-        self.goal_coordinate_pub.publish(coords_msg)
         self.logger.info(f"[CabotExplorationNode] Publishing: {coords_msg}")
+        self.goal_coordinate_pub.publish(coords_msg)
+        self.logger.info(f"[CabotExplorationNode] Published: {coords_msg}")
 
     def stop_timer_callback(self, msg):
         self.logger.info(f"(test_explore) Received: {msg.data}")
         if msg.data == "navigation_arrived" or msg.data == "navigation;cancel":
-            self.logger.info("Goal is reached (or canceled)")
-            # raise SystemExit("Goal is reached")
-            # self.should_stop = True
-            # self.timer.cancel()
-            # self.destroy_node()
-            # rclpy.shutdown()
-            sys.exit(0)
-        # elif msg.data == "startchat":
-        #     # publish "startchat" to /cabot/event to start chat
-        #     start_chat_msg = String()
-        #     start_chat_msg.data = "navigation;cancel"
-        #     self.goal_coordinate_pub.publish(start_chat_msg)
-        #     raise SystemExit("Start chat")
-    
-    def odom_callback(self, msg):
-        # self.logger.info(f"Received: {msg.pose.pose.position.x}, {msg.pose.pose.position.y}")
-        self.coordinates.append((msg.pose.pose.position.x, msg.pose.pose.position.y))
+            self.logger.info("[CabotExplorationNode] Goal is reached (or canceled)")
 
-    def map_callback(self, msg):
-        self.map_x = msg.info.origin.position.x
-        self.map_y = msg.info.origin.position.y
-        self.map_width = msg.info.width
-        self.map_height = msg.info.height
-        self.map_resolution = msg.info.resolution
+            if self.pose is not None:
+                self.logger.info("[CabotExplorationNode] Pose is provided, so rotate the robot to the given pose")
+            sys.exit(0)
 
 
 class CancelNode(Node):
@@ -188,14 +184,18 @@ def main(x: int, y: int, query_type: str, cancel_mode: bool = False):
 
         print("spin done")
         # convert coordinates to map coordinates
-        coordinates = np.asarray(rcl_publisher.coordinates) / rcl_publisher.map_resolution
-        coordinates[:, 1] = -coordinates[:, 1]
-        map_x = -rcl_publisher.map_x / rcl_publisher.map_resolution
-        map_y = -rcl_publisher.map_y / rcl_publisher.map_resolution
-        map_coordinates = np.asarray([map_x, rcl_publisher.map_height - map_y])
-        coordinates += map_coordinates
-        with open("coordinates.npy", "wb") as f:
-            np.save(f, coordinates)
+        try:
+            coordinates = np.asarray(rcl_publisher.coordinates) / rcl_publisher.map_resolution
+            coordinates[:, 1] = -coordinates[:, 1]
+            map_x = -rcl_publisher.map_x / rcl_publisher.map_resolution
+            map_y = -rcl_publisher.map_y / rcl_publisher.map_resolution
+            map_coordinates = np.asarray([map_x, rcl_publisher.map_height - map_y])
+            coordinates += map_coordinates
+            with open("coordinates.npy", "wb") as f:
+                np.save(f, coordinates)
+        except Exception as e:
+            print(e)
+            print("Error saving coordinates")
         
 
 

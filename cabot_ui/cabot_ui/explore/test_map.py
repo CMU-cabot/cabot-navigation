@@ -1,25 +1,27 @@
+import argparse
+import datetime
+import json
+import os
+import random
+import sys
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.ndimage import gaussian_filter
+from shapely.geometry import Point, Polygon
+from skimage.morphology import skeletonize
+from sklearn.cluster import DBSCAN
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Point
-from visualization_msgs.msg import Marker, MarkerArray
-import argparse
-from mf_localization_msgs.msg import MFLocalizeStatus
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
-from nav_msgs.msg import Odometry, OccupancyGrid
-import sys
-import numpy as np
 import tf_transformations
-from scipy.ndimage import gaussian_filter
-from skimage.morphology import skeletonize
-import cv2
-import random
-from typing import Tuple, Dict, List, Any, Union, Optional
-import matplotlib.pyplot as plt
-from sklearn.cluster import DBSCAN
-import json
-from shapely.geometry import Polygon, Point
-import datetime
-import os
+from geometry_msgs.msg import Point
+from mf_localization_msgs.msg import MFLocalizeStatus
+from nav_msgs.msg import Odometry, OccupancyGrid
+from visualization_msgs.msg import Marker, MarkerArray
+
 
 
 """
@@ -320,8 +322,11 @@ class FilterCandidates:
             initial_pose_filter: bool = True,
             log_dir: str = ".",
             marker_a: Optional[float] = None,
-            marker_b: Optional[float] = None
+            marker_b: Optional[float] = None,
+            logger: Optional[Any] = None
         ):
+        self.logger = logger
+
         # forbidden_area_centers: [(x, y), ...] in odom coordinates
         self.map_x = map_data.map_x
         self.map_y = map_data.map_y
@@ -380,7 +385,7 @@ class FilterCandidates:
                 ), axis=-1
             ).reshape(-1, 2)
 
-        self.max_dist = 200
+        self.max_dist = 500
         self.min_dist = 50
         self.corridor_width = 75
 
@@ -454,6 +459,17 @@ class FilterCandidates:
             return scores
         else:
             return np.zeros(candidates.shape[0])
+    
+    def replanning_filter(self, previous_destination: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        # set the area around the previous destination as forbidden area
+        # calculate the distance from the previous destination
+        thres_dist = 3 / self.map_resolution
+        previous_destination = convert_odom_to_map_batch(np.array([previous_destination]), self.map_x, self.map_y, self.map_resolution, self.map_height)[0]
+        dists = np.linalg.norm(candidates - previous_destination, axis=1)
+        self.logger.info(f"replanning filter; candidates: {candidates}, previous destination: {previous_destination}, dists: {dists}")
+        score_map = np.zeros(candidates.shape[0])
+        score_map[dists < thres_dist] = 10
+        return score_map
     
     def availability_filter(
             self, current_point: np.ndarray, orientation, candidates: np.ndarray
@@ -550,20 +566,23 @@ class FilterCandidates:
         self.initial_orientation = initial_orientation
 
         score_map = np.zeros(candidates.shape[0])
-        initial_coords_in_map = convert_odom_to_map_batch(np.array([initial_coords]), self.map_x, self.map_y, self.map_resolution, self.map_height)[0]
+        dists = self.dist_from_initial_pose(candidates)
+        score_map[dists > self.corridor_width] = 10
+        return score_map
+
+    def dist_from_initial_pose(self, candidates: np.ndarray) -> np.ndarray:
+        initial_coords_in_map = convert_odom_to_map_batch(np.array([self.initial_coords]), self.map_x, self.map_y, self.map_resolution, self.map_height)[0]
         initial_coords_in_map = initial_coords_in_map[::-1].astype(int)
-        initial_orientation = np.pi / 2 + initial_orientation
+        initial_orientation = np.pi / 2 + self.initial_orientation
         # filter out the points that are too far to the line from the initial point and the orientation
         # first, calculate the line equation from the initial point and the orientation
         # i.e., y = ax + b
         a = np.tan(initial_orientation)
         b = initial_coords_in_map[1] - a * initial_coords_in_map[0]
         dists = np.abs(a * candidates[:, 0] - candidates[:, 1] + b) / np.sqrt(a ** 2 + 1)
-        score_map[dists > self.corridor_width] = 10
-        return score_map
+        return dists
 
-
-    def filter(self, current_point, candidates, orientation) -> np.ndarray:
+    def filter(self, current_point, candidates, orientation, previous_destination) -> np.ndarray:
         # candidates: (n, 2); n: number of coordinates
         # orientation: (1,); current orientation in radian
         # return: (n, 1); n: number of coordinates
@@ -593,8 +612,10 @@ class FilterCandidates:
             initial_pose_filter = np.zeros(candidates.shape[0])
         
         marker_filter = self.marker_filter(current_point, orientation, candidates, self.initial_orientation)
+        replanning_filter = self.replanning_filter(previous_destination, candidates)
         
-        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter + initial_pose_filter + marker_filter
+        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
+              + initial_pose_filter + marker_filter + replanning_filter
         return score_map
         
 
@@ -617,7 +638,9 @@ def set_next_point_based_on_skeleton(
         initial_orientation: Optional[float] = None,
         follow_initial_orientation: bool = True,
         marker_a: Optional[float] = None,
-        marker_b: Optional[float] = None
+        marker_b: Optional[float] = None,
+        previous_destination: Optional[np.ndarray] = None,
+        logger: Optional[Any] = None
     ):
     print(f"map data: map_x: {map_x}, map_y: {map_y}, map_resolution: {map_resolution}, map_height: {map_height}")
     orientation = np.pi / 2 + orientation  # flip x axis
@@ -647,7 +670,8 @@ def set_next_point_based_on_skeleton(
         initial_pose_filter=follow_initial_orientation,
         log_dir=log_dir,
         marker_a=marker_a,
-        marker_b=marker_b
+        marker_b=marker_b,
+        logger=logger
     )
     if do_trajectory_filter:
         cand_filter.save_traj_map(log_dir)
@@ -682,7 +706,7 @@ def set_next_point_based_on_skeleton(
     
     cand_score = cand_filter.filter(
         current_point=coords[-1], candidates=map_data.intersection_points,
-        orientation=orientation[-1]
+        orientation=orientation[-1], previous_destination=previous_destination
     )
     # save current coords as txt
     np.savetxt(f"{log_dir}/current_coords.txt", coords[-1])
@@ -732,6 +756,15 @@ def set_next_point_based_on_skeleton(
             print(f"no candidate points in {direction}")
             continue
         min_score_points = points_array[points_scores == min_score]
+        min_score_points_scores = points_scores[points_scores == min_score]
+
+        # add distance from the initial pose to the score
+        dist_from_initial_pose = cand_filter.dist_from_initial_pose(min_score_points)
+        logger.info(f"[set_next_point_based_on_skeleton] min score: {min_score_points_scores}, dist from initial pose: {dist_from_initial_pose}")
+        min_score_points_scores += dist_from_initial_pose
+        logger.info(f"[set_next_point_based_on_skeleton] min score after adding dist from initial pose: {min_score_points_scores}")
+
+        min_score_points = min_score_points[min_score_points_scores == np.min(min_score_points_scores)]
         sampled_point = min_score_points[np.random.choice(len(min_score_points))]
         sampled_points.append([sampled_point, direction, min_score])
 
@@ -786,7 +819,9 @@ def main(
         initial_orientation: Optional[float] = None,
         follow_initial_orientation: bool = True,
         marker_a: Optional[float] = None,
-        marker_b: Optional[float] = None
+        marker_b: Optional[float] = None,
+        previous_destination: Optional[np.ndarray] = None,
+        logger: Optional[Any] = None
     ) -> Optional[Tuple[float, float]]:
     """
     main function to get the next point based on the local map
@@ -874,7 +909,9 @@ def main(
         initial_orientation=initial_orientation,
         follow_initial_orientation=follow_initial_orientation,
         marker_a=marker_a,
-        marker_b=marker_b
+        marker_b=marker_b,
+        previous_destination=previous_destination,
+        logger=logger
     )
     return output_point, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b
 
