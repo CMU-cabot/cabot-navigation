@@ -35,15 +35,11 @@ PROMPT_EXPLORE = """
     上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
 
     JSON形式で返答してください。
-    まず、"initial_description"キーの中に最初の画像の説明を入れてください。
-    その後、"thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
     最後に、"description"キーの中に修正版の画像の説明を入れてください。
     最初にJSONの始まりである```json\n{から返答を開始してください。
     返答例は以下です。
     ```json
     {
-    "initial_description": "<周囲説明>",
-    "thought": "<考察>",
     "description": "<周囲説明>",
     }
     ```
@@ -83,15 +79,11 @@ PROMPT_MIDDLE = """
     上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
 
     JSON形式で返答してください。
-    まず、"initial_description"キーの中に最初の画像の説明を入れてください。
-    その後、"thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
     最後に、"description"キーの中に修正版の画像の説明を入れてください。
     最初にJSONの始まりである```json\n{から返答を開始してください。
     返答例は以下です。
     ```json
     {
-    "initial_description": "<周囲説明>",
-    "thought": "<考察>",
     "description": "<周囲説明>",
     }
     ```
@@ -135,15 +127,11 @@ PROMPT_NAVIGATION = """
     上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
 
     JSON形式で返答してください。
-    まず、"initial_description"キーの中に最初の画像の説明を入れてください。
-    その後、"check_description_thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
     最後に、"description"キーの中に修正版の画像の説明を入れてください。
     最初にJSONの始まりである```json\n{から返答を開始してください。
     返答例は以下です。
     ```json
     {
-    "initial_description": "<周囲説明>",
-    "thought": "<考察>",
     "description": "<周囲説明>",
     }
     ```

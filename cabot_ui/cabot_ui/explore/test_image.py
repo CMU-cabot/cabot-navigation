@@ -335,7 +335,6 @@ class CaBotImageNode(Node):
         # print(f"cabot nav state: {self.cabot_nav_state}")
 
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-        self.logger.info("[test_image; CaBotImageNode - image_callback] Image received")
 
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
@@ -427,6 +426,7 @@ class CaBotImageNode(Node):
             if self.touching and not self.in_conversation and is_in_valid_state:
                 self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
                 test_speak.speak_text(explain)
+                self.can_speak_explanation = False
             else:
                 self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
                 wait_time = 0.1
@@ -438,7 +438,6 @@ class CaBotImageNode(Node):
 
             self.publish_latest_explained_info()
 
-            self.can_speak_explanation = False
             self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
 
             if self.mode == "intersection_detection_mode":
