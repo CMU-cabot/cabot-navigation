@@ -322,8 +322,11 @@ class FilterCandidates:
             initial_pose_filter: bool = True,
             log_dir: str = ".",
             marker_a: Optional[float] = None,
-            marker_b: Optional[float] = None
+            marker_b: Optional[float] = None,
+            logger: Optional[Any] = None
         ):
+        self.logger = logger
+
         # forbidden_area_centers: [(x, y), ...] in odom coordinates
         self.map_x = map_data.map_x
         self.map_y = map_data.map_y
@@ -457,6 +460,17 @@ class FilterCandidates:
         else:
             return np.zeros(candidates.shape[0])
     
+    def replanning_filter(self, previous_destination: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        # set the area around the previous destination as forbidden area
+        # calculate the distance from the previous destination
+        thres_dist = 3 / self.map_resolution
+        previous_destination = convert_odom_to_map_batch(np.array([previous_destination]), self.map_x, self.map_y, self.map_resolution, self.map_height)[0]
+        dists = np.linalg.norm(candidates - previous_destination, axis=1)
+        self.logger.info(f"replanning filter; candidates: {candidates}, previous destination: {previous_destination}, dists: {dists}")
+        score_map = np.zeros(candidates.shape[0])
+        score_map[dists < thres_dist] = 10
+        return score_map
+    
     def availability_filter(
             self, current_point: np.ndarray, orientation, candidates: np.ndarray
         ) -> np.ndarray:
@@ -568,7 +582,7 @@ class FilterCandidates:
         dists = np.abs(a * candidates[:, 0] - candidates[:, 1] + b) / np.sqrt(a ** 2 + 1)
         return dists
 
-    def filter(self, current_point, candidates, orientation) -> np.ndarray:
+    def filter(self, current_point, candidates, orientation, previous_destination) -> np.ndarray:
         # candidates: (n, 2); n: number of coordinates
         # orientation: (1,); current orientation in radian
         # return: (n, 1); n: number of coordinates
@@ -598,8 +612,10 @@ class FilterCandidates:
             initial_pose_filter = np.zeros(candidates.shape[0])
         
         marker_filter = self.marker_filter(current_point, orientation, candidates, self.initial_orientation)
+        replanning_filter = self.replanning_filter(previous_destination, candidates)
         
-        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter + initial_pose_filter + marker_filter
+        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
+              + initial_pose_filter + marker_filter + replanning_filter
         return score_map
         
 
@@ -623,6 +639,7 @@ def set_next_point_based_on_skeleton(
         follow_initial_orientation: bool = True,
         marker_a: Optional[float] = None,
         marker_b: Optional[float] = None,
+        previous_destination: Optional[np.ndarray] = None,
         logger: Optional[Any] = None
     ):
     print(f"map data: map_x: {map_x}, map_y: {map_y}, map_resolution: {map_resolution}, map_height: {map_height}")
@@ -653,7 +670,8 @@ def set_next_point_based_on_skeleton(
         initial_pose_filter=follow_initial_orientation,
         log_dir=log_dir,
         marker_a=marker_a,
-        marker_b=marker_b
+        marker_b=marker_b,
+        logger=logger
     )
     if do_trajectory_filter:
         cand_filter.save_traj_map(log_dir)
@@ -688,7 +706,7 @@ def set_next_point_based_on_skeleton(
     
     cand_score = cand_filter.filter(
         current_point=coords[-1], candidates=map_data.intersection_points,
-        orientation=orientation[-1]
+        orientation=orientation[-1], previous_destination=previous_destination
     )
     # save current coords as txt
     np.savetxt(f"{log_dir}/current_coords.txt", coords[-1])
@@ -802,6 +820,7 @@ def main(
         follow_initial_orientation: bool = True,
         marker_a: Optional[float] = None,
         marker_b: Optional[float] = None,
+        previous_destination: Optional[np.ndarray] = None,
         logger: Optional[Any] = None
     ) -> Optional[Tuple[float, float]]:
     """
@@ -891,6 +910,7 @@ def main(
         follow_initial_orientation=follow_initial_orientation,
         marker_a=marker_a,
         marker_b=marker_b,
+        previous_destination=previous_destination,
         logger=logger
     )
     return output_point, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b
