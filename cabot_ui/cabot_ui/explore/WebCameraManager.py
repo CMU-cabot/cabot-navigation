@@ -27,7 +27,10 @@ class WebCameraManager:
             self.logger.error(f"Camera {id} is not opened")
 
         frame = self.get_frame()
-        cv2.imwrite(os.path.join(log_dir, f"test_frame.jpg"), frame)
+        try:
+            cv2.imwrite(os.path.join(log_dir, f"test_frame.jpg"), frame)
+        except Exception as e:
+            pass
 
     def get_frame(self):
         ret, frame = self.cap.read()

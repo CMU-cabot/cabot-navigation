@@ -53,11 +53,16 @@ class ExplorationMainLoop(Node):
         self.planning_count_threshold = 10
 
         self.plan_events = []
+        self.ndtws = []
         self.plan_time_threshold = 10
-        self.plan_count_threshold = 4
+        self.plan_count_threshold = 3
+        self.plan_ave_ndtw_threshold = 30
 
         self.poses = None
-        self.nDTW_threshold = 1.5
+        self.nDTW_threshold = 10
+        self.nDTW_max_threshold = 150
+
+        self.previous_destination = np.asarray([0, 0])
 
         self.logger.info("ExplorationMainLoop initialized")
 
@@ -76,6 +81,11 @@ class ExplorationMainLoop(Node):
             if len(self.planning_events) >= self.planning_count_threshold:
                 # Robot may be stuck in planning
                 self.logger.warning(f"[Main Loop] WARNING: More than {self.planning_count_threshold} planning events detected within {self.planning_time_threshold} seconds!")
+        # if msg.data == "navigation;event;navigation_arrived" or msg.data == "navigation;cancel":
+        #     self.logger.info("[Main Loop] Clear planning_events and ndtws")
+        #     self.ndtws = []
+        #     self.plan_events = []
+
 
     def plan_callback(self, msg):
         self.logger.info(f"[Main Loop] Received plan message")
@@ -89,13 +99,26 @@ class ExplorationMainLoop(Node):
 
             if nDTW > self.nDTW_threshold:
                 self.logger.info("[Main Loop] Plan has changed! (Replanning)")
-                self.plan_events = [t for t in self.plan_events if current_time - t < self.plan_time_threshold]
+                
+                intime_event_index = [i for i, t in enumerate(self.plan_events) if current_time - t < self.plan_time_threshold]
+                self.plan_events = [self.plan_events[i] for i in intime_event_index]
+                self.ndtws = [self.ndtws[i] for i in intime_event_index]
+
                 if len(self.plan_events) > 0:
                     self.logger.info(f"[Main Loop] Time from the last plan event: {current_time - self.plan_events[-1]} seconds")
-                self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}")
+                self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}, nDTWs: {self.ndtws}")
                 self.plan_events.append(current_time)
+                self.ndtws.append(nDTW)
                 if len(self.plan_events) >= self.plan_count_threshold:
-                    self.logger.warning(f"[Main Loop] WARNING: {len(self.plan_events)} plan events detected within {self.plan_time_threshold} seconds!")
+                    # calculate average nDTW, but only lower than the max nDTW threshold
+                    average_ndtws = np.mean([ndtw for ndtw in self.ndtws if ndtw < self.nDTW_max_threshold])
+                    self.logger.warning(f"[Main Loop] WARNING: {len(self.plan_events)} plan events detected within {self.plan_time_threshold} seconds! (Average nDTW: {average_ndtws})")
+                    if np.mean(self.ndtws) > self.plan_ave_ndtw_threshold:
+                        self.logger.warning(f"[Main Loop] WARNING: Average nDTW is greater than {self.plan_ave_ndtw_threshold}!")
+                        self.logger.info(f"nDTWs: {self.ndtws}, average: {average_ndtws}, size: {len(self.ndtws)}")
+                        self.logger.info("[Main Loop] Canceling and Replanning...")
+                        self.event_pub.publish(std_msgs.msg.String(data="navigation;cancel"))
+                        self.event_pub.publish(std_msgs.msg.String(data="navigation;replan"))
 
         self.poses = poses
 
@@ -142,7 +165,6 @@ class ExplorationMainLoop(Node):
             threading.Thread(target=self.main_callback).start()
         else:
             self.logger.info("Camera is not ready yet; waiting...")
-    
 
     def main_callback(self):
         self.timer.cancel()
@@ -267,14 +289,16 @@ class ExplorationMainLoop(Node):
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
                 do_trajectory_filter=trajectory_filter, 
-                auto_mode=auto, 
+                auto_mode=auto,
                 log_dir=log_dir, 
                 availability_from_image=availability_from_image,
                 forbidden_centers=forbidden_centers,
                 initial_coords=initial_coords,
                 initial_orientation=initial_orientation,
                 marker_a=self.marker_a,
-                marker_b=self.marker_b
+                marker_b=self.marker_b,
+                previous_destination=self.previous_destination,
+                logger=state_client.logger
             )
             state_client.logger.info(f"Took {time.time() - start:.2f} seconds to get the next point\n")
 
@@ -431,12 +455,15 @@ class ExplorationMainLoop(Node):
             # return output_point, cand_filter.forbidden_area_centers
             
             state_client.logger.info(f"Exploring next point: {output_point}\n")
+            self.previous_destination = output_point
+            self.logger.info(f"Set previous destination: {self.previous_destination}")
             x, y = output_point
             if query_node is not None:
                 query_type = query_node.query_type
             else:
                 query_type = "none"
             self.state_control.set_state("running")
+            
             start = time.time()
             explore(x, y, query_type=query_type)
             state_client.logger.info(f"Took {time.time() - start:.2f} seconds to explore the next point\n")

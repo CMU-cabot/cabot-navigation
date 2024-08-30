@@ -117,11 +117,6 @@ class CaBotTrajectoryNode(Node):
             plt.clf()
             plt.close()
             print(f"  {self.count} trajectory and map saved")
-        
-        # if self.map_resolution != 0:
-        #     # self.destroy_node()
-        #     # rclpy.shutdown()
-        #     sys.exit(0)
 
 
 
@@ -152,31 +147,6 @@ def main():
     
     rcl_publisher.destroy_node()
     rclpy.shutdown()
-
-    # # save map data
-    # map_data = np.copy(rcl_publisher.map_data)
-    # map_resolution = rcl_publisher.map_resolution
-    # map_x = rcl_publisher.map_x
-    # map_y = rcl_publisher.map_y
-    # map_height = rcl_publisher.map_height
-    # map_width = rcl_publisher.map_width
-
-    # # convert coordinates to map coordinates
-    # coordinates = np.asarray(rcl_publisher.coordinates)
-    # orientation = np.asarray(rcl_publisher.orientation)
-    
-    # coordinates = np.asarray(coordinates) / map_resolution
-    # coordinates[:, 1] = -coordinates[:, 1]
-    # map_x = -map_x / map_resolution
-    # map_y = -map_y / map_resolution
-    # map_coordinates = np.asarray([map_x, map_height - map_y])
-    # coordinates += map_coordinates
-    # with open("coordinates_local_map.npy", "wb") as f:
-    #     np.save(f, coordinates)
-    # with open("orientation_local_map.npy", "wb") as f:
-    #     np.save(f, orientation)
-    
-    # print("local map coordinates saved")
 
 
 if __name__ == "__main__":    
