@@ -60,10 +60,11 @@ class ExplorationChatServer(Node):
 
         self.prompt = """
             ### 指示
-            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"conversation"、です。
+            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"simple_conversation"、"image_conversation"です。
             ユーザが特定の場所に行きたい場合、"search"として分類してください。
             ユーザが特定の方向に行きたい場合、"direction"として分類してください。
-            どちらにも当てはまらない場合や、どちらかに分類されるけれども行く場所や方向が特定できない場合、"failed"として分類してください。
+            ユーザが簡単な会話をしたい場合、"simple_conversation"として分類してください。単にカジュアルな会話や「ありがとう」などの挨拶が含まれます。
+            ユーザが画像を使って会話をしたい場合、"image_conversation"として分類してください。周囲の状況に関して質問された場合、"simple_conversation"として分類してください。
 
             次に、"search"として分類された場合、ユーザから与えられた文字列からユーザがいきたい場所("target_location")を抽出してください。
 
@@ -78,9 +79,10 @@ class ExplorationChatServer(Node):
             3. その後"classification"キーに"search"、"direction"、"conversation"のいずれかを入れてください。
             4. "search"の場合、"target_location"キーにユーザがいきたい場所を入れてください。
             5. "direction"の場合、"target_direction"キーにユーザがいきたい方向を入れてください。
-            6. "conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
-            7. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
-            8. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
+            6. "simple_conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
+            7. "image_conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
+            8. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
+            9. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
 
             例：
             入力：木製の展示に行きたいわ
@@ -119,21 +121,42 @@ class ExplorationChatServer(Node):
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "conversation",
+                "classification": "image_conversation",
             }
 
             入力：周りに何があるか教えて。
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "conversation",
+                "classification": "image_conversation",
             }
 
             入力：さっきのことについてもっと詳しく教えて。
             出力：
             {
                 "thought": "<あなたが考察したこと>",
-                "classification": "conversation",
+                "classification": "image_conversation",
+            }
+
+            入力：ありがとう
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "simple_conversation",
+            }
+
+            入力：もういいよ
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "simple_conversation",
+            }
+
+            入力：あなたは誰
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "simple_conversation",
             }
 
             <あなたが考察したこと>の中には、入力に対しての考察を入れてください。例えば、入力が"木製の展示に行きたいわ"の場合、"木製の展示"が目的地であると考察してください。
@@ -144,10 +167,50 @@ class ExplorationChatServer(Node):
         
         self.prompt_conversation = """
         視覚障害者の方からの質問に対して、適切な返答を生成してください。
-        これまであなたが伝えたことは次のようになってます。%s
-        ユーザの質問：%s
+        これまであなたが伝えたことは次のようになってます。：%s
+
         JSON形式で返答してください。
         "answer"キーに返答を入れてください。
+        "finish"キーには会話が終わったかどうかを入れてください。例えば相手が「ありがとう」と言った場合には"finish"にtrueを入れてください。
+
+        入力：さっきのことについてもっと詳しく教えて。
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": false,
+        }
+
+        入力：その展示は何色？
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": false,
+        }
+
+        入力：近くに飲食店ある？
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": false,
+        }
+
+        入力：ありがとう
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": true,
+        }
+
+        入力：またね
+        出力：
+        {
+            "answer": "<あなた返答>",
+            "finish": true,
+        }
+
+        ユーザが言ったこと：%s
+        これからJSON形式で返答してください。
+
         """
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
@@ -204,12 +267,12 @@ class ExplorationChatServer(Node):
         self.get_logger().info(f"Query published: {query_msg.data}")
 
         if query_type == "search":
-            query_message = f"ご要望いただいた{user_query_message}の場所を検索いたしましたので、ご案内します。"
+            query_message = f"{user_query_message}の場所までご案内します。"
         elif query_type == "direction":
             dir_jp = self.dir_to_jp.get(query_string, query_string)
-            query_message = f"ご要望いただいた{dir_jp}の方向に進みます。"
+            query_message = f"" # let test loop handle this
         else:
-            query_message = f"入力に何か問題がありそうです。もう一度入力してください。"
+            query_message = f"すみません、もう一度言ってください。"
 
         return query_message
 
@@ -217,6 +280,7 @@ class ExplorationChatServer(Node):
         app = Flask(__name__)
         @app.route('/service', methods=['POST'])
         def handle_post():
+            self.publish_tmp_start_chat()
             data = request.json
 
             logging.info(data)
@@ -236,7 +300,7 @@ class ExplorationChatServer(Node):
                 payload = {
                     "model": "gpt-4o",
                     "messages": [{"role": "user", "content": content}],
-                    "max_tokens": 300
+                    "max_tokens": 2000
                 }
 
                 headers = {
@@ -251,6 +315,9 @@ class ExplorationChatServer(Node):
                     print(f"Error: {e}")
                     res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
 
+                self.logger.info("input: " + gpt_input)
+                self.logger.info(f"openai response: {res_json}")
+
                 # $ curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'
                 # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerprint":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
                 query_string = res_json["choices"][0]["message"]["content"]
@@ -263,12 +330,11 @@ class ExplorationChatServer(Node):
                         query_string = query_target + "があります"
                         print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif query_type == "direction":
-                        query_target = query_json("target_direction", "unknown")
+                        query_target = query_json.get("target_direction", "unknown")
                         query_string = query_target
                         print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
-                    elif query_type == "conversation":
+                    elif "conversation" in query_type:
                         # make user input quert string
-                        query_type = "conversation"
                         query_target = "conversation"
                         query_string = gpt_input
                     else:
@@ -294,25 +360,37 @@ class ExplorationChatServer(Node):
 
             if query_string == "":
                 print("skip chat")
-                res_text = ["はい。行きたい場所や方向を指定してください。"]
+                res_text = ["対話を開始します。はい。ご用件は何でしょう。"]
             elif query_type == "failed":
                 print("failed to extract JSON")
-                res_text = ["入力を理解できませんでした。もう一度入力してください。"]
-            elif query_type == "conversation":
-                prompt_conversation = self.prompt_conversation % (self.latest_explained_info, query_string)
+                res_text = ["すみません、もう一度言っていただいても良いですか。"]
+            elif "conversation" in query_type:
+                prompt_conversation = copy(self.prompt_conversation) % (self.latest_explained_info, query_string)
                 gpt_explainer = GPTExplainer(self.apikey)
                 images = []
-                if self.latest_explained_front_image is not None:
-                    images.append(self.latest_explained_front_image)
-                if self.latest_explained_right_image is not None:
-                    images.append(self.latest_explained_right_image)
-                if self.latest_explained_left_image is not None:
-                    images.append(self.latest_explained_left_image)
-                if self.latest_explained_webcam_image is not None:
-                    images.append(self.latest_explained_webcam_image)
+                if query_type == "image_conversation":
+                    if self.latest_explained_front_image is not None:
+                        images.append(self.latest_explained_front_image)
+                    if self.latest_explained_right_image is not None:
+                        images.append(self.latest_explained_right_image)
+                    if self.latest_explained_left_image is not None:
+                        images.append(self.latest_explained_left_image)
+                    if self.latest_explained_webcam_image is not None:
+                        images.append(self.latest_explained_webcam_image)
                 res_json = gpt_explainer.query_with_images(prompt_conversation, images)
+                self.logger.info(f"res_json[\"choices\"][0][\"message\"][\"content\"][\"answer\"]: {res_json["choices"][0]["message"]["content"]["answer"]}")
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
+                finish = bool(res_json["choices"][0]["message"]["content"]["finish"])
                 res_text = [answer]
+
+                self.latest_explained_info += answer
+                self.logger.info(f"query_string: {prompt_conversation}")
+                self.logger.info(f"finish: {finish}")
+
+                if finish:
+                    navi = True
+                    dest_info = {"nodes": ""}
+                    self.publish_tmp_finish_chat()
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir_search)
@@ -325,7 +403,7 @@ class ExplorationChatServer(Node):
 
                 navi = True
                 dest_info = {"nodes": ""}
-                self.publish_finish_chat()
+                self.publish_tmp_finish_chat()
 
                 res_text = [query_message]
 
@@ -350,10 +428,16 @@ class ExplorationChatServer(Node):
             return jsonify(response)
         return app
     
-    def publish_finish_chat(self):
+    def publish_tmp_finish_chat(self):
         msg = std_msgs.msg.String()
-        msg.data = "navigation_finishchat"
+        msg.data = "navigation_tmp_finishchat"
         self._eventPub.publish(msg)
+
+    def publish_tmp_start_chat(self):
+        msg = std_msgs.msg.String()
+        msg.data = "navigation_tmp_startchat"
+        self._eventPub.publish(msg)
+
 
 class GPTExplainer():
     def __init__(

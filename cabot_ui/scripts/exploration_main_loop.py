@@ -12,6 +12,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 import std_msgs.msg
+from cabot_ui.explore.test_state_control import StateControl
 
 from cabot_common import vibration
 from cabot_ui.explore.test_explore import main as explore
@@ -19,6 +20,8 @@ from cabot_ui.explore.test_image import main as generate_from_images
 from cabot_ui.explore.test_loop import PersistentCancelClient, CabotQueryNode
 from cabot_ui.explore.test_map import main as get_next_point
 from cabot_ui.explore.test_speak import speak_text
+import threading
+import nav_msgs
 
 
 
@@ -33,21 +36,110 @@ class ExplorationMainLoop(Node):
         self.note_pub = self.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.event_pub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10)
         self.camera_ready_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/camera_ready", self.camera_ready_callback, 10)
-
+        self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
+        self.plan_sub = self.create_subscription(nav_msgs.msg.Path, "/plan", self.plan_callback, 10)
+        self.state_control = StateControl(self)
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
 
         self.camera_ready = False
+        self.iter = 0
 
         self.timer = self.create_timer(1.0, self.check_camera_ready_and_start)
 
         self.marker_a, self.marker_b = None, None
+        self.planning_events = []
+        self.planning_time_threshold = 10
+        self.planning_count_threshold = 10
 
+        self.plan_events = []
+        self.plan_time_threshold = 10
+        self.plan_count_threshold = 4
+
+        self.poses = None
+        self.nDTW_threshold = 1.5
+
+        self.logger.info("ExplorationMainLoop initialized")
+
+    def event_callback(self, msg):
+        self.logger.info(f"[Main Loop] Received event: {msg.data}")
+
+        # TODO: Maybe reset the planning events when the robot is stopped
+        if msg.data == "navigation;exploration;compute_path_to_pose":
+            current_time = time.time()
+            self.planning_events = [t for t in self.planning_events if current_time - t < self.planning_time_threshold]
+            self.logger.info(f"[Main Loop] Planning detected at {current_time}")
+            if len(self.planning_events) > 0:
+                self.logger.info(f"[Main Loop] Time from the last planning event: {current_time - self.planning_events[-1]} seconds")
+            self.logger.info(f"[Main Loop] Planning events in last {self.planning_time_threshold} seconds: {len(self.planning_events)}")
+            self.planning_events.append(current_time)
+            if len(self.planning_events) >= self.planning_count_threshold:
+                # Robot may be stuck in planning
+                self.logger.warning(f"[Main Loop] WARNING: More than {self.planning_count_threshold} planning events detected within {self.planning_time_threshold} seconds!")
+
+    def plan_callback(self, msg):
+        self.logger.info(f"[Main Loop] Received plan message")
+        current_time = time.time()
+        poses = msg.poses
+
+        if self.poses is not None:
+            #calculate nDTW
+            nDTW = self.calculate_nDTW(self.poses, poses)
+            self.logger.info(f"[Main Loop] nDTW = {nDTW}")
+
+            if nDTW > self.nDTW_threshold:
+                self.logger.info("[Main Loop] Plan has changed! (Replanning)")
+                self.plan_events = [t for t in self.plan_events if current_time - t < self.plan_time_threshold]
+                if len(self.plan_events) > 0:
+                    self.logger.info(f"[Main Loop] Time from the last plan event: {current_time - self.plan_events[-1]} seconds")
+                self.logger.info(f"[Main Loop] plan events in last {self.plan_time_threshold} seconds: {len(self.plan_events)}")
+                self.plan_events.append(current_time)
+                if len(self.plan_events) >= self.plan_count_threshold:
+                    self.logger.warning(f"[Main Loop] WARNING: {len(self.plan_events)} plan events detected within {self.plan_time_threshold} seconds!")
+
+        self.poses = poses
+
+    def calculate_path_length(self, poses):
+        path_length = 0
+        for i in range(1, len(poses)):
+            x1, y1 = poses[i-1].pose.position.x, poses[i-1].pose.position.y
+            x2, y2 = poses[i].pose.position.x, poses[i].pose.position.y
+            path_length += np.linalg.norm(np.array([x1, y1]) - np.array([x2, y2]))
+        return path_length
+
+    def dtw_distance(self, path1, path2):
+        n, m = len(path1), len(path2)
+        dtw_matrix = np.zeros((n+1, m+1))
+        dtw_matrix[1:, 0] = np.inf
+        dtw_matrix[0, 1:] = np.inf
+
+        for i in range(1, n+1):
+            for j in range(1, m+1):
+                x1, y1 = path1[i-1].pose.position.x, path1[i-1].pose.position.y
+                x2, y2 = path2[j-1].pose.position.x, path2[j-1].pose.position.y
+                cost = np.linalg.norm(np.array([x1, y1]) - np.array([x2, y2]))
+                dtw_matrix[i, j] = cost + min(dtw_matrix[i-1, j],    # insertion
+                                            dtw_matrix[i, j-1],    # deletion
+                                            dtw_matrix[i-1, j-1])  # match
+
+        return dtw_matrix[n, m]
+
+    def calculate_nDTW(self, path1, path2):
+        dtw_cost = self.dtw_distance(path1, path2)
+        path_length_1 = self.calculate_path_length(path1)
+        path_length_2 = self.calculate_path_length(path2)
+        total_path_length = path_length_1 + path_length_2
+        nDTW = dtw_cost / total_path_length
+        return nDTW
+
+    def change_timer_interval(self, interval: float):
+        self.timer.cancel()
+        self.timer = self.create_timer(interval, self.main_loop)
 
     def check_camera_ready_and_start(self):
         if self.camera_ready:
             self.timer.cancel()
-            self.main_callback()
+            threading.Thread(target=self.main_callback).start()
         else:
             self.logger.info("Camera is not ready yet; waiting...")
     
@@ -66,7 +158,7 @@ class ExplorationMainLoop(Node):
         keyboard = False
         debug = False
 
-        self.event_pub.publish(std_msgs.msg.String(data="explore_main_loop_start")) # TODO: move this inside main_loop
+        self.event_pub.publish(std_msgs.msg.String(data="navigation_main_loop_start")) # TODO: move this inside main_loop
         # print all the parameters
         self.logger.info(f"dist_filter: {dist_filter}")
         self.logger.info(f"forbidden_area_filter: {forbidden_area_filter}")
@@ -85,7 +177,6 @@ class ExplorationMainLoop(Node):
         executor = MultiThreadedExecutor()
         executor.add_node(state_client)
 
-        iter = 0
         timestamp = datetime.datetime.now().strftime("%m%d-%H%M%S")
 
         # if test_trajectory.py is not running, run it
@@ -123,8 +214,8 @@ class ExplorationMainLoop(Node):
         print(f"Logs will be saved in {log_dir}")
         
         # 0. run exploration loop!
-        self.logger.info("[ExplorationMainLoop] Waiting for 20 seconds before starting exploration loop...")
-        time.sleep(10)
+        self.logger.info("[ExplorationMainLoop] Waiting for 5 seconds before starting exploration loop...")
+        time.sleep(5)
         self.logger.info("[ExplorationMainLoop] Starting exploration loop!")
 
         while True:
@@ -132,8 +223,9 @@ class ExplorationMainLoop(Node):
             if not rclpy.ok():
                 state_client.logger.info("rclpy is not ok; initializing...")
                 rclpy.init()
-            state_client.logger.info(f"\nIteration: {iter}")
-
+            start_all = time.time()
+            state_client.logger.info(f"\nIteration: {self.iter}")
+            self.state_control.set_state("paused")
             # 1. generate "intersection" explanation from images to check the availability of each direction
             if use_image:
                 state_client.logger.info("Generating GPT-4o explanation from images...\n")
@@ -170,6 +262,7 @@ class ExplorationMainLoop(Node):
             # 2. get the next point to explore
             self.logger.info(f"availability_from_image: {availability_from_image}")
             state_client.logger.info(f"Getting next point...\n")
+            start = time.time()
             sampled_points, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = get_next_point(
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
@@ -183,12 +276,13 @@ class ExplorationMainLoop(Node):
                 marker_a=self.marker_a,
                 marker_b=self.marker_b
             )
+            state_client.logger.info(f"Took {time.time() - start:.2f} seconds to get the next point\n")
 
             self.marker_a = marker_a
             self.marker_b = marker_b
 
             maps.append(costmap)
-            if iter == 0:
+            if self.iter == 0:
                 initial_coords = current_coords
                 initial_orientation = current_orientation
             # if current coords is close to the initial coords, stop the exploration
@@ -342,9 +436,13 @@ class ExplorationMainLoop(Node):
                 query_type = query_node.query_type
             else:
                 query_type = "none"
+            self.state_control.set_state("running")
+            start = time.time()
             explore(x, y, query_type=query_type)
-            state_client.logger.info(f"Exploration {iter} done\n")
-            iter += 1
+            state_client.logger.info(f"Took {time.time() - start:.2f} seconds to explore the next point\n")
+            state_client.logger.info(f"Exploration {self.iter} done\n")
+            state_client.logger.info(f"Took {time.time() - start_all:.2f} seconds for all\n")
+            self.iter += 1
 
             # finish check
             should_finish = False
@@ -363,9 +461,9 @@ class ExplorationMainLoop(Node):
         self.note_pub.publish(msg)
 
     def camera_ready_callback(self, msg):
+        if not self.camera_ready:
+            self.logger.info(f"Camera ready at exploration main loop: {self.camera_ready}")
         self.camera_ready = msg.data
-        self.logger.info(f"Camera ready at exploration main loop: {self.camera_ready}")
-
 
 def main(args=None):
     rclpy.init(args=args)

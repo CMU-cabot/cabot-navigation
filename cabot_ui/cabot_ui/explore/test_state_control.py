@@ -13,15 +13,14 @@ class StateControl:
         self.state_to_idx = {k: v for v, k in self.idx_to_state.items()}
         
         self.state_pub = self.node.create_publisher(String, '/cabot/nav_state', 10)
-        self.state_sub = self.node.create_subscription(String, '/cabot/nav_state_input', self.state_callback, 10)
-        self.timer = self.node.create_timer(1.0, self.timer_callback)
-    
-    def state_callback(self, msg):
-        self.state_str = msg.data
-        self.state_idx = self.state_to_idx[self.state_str]
-        # self.node.get_logger().info(f"State received: {self.state_str}")
+        self.timer = self.node.create_timer(0.25, self.timer_callback)
     
     def timer_callback(self):
+        self.publish_state()
+
+    def set_state(self, state_str):
+        self.state_str = state_str
+        self.state_idx = self.state_to_idx[state_str]
         self.publish_state()
     
     def run(self):

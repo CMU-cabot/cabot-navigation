@@ -20,12 +20,11 @@ class CancelNode:
     def event_callback(self, msg):
         # called when /cabot/event is subscribed
         if msg.data == "navigation_startchat" or msg.data == "navigation_button_control":
-            if self.state != "navigation;cancel":
-                self.logger.info("Received startchat event")
-                self.state = "navigation;cancel"
-            else:
-                self.state = "auto_mode"
-                self.cancel_state_published = False
+            self.logger.info("Received startchat event")
+            self.state = "navigation;cancel"
+        elif msg.data == "navigation_tmp_finishchat" or msg.data == "navigation_finishchat" or msg.data == "navigation_finish_button_control":
+            self.state = "auto_mode"
+            self.cancel_state_published = False
         elif msg.data == "navigation_search":
             self.state = ""
         else:

@@ -31,6 +31,8 @@ from .test_semantic import extract_image_feature, concat_features, extract_text_
 import std_msgs.msg
 from PIL import Image as PILImage
 from .WebCameraManager import WebCameraManager
+import traceback
+import threading
 
 
 """
@@ -183,8 +185,17 @@ class CaBotImageNode(Node):
                 persona=self.persona,
                 # dummy=True if is_sim else False
             )
-        
-        self.web_camera_manager = WebCameraManager(logger=self.logger)
+        self.web_camera_ready  = False
+
+        self.logger.info("Opening web camera")
+        self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
+        if self.web_camera_manager.is_open():
+            self.logger.info("Web camera is open")
+            test_speak.speak_text("Webカメラが起動しました")
+            self.web_camera_ready = True
+        else:
+            self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
+            self.open_webcam_loop()
 
         self.can_speak_explanation = False
         self.can_speak_timer = None
@@ -199,6 +210,32 @@ class CaBotImageNode(Node):
         self.loop_count = 0
 
         self.timer = self.create_timer(5.0, self.loop)
+
+        if self.web_camera_ready:
+            self.publish_camera_ready()
+
+    def open_webcam_loop(self):
+        # open the webcam in different thread until it is opened
+        def _open_webcam_loop():
+            while not self.web_camera_manager.is_open():
+                self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
+                time.sleep(1)
+            self.logger.info("Web camera is open")
+            test_speak.speak_text("Webカメラが起動しました")
+            self.web_camera_ready = True
+            self.publish_camera_ready()
+            self.publish_latest_explained_info()
+        thread = threading.Thread(target=_open_webcam_loop)
+        thread.start()
+
+    def publish_camera_ready(self):
+        def _publish_camera_ready():
+            for i in range(10):
+                # publish the camera ready status after i seconds
+                self.logger.info(f"Publishing camera ready status after {i} seconds")
+                self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
+        thread = threading.Thread(target=_publish_camera_ready)
+        thread.start()
 
     def touch_callback(self, msg: std_msgs.msg.Int16):
         if msg.data == 1:
@@ -229,6 +266,8 @@ class CaBotImageNode(Node):
             left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
             right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
             if self.webcamera_image is not None:
+                # make the resolution smaller
+                self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
                 webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
             self.latest_explained_front_image_pub.publish(front_image_msg)
             self.latest_explained_left_image_pub.publish(left_image_msg)
@@ -249,21 +288,17 @@ class CaBotImageNode(Node):
                     self.can_speak_timer.cancel()
 
     def event_callback(self, msg):
-        if msg.data == "navigation_tmp_startchat":
+        if msg.data == "navigation_startchat" or msg.data == "navigation_tmp_startchat": # if we start conversation on iPhone this does not get called
             self.in_conversation = True
-        elif msg.data == "navigation_finishchat":
+        elif msg.data == "navigation_finishchat" or msg.data == "navigation_tmp_finishchat":
             self.in_conversation = False
-        elif msg.data == "explore_main_loop_start":
+        elif msg.data == "navigation_main_loop_start":
             self.explore_main_loop_ready = True
         elif "navigation;destination;goal" in msg.data:
             self.explore_main_loop_ready = True
-        elif msg.data == "navigation_arrived":
-            self.explore_main_loop_ready = False
         elif msg.data == "navigation;cancel":
-            self.explore_main_loop_ready = False
+            # self.explore_main_loop_ready = False
             test_speak.speak_text("", force=True)
-        elif msg.data == "explore_main_loop_pause":
-            self.explore_main_loop_ready = False
         
 
     def reset_can_speak(self):
@@ -314,6 +349,12 @@ class CaBotImageNode(Node):
             self.logger.info("Realsense ready")
             test_speak.speak_text("カメラが起動しました")
             self.publish_latest_explained_info()
+
+        if not self.web_camera_ready and self.web_camera_manager.is_open():
+            self.logger.info("Web camera is open")
+            test_speak.speak_text("Webカメラが起動しました")
+            self.web_camera_ready = True
+            self.publish_latest_explained_info()
         
         self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
@@ -339,64 +380,66 @@ class CaBotImageNode(Node):
             self.logger.info(f"Max loop count reached. Exiting.")
             self.timer.cancel()
             return
+        is_in_valid_state = self.cabot_nav_state == self.valid_state
+        self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
         self.loop_count += 1
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, touching: {self.touching}")
-        # generate explanation
-        if not self.no_explain_mode and self.ready and self.realsense_ready and not self.in_conversation and self.explore_main_loop_ready and self.touching:
+        camera_ready = self.realsense_ready or self.web_camera_ready
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
+        if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
             if self.mode == "surrounding_explain_mode":
                 if not self.can_speak_explanation:
                     self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
+                    self.logger.info(f"next wait time: 0.5 (constant)")
+                    self.change_timer_interval(interval=0.5)
                     return
-                
-            self.logger.info(f"Generating explanation; mode: {self.mode}, state: {self.cabot_nav_state}")
-            # intersection detection mode -> only rcl_publisher.cabot_nav_state is "paused", then explain
-            # semantic map mode & surronding explain mode -> only rcl_publisher.cabot_nav_state is "running", then explain
-            if self.cabot_nav_state != self.valid_state:
-                self.logger.info(f"mode: {self.mode} current state: {self.cabot_nav_state}; not {self.valid_state}. Skip explaining")
-                return
+
+            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
+
+            is_in_valid_state = self.cabot_nav_state == self.valid_state
+            if self.touching and not self.in_conversation and is_in_valid_state:
+                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
+                test_speak.speak_text(explain)
             else:
-                wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
-                if self.touching:
-                    test_speak.speak_text(explain)
+                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
+                wait_time = 0.1
 
-                self.latest_explained_front_image = self.front_image
-                self.latest_explained_left_image = self.left_image
-                self.latest_explained_right_image = self.right_image
-                self.latest_explain = explain
+            self.latest_explained_front_image = self.front_image
+            self.latest_explained_left_image = self.left_image
+            self.latest_explained_right_image = self.right_image
+            self.latest_explain = explain
 
-                self.publish_latest_explained_info()
+            self.publish_latest_explained_info()
 
-                self.can_speak_explanation = False
-                self.can_speak_timer = self.create_timer(wait_time + 10.0, self.reset_can_speak)
+            self.can_speak_explanation = False
+            self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
 
-                if self.mode == "intersection_detection_mode":
-                    self.logger.info("Availability of each direction")
-                    self.logger.info(f"Front marker : {self.front_marker_detected}")
-                    self.logger.info(f"Left marker  : {self.left_marker_detected}")
-                    self.logger.info(f"Right marker : {self.right_marker_detected}")
-                    if not self.no_explain_mode:
-                        self.logger.info(f"Front available (GPT) : {self.gpt_explainer.front_available}")
-                        self.logger.info(f"Left available (GPT)  : {self.gpt_explainer.left_available}")
-                        self.logger.info(f"Right available (GPT) : {self.gpt_explainer.right_available}")
-                
-                if self.debug:
-                    # randomly decide the values
-                    self.logger.info("random mode; setting the values randomly")
-                    self.front_marker_detected = np.random.choice([True, False])
-                    self.left_marker_detected = np.random.choice([True, False])
-                    self.right_marker_detected = np.random.choice([True, False])
-                    self.gpt_explainer.front_available = np.random.choice([True, False])
-                    self.gpt_explainer.left_available = np.random.choice([True, False])
-                    self.gpt_explainer.right_available = np.random.choice([True, False])
+            if self.mode == "intersection_detection_mode":
+                self.logger.info("Availability of each direction")
+                self.logger.info(f"Front marker : {self.front_marker_detected}")
+                self.logger.info(f"Left marker  : {self.left_marker_detected}")
+                self.logger.info(f"Right marker : {self.right_marker_detected}")
+                if not self.no_explain_mode:
+                    self.logger.info(f"Front available (GPT) : {self.gpt_explainer.front_available}")
+                    self.logger.info(f"Left available (GPT)  : {self.gpt_explainer.left_available}")
+                    self.logger.info(f"Right available (GPT) : {self.gpt_explainer.right_available}")
+            
+            if self.debug:
+                # randomly decide the values
+                self.logger.info("random mode; setting the values randomly")
+                self.front_marker_detected = np.random.choice([True, False])
+                self.left_marker_detected = np.random.choice([True, False])
+                self.right_marker_detected = np.random.choice([True, False])
+                self.gpt_explainer.front_available = np.random.choice([True, False])
+                self.gpt_explainer.left_available = np.random.choice([True, False])
+                self.gpt_explainer.right_available = np.random.choice([True, False])
                 
             if self.mode == "surronding_explain_mode":
-                # wait_time = max(wait_time, 7.0)
                 self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
                 self.change_timer_interval(interval=wait_time)
         else:
-            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}")
-            self.logger.info(f"next wait time: 1.0 (constant)")
-            self.change_timer_interval(interval=1.0)
+            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
+            self.logger.info(f"next wait time: 0.5 (constant)")
+            self.change_timer_interval(interval=0.5)
 
     def change_timer_interval(self, interval: float):
         self.timer.cancel()
@@ -515,12 +558,12 @@ class GPTExplainer():
                 画像を説明してください。
                 %s
                 あなたの生成した文章はそのまま視覚障害者の方に読まれます。
-                多少長くてもいいので、説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
+                説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
                 画像を説明するには、以下のルールに必ず従ってください。
 
                 ## 指示に従うために必ず守るべきルール
                 1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を詳しく説明してください。
-                2. 全体で3-4文程度の説明になるようにしてください。
+                2. 最大で3文の説明になるようにしてください。
                 3. 敬語を使うこと。
                 4. 画像の全体/左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
                 5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
@@ -671,6 +714,8 @@ class GPTExplainer():
 
         self.should_speak = should_speak
         self.conversation_history = []
+        test_inference = self.query_with_images(prompt="test", images=[])
+        self.okay_images = False
 
         if  self.mode == "semantic_map_mode":
             self.postfix = "s"
@@ -700,7 +745,7 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: np.ndarray, left_image: np.ndarray, right_image: np.ndarray, webcamera_image: np.ndarray) -> float:
+    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], webcamera_image: Optional[np.ndarray]) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
@@ -709,37 +754,57 @@ class GPTExplainer():
             prompt = self.prompt
             use_initial_prompt = True
         else:
-            if self.mode == "semantic_map_mode" or self.mode == "intersection_detection_mode":
-                prompt = self.prompt
-                use_initial_prompt = True
-                self.conversation_history = []
-            else:
-                prompt = "この画像の説明も同様にルールに従って生成してください。ただし、前の画像説明ですでに説明されているものは説明に含めないでください。前のレスポンスと同じようにJSON形式で返してください。"
+            prompt = self.prompt
+            use_initial_prompt = True
+            self.conversation_history = []
 
         try:
-            # resize images max width 512
-            front_image = self.resize_images(front_image, max_width=768)
-            left_image = self.resize_images(left_image, max_width=768)
-            right_image = self.resize_images(right_image, max_width=768)
-            if not webcamera_image is None:
-                webcamera_image = self.resize_images(webcamera_image, max_width=768)
+            images = []
 
-            # generate explanation from the three-view images
-            front_image_with_text = self.add_text_to_image(front_image, "Front")
-            left_image_with_text = self.add_text_to_image(left_image, "Left")
-            right_image_with_text = self.add_text_to_image(right_image, "Right")
-            if not webcamera_image is None:
+            if webcamera_image is not None:
+                if not self.okay_images:
+                    self.logger.info("Okay")
+                    self.okay_images = True
+                    test_speak.speak_text("実験準備ができました")
+                    
+                # resize to 1080p
+                webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
-
-            images = [front_image_with_text, left_image_with_text, right_image_with_text]
-
-            if not webcamera_image is None:
                 images.append(webcamera_image_with_text)
                 if use_initial_prompt:
-                    prompt = prompt % "画像は4枚あります。順番に左、前、右の画像と上の視点から撮影した広角の画像です。"
-            else:
+                    prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
+
+                images_with_text = [webcamera_image_with_text]
+
+            elif (front_image is not None) and (left_image is not None) and (right_image is not None):
+                if not self.okay_images:
+                    self.logger.info("Okay")
+                    self.okay_images = True
+                    test_speak.speak_text("実験準備ができました")
+
+                left_image = self.resize_images(left_image, max_width=768)
+                left_image_with_text = self.add_text_to_image(left_image, "Left")
+                images.append(left_image_with_text)
+
+                front_image = self.resize_images(front_image, max_width=768)
+                front_image_with_text = self.add_text_to_image(front_image, "Front")
+                images.append(front_image_with_text)
+
+                right_image = self.resize_images(right_image, max_width=768)
+                right_image_with_text = self.add_text_to_image(right_image, "Right")
+                images.append(right_image_with_text)
+
+                images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
+
                 if use_initial_prompt:
                     prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
+            else:
+                self.logger.info(f"Webcamera image: {webcamera_image}")
+                self.logger.info(f"Front image: {front_image}")
+                self.logger.info(f"Left image: {left_image}")
+                self.logger.info(f"Right image: {right_image}")
+                self.logger.info("Error in GPTExplainer.explain: Images are None.")
+                return 1.0, "エラー"
 
             gpt_response = self.query_with_images(prompt, images)
             gpt_response["log_dir"] = self.log_dir
@@ -747,9 +812,10 @@ class GPTExplainer():
             # get front/left/right availability
             self.logger.info(f"Extracting JSON from the response: {gpt_response}")
             extracted_json = gpt_response["choices"][0]["message"]["content"]
+            
             if extracted_json is None:
+                extracted_json = {"description": ""}
                 self.logger.info("Could not extract JSON part from the response.")
-                extracted_json["description"] = "" # error so set the description to empty
                 self.logger.info(f"Error in GPTExplainer.explain: extracted_json is None: {gpt_response}")
             else:
                 if self.mode == "intersection_detection_mode":
@@ -781,6 +847,8 @@ class GPTExplainer():
             cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
             cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
             cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+            if not webcamera_image is None:
+                cv2.imwrite(os.path.join(folder_name,"webcamera.jpg"), webcamera_image)
 
             with open(os.path.join(folder_name,"explanation.jsonl"), "w") as f:
                 description_json = {"description": extracted_json["description"]}
@@ -791,11 +859,15 @@ class GPTExplainer():
 
             pretty_response = json.dumps(gpt_response, indent=4)
 
-            log_image_and_gpt_response([left_image_with_text, front_image_with_text, right_image_with_text], str(extracted_json["description"]), self.folder_name)
+            # if not webcamera_image is None:
+            #     images_with_text.append(webcamera_image_with_text)
+
+            log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
-            return  1.0, "No explanation"
+            self.logger.info(traceback.format_exc())
+            return  1.0, "エラー"
 
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
@@ -862,7 +934,8 @@ class GPTExplainer():
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
         # 1 character takes 0.1 seconds
-        return len(text) * 0.1
+        # but we make it shorter by 0.05 seconds beacause we want to keep doing the inference
+        return len(text) * 0.05
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it

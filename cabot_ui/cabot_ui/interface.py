@@ -364,8 +364,7 @@ class UserInterface(object):
 
     def start_chat(self):
         self._activity_log("cabot/interface", "exploration", "start chat")
-        self.speak(i18n.localized_string("START_CHAT"))
-
+        # self.speak(i18n.localized_string("START_CHAT"))
     
     def set_button_control(self, flag):
         self._activity_log("cabot/interface", "button_control", str(flag))

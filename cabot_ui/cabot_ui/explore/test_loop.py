@@ -82,6 +82,7 @@ class CabotQueryNode(Node):
                 speak_text(f"指定された{self.dir_to_jp[self.query_string]}方向には進めないようです。")
             else:
                 # finish the node
+                speak_text(f"{self.dir_to_jp[self.query_string]}の方向に進みます。")
                 sys.exit(0)
         elif self.query_type == "search":
             self.logger.info("get search query")
