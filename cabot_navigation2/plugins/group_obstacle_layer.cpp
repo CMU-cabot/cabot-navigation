@@ -1,3 +1,23 @@
+// Copyright (c) 2024  Miraikan
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #include "cabot_navigation2/group_obstacle_layer.hpp"
 
 #include <algorithm>
@@ -50,7 +70,7 @@ void GroupObstacleLayer::reset()
 // of need_recalculation_ variable.
 void GroupObstacleLayer::onInitialize()
 {
-  auto node = node_.lock(); 
+  auto node = node_.lock();
   declareParameter("enabled", rclcpp::ParameterValue(true));
   node->get_parameter(name_ + "." + "enabled", enabled_);
 
@@ -82,7 +102,7 @@ void GroupObstacleLayer::updateBounds(
 
   last_min_x_ = *min_x;
   last_min_y_ = *min_y;
-  last_max_x_ = *max_x; 
+  last_max_x_ = *max_x;
   last_max_y_ = *max_y;
   if (need_recalculation_) {
     // For some reason when I make these -<double>::max() it does not
@@ -117,10 +137,9 @@ void GroupObstacleLayer::onFootprintChanged()
 // Inside this method the costmap gradient is generated and is writing directly
 // to the resulting costmap master_grid without any merging with previous layers.
 void GroupObstacleLayer::updateCosts(
-  nav2_costmap_2d::Costmap2D & master_grid, 
+  nav2_costmap_2d::Costmap2D & master_grid,
   int min_i, int min_j, int max_i, int max_j)
 {
-
   auto node = node_.lock();
 
   if (!enabled_) {
