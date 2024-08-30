@@ -381,8 +381,10 @@ local_costmap:
         plugin: "cabot_navigation2::GroupObstacleLayer"
         enabled: true
         group_topic: /group_predictions
-        update_width: 10.0
-        update_height: 10.0
+        update_width: 100.0
+        update_height: 100.0
+        init_cost: 50.0
+        discount_factor: 0.9
       always_send_full_costmap: True
   local_costmap_client:
     ros__parameters:

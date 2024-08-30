@@ -83,6 +83,12 @@ void GroupObstacleLayer::onInitialize()
   declareParameter("update_height", rclcpp::ParameterValue(10.0));
   node->get_parameter(name_ + "." + "update_height", update_height);
 
+  declareParameter("init_cost", rclcpp::ParameterValue(50.0));
+  node->get_parameter(name_ + "." + "init_cost", init_cost);
+
+  declareParameter("discount_factor", rclcpp::ParameterValue(0.9));
+  node->get_parameter(name_ + "." + "discount_factor", discount_factor);
+
   group_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
     group_topic_, 10,
     std::bind(&GroupObstacleLayer::groupCallBack, this, std::placeholders::_1));
@@ -99,6 +105,12 @@ void GroupObstacleLayer::updateBounds(
   double * min_y, double * max_x, double * max_y)
 {
   auto node = node_.lock();
+
+  unsigned int x0, y0;
+  if (!worldToMap(robot_x, robot_y, x0, y0)) {
+    RCLCPP_DEBUG(node->get_logger(), "robot is out of map");
+    return;
+  }
 
   last_min_x_ = *min_x;
   last_min_y_ = *min_y;
@@ -146,6 +158,11 @@ void GroupObstacleLayer::updateCosts(
     return;
   }
 
+  if (!last_group_)
+  {
+    return;
+  }
+
   // master_array - is a direct pointer to the resulting master_grid.
   // master_grid - is a resulting costmap combined from all layers.
   // By using this pointer all layers will be overwritten!
@@ -158,7 +175,7 @@ void GroupObstacleLayer::updateCosts(
   // - updateWithTrueOverwrite()
   // In this case using master_array pointer is equal to modifying local costmap_
   // pointer and then calling updateWithTrueOverwrite():
-  unsigned char * master_array = master_grid.getCharMap();
+  // unsigned char * master_array = master_grid.getCharMap();
   unsigned int size_x = master_grid.getSizeInCellsX(), size_y = master_grid.getSizeInCellsY();
 
   // {min_i, min_j} - {max_i, max_j} - are update-window coordinates.
@@ -171,7 +188,56 @@ void GroupObstacleLayer::updateCosts(
   max_i = std::min(static_cast<int>(size_x), max_i);
   max_j = std::min(static_cast<int>(size_y), max_j);
 
+  double cost_value = init_cost;
+  for (auto it = last_group_->group_sequences.begin(); it != last_group_->group_sequences.end(); it++) {
+    auto curr_groups = it;
+    for (auto it2 = curr_groups->groups.begin(); it2 != curr_groups->groups.end(); it2++) {
+      auto group = it2;
+      geometry_msgs::msg::Point left = group->left;
+      geometry_msgs::msg::Point center = group->center;
+      geometry_msgs::msg::Point right = group->right;
+      geometry_msgs::msg::Point right_offset = group->right_offset;
+      geometry_msgs::msg::Point left_offset = group->left_offset;
+
+      int lx, ly, cx, cy, rx, ry, rox, roy, lox, loy;
+      nav2_costmap_2d::MapLocation l, c, r, ro, lo;
+      worldToMapNoBounds(left.x, left.y, lx, ly);
+      worldToMapNoBounds(center.x, center.y, cx, cy);
+      worldToMapNoBounds(right.x, right.y, rx, ry);
+      worldToMapNoBounds(right_offset.x, right_offset.y, rox, roy);
+      worldToMapNoBounds(left_offset.x, left_offset.y, lox, loy);
+      l.x = (unsigned int)lx;
+      l.y = (unsigned int)ly;
+      c.x = (unsigned int)cx;
+      c.y = (unsigned int)cy;
+      r.x = (unsigned int)rx;
+      r.y = (unsigned int)ry;
+      ro.x = (unsigned int)rox;
+      ro.y = (unsigned int)roy;
+      lo.x = (unsigned int)lox;
+      lo.y = (unsigned int)loy;
+
+      std::vector<nav2_costmap_2d::MapLocation> map_polygon;
+      map_polygon.push_back(l);
+      map_polygon.push_back(c);
+      map_polygon.push_back(r);
+      map_polygon.push_back(ro);
+      map_polygon.push_back(lo);
+
+      std::vector<nav2_costmap_2d::MapLocation> polygon_cells;
+
+      for (unsigned int i = 0; i < polygon_cells.size(); i++) {
+        unsigned int index = getIndex(polygon_cells[i].x, polygon_cells[i].y);
+        costmap_[index] = (unsigned char)cost_value;
+      }
+    }
+    cost_value = cost_value * discount_factor;
+  }
+
+  updateWithMax(master_grid, min_i, min_j, max_i, max_j);
+
   // Simply computing one-by-one cost per each cell
+  /*
   int gradient_index;
   for (int j = min_j; j < max_j; j++) {
     // Reset gradient_index each time when reaching the end of re-calculated window
@@ -184,10 +250,12 @@ void GroupObstacleLayer::updateCosts(
       master_array[index] = 20.0;
     }
   }
+  */
 }
 
 void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group)
 {
+  // Group sequences: First time, then groups
   auto node = node_.lock();
   last_group_ = group;
   RCLCPP_INFO(node->get_logger(), "======================Group Received======================");

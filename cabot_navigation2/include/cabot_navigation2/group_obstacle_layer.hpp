@@ -28,11 +28,13 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_costmap_2d/layer.hpp"
 #include "nav2_costmap_2d/obstacle_layer.hpp"
-#include <nav2_costmap_2d/costmap_layer.hpp>
+#include "nav2_costmap_2d/costmap_layer.hpp"
 
 #include "lidar_process_msgs/msg/group_time_array.hpp"
 #include "lidar_process_msgs/msg/group_array.hpp"
 #include "lidar_process_msgs/msg/group.hpp"
+
+#include "geometry_msgs/msg/point.hpp"
 
 namespace cabot_navigation2
 {
@@ -64,6 +66,7 @@ public:
 private:
   double last_min_x_, last_min_y_, last_max_x_, last_max_y_;
   double update_width, update_height;
+  double init_cost, discount_factor;
 
   void groupCallBack(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group_series);
 
