@@ -668,8 +668,6 @@ class GPTExplainer():
                 webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
                 images.append(webcamera_image_with_text)
-                if use_initial_prompt:
-                    prompt = self.prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
 
             if (front_image is not None) and (left_image is not None) and (right_image is not None):
                 if not self.okay_images:
