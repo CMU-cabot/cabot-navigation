@@ -378,8 +378,8 @@ class ExplorationChatServer(Node):
                     if self.latest_explained_webcam_image is not None:
                         images.append(self.latest_explained_webcam_image)
                 res_json = gpt_explainer.query_with_images(prompt_conversation, images)
-                self.logger.info(f"res_json[\"choices\"][0][\"message\"][\"content\"][\"answer\"]: {res_json["choices"][0]["message"]["content"]["answer"]}")
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
+                self.logger.info(f"answer: {answer}")
                 finish = bool(res_json["choices"][0]["message"]["content"]["finish"])
                 res_text = [answer]
 
