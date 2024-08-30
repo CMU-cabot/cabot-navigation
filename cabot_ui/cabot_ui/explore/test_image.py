@@ -644,10 +644,10 @@ class GPTExplainer():
             return
         use_initial_prompt = False
         if len(self.conversation_history) == 0:
-            prompt = self.prompt
+            prompt = copy(self.prompt)
             use_initial_prompt = True
         else:
-            prompt = self.prompt
+            prompt = copy(self.prompt)
             use_initial_prompt = True
             self.conversation_history = []
 
@@ -665,7 +665,7 @@ class GPTExplainer():
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
                 images.append(webcamera_image_with_text)
                 if use_initial_prompt:
-                    prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
+                    prompt = self.prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
 
                 images_with_text = [webcamera_image_with_text]
 
