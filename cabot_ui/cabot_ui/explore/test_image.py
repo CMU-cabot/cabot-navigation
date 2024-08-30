@@ -194,7 +194,6 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is open")
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
-            self.webcamera_image = self.web_camera_manager.get_frame()
         else:
             self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
             self.open_webcam_loop()
@@ -217,7 +216,7 @@ class CaBotImageNode(Node):
 
         if self.web_camera_ready:
             self.publish_camera_ready()
-            self.get_web_camera_image()
+            # self.get_web_camera_image() # use this only when after discussing with the team
 
     def get_web_camera_image(self):
         # Function to capture and schedule the next image capture
