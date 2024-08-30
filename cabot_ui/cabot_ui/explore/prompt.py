@@ -96,7 +96,7 @@ PROMPT_MIDDLE = """
     }
     ```
     """
-PROMPT_NAIVGATION = """
+PROMPT_NAVIGATION = """
     # 指示
     画像を説明してください。
     %s

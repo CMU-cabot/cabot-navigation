@@ -33,7 +33,7 @@ from PIL import Image as PILImage
 from .WebCameraManager import WebCameraManager
 import traceback
 import threading
-from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAIVGATION
+from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION
 
 """
 This script will output the GPT-generated explanation from the images captured by the robot.
@@ -624,7 +624,7 @@ class GPTExplainer():
         elif self.persona == "middle":
             self.prompt = PROMPT_MIDDLE
         else:
-            self.prompt = PROMPT_NAIVGATION
+            self.prompt = PROMPT_NAVIGATION
 
     def resize_images(self, image, max_width=None, max_height=None):
         image_width = image.shape[1]
