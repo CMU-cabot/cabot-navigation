@@ -22,9 +22,27 @@ GroupObstacleLayer::GroupObstacleLayer()
 : last_min_x_(-std::numeric_limits<float>::max()),
   last_min_y_(-std::numeric_limits<float>::max()),
   last_max_x_(std::numeric_limits<float>::max()),
-  last_max_y_(std::numeric_limits<float>::max()),
-  group_topic_("/group_predictions")
+  last_max_y_(std::numeric_limits<float>::max())
 {
+}
+
+GroupObstacleLayer::~GroupObstacleLayer()
+{
+}
+
+void GroupObstacleLayer::activate()
+{
+  nav2_costmap_2d::ObstacleLayer::activate();
+}
+
+void GroupObstacleLayer::deactivate()
+{
+  nav2_costmap_2d::ObstacleLayer::deactivate();
+}
+
+void GroupObstacleLayer::reset()
+{
+  nav2_costmap_2d::ObstacleLayer::reset();
 }
 
 // This method is called at the end of plugin initialization.
@@ -36,8 +54,18 @@ void GroupObstacleLayer::onInitialize()
   declareParameter("enabled", rclcpp::ParameterValue(true));
   node->get_parameter(name_ + "." + "enabled", enabled_);
 
-  declareParameter("group_topic", rclcpp::ParameterValue(group_topic_));
-  node->get_parameter(name_ + "." + "group_topic", group_topic_)
+  declareParameter("group_topic", rclcpp::ParameterValue("/group_predictions"));
+  node->get_parameter(name_ + "." + "group_topic", group_topic_);
+
+  declareParameter("update_width", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + "." + "update_width", update_width);
+
+  declareParameter("update_height", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + "." + "update_height", update_height);
+
+  group_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
+    group_topic_, 10,
+    std::bind(&GroupObstacleLayer::groupCallBack, this, std::placeholders::_1));
 
   need_recalculation_ = false;
   current_ = true;
@@ -47,14 +75,16 @@ void GroupObstacleLayer::onInitialize()
 // Inside this method window bounds are re-calculated if need_recalculation_ is true
 // and updated independently on its value.
 void GroupObstacleLayer::updateBounds(
-  double /*robot_x*/, double /*robot_y*/, double /*robot_yaw*/, double * min_x,
+  double robot_x, double robot_y, double robot_yaw, double * min_x,
   double * min_y, double * max_x, double * max_y)
 {
+  auto node = node_.lock();
+
+  last_min_x_ = *min_x;
+  last_min_y_ = *min_y;
+  last_max_x_ = *max_x; 
+  last_max_y_ = *max_y;
   if (need_recalculation_) {
-    last_min_x_ = *min_x;
-    last_min_y_ = *min_y;
-    last_max_x_ = *max_x;
-    last_max_y_ = *max_y;
     // For some reason when I make these -<double>::max() it does not
     // work with Costmap2D::worldToMapEnforceBounds(), so I'm using
     // -<float>::max() instead.
@@ -64,18 +94,10 @@ void GroupObstacleLayer::updateBounds(
     *max_y = std::numeric_limits<float>::max();
     need_recalculation_ = false;
   } else {
-    double tmp_min_x = last_min_x_;
-    double tmp_min_y = last_min_y_;
-    double tmp_max_x = last_max_x_;
-    double tmp_max_y = last_max_y_;
-    last_min_x_ = *min_x;
-    last_min_y_ = *min_y;
-    last_max_x_ = *max_x;
-    last_max_y_ = *max_y;
-    *min_x = std::min(tmp_min_x, *min_x);
-    *min_y = std::min(tmp_min_y, *min_y);
-    *max_x = std::max(tmp_max_x, *max_x);
-    *max_y = std::max(tmp_max_y, *max_y);
+    *min_x = robot_x - update_width / 2;
+    *min_y = robot_y - update_height / 2;
+    *max_x = robot_x + update_width / 2;
+    *max_y = robot_y + update_height / 2;
   }
 }
 
@@ -95,10 +117,12 @@ void GroupObstacleLayer::onFootprintChanged()
 // Inside this method the costmap gradient is generated and is writing directly
 // to the resulting costmap master_grid without any merging with previous layers.
 void GroupObstacleLayer::updateCosts(
-  nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j,
-  int max_i,
-  int max_j)
+  nav2_costmap_2d::Costmap2D & master_grid, 
+  int min_i, int min_j, int max_i, int max_j)
 {
+
+  auto node = node_.lock();
+
   if (!enabled_) {
     return;
   }
@@ -137,24 +161,20 @@ void GroupObstacleLayer::updateCosts(
     for (int i = min_i; i < max_i; i++) {
       int index = master_grid.getIndex(i, j);
       // setting the gradient cost
-      unsigned char cost = (LETHAL_OBSTACLE - gradient_index*GRADIENT_FACTOR)%255;
-      if (gradient_index <= GRADIENT_SIZE) {
-        gradient_index++;
-      } else {
-        gradient_index = 0;
-      }
-      master_array[index] = cost;
+      unsigned char cost = LETHAL_OBSTACLE;
+      master_array[index] = 20.0;
     }
   }
 }
 
-}  // namespace cabot_navigation2
-
 void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group)
 {
-  std::lock_guard<std::mutex> lock(mutex_);
+  auto node = node_.lock();
   last_group_ = group;
+  RCLCPP_INFO(node->get_logger(), "======================Group Received======================");
 }
 
-#include "pluginlib/class_list_macros.hpp"
+}  // namespace cabot_navigation2
+
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(cabot_navigation2::GroupObstacleLayer, nav2_costmap_2d::Layer)

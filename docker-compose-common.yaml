@@ -75,6 +75,7 @@ services:
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
       - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
       - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
+      - ./lidar_process_msgs:/home/developer/ros2_ws/src/lidar_process_msgs
 # network
     privileged: true
     network_mode: host

@@ -343,7 +343,7 @@ local_costmap:
       width: 8
       height: 8
       resolution: 0.05
-      plugins: ["obstacle_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "inflation_layer", "group_obstacle_layer"]
       robot_radius: 0.45
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -377,6 +377,12 @@ local_costmap:
           data_type: "PointCloud2"
       static_layer:
         map_subscribe_transient_local: True
+      group_obstacle_layer:
+        plugin: "cabot_navigation2::GroupObstacleLayer"
+        enabled: true
+        group_topic: /group_predictions
+        update_width: 10.0
+        update_height: 10.0
       always_send_full_costmap: True
   local_costmap_client:
     ros__parameters:
