@@ -220,11 +220,22 @@ def generate_launch_description():
 
         # write pose to csv file
         Node(
-            name="tf2_listener",
+            name="tracked_pose_listener",
             package="mf_localization",
-            executable="tf2_listener.py",
+            executable="tracked_pose_listener.py",
             parameters=[{
-                "output": PythonExpression(['"', bag_filename, '.pose.csv" if "', save_pose, '"=="true" else ""'])
+                "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
+            }],
+            condition=IfCondition(save_pose),
+        ),
+
+        # write optimized trajectory to csv file
+        Node(
+            name="trajectory_recorder",
+            package="mf_localization",
+            executable="trajectory_recorder.py",
+            parameters=[{
+                "output": PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_pose, '"=="true" else ""'])
             }],
             condition=IfCondition(save_pose),
         ),
