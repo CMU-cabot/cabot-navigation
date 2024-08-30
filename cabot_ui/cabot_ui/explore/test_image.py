@@ -198,7 +198,7 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
             self.open_webcam_loop()
 
-        self.can_speak_explanation = False
+        self.can_speak_explanation = True
         self.can_speak_timer = None
         self.in_conversation = False
         self.last_saved_images_time = time.time()
@@ -210,7 +210,8 @@ class CaBotImageNode(Node):
             self.max_loop = -1
         self.loop_count = 0
 
-        self.timer = self.create_timer(5.0, self.loop)
+        #do loop in different threading no timer
+        self.timer = threading.Timer(0.1, self.loop).start()
 
         self.webcam_timer = None
 
@@ -304,8 +305,9 @@ class CaBotImageNode(Node):
             self.ready = True
         elif msg.category == "ble speech request completed":
             if not self.can_speak_explanation:
-                self.can_speak_explanation = True
-                self.logger.info("can speak explanation set to True by activity log")
+                # set can_speak_explanation to True 3 sec later in different thread
+                thread = threading.Timer(3.0, self.reset_can_speak).start()
+
                 if self.can_speak_timer is not None:
                     self.can_speak_timer.cancel()
 
@@ -321,7 +323,6 @@ class CaBotImageNode(Node):
         elif msg.data == "navigation;cancel":
             # self.explore_main_loop_ready = False
             test_speak.speak_text("", force=True)
-        
 
     def reset_can_speak(self):
         self.logger.info("can speak explanation set to True by timer")
@@ -330,12 +331,11 @@ class CaBotImageNode(Node):
             self.can_speak_timer.cancel()
 
     def cabot_nav_state_callback(self, msg: String):
+        if self.cabot_nav_state != msg.data:
+            self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
         self.cabot_nav_state = msg.data
-        self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
-        # print(f"cabot nav state: {self.cabot_nav_state}")
-
+    
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
-
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
         self.last_saved_images_time = time.time()
@@ -405,7 +405,6 @@ class CaBotImageNode(Node):
     def loop(self):
         if self.max_loop > 0 and self.loop_count >= self.max_loop:
             self.logger.info(f"Max loop count reached. Exiting.")
-            self.timer.cancel()
             return
         is_in_valid_state = self.cabot_nav_state == self.valid_state
         self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
@@ -413,24 +412,20 @@ class CaBotImageNode(Node):
         camera_ready = self.realsense_ready or self.web_camera_ready
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
-            if self.mode == "surrounding_explain_mode":
-                if not self.can_speak_explanation:
-                    self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
-                    self.logger.info(f"next wait time: 0.5 (constant)")
-                    self.change_timer_interval(interval=0.5)
-                    return
 
             wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
-            if self.touching and not self.in_conversation and is_in_valid_state:
-                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
+            if self.touching and not self.in_conversation and is_in_valid_state and self.can_speak_explanation and explain != "":
+                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is not empty")
                 test_speak.speak_text(explain)
                 self.can_speak_explanation = False
+                self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
                 self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
+                next_loop_wait_time = 3.0
             else:
-                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
-                wait_time = 0.1
+                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
+                next_loop_wait_time = 0.1
 
             self.latest_explained_front_image = self.front_image
             self.latest_explained_left_image = self.left_image
@@ -460,16 +455,15 @@ class CaBotImageNode(Node):
                 self.gpt_explainer.right_available = np.random.choice([True, False])
                 
             if self.mode == "surronding_explain_mode":
-                self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
-                self.change_timer_interval(interval=wait_time)
+                self.logger.info(f"surronding_explain_mode next wait time: {next_loop_wait_time}")
+                self.change_timer_interval(interval=next_loop_wait_time)
         else:
             self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
             self.logger.info(f"next wait time: 0.5 (constant)")
             self.change_timer_interval(interval=0.5)
 
     def change_timer_interval(self, interval: float):
-        self.timer.cancel()
-        self.timer = self.create_timer(interval, self.loop)
+        self.timer = threading.Timer(interval, self.loop).start()
 
 
 class GPTExplainer():
@@ -836,7 +830,7 @@ class GPTExplainer():
         # calculate the time to speak the text
         # 1 character takes 0.1 seconds
         # but we make it shorter by 0.05 seconds beacause we want to keep doing the inference
-        return len(text) * 0.05
+        return len(text) * 0.1
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it
