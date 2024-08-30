@@ -427,6 +427,7 @@ class CaBotImageNode(Node):
                 self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
                 test_speak.speak_text(explain)
                 self.can_speak_explanation = False
+                self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
             else:
                 self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
                 wait_time = 0.1
@@ -437,8 +438,6 @@ class CaBotImageNode(Node):
             self.latest_explain = explain
 
             self.publish_latest_explained_info()
-
-            self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
 
             if self.mode == "intersection_detection_mode":
                 self.logger.info("Availability of each direction")
