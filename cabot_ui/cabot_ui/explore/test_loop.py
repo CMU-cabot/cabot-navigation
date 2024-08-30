@@ -77,6 +77,16 @@ class CabotQueryNode(Node):
         self.logger.info(f"Query received: {self.query_type}, {self.query_string}")
         
         if self.query_type == "direction":
+            self.logger.info(f"candidates: {self.candidates}, query: {self.query_string}")
+            replaced_query_candidates = []
+            if self.query_string == "front" and "front" not in self.candidates:
+                replaced_query_candidates = [x for x in self.candidates if "front" in x]
+            elif self.query_string == "back" and "back" not in self.candidates:
+                replaced_query_candidates = [x for x in self.candidates if "back" in x]
+            if len(replaced_query_candidates) > 0:
+                self.query_string = replaced_query_candidates[0]
+                self.logger.info(f"replaced query candidates: {self.query_string}")
+            
             if self.query_string not in self.candidates:
                 self.get_logger().info(f"Invalid direction: {self.query_string}; please select from {self.candidates}")
                 speak_text(f"指定された{self.dir_to_jp[self.query_string]}方向には進めないようです。")
