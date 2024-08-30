@@ -654,11 +654,15 @@ class GPTExplainer():
         try:
             images = []
 
+            use_webcamera = False
+            use_realsense = False
+
             if webcamera_image is not None:
                 if not self.okay_images:
                     self.logger.info("Okay")
                     self.okay_images = True
                     test_speak.speak_text("実験準備ができました")
+                use_webcamera = True
                     
                 # resize to 1080p
                 webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
@@ -667,13 +671,12 @@ class GPTExplainer():
                 if use_initial_prompt:
                     prompt = self.prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
 
-                images_with_text = [webcamera_image_with_text]
-
-            elif (front_image is not None) and (left_image is not None) and (right_image is not None):
+            if (front_image is not None) and (left_image is not None) and (right_image is not None):
                 if not self.okay_images:
                     self.logger.info("Okay")
                     self.okay_images = True
                     test_speak.speak_text("実験準備ができました")
+                use_realsense = True
 
                 left_image = self.resize_images(left_image, max_width=768)
                 left_image_with_text = self.add_text_to_image(left_image, "Left")
@@ -687,11 +690,17 @@ class GPTExplainer():
                 right_image_with_text = self.add_text_to_image(right_image, "Right")
                 images.append(right_image_with_text)
 
+            if use_webcamera and use_realsense:
+                prompt = prompt % "画像は4枚あります。順番に全体、左、前、右を撮影した広角の画像です。"
+                images_with_text = [left_image_with_text, front_image_with_text, right_image_with_text, webcamera_image_with_text]
+            elif use_webcamera:
+                prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
+                images_with_text = [webcamera_image_with_text]
+            elif use_realsense:
+                prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
                 images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
-
-                if use_initial_prompt:
-                    prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
-            else:
+            
+            if webcamera_image is None and (front_image is None or left_image is None or right_image is None):
                 self.logger.info(f"Webcamera image: {webcamera_image}")
                 self.logger.info(f"Front image: {front_image}")
                 self.logger.info(f"Left image: {left_image}")
