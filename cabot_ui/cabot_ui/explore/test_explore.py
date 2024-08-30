@@ -184,14 +184,18 @@ def main(x: int, y: int, query_type: str, cancel_mode: bool = False):
 
         print("spin done")
         # convert coordinates to map coordinates
-        coordinates = np.asarray(rcl_publisher.coordinates) / rcl_publisher.map_resolution
-        coordinates[:, 1] = -coordinates[:, 1]
-        map_x = -rcl_publisher.map_x / rcl_publisher.map_resolution
-        map_y = -rcl_publisher.map_y / rcl_publisher.map_resolution
-        map_coordinates = np.asarray([map_x, rcl_publisher.map_height - map_y])
-        coordinates += map_coordinates
-        with open("coordinates.npy", "wb") as f:
-            np.save(f, coordinates)
+        try:
+            coordinates = np.asarray(rcl_publisher.coordinates) / rcl_publisher.map_resolution
+            coordinates[:, 1] = -coordinates[:, 1]
+            map_x = -rcl_publisher.map_x / rcl_publisher.map_resolution
+            map_y = -rcl_publisher.map_y / rcl_publisher.map_resolution
+            map_coordinates = np.asarray([map_x, rcl_publisher.map_height - map_y])
+            coordinates += map_coordinates
+            with open("coordinates.npy", "wb") as f:
+                np.save(f, coordinates)
+        except Exception as e:
+            print(e)
+            print("Error saving coordinates")
         
 
 
