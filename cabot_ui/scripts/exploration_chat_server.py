@@ -51,6 +51,7 @@ class ExplorationChatServer(Node):
         self.latest_explained_webcam_image = None
 
         self.searched_location = None
+        self.searched_direction = None
 
         self.dir_to_jp = {
             "front": "前",
@@ -225,6 +226,20 @@ class ExplorationChatServer(Node):
         ユーザが言ったこと：%s
         これからJSON形式で返答してください。
 
+        """
+
+        self.prompt_text_search = """
+        次のテキストから対象物のある方向を教えてください。
+        テキスト：%s
+        対象物：%s
+
+
+        JSON形式で返答してください。
+        "answer"キーに返答を入れてください。
+        "answer"には"front", "left", "right", "None"のいずれかを入れてください。
+        "front"は前方、"left"は左方向、"right"は右方向、"None"はわからない場合です。
+
+        
         """
 
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
@@ -421,7 +436,25 @@ class ExplorationChatServer(Node):
                 query_message = self.specify_destination("search", query_string, "最初の位置")
             else:
                 if query_type == "search":
-                    odom = search(query_string, self.log_dir_search)
+                    odom, direction, text = search(query_string, self.log_dir_search)
+                    if direction == "text":
+                        try:
+                            gpt_explainer = GPTExplainer(self.apikey)
+                            prompt_text_search = copy(self.prompt_text_search) % (text, query_string)
+                            res_json = gpt_explainer.query_with_images(prompt_text_search, [])
+                            answer = res_json["choices"][0]["message"]["content"]["answer"]
+                            self.logger.info(f"input: {prompt_text_search}")
+                            self.logger.info(f"answer: {answer}")
+                            
+                            if not answer in self.dir_to_jp:
+                                answer = "None"
+                            self.searched_direction = answer
+                        except Exception as e:
+                            self.logger.info(f"Error: {e}")
+                            answer = "None"
+                            self.searched_direction = None
+                    else:
+                        self.searched_direction = direction
                     query_string = f"{odom[0]},{odom[1]}"
                     self.logger.info(f"searched odom: {query_string}")
                     draw_destination_on_rviz([odom], [[0.0, 1.0, 0.0]])
@@ -471,9 +504,18 @@ class ExplorationChatServer(Node):
         self.logger.info(f"Received event: {event}")
         if event == "navigation_arrived":
             if self.searched_location is not None:
-                speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
+                speak_text(f"{self.searched_location}に到着しました。")
+                # if not self.searched_direction:
+                #     speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
+                # else:
+                #     try:
+                #         direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
+                #         speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。")
+                #     except Exception as e:
+                #         speak_text(f"{self.searched_location}に到着しました。")
                 self.logger.info(f"Arrived at {self.searched_location}")
                 self.searched_location = None
+                self.searched_direction = None
                 self.logger.info("searched_location is reset")
 
 class GPTExplainer():

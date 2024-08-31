@@ -167,7 +167,8 @@ def search(user_query: str, log_dir: str, use_default_query: bool = False):
 
         sims["text"] = {
             "odom": text_odoms[max_sim_idx],
-            "similarity": similarity[max_sim_idx]
+            "similarity": similarity[max_sim_idx],
+            "text": texts[max_sim_idx]
         }
     else:
         print(f"text_pre_features.shape: {text_pre_features.shape}")
@@ -179,13 +180,18 @@ def search(user_query: str, log_dir: str, use_default_query: bool = False):
     # get max similarity
     max_sim = 0.0
     max_sim_direction = None
+    max_sim_odom_text = None
     for direction, sim in sims.items():
         if sim["similarity"] > max_sim:
             max_sim = sim["similarity"]
             max_sim_direction = direction
+            if direction == "text" and "text" in sim:
+                max_sim_odom_text =  sim["text"]
+            else:
+                max_sim_odom_text = None
 
     print(f"Max similarity is {max_sim} at {max_sim_direction} with odom {sims[max_sim_direction]['odom']}")
-    return sims[max_sim_direction]["odom"]
+    return sims[max_sim_direction]["odom"], max_sim_direction, max_sim_odom_text
     
 
 def direction_or_search(response: str) -> str:
