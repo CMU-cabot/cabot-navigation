@@ -615,8 +615,10 @@ class GPTExplainer():
             self.prompt = PROMPT_EXPLORE
         elif self.persona == "middle":
             self.prompt = PROMPT_MIDDLE
-        else:
+        elif self.persona == "navigation":
             self.prompt = PROMPT_NAVIGATION
+        else:
+            self.logger.info(f"Persona {persona} is not recognized.")
 
     def resize_images(self, image, max_width=None, max_height=None):
         image_width = image.shape[1]

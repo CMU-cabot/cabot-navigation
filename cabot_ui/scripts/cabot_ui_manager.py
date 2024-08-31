@@ -93,7 +93,7 @@ class CabotUIManager(NavigationInterface, object):
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._personaPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/persona", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.persona_list = ["explore", "middle", "navigation"]
-        self.persona_index = 0
+        self.persona_index = 1
 
         # request language
         e = NavigationEvent("getlanguage", None)
