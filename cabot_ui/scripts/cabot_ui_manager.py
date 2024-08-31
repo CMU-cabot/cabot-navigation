@@ -542,7 +542,7 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.error(f"[CabotUIManager] event {event}")
         
         if event.subtype == "front":
-            if in_conversation or in_button_control:
+            if in_button_control:
                 # self._interface.exploring_direction("front")
                 self._interface.vibrate(vibration.FRONT)
                 self._exploration.send_query("direction","front")
@@ -555,7 +555,7 @@ class CabotUIManager(NavigationInterface, object):
                 self._eventPub.publish(msg)
                 
         elif event.subtype == "back":
-            if in_conversation or in_button_control:
+            if in_button_control:
                 # self._interface.exploring_direction("back")
                 self._exploration.send_query("direction","back")
             else:
@@ -567,7 +567,7 @@ class CabotUIManager(NavigationInterface, object):
                 self._eventPub.publish(msg)
 
         elif event.subtype == "left":
-            if in_conversation or in_button_control:
+            if in_button_control:
                 # self._interface.exploring_direction("left")
                 self._interface.vibrate(vibration.LEFT_TURN)
                 self._exploration.send_query("direction","left")
@@ -575,7 +575,7 @@ class CabotUIManager(NavigationInterface, object):
                 self.update_persona(direction=-1)
                 self._interface.update_persona(self.persona_list[self.persona_index])
         elif event.subtype == "right":
-            if in_conversation or in_button_control:
+            if in_button_control:
                 # self._interface.exploring_direction("right")
                 self._interface.vibrate(vibration.RIGHT_TURN)
                 self._exploration.send_query("direction","right")
