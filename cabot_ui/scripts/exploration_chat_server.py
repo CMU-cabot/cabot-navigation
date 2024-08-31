@@ -321,7 +321,7 @@ class ExplorationChatServer(Node):
                     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
                     res_json = response.json()
                 except Exception as e:
-                    self.logger(f"Error: {e}")
+                    self.logger.info(f"Error: {e}")
                     res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
 
                 self.logger.info("input: " + gpt_input)
@@ -330,23 +330,23 @@ class ExplorationChatServer(Node):
                 # $ curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'
                 # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerself.logger":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
                 query_string = res_json["choices"][0]["message"]["content"]
-                self.logger(f"openai response: {query_string}")
+                self.logger.info(f"openai response: {query_string}")
                 query_json = extract_json_part(query_string)
                 if query_json is not None:
                     query_type = query_json.get("classification", "failed")
                     if query_type == "search":
                         query_target = query_json.get("target_location", "unknown")
                         query_string = query_target + "があります"
-                        self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                        self.logger.info(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif query_type == "direction":
                         query_target = query_json.get("target_direction", "unknown")
                         query_string = query_target
-                        self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                        self.logger.info(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif "conversation" in query_type:
                         # make user input quert string
                         query_target = "conversation"
                         query_string = gpt_input
-                        self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                        self.logger.info(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif query_type == "go_back_to_initial_position":
                         query_target = "最初"
                         query_string = "go_back_to_initial_position"
@@ -354,7 +354,7 @@ class ExplorationChatServer(Node):
                         query_type = "failed"
                         query_target = "unknown"
                         query_string = "failed"
-                    self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                    self.logger.info(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                 else:
                     query_type = "failed"
                     query_target = "unknown"
@@ -372,10 +372,10 @@ class ExplorationChatServer(Node):
             dest_info = {}
 
             if query_string == "":
-                self.logger("skip chat")
+                self.logger.info("skip chat")
                 res_text = ["対話を開始します。はい。ご用件は何でしょう。"]
             elif query_type == "failed":
-                self.logger("failed to extract JSON")
+                self.logger.info("failed to extract JSON")
                 res_text = ["すみません、もう一度言っていただいても良いですか。"]
             elif "conversation" in query_type:
                 prompt_conversation = copy(self.prompt_conversation) % (self.latest_explained_info, query_string)
