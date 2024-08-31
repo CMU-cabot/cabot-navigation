@@ -577,7 +577,7 @@ class GPTExplainer():
             elif self.persona == "middle":
                 self.prompt = PROMPT_MIDDLE
             else:
-                self.prompt = PROMPT_EXPLORE
+                self.prompt = PROMPT_NAVIGATION
         else:
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
         self.prompt = textwrap.dedent(self.prompt).strip()
