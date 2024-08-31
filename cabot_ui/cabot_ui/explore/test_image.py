@@ -700,6 +700,7 @@ class GPTExplainer():
                 self.logger.info("Error in GPTExplainer.explain: Images are None.")
                 return 1.0, "エラー"
 
+            self.logger.info(f"Persona: {self.persona} Prompt: {prompt}")
             gpt_response = self.query_with_images(prompt, images)
             gpt_response["log_dir"] = self.log_dir
 
@@ -729,6 +730,8 @@ class GPTExplainer():
                         self.logger.info(f"Error in GPTExplainer.explain: extracted_json is 'Error': {extracted_json}")
                     else:
                         extracted_json["description"] = extracted_json["description"]
+
+            self.logger.info(f"length of gpt_response: {len(extracted_json['description'])} actual response: {extracted_json['description']}")
 
             ##save odom and img
             current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
