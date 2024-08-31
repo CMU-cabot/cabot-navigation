@@ -60,11 +60,12 @@ class ExplorationChatServer(Node):
 
         self.prompt = """
             ### 指示
-            まず、ユーザから与えられた文字列を三つに分類してください。三つの分類は、"search"、"direction"、"simple_conversation"、"image_conversation"です。
+            まず、ユーザから与えられた文字列を三つに分類してください。5つの分類は、"search"、"direction"、"simple_conversation"、"image_conversation"、"go_back_to_initial_position"です。
             ユーザが特定の場所に行きたい場合、"search"として分類してください。
             ユーザが特定の方向に行きたい場合、"direction"として分類してください。
             ユーザが簡単な会話をしたい場合、"simple_conversation"として分類してください。単にカジュアルな会話や「ありがとう」などの挨拶が含まれます。
             ユーザが画像を使って会話をしたい場合、"image_conversation"として分類してください。周囲の状況に関して質問された場合、"simple_conversation"として分類してください。
+            ユーザが最初の位置に戻りたい場合、"go_back_to_initial_position"として分類してください。
 
             次に、"search"として分類された場合、ユーザから与えられた文字列からユーザがいきたい場所("target_location")を抽出してください。
 
@@ -83,6 +84,7 @@ class ExplorationChatServer(Node):
             7. "image_conversation"の場合、"target_location"と"target_direction"のキーは入れないでください。
             8. "search"の場合、ユーザが行きたい場所は１箇所です。"target_location"キーには１箇所の情報だけ入れてください。
             9. "direction"の場合、ユーザが行きたい方向は１つです。"target_direction"キーには１つの方向だけ入れてください。
+            10. "go_back_to_initial_position"の場合、"target_location"と"target_direction"のキーは入れないでください。
 
             例：
             入力：木製の展示に行きたいわ
@@ -157,6 +159,13 @@ class ExplorationChatServer(Node):
             {
                 "thought": "<あなたが考察したこと>",
                 "classification": "simple_conversation",
+            }
+
+            入力：最初の位置に戻って
+            出力：
+            {
+                "thought": "<あなたが考察したこと>",
+                "classification": "go_back_to_initial_position",
             }
 
             <あなたが考察したこと>の中には、入力に対しての考察を入れてください。例えば、入力が"木製の展示に行きたいわ"の場合、"木製の展示"が目的地であると考察してください。
@@ -312,36 +321,40 @@ class ExplorationChatServer(Node):
                     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
                     res_json = response.json()
                 except Exception as e:
-                    print(f"Error: {e}")
+                    self.logger(f"Error: {e}")
                     res_json = {"choices": [{"message": {"content": "Something is wrong with OpenAI API.", "role": "assistant"}}]}
 
                 self.logger.info("input: " + gpt_input)
                 self.logger.info(f"openai response: {res_json}")
 
                 # $ curl -X POST http://127.0.0.1:5000/service -H "Content-Type: application/json" -d '{"input":{"text": "木製の展示"}}'
-                # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerprint":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
+                # >>> {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! How can I assist you today?","role":"assistant"}}],"created":1721701880,"id":"chatcmpl-9nzb64fOmcBAO3c963JGK55WuB0yx","model":"gpt-4o-2024-05-13","object":"chat.completion","system_fingerself.logger":"fp_400f27fa1f","usage":{"completion_tokens":9,"prompt_tokens":10,"total_tokens":19}}
                 query_string = res_json["choices"][0]["message"]["content"]
-                print(f"openai response: {query_string}")
+                self.logger(f"openai response: {query_string}")
                 query_json = extract_json_part(query_string)
                 if query_json is not None:
                     query_type = query_json.get("classification", "failed")
                     if query_type == "search":
                         query_target = query_json.get("target_location", "unknown")
                         query_string = query_target + "があります"
-                        print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                        self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif query_type == "direction":
                         query_target = query_json.get("target_direction", "unknown")
                         query_string = query_target
-                        print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                        self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                     elif "conversation" in query_type:
                         # make user input quert string
                         query_target = "conversation"
                         query_string = gpt_input
+                        self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                    elif query_type == "go_back_to_initial_position":
+                        query_target = "最初"
+                        query_string = "go_back_to_initial_position"
                     else:
                         query_type = "failed"
                         query_target = "unknown"
                         query_string = "failed"
-                    print(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
+                    self.logger(f"query type: {query_type}, query target: {query_target}, query string: {query_string}")
                 else:
                     query_type = "failed"
                     query_target = "unknown"
@@ -359,10 +372,10 @@ class ExplorationChatServer(Node):
             dest_info = {}
 
             if query_string == "":
-                print("skip chat")
+                self.logger("skip chat")
                 res_text = ["対話を開始します。はい。ご用件は何でしょう。"]
             elif query_type == "failed":
-                print("failed to extract JSON")
+                self.logger("failed to extract JSON")
                 res_text = ["すみません、もう一度言っていただいても良いですか。"]
             elif "conversation" in query_type:
                 prompt_conversation = copy(self.prompt_conversation) % (self.latest_explained_info, query_string)
@@ -391,6 +404,15 @@ class ExplorationChatServer(Node):
                     navi = True
                     dest_info = {"nodes": ""}
                     self.publish_tmp_finish_chat()
+            elif query_type == "go_back_to_initial_position":
+                navi = True
+                odom = [0.0, 0.0]
+                dest_info = {"nodes": ""}
+                self.publish_tmp_finish_chat()
+                res_text = ["最初の位置に戻ります。"]   
+                query_string = f"{odom[0]},{odom[1]}"
+                draw_destination_on_rviz([odom], [[0.0, 1.0, 0.0]])
+                query_message = self.specify_destination("search", query_string, "最初")
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir_search)
