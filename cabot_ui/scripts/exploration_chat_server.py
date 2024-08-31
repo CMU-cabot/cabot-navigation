@@ -16,6 +16,7 @@ import base64
 from copy import copy
 from cv_bridge import CvBridge
 from cabot_ui.explore.test_speak import speak_text
+import tf_transformations
 
 class ExplorationChatServer(Node):
     def __init__(self):
@@ -50,8 +51,13 @@ class ExplorationChatServer(Node):
         self.latest_explained_webcam_image_sub = self.create_subscription(Image, "/cabot/latest_web_camera_image", self.latest_explained_webcam_image_callback, 10)
         self.latest_explained_webcam_image = None
 
+        # make odom sub
+        self.odom_sub = self.create_subscription(std_msgs.msg.String, "/cabot/odom", self.odom_callback, 10)
+        self.odom = None
+
         self.searched_location = None
         self.searched_direction = None
+        self.searched_yaw = None
 
         self.dir_to_jp = {
             "front": "前",
@@ -245,6 +251,15 @@ class ExplorationChatServer(Node):
         # Ensure Flask app runs in a separate thread to avoid blocking ROS 2
         flask_thread = threading.Thread(target=self.run_flask_app)
         flask_thread.start()
+
+    def odom_callback(self, msg):
+        msg_odom = msg.data
+        # save the odom
+        quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
+        roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
+        odom = np.array([msg_odom.pose.pose.position.x, msg_odom.pose.pose.position.y, yaw])
+        self.odom = odom        
+
 
     def latest_explained_info_callback(self, msg):
         self.latest_explained_info = msg.data
@@ -449,6 +464,8 @@ class ExplorationChatServer(Node):
                             if not answer in self.dir_to_jp:
                                 answer = "None"
                             self.searched_direction = answer
+                            self.searched_yaw = odom[2]
+
                         except Exception as e:
                             self.logger.info(f"Error: {e}")
                             answer = "None"
@@ -504,18 +521,36 @@ class ExplorationChatServer(Node):
         self.logger.info(f"Received event: {event}")
         if event == "navigation_arrived":
             if self.searched_location is not None:
-                speak_text(f"{self.searched_location}に到着しました。")
-                # if not self.searched_direction:
-                #     speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
-                # else:
-                #     try:
-                #         direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
-                #         speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。")
-                #     except Exception as e:
-                #         speak_text(f"{self.searched_location}に到着しました。")
+                # speak_text(f"{self.searched_location}に到着しました。")
+                if not self.searched_direction:
+                    speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
+                else:
+                    try:
+                        # compare self.searched_yaw and self.odom[2] and determine which direction is the searched direction in
+                        if self.searched_yaw is not None:
+                            diff_yaw = self.searched_yaw - self.odom[2]
+                            # if difference is small, just use self.searched_direction
+                            # if difference is large (the robot is facing opposite way as where the searched_yaw is acquired), reverse the direction
+                            if diff_yaw < np.pi:
+                                self.searched_directio = self.searched_direction
+                            elif abs(diff_yaw) > np.pi:
+                                if self.searched_direction == "front":
+                                    self.searched_direction = "back"
+                                elif self.searched_direction == "left":
+                                    self.searched_direction = "right"
+                                elif self.searched_direction == "right":
+                                    self.searched_direction = "left"
+                                elif self.searched_direction == "back":
+                                    self.searched_direction = "front"
+
+                        direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
+                        speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。")
+                    except Exception as e:
+                        speak_text(f"{self.searched_location}に到着しました。")
                 self.logger.info(f"Arrived at {self.searched_location}")
                 self.searched_location = None
                 self.searched_direction = None
+                self.searched_yaw = None
                 self.logger.info("searched_location is reset")
 
 class GPTExplainer():
