@@ -543,7 +543,7 @@ class CabotUIManager(NavigationInterface, object):
         
         if event.subtype == "front":
             if in_conversation or in_button_control:
-                self._interface.exploring_direction("front")
+                # self._interface.exploring_direction("front")
                 self._interface.vibrate(vibration.FRONT)
                 self._exploration.send_query("direction","front")
             else:
@@ -556,7 +556,7 @@ class CabotUIManager(NavigationInterface, object):
                 
         elif event.subtype == "back":
             if in_conversation or in_button_control:
-                self._interface.exploring_direction("back")
+                # self._interface.exploring_direction("back")
                 self._exploration.send_query("direction","back")
             else:
                 # speed down
@@ -568,7 +568,7 @@ class CabotUIManager(NavigationInterface, object):
 
         elif event.subtype == "left":
             if in_conversation or in_button_control:
-                self._interface.exploring_direction("left")
+                # self._interface.exploring_direction("left")
                 self._interface.vibrate(vibration.LEFT_TURN)
                 self._exploration.send_query("direction","left")
             else:
@@ -576,7 +576,7 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.update_persona(self.persona_list[self.persona_index])
         elif event.subtype == "right":
             if in_conversation or in_button_control:
-                self._interface.exploring_direction("right")
+                # self._interface.exploring_direction("right")
                 self._interface.vibrate(vibration.RIGHT_TURN)
                 self._exploration.send_query("direction","right")
             else:   

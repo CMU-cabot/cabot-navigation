@@ -38,7 +38,7 @@ class CabotQueryNode(Node):
         self.cancel_pub = self.create_publisher(String, "/cabot/event", 10)
 
         self.dir_to_jp = {
-            "front": "前",
+            "front": "まえ",
             "front_left": "左前",
             "front_right": "右前",
             "left": "左",
@@ -399,7 +399,7 @@ def main(
         dist = np.linalg.norm(np.array(output_point) - np.array(current_coords))
 
         japanese_directions = {
-            "front": "前",
+            "front": "まえ",
             "front_left": "左前",
             "front_right": "右前",
             "left": "左",
