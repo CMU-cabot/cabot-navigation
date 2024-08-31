@@ -266,6 +266,12 @@ class CabotUIManager(NavigationInterface, object):
             self._exploration.set_conversation_control(False)
             return
         
+        if msg.data == "navigation_tmp_finishchat" or msg.data == "navigation_finishchat" or msg.data == "navigation_finish_button_control":
+            self._logger.info("NavigationState: Finish chat")
+            self._exploration.set_conversation_control(False)
+            self._exploration.set_button_control(False)
+            return
+        
         event = BaseEvent.parse(msg.data)
         if event is None:
             self._logger.error("cabot event %s cannot be parsed", msg.data)

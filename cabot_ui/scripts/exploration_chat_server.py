@@ -15,6 +15,7 @@ import time
 import base64
 from copy import copy
 from cv_bridge import CvBridge
+from cabot_ui.explore.test_speak import speak_text
 
 class ExplorationChatServer(Node):
     def __init__(self):
@@ -31,6 +32,8 @@ class ExplorationChatServer(Node):
         self._eventPub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.query_pub = self.create_publisher(String, "/cabot/user_query", 10)
 
+        self._eventSub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+
 
         self.latest_explained_info_sub = self.create_subscription(String, "/cabot/latest_explained_info", self.latest_explained_info_callback, 10)
         self.latest_explained_info = None
@@ -46,6 +49,8 @@ class ExplorationChatServer(Node):
 
         self.latest_explained_webcam_image_sub = self.create_subscription(Image, "/cabot/latest_web_camera_image", self.latest_explained_webcam_image_callback, 10)
         self.latest_explained_webcam_image = None
+
+        self.searched_location = None
 
         self.dir_to_jp = {
             "front": "前",
@@ -276,7 +281,8 @@ class ExplorationChatServer(Node):
         self.get_logger().info(f"Query published: {query_msg.data}")
 
         if query_type == "search":
-            query_message = f"{user_query_message}の場所までご案内します。"
+            query_message = f"{user_query_message}までご案内します。"
+            self.searched_location = user_query_message
         elif query_type == "direction":
             dir_jp = self.dir_to_jp.get(query_string, query_string)
             query_message = f"" # let test loop handle this
@@ -412,7 +418,7 @@ class ExplorationChatServer(Node):
                 res_text = ["最初の位置に戻ります。"]   
                 query_string = f"{odom[0]},{odom[1]}"
                 draw_destination_on_rviz([odom], [[0.0, 1.0, 0.0]])
-                query_message = self.specify_destination("search", query_string, "最初")
+                query_message = self.specify_destination("search", query_string, "最初の位置")
             else:
                 if query_type == "search":
                     odom = search(query_string, self.log_dir_search)
@@ -460,6 +466,15 @@ class ExplorationChatServer(Node):
         msg.data = "navigation_tmp_startchat"
         self._eventPub.publish(msg)
 
+    def event_callback(self, msg):
+        event = msg.data
+        self.logger.info(f"Received event: {event}")
+        if event == "navigation_arrived":
+            if self.searched_location is not None:
+                speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
+                self.logger.info(f"Arrived at {self.searched_location}")
+                self.searched_location = None
+                self.logger.info("searched_location is reset")
 
 class GPTExplainer():
     def __init__(

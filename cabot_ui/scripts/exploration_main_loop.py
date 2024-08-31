@@ -378,7 +378,7 @@ class ExplorationMainLoop(Node):
 
                     # here, say something when button control mode is on
                     if self.in_button_control:
-                        speak_text("ボタンを押してください。")
+                        speak_text("行きたい方向のボタンを押してください。")
 
                     query_node = CabotQueryNode(candidates=direction_candidates)
                     try:
