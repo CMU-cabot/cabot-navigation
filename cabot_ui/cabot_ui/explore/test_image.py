@@ -33,7 +33,7 @@ from PIL import Image as PILImage
 from .WebCameraManager import WebCameraManager
 import traceback
 import threading
-
+from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION
 
 """
 This script will output the GPT-generated explanation from the images captured by the robot.
@@ -89,6 +89,7 @@ class CaBotImageNode(Node):
         self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
         self.latest_web_camera_image_pub = self.create_publisher(Image, "/cabot/latest_web_camera_image", 10)
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
+        self.prompt_sub = self.create_subscription(std_msgs.msg.String, "/cabot/persona", self.persona_callback, 10)
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
@@ -197,7 +198,7 @@ class CaBotImageNode(Node):
             self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
             self.open_webcam_loop()
 
-        self.can_speak_explanation = False
+        self.can_speak_explanation = True
         self.can_speak_timer = None
         self.in_conversation = False
         self.last_saved_images_time = time.time()
@@ -209,10 +210,28 @@ class CaBotImageNode(Node):
             self.max_loop = -1
         self.loop_count = 0
 
-        self.timer = self.create_timer(5.0, self.loop)
+        #do loop in different threading no timer
+        self.timer = threading.Timer(0.1, self.loop).start()
+
+        self.webcam_timer = None
 
         if self.web_camera_ready:
             self.publish_camera_ready()
+            # self.get_web_camera_image() # use this only when after discussing with the team
+
+    def get_web_camera_image(self):
+        # Function to capture and schedule the next image capture
+        def _capture_and_schedule():
+            self.webcamera_image = self.web_camera_manager.get_frame()
+            self.logger.info("Captured web camera image")
+            # Schedule the next capture 1 second later
+
+        self.webcam_timer = threading.Timer(1.0, _capture_and_schedule).start()
+
+    def persona_callback(self, msg: std_msgs.msg.String):
+        self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
+        self.persona = msg.data
+        self.gpt_explainer.update_persona(self.persona)
 
     def open_webcam_loop(self):
         # open the webcam in different thread until it is opened
@@ -254,36 +273,41 @@ class CaBotImageNode(Node):
             self.touching = False
 
     def publish_latest_explained_info(self):
+        self.logger.info("Publishing latest explained info")
+        msg = String()
+        msg.data = self.latest_explain
+        self.latest_explained_info_pub.publish(msg)
+
+        # publish the images
+        bridge = CvBridge()
         if self.latest_explained_front_image is not None:
-            self.logger.info("Publishing latest explained info")
-            msg = String()
-            msg.data = self.latest_explain
-            self.latest_explained_info_pub.publish(msg)
-
-            # publish the images
-            bridge = CvBridge()
             front_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_front_image, encoding="rgb8")
-            left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
-            right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
-            if self.webcamera_image is not None:
-                # make the resolution smaller
-                self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
-                webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
             self.latest_explained_front_image_pub.publish(front_image_msg)
+        
+        if self.latest_explained_left_image is not None:
+            left_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_left_image, encoding="rgb8")
             self.latest_explained_left_image_pub.publish(left_image_msg)
-            self.latest_explained_right_image_pub.publish(right_image_msg)
-            if self.webcamera_image is not None:
-                self.latest_web_camera_image_pub.publish(webcamera_image_msg)
 
-            self.logger.info("Published latest explained info")
+        if self.latest_explained_right_image is not None:
+            right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
+            self.latest_explained_right_image_pub.publish(right_image_msg)
+
+        if self.webcamera_image is not None:
+            # make the resolution smaller
+            self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
+            webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
+            self.latest_web_camera_image_pub.publish(webcamera_image_msg)
+
+        self.logger.info("Published latest explained info")
     
     def activity_callback(self, msg: Log):
         if msg.category == "cabot/interface" and msg.memo == "ready":
             self.ready = True
         elif msg.category == "ble speech request completed":
             if not self.can_speak_explanation:
-                self.can_speak_explanation = True
-                self.logger.info("can speak explanation set to True by activity log")
+                # set can_speak_explanation to True 3 sec later in different thread
+                thread = threading.Timer(3.0, self.reset_can_speak).start()
+
                 if self.can_speak_timer is not None:
                     self.can_speak_timer.cancel()
 
@@ -299,7 +323,6 @@ class CaBotImageNode(Node):
         elif msg.data == "navigation;cancel":
             # self.explore_main_loop_ready = False
             test_speak.speak_text("", force=True)
-        
 
     def reset_can_speak(self):
         self.logger.info("can speak explanation set to True by timer")
@@ -308,10 +331,10 @@ class CaBotImageNode(Node):
             self.can_speak_timer.cancel()
 
     def cabot_nav_state_callback(self, msg: String):
+        if self.cabot_nav_state != msg.data:
+            self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
         self.cabot_nav_state = msg.data
-        self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
-        # print(f"cabot nav state: {self.cabot_nav_state}")
-
+    
     def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
@@ -337,8 +360,9 @@ class CaBotImageNode(Node):
         
         self.front_image = front_image
         self.left_image = left_image
-        self.right_image = right_image  
-        self.webcamera_image = self.web_camera_manager.get_frame()     
+        self.right_image = right_image
+        if self.web_camera_manager.is_open():
+            self.webcamera_image = self.web_camera_manager.get_frame()     
 
         self.front_marker_detected = self.detect_marker(front_image)
         self.left_marker_detected = self.detect_marker(left_image)
@@ -355,6 +379,9 @@ class CaBotImageNode(Node):
             test_speak.speak_text("Webカメラが起動しました")
             self.web_camera_ready = True
             self.publish_latest_explained_info()
+
+        if self.webcam_timer is not None:
+            self.webcam_timer.cancel()
         
         self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
 
@@ -378,7 +405,6 @@ class CaBotImageNode(Node):
     def loop(self):
         if self.max_loop > 0 and self.loop_count >= self.max_loop:
             self.logger.info(f"Max loop count reached. Exiting.")
-            self.timer.cancel()
             return
         is_in_valid_state = self.cabot_nav_state == self.valid_state
         self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
@@ -386,22 +412,20 @@ class CaBotImageNode(Node):
         camera_ready = self.realsense_ready or self.web_camera_ready
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
-            if self.mode == "surrounding_explain_mode":
-                if not self.can_speak_explanation:
-                    self.logger.info("can't speak explanation yet because can_speak_explanation is False no mode surrounding_explain_mode")
-                    self.logger.info(f"next wait time: 0.5 (constant)")
-                    self.change_timer_interval(interval=0.5)
-                    return
 
             wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
-            if self.touching and not self.in_conversation and is_in_valid_state:
-                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
+            if self.touching and not self.in_conversation and is_in_valid_state and self.can_speak_explanation and explain != "":
+                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is not empty")
                 test_speak.speak_text(explain)
+                self.can_speak_explanation = False
+                self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
+                self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
+                next_loop_wait_time = 3.0
             else:
-                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state}")
-                wait_time = 0.1
+                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
+                next_loop_wait_time = 0.1
 
             self.latest_explained_front_image = self.front_image
             self.latest_explained_left_image = self.left_image
@@ -409,9 +433,6 @@ class CaBotImageNode(Node):
             self.latest_explain = explain
 
             self.publish_latest_explained_info()
-
-            self.can_speak_explanation = False
-            self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
 
             if self.mode == "intersection_detection_mode":
                 self.logger.info("Availability of each direction")
@@ -434,16 +455,15 @@ class CaBotImageNode(Node):
                 self.gpt_explainer.right_available = np.random.choice([True, False])
                 
             if self.mode == "surronding_explain_mode":
-                self.logger.info(f"surronding_explain_mode next wait time: {wait_time}")
-                self.change_timer_interval(interval=wait_time)
+                self.logger.info(f"surronding_explain_mode next wait time: {next_loop_wait_time}")
+                self.change_timer_interval(interval=next_loop_wait_time)
         else:
             self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
             self.logger.info(f"next wait time: 0.5 (constant)")
             self.change_timer_interval(interval=0.5)
 
     def change_timer_interval(self, interval: float):
-        self.timer.cancel()
-        self.timer = self.create_timer(interval, self.loop)
+        self.timer = threading.Timer(interval, self.loop).start()
 
 
 class GPTExplainer():
@@ -553,156 +573,11 @@ class GPTExplainer():
             """
         elif self.mode == "surronding_explain_mode":
             if self.persona == "explore":
-                self.prompt = """
-                # 指示
-                画像を説明してください。
-                %s
-                あなたの生成した文章はそのまま視覚障害者の方に読まれます。
-                説明文は、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
-                画像を説明するには、以下のルールに必ず従ってください。
-
-                ## 指示に従うために必ず守るべきルール
-                1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を詳しく説明してください。
-                2. 最大で3文の説明になるようにしてください。
-                3. 敬語を使うこと。
-                4. 画像の全体/左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
-                5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
-                6. 説明は必ず全体の要約、左手、前方、右手の順番で説明してください。
-                7. 以下の情報を含むように努力してください。
-                    - 建物の内装や装飾の情報。
-                    - 建物のレイアウトの情報（前方が開けている情報や行ける方向に関する情報など）。
-                    - 周囲の明るさや窓からの光の差し込み具合の情報。
-                    - 周囲の人の情報とその人たちが行なっている行動や来ている服の色やその人が従業員か客かの情報。
-                    - お店の場合は入り口が空いていて、盲導犬が待機可能かの情報。
-                    - 見えているお店や展示物に関する情報。必ずそれのジャンル（飲食店の場合は料理のジャンル、展示物の場合は何をする場所か）を含めること。可能な場合はその場所の名前も含めること。展示に関してはそれが触れる展示か、見るだけの展示か必ず言及してください。
-                    - 物体に関して言及する際はそれは具体的（ジャンルとか具体的な名称）な情報。例えば、カウンターがある際にはカフェのカウンターのようであるとかです。
-                    - 衝突の可能性がある前方から歩いてくる人の情報。
-                    - 数字を用いた物体の位置説明（右5メートルの方向に...等）。
-                    - 看板や案内板がある場合はなんの看板か、それについての内容やそれに書いてる文字を読み上げること。
-                    - 見える文字を読み上げること。
-                8. 「画像は」「視点」「全体的に」など、説明を聞くユーザにとって不自然な言葉は絶対に用いないでください。
-                9. 説明する必要がない方向があれば（例：右側には何もない）その方向に関しては絶対にしないでください。     
-                10. 説明を締めくくる際（最後の文章）に方向全体、シーンの全体像、その空間のまとめについての説明は絶対にしないでください。
-                11. 画像に見えないもは説明しないでください。嘘をつかないでください。ハルシネーションをしないで下さい。
-
-                ## 返答形式
-                上記のルールを守った場合5000円のチップを与えます。
-                上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
-
-                JSON形式で返答してください。
-                まず、"initial_description"キーの中に最初の画像の説明を入れてください。
-                その後、"thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
-                最後に、"description"キーの中に修正版の画像の説明を入れてください。
-                最初にJSONの始まりである```json\n{から返答を開始してください。
-                返答例は以下です。
-                ```json
-                {
-                "initial_description": "<周囲説明>",
-                "thought": "<考察>",
-                "description": "<周囲説明>",
-                }
-                ```
-                """
+                self.prompt = PROMPT_EXPLORE
             elif self.persona == "middle":
-                self.prompt = """
-                # 指示
-                画像を説明してください。
-                あなたの生成した文章はそのまま視覚障害者の方に読まれます。
-                説明文は、簡潔にとどめつつ、視覚障害者の方が聞いていて楽しい気分になるように、魅力的な説明を心がけてください。
-                画像を説明するには、以下のルールに必ず従ってください。
-
-                ## 指示に従うために必ず守るべきルール
-                1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。可能な限りの物体とその詳細を説明してください。
-                2. 全体で2-3文程度の説明になるようにしてください。
-                3. 敬語を使うこと。
-                4. 画像の全体/左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
-                5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
-                6. 説明は必ず全体の要約、左手、前方、右手の順番で説明してください。
-                7. 以下の情報を含むように努力してください。
-                    - お店の場合は入り口が空いていて、盲導犬が待機可能かの情報。
-                    - 見えているお店や展示物に関する情報。必ずそれのジャンル（飲食店の場合は料理のジャンル、展示物の場合は何をする場所か）を含めること。可能な場合はその場所の名前も含めること。展示に関してはそれが触れる展示か、見るだけの展示か必ず言及してください。
-                    - 未来的な、おしゃれな、モダンな、古典的な等様々な形容詞。
-                    - 衝突の可能性がある前方から歩いてくる人の情報。
-                    - 物体について言及する時は数字を用いた物体の位置説明（右5メートルの方向に...等）
-                    - 看板や案内板がある場合はなんの看板か、それについての内容やそれに書いてる文字を読み上げること。
-                    - 見える文字を読み上げること
-                8. 「画像は」「視点」「全体的に」など、説明を聞くユーザにとって不自然な言葉は絶対に用いないでください。
-                9. 説明する必要がない方向があれば（例：右側には何もない）その方向に関しては絶対にしないでください。     
-                10. 説明の最後に方向全体やシーンの全体像についての説明は絶対にしないでください。
-                11. 具体的に説明できない物体に関しては決して説明をしないでください。
-                12. 衝突の危険がない周囲の人に関する情報は絶対に含めないでください。
-                13. 画像に見えないもは説明しないでください。嘘をつかないでください。ハルシネーションをしないで下さい。
-
-                ## 返答形式
-                上記のルールを守った場合5000円のチップを与えます。
-                上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
-
-                JSON形式で返答してください。
-                まず、"initial_description"キーの中に最初の画像の説明を入れてください。
-                その後、"thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
-                最後に、"description"キーの中に修正版の画像の説明を入れてください。
-                最初にJSONの始まりである```json\n{から返答を開始してください。
-                返答例は以下です。
-                ```json
-                {
-                "initial_description": "<周囲説明>",
-                "thought": "<考察>",
-                "description": "<周囲説明>",
-                }
-                ```
-                """
+                self.prompt = PROMPT_MIDDLE
             else:
-                self.prompt = """
-                # 指示
-                画像を説明してください。
-                あなたの生成した文章はそのまま視覚障害者の方に読まれます。
-                説明文は、視覚障害者の方が端的に周囲を理解できるように、簡潔で最小限の長さの説明を心がけてください。
-                視覚障害者の方は目的地を探すために画像の説明を聞いているます。
-                画像を説明するには、以下のルールに必ず従ってください。
-
-                ## 指示に従うために必ず守るべきルール
-                1. 視覚障害者の人が歩きながら聞くので、説明すること。一まとまりの文章で説明する事。
-                2. 全体で1-2文程度の説明になるようにしてください。
-                3. 敬語を使うこと。
-                4. 画像の左/前/右にある物体を特定し、そのシーンを知るのに必要な情報を説明するしてください。
-                5. 物体を説明する際ははっきり見える物のみ説明してください。特徴的なオブジェクトの説明は含めてください。
-                6. 説明は必ず左手、前方、右手の順番で説明してください。
-                7. 以下の情報を含むように努力してください。
-                    - お店の場合は入り口が空いていて、盲導犬が待機可能かの情報。
-                    - 見えているお店や展示物に関する情報。必ずそれのジャンル（飲食店の場合は料理のジャンル、展示物の場合は何をする場所か）を含めること。可能な場合はその場所の名前も含めること。展示に関してはそれが触れる展示か、見るだけの展示か必ず言及してください
-                    - 数字を用いた物体の位置説明（右5メートルの方向に...等）
-                    - 看板や案内板がある場合はなんの看板か、それについての内容やそれに書いてる文字を読み上げること。
-                    - 見える文字を読み上げること
-                8. 具体的な情報のみを伝えるようにしてください。
-                9. 説明文章は短く、端的で、簡潔なものにしてください。 
-                10. 「画像は」「視点」「全体的に」など、説明を聞くユーザにとって不自然な言葉は絶対に用いないでください。
-                11. 説明する必要がない方向があれば（例：右側には何もない）その方向に関しては絶対にしないでください。     
-                12. 説明の最初や最後に方向全体やシーンの全体像についての説明は絶対にしないでください。
-                13. 装飾に関する説明は絶対にしないでください。淡々と何があるかとその具体的な情報だけを伝えるようにしてください。
-                14. 長さを最小限にとどめるため、形容詞は絶対に含めないでください。
-                15. 目的地を決める上で参考にならない情報（例えば椅子やテーブルなどの家具に関しての情報）を絶対に含めないでください。
-                16. 具体的に説明できない物体に関しては決して説明をしないでください。
-                17. 衝突の危険がない周囲の人に関する情報は絶対に含めないでください。
-                18. 画像に見えないもは説明しないでください。嘘をつかないでください。ハルシネーションをしないで下さい。
-
-                ## 返答形式
-                上記のルールを守った場合5000円のチップを与えます。
-                上記のルールを無視した場合、あなたはぺナルティとしてお金を支払わなければなりません。
-
-                JSON形式で返答してください。
-                まず、"initial_description"キーの中に最初の画像の説明を入れてください。
-                その後、"check_description_thought"キーの中に"initial_description"キーの中の説明が指示に従っているかの考察と改善点を入れてください。ポイントが守れているか一つ一つ確認してください。
-                最後に、"description"キーの中に修正版の画像の説明を入れてください。
-                最初にJSONの始まりである```json\n{から返答を開始してください。
-                返答例は以下です。
-                ```json
-                {
-                "initial_description": "<周囲説明>",
-                "thought": "<考察>",
-                "description": "<周囲説明>",
-                }
-                ```
-                """
+                self.prompt = PROMPT_NAVIGATION
         else:
             raise ValueError("Please set the mode to either semantic_map_mode, intersection_detection_mode, or surronding_explain_mode.")
         self.prompt = textwrap.dedent(self.prompt).strip()
@@ -732,6 +607,18 @@ class GPTExplainer():
         _, buffer = cv2.imencode('.jpg', image)
         image_bytes = buffer.tobytes()
         return base64.b64encode(image_bytes).decode('utf-8')
+    
+    def update_persona(self, persona: str):
+        self.logger.info(f"Updating persona to {persona}")
+        self.persona = persona
+        if self.persona == "explore":
+            self.prompt = PROMPT_EXPLORE
+        elif self.persona == "middle":
+            self.prompt = PROMPT_MIDDLE
+        elif self.persona == "navigation":
+            self.prompt = PROMPT_NAVIGATION
+        else:
+            self.logger.info(f"Persona {persona} is not recognized.")
 
     def resize_images(self, image, max_width=None, max_height=None):
         image_width = image.shape[1]
@@ -751,36 +638,37 @@ class GPTExplainer():
             return
         use_initial_prompt = False
         if len(self.conversation_history) == 0:
-            prompt = self.prompt
+            prompt = copy(self.prompt)
             use_initial_prompt = True
         else:
-            prompt = self.prompt
+            prompt = copy(self.prompt)
             use_initial_prompt = True
             self.conversation_history = []
 
         try:
             images = []
 
+            use_webcamera = False
+            use_realsense = False
+
             if webcamera_image is not None:
                 if not self.okay_images:
                     self.logger.info("Okay")
                     self.okay_images = True
                     test_speak.speak_text("実験準備ができました")
+                use_webcamera = True
                     
                 # resize to 1080p
                 webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
                 images.append(webcamera_image_with_text)
-                if use_initial_prompt:
-                    prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
 
-                images_with_text = [webcamera_image_with_text]
-
-            elif (front_image is not None) and (left_image is not None) and (right_image is not None):
+            if (front_image is not None) and (left_image is not None) and (right_image is not None):
                 if not self.okay_images:
                     self.logger.info("Okay")
                     self.okay_images = True
                     test_speak.speak_text("実験準備ができました")
+                use_realsense = True
 
                 left_image = self.resize_images(left_image, max_width=768)
                 left_image_with_text = self.add_text_to_image(left_image, "Left")
@@ -794,11 +682,17 @@ class GPTExplainer():
                 right_image_with_text = self.add_text_to_image(right_image, "Right")
                 images.append(right_image_with_text)
 
+            if use_webcamera and use_realsense:
+                prompt = prompt % "画像は4枚あります。順番に全体、左、前、右を撮影した広角の画像です。"
+                images_with_text = [left_image_with_text, front_image_with_text, right_image_with_text, webcamera_image_with_text]
+            elif use_webcamera:
+                prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
+                images_with_text = [webcamera_image_with_text]
+            elif use_realsense:
+                prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
                 images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
-
-                if use_initial_prompt:
-                    prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
-            else:
+            
+            if webcamera_image is None and (front_image is None or left_image is None or right_image is None):
                 self.logger.info(f"Webcamera image: {webcamera_image}")
                 self.logger.info(f"Front image: {front_image}")
                 self.logger.info(f"Left image: {left_image}")
@@ -806,6 +700,7 @@ class GPTExplainer():
                 self.logger.info("Error in GPTExplainer.explain: Images are None.")
                 return 1.0, "エラー"
 
+            self.logger.info(f"Persona: {self.persona} Prompt: {prompt}")
             gpt_response = self.query_with_images(prompt, images)
             gpt_response["log_dir"] = self.log_dir
 
@@ -836,6 +731,8 @@ class GPTExplainer():
                     else:
                         extracted_json["description"] = extracted_json["description"]
 
+            self.logger.info(f"length of gpt_response: {len(extracted_json['description'])} actual response: {extracted_json['description']}")
+
             ##save odom and img
             current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             folder_name = os.path.join(self.log_dir,current_time + '_' + self.postfix)
@@ -844,9 +741,12 @@ class GPTExplainer():
             #save the odom as numpy array
             np.save(f"{folder_name}/odom.npy", self.node.odom)
 
-            cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
-            cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
-            cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
+            if not front_image is None:
+                cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
+            if not left_image is None:
+                cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
+            if not right_image is None:
+                cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
             if not webcamera_image is None:
                 cv2.imwrite(os.path.join(folder_name,"webcamera.jpg"), webcamera_image)
 
@@ -933,9 +833,8 @@ class GPTExplainer():
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
-        # 1 character takes 0.1 seconds
-        # but we make it shorter by 0.05 seconds beacause we want to keep doing the inference
-        return len(text) * 0.05
+        # assume 1 character takes 0.15 seconds to speak (a bit longer than the average which is 0.1 seconds)
+        return len(text) * 0.15
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it

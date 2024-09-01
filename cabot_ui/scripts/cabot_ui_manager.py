@@ -91,6 +91,9 @@ class CabotUIManager(NavigationInterface, object):
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._personaPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/persona", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.persona_list = ["navigation", "middle", "explore"]
+        self.persona_index = 1
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -258,6 +261,17 @@ class CabotUIManager(NavigationInterface, object):
 
     def _event_callback(self, msg):
         self._logger.info(f"event received: {msg.data}")
+        if msg.data == "navigation_tmp_finishchat":
+            self._logger.info("NavigationState: Finish chat")
+            self._exploration.set_conversation_control(False)
+            return
+        
+        if msg.data == "navigation_tmp_finishchat" or msg.data == "navigation_finishchat" or msg.data == "navigation_finish_button_control":
+            self._logger.info("NavigationState: Finish chat")
+            self._exploration.set_conversation_control(False)
+            self._exploration.set_button_control(False)
+            return
+        
         event = BaseEvent.parse(msg.data)
         if event is None:
             self._logger.error("cabot event %s cannot be parsed", msg.data)
@@ -534,9 +548,9 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.error(f"[CabotUIManager] event {event}")
         
         if event.subtype == "front":
-            if in_conversation or in_button_control:
-                self._interface.exploring_direction("front")
-                self._interface.vibrate(vibration.FRONT)
+            if in_button_control:
+                # self._interface.exploring_direction("front")
+                # self._interface.vibrate(vibration.FRONT)
                 self._exploration.send_query("direction","front")
             else:
                 # speed up
@@ -547,8 +561,8 @@ class CabotUIManager(NavigationInterface, object):
                 self._eventPub.publish(msg)
                 
         elif event.subtype == "back":
-            if in_conversation or in_button_control:
-                self._interface.exploring_direction("back")
+            if in_button_control:
+                # self._interface.exploring_direction("back")
                 self._exploration.send_query("direction","back")
             else:
                 # speed down
@@ -559,15 +573,21 @@ class CabotUIManager(NavigationInterface, object):
                 self._eventPub.publish(msg)
 
         elif event.subtype == "left":
-            if in_conversation or in_button_control:
-                self._interface.exploring_direction("left")
-                self._interface.vibrate(vibration.LEFT_TURN)
+            if in_button_control:
+                # self._interface.exploring_direction("left")
+                # self._interface.vibrate(vibration.LEFT_TURN)
                 self._exploration.send_query("direction","left")
+            else:
+                self.update_persona(direction=-1)
+                self._interface.update_persona(self.persona_list[self.persona_index])
         elif event.subtype == "right":
-            if in_conversation or in_button_control:
-                self._interface.exploring_direction("right")
-                self._interface.vibrate(vibration.RIGHT_TURN)
+            if in_button_control:
+                # self._interface.exploring_direction("right")
+                # self._interface.vibrate(vibration.RIGHT_TURN)
                 self._exploration.send_query("direction","right")
+            else:   
+                self.update_persona(direction=+1)
+                self._interface.update_persona(self.persona_list[self.persona_index])
 
         elif event.subtype == "chat": 
             self._logger.info(f"received event: {event.subtype}")
@@ -623,6 +643,18 @@ class CabotUIManager(NavigationInterface, object):
         e = NavigationEvent(event, None)
         msg.data = str(e)
         self._eventPub.publish(msg)
+
+    def update_persona(self, direction):
+        self._logger.info(f"Updating persona: {self.persona_index}, to direction: {direction}")
+        self.persona_index += direction
+        if self.persona_index < 0:
+            self.persona_index = 2
+        elif self.persona_index > 2:
+            self.persona_index = 0
+        self._logger.info(f"New persona index: {self.persona_index}, persona: {self.persona_list[self.persona_index]}")
+        msg = std_msgs.msg.String()
+        msg.data = self.persona_list[self.persona_index]
+        self._personaPub.publish(msg)
 
 class EventMapper(object):
     def __init__(self):

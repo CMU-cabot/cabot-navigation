@@ -36,7 +36,7 @@ def generate_launch_description():
                 {'no_explain_mode': False},
                 {'is_sim': is_sim},
                 {'apikey': apikey},
-                {'persona': 'explore'}
+                {'persona': 'middle'}
                 
             ]
         ),

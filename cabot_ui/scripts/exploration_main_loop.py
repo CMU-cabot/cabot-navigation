@@ -37,10 +37,13 @@ class ExplorationMainLoop(Node):
         self.event_pub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10)
         self.camera_ready_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/camera_ready", self.camera_ready_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
+        self.state_sub = self.create_subscription(std_msgs.msg.String, "/cabot/state", self.state_callback, 10)
         self.plan_sub = self.create_subscription(nav_msgs.msg.Path, "/plan", self.plan_callback, 10)
         self.state_control = StateControl(self)
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
+        self.in_button_control = False
+        self.in_conversation = False
 
         self.camera_ready = False
         self.iter = 0
@@ -81,11 +84,23 @@ class ExplorationMainLoop(Node):
             if len(self.planning_events) >= self.planning_count_threshold:
                 # Robot may be stuck in planning
                 self.logger.warning(f"[Main Loop] WARNING: More than {self.planning_count_threshold} planning events detected within {self.planning_time_threshold} seconds!")
+        elif msg.data == "navigation;exploration;compute_path_to_pose_done":
+            self.logger.info("[Main Loop] Planning done")
         # if msg.data == "navigation;event;navigation_arrived" or msg.data == "navigation;cancel":
         #     self.logger.info("[Main Loop] Clear planning_events and ndtws")
         #     self.ndtws = []
         #     self.plan_events = []
 
+    def state_callback(self, msg):
+        self.logger.info(f"[Main Loop] Received state message: {msg.data}")
+        if msg.data == "button_control_start":
+            self.in_button_control = True
+        elif msg.data == "button_control_end":
+            self.in_button_control = False
+        elif msg.data == "conversation_start":
+            self.in_conversation = True
+        elif msg.data == "conversation_end":
+            self.in_conversation = False
 
     def plan_callback(self, msg):
         self.logger.info(f"[Main Loop] Received plan message")
@@ -360,6 +375,11 @@ class ExplorationMainLoop(Node):
                     # accept input from ros topic (user_query_node)
                     # if not rclpy.ok():
                     #     rclpy.init()
+
+                    # here, say something when button control mode is on
+                    if self.in_button_control:
+                        speak_text("行きたい方向のボタンを押してください。")
+
                     query_node = CabotQueryNode(candidates=direction_candidates)
                     try:
                         rclpy.spin(query_node)
