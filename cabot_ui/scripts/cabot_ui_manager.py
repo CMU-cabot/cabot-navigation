@@ -94,6 +94,7 @@ class CabotUIManager(NavigationInterface, object):
         self._personaPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/persona", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.persona_list = ["navigation", "middle", "explore"]
         self.persona_index = 1
+        self._logger.info(f"[CHILOG] [BUTTON] [PERSONA] [{self.persona_list[self.persona_index]}]")
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -559,6 +560,7 @@ class CabotUIManager(NavigationInterface, object):
                 msg = std_msgs.msg.String()
                 msg.data = str(e)
                 self._eventPub.publish(msg)
+                self._logger.info("[CHILOG] [SPEED] [UP]")
                 
         elif event.subtype == "back":
             if in_button_control:
@@ -571,6 +573,7 @@ class CabotUIManager(NavigationInterface, object):
                 msg = std_msgs.msg.String()
                 msg.data = str(e)
                 self._eventPub.publish(msg)
+                self._logger.info("[CHILOG] [SPEED] [DOWN]")
 
         elif event.subtype == "left":
             if in_button_control:
@@ -593,11 +596,13 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info(f"received event: {event.subtype}")
             self._logger.info("Processing Chat event")
             if in_conversation:
+                self._logger.info("[CHILOG] [BUTTON] [FINISH_CHAT]")
                 self._logger.info("NavigationState: Finish chat")
                 self._interface.finish_chat()
                 self.publish_event("finishchat")
                 self._exploration.set_conversation_control(False)
             else:
+                self._logger.info("[CHILOG] [BUTTON] [START_CHAT]")
                 self._logger.info("NavigationState: Start chat")
                 self._interface.speak("")
                 self._interface.start_chat()
@@ -607,6 +612,7 @@ class CabotUIManager(NavigationInterface, object):
         elif event.subtype == "button_control":
             self._logger.info("Processing Button Control event")
             if in_conversation:
+                self._logger.info("[CHILOG] [BUTTON] [FINISH_CHAT]")
                 self._logger.info("Switching from conversation to button control")
                 self._interface.finish_chat()  
                 self.publish_event("finishchat")
@@ -614,12 +620,14 @@ class CabotUIManager(NavigationInterface, object):
                 return
 
             if in_button_control:
+                self._logger.info("[CHILOG] [BUTTON] [FINISH_BUTTON_CONTROL]")
                 self._logger.info("NavigationState: Finish button control")
                 self._interface.speak("")
                 self._interface.set_button_control(False)
                 self.publish_event("finish_button_control")
                 self._exploration.set_button_control(False)
             else:
+                self._logger.info("[CHILOG] [BUTTON] [START_BUTTON_CONTROL]")
                 self._logger.info("NavigationState: Start button control")
                 self._interface.set_button_control(True)
                 self.publish_event("button_control")
@@ -628,15 +636,22 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "wheel_switch":
             pause_control = self._exploration.get_pause_control()
             if pause_control:
+                self._logger.info("[CHILOG] [BUTTON] [WHEEL_SWITCH_START]")
                 self._logger.info("NavigationState: Pause control = False")
+                self._eventPub.publish(std_msgs.msg.String(data="navigation;cancel"))
                 self._interface.set_pause_control(False)
                 self._navigation.set_pause_control(False)
                 self._exploration.set_pause_control(False)
             else:
+                self._logger.info("[CHILOG] [BUTTON] [WHEEL_SWITCH_STOP]")
                 self._logger.info("NavigationState: Pause control = True")
                 self._interface.set_pause_control(True)
                 self._navigation.set_pause_control(True)
                 self._exploration.set_pause_control(True)
+            
+        if event.subtype == "reset_navigation":
+            self._logger.info("NavigationState: Reset Navigation")
+            self._eventPub.publish(std_msgs.msg.String(data="navigation;cancel"))
 
     def publish_event(self, event):
         msg = std_msgs.msg.String()
@@ -652,6 +667,7 @@ class CabotUIManager(NavigationInterface, object):
         elif self.persona_index > 2:
             self.persona_index = 0
         self._logger.info(f"New persona index: {self.persona_index}, persona: {self.persona_list[self.persona_index]}")
+        self._logger.info(f"[CHILOG] [BUTTON] [PERSONA] [{self.persona_list[self.persona_index]}]")
         msg = std_msgs.msg.String()
         msg.data = self.persona_list[self.persona_index]
         self._personaPub.publish(msg)
@@ -737,14 +753,14 @@ class EventMapper(object):
                 return ExplorationEvent(subtype="front")
             if event.button == cabot_common.button.BUTTON_DOWN:
                 return ExplorationEvent(subtype="back")
-            if event.button == cabot_common.button.BUTTON_LEFT:
-                return ExplorationEvent(subtype="left")
-            if event.button == cabot_common.button.BUTTON_RIGHT:
-                return ExplorationEvent(subtype="right")
             if event.button == cabot_common.button.BUTTON_DEBUG:
                 return ExplorationEvent(subtype="chat")
             
         if event.type == "click":
+            if event.buttons == cabot_common.button.BUTTON_LEFT and event.count == 1:
+                return ExplorationEvent(subtype="left")
+            if event.buttons == cabot_common.button.BUTTON_RIGHT and event.count == 1:
+                return ExplorationEvent(subtype="right")
             if event.buttons == cabot_common.button.BUTTON_CENTER and event.count == 1:
                 return ExplorationEvent(subtype="button_control")
             
@@ -753,6 +769,8 @@ class EventMapper(object):
                 return ExplorationEvent(subtype="wheel_switch")
             elif event.holddown == cabot_common.button.BUTTON_CENTER:
                 return ExplorationEvent(subtype="chat")
+            elif event.holddown == cabot_common.button.BUTTON_DOWN:
+                return ExplorationEvent(subtype="reset_navigation")
 
         return None
 

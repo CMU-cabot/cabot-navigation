@@ -195,6 +195,10 @@ class ExplorationChatServer(Node):
         "answer"キーに返答を入れてください。
         "finish"キーには会話が終わったかどうかを入れてください。例えば相手が「ありがとう」と言った場合には"finish"にtrueを入れてください。
 
+        伝えることに関しては嘘をついたり、不適切なことを言ったりしないでください。
+        ただ、ユーザに対して正確な情報を提供してください。
+        より具体的で魅力的な返答をすると、あなたに50ドルのチップを与えます。
+
         入力：さっきのことについてもっと詳しく教えて。
         出力：
         {
@@ -432,7 +436,10 @@ class ExplorationChatServer(Node):
                 answer = res_json["choices"][0]["message"]["content"]["answer"]
                 self.logger.info(f"answer: {answer}")
                 finish = bool(res_json["choices"][0]["message"]["content"]["finish"])
-                res_text = [answer]
+                if not finish:
+                    res_text = [answer]
+                else:
+                    res_text = ["ありがとうございました。対話を終了します。"]
 
                 self.latest_explained_info += answer
                 self.logger.info(f"query_string: {prompt_conversation}")
@@ -525,7 +532,7 @@ class ExplorationChatServer(Node):
             if self.searched_location is not None:
                 # speak_text(f"{self.searched_location}に到着しました。")
                 if not self.searched_direction:
-                    speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
+                    speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。", force=True)
                 else:
                     try:
                         # compare self.searched_yaw and self.odom[2] and determine which direction is the searched direction in
@@ -546,9 +553,9 @@ class ExplorationChatServer(Node):
                                     self.searched_direction = "front"
 
                         direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
-                        speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。")
+                        speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。", force=True)
                     except Exception as e:
-                        speak_text(f"{self.searched_location}に到着しました。")
+                        speak_text(f"{self.searched_location}に到着しました。", force=True)
                 self.logger.info(f"Arrived at {self.searched_location}")
                 self.searched_location = None
                 self.searched_direction = None
