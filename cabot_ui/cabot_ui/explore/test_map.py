@@ -72,6 +72,9 @@ class CaBotMapNode(Node):
         self.map_sub = self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
 
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         self.map_x = 0
         self.map_y = 0
         self.map_width = 0
@@ -84,8 +87,6 @@ class CaBotMapNode(Node):
     def map_callback(self, msg):
         """
         Receive map data and save it to local variables
-        Args:
-            msg (OccupancyGrid): map data; x, y, width, height, resolution, orientation, data (map data as 1D array), etc.
         """
         print("map callback")
         self.map_x = msg.info.origin.position.x
@@ -103,24 +104,33 @@ class CaBotMapNode(Node):
         self.map_data = np.asarray(msg.data).reshape((msg.info.height, msg.info.width))
         print(f"map data; x: {self.map_x:.5f}, y: {self.map_y:.5f}, width: {self.map_width}, height: {self.map_height}, resolution: {self.map_resolution:.5f}, orientation: {self.map_orientation:.5f}")
 
-    
     def odom_callback(self, msg):
         """
         Receive odometry data and save it to local variables;
         If the map data is received, save the odometry data and exit the program
-        Args:
-            msg (Odometry): odometry data; x, y, orientation, etc.
         """
-        self.coordinates.append((msg.pose.pose.position.x, msg.pose.pose.position.y))
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
+            position = transform.transform.translation
+            quaternion = transform.transform.rotation
+            roll, pitch, yaw = tf_transformations.euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
 
-        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
-        roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
-        self.orientation.append(yaw)  # yaw is the rotation around the z-axis; unit: radian
-        
-        if self.map_resolution != 0:
-            print(f"odom callback; x: {msg.pose.pose.position.x:.6f}, y: {msg.pose.pose.position.y:.6f}, yaw: {yaw:.6f}")
-            # save local costmap and exit
-            sys.exit(0)
+            # compare with odom-based position
+            # odom_x = msg.pose.pose.position.x
+            # odom_y = msg.pose.pose.position.y
+            # odom_quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+            # odom_roll, odom_pitch, odom_yaw = tf_transformations.euler_from_quaternion(odom_quaternion)
+            # self.get_logger().info(f"[CaBotMapNode] odom callback; tf_x: {position.x:.6f}, tf_y: {position.y:.6f}, tf_yaw: {yaw:.6f}, odom_x: {odom_x:.6f}, odom_y: {odom_y:.6f}, odom_yaw: {odom_yaw:.6f}")
+
+            self.coordinates.append((position.x, position.y))
+            self.orientation.append(yaw)  # yaw is the rotation around the z-axis; unit: radian
+            
+            if self.map_resolution != 0:
+                print(f"odom callback; x: {position.x:.6f}, y: {position.y:.6f}, yaw: {yaw:.6f}")
+                # save local costmap and exit
+                sys.exit(0)
+        except Exception as e:
+            self.get_logger().warn(f"Could not transform base_link to map: {e}")
 
 
 class CabotRvizPointDrawer(Node):
@@ -201,6 +211,7 @@ class MapData:
         self.highlighted_map = self.get_gaussian_map()
         self.skeleton_map = self.skeletonize(self.highlighted_map)
         self.intersection_points = self.find_intersection_points(self.skeleton_map)
+        self.intersection_points_num = len(self.intersection_points)
     
     def skeletonize(self, highlighted_map):
         return skeletonize(highlighted_map > np.quantile(highlighted_map, 0.8))
@@ -331,6 +342,7 @@ class FilterCandidates:
     def __init__(
             self, 
             map_data: MapData, 
+            floor: int,
             do_dist_filter: bool = True, 
             do_forbidden_area_filter: bool = True, 
             do_trajectory_filter: bool = True,
@@ -405,7 +417,15 @@ class FilterCandidates:
 
         self.max_dist = 500
         self.min_dist = 50
-        self.corridor_width = 75
+        if floor == 5:
+            corridor_width_meter = 7.5  # corridor width in meter (5th floor): 7.5m
+        elif floor == 3:
+            corridor_width_meter = 3
+        elif floor == 7:
+            corridor_width_meter = 2
+        else:
+            corridor_width_meter = 3  # default value
+        self.corridor_width = (corridor_width_meter / 2) / self.map_resolution  # convert meter to pixel
 
         # for marker filter
         self.marker_a = marker_a
@@ -492,16 +512,6 @@ class FilterCandidates:
     def availability_filter(
             self, current_point: np.ndarray, orientation, candidates: np.ndarray
         ) -> np.ndarray:
-        # availability_from_image:
-        # {
-        #     "front_marker": bool,
-        #     "left_marker": bool,
-        #     "right_marker": bool,
-        #     "front_available": Optional[bool],
-        #     "left_available": Optional[bool],
-        #     "right_available": Optional[bool],
-        # }
-        
         # if availability is False, set 3m-radius circular area which center is 6m away from the current point to that direction as forbidden area
         front_availability = (not self.availability_from_image["front_marker"]) and self.availability_from_image["front_available"]
         left_availability = (not self.availability_from_image["left_marker"]) and self.availability_from_image["left_available"]
@@ -602,8 +612,14 @@ class FilterCandidates:
 
     def costmap_filter(self, candidates: np.ndarray) -> np.ndarray:
         score_map = np.zeros(candidates.shape[0])
-        map_max_score = np.max(self.map_data.highlighted_map)
-        is_forbidden = self.map_data.highlighted_map[candidates[:, 0].astype(int), candidates[:, 1].astype(int)] < map_max_score - map_max_score * 0.1
+        
+        candidates_without_additional = candidates[:self.map_data.intersection_points_num, :]
+        score_candidates_without_additional = self.map_data.highlighted_map[candidates_without_additional[:, 0].astype(int), candidates_without_additional[:, 1].astype(int)]
+        map_max_score = np.max(score_candidates_without_additional)
+        map_min_score = max(np.min(score_candidates_without_additional), 1)
+        
+        cand_on_map = self.map_data.highlighted_map[candidates[:, 0].astype(int), candidates[:, 1].astype(int)]
+        is_forbidden = cand_on_map < map_min_score
         score_map[is_forbidden] = 20
         return score_map
 
@@ -647,6 +663,7 @@ class FilterCandidates:
 
 def set_next_point_based_on_skeleton(
         map_array: np.ndarray, 
+        floor: int,
         orientation: np.ndarray, 
         coords: np.ndarray, 
         map_resolution: float, 
@@ -678,18 +695,11 @@ def set_next_point_based_on_skeleton(
     # create candidate filter
     cand_filter = FilterCandidates(
         map_data, 
+        floor=floor,
         do_dist_filter=do_dist_filter,
         do_forbidden_area_filter=do_forbidden_area_filter,
         do_trajectory_filter=do_trajectory_filter,
         availability_from_image=availability_from_image,
-        # availability_from_image={
-        #     "front_marker": False,
-        #     "left_marker": False,
-        #     "right_marker": False,
-        #     "front_available": False,
-        #     "left_available": True,
-        #     "right_available": False
-        # },
         forbidden_area_centers=forbidden_centers,
         initial_pose_filter=follow_initial_orientation,
         log_dir=log_dir,
@@ -852,6 +862,7 @@ def set_next_point_based_on_skeleton(
 
 
 def main(
+        floor: int,
         do_dist_filter: bool = True,
         do_forbidden_area_filter: bool = True,
         do_trajectory_filter: bool = True,
@@ -940,7 +951,7 @@ def main(
     # next_point = set_next_point(map_data, orientation, coordinates, map_resolution, map_x, map_y, map_height)
     # print(f"Next point: {next_point}")
     output_point, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = set_next_point_based_on_skeleton(
-        map_data, orientation, coordinates, 
+        map_data, floor, orientation, coordinates, 
         map_resolution, map_x, map_y, map_height, 
         do_dist_filter=do_dist_filter, 
         do_forbidden_area_filter=do_forbidden_area_filter, 

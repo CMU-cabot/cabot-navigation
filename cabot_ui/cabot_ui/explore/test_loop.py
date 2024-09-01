@@ -159,6 +159,7 @@ class PersistentCancelClient(Node):
 
 
 def main(
+    floor: int,
     dist_filter: bool = False,
     forbidden_area_filter: bool = False,
     trajectory_filter: bool = False,
@@ -269,6 +270,7 @@ def main(
         # 2. get the next point to explore
         state_client.logger.info(f"Getting next point...\n")
         sampled_points, forbidden_centers, current_coords, current_orientation, costmap = get_next_point(
+            floor=floor,
             do_dist_filter=dist_filter, 
             do_forbidden_area_filter=forbidden_area_filter, 
             do_trajectory_filter=trajectory_filter, 

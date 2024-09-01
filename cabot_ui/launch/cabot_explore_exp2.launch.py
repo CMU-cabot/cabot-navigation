@@ -18,6 +18,7 @@ def generate_launch_description():
                 {"log_dir": log_dir},
                 {"dist_filter": True},
                 {"is_sim": is_sim},
+                {"floor": 5}
             ],
         ),
 

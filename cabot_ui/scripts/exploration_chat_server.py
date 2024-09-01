@@ -18,6 +18,7 @@ from cv_bridge import CvBridge
 from cabot_ui.explore.test_speak import speak_text
 import tf_transformations
 
+
 class ExplorationChatServer(Node):
     def __init__(self):
         super().__init__('exploration_chat_server')
@@ -336,6 +337,7 @@ class ExplorationChatServer(Node):
                 if "text" in data["input"]:
                     if data["input"]["text"]:
                         gpt_input = data["input"]["text"]
+            self.logger.info(f"[CHILOG] [CHAT] user spoken text: {gpt_input}")
             
             if self.use_openai and gpt_input != "":
                 # Preparing the content with the prompt and images
