@@ -267,9 +267,12 @@ class CaBotImageNode(Node):
 
         if self.consequtive_touch_count > 5:
             self.touching = True
+            if not self.touching:
+                self.logger.info("[CHILOG][TOUCHING]")
         else:
             if self.touching:
                 test_speak.speak_text("", force=True)
+                self.logger.info("[CHILOG][NOT_TOUCHING]")
             self.touching = False
 
     def publish_latest_explained_info(self):
@@ -419,6 +422,7 @@ class CaBotImageNode(Node):
             if self.touching and not self.in_conversation and is_in_valid_state and self.can_speak_explanation and explain != "":
                 self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is not empty")
                 test_speak.speak_text(explain)
+                self.logger.info(f"[CHILOG][EXPLAIN][{explain}]")
                 self.can_speak_explanation = False
                 self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
                 self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
