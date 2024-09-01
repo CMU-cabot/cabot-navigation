@@ -638,6 +638,7 @@ class CabotUIManager(NavigationInterface, object):
             if pause_control:
                 self._logger.info("[CHILOG] [BUTTON] [WHEEL_SWITCH_START]")
                 self._logger.info("NavigationState: Pause control = False")
+                self._eventPub.publish(std_msgs.msg.String(data="navigation;cancel"))
                 self._interface.set_pause_control(False)
                 self._navigation.set_pause_control(False)
                 self._exploration.set_pause_control(False)
@@ -647,6 +648,10 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.set_pause_control(True)
                 self._navigation.set_pause_control(True)
                 self._exploration.set_pause_control(True)
+            
+        if event.subtype == "reset_navigation":
+            self._logger.info("NavigationState: Reset Navigation")
+            self._eventPub.publish(std_msgs.msg.String(data="navigation;cancel"))
 
     def publish_event(self, event):
         msg = std_msgs.msg.String()
@@ -748,14 +753,14 @@ class EventMapper(object):
                 return ExplorationEvent(subtype="front")
             if event.button == cabot_common.button.BUTTON_DOWN:
                 return ExplorationEvent(subtype="back")
-            if event.button == cabot_common.button.BUTTON_LEFT:
-                return ExplorationEvent(subtype="left")
-            if event.button == cabot_common.button.BUTTON_RIGHT:
-                return ExplorationEvent(subtype="right")
             if event.button == cabot_common.button.BUTTON_DEBUG:
                 return ExplorationEvent(subtype="chat")
             
         if event.type == "click":
+            if event.buttons == cabot_common.button.BUTTON_LEFT and event.count == 1:
+                return ExplorationEvent(subtype="left")
+            if event.buttons == cabot_common.button.BUTTON_RIGHT and event.count == 1:
+                return ExplorationEvent(subtype="right")
             if event.buttons == cabot_common.button.BUTTON_CENTER and event.count == 1:
                 return ExplorationEvent(subtype="button_control")
             
@@ -764,6 +769,8 @@ class EventMapper(object):
                 return ExplorationEvent(subtype="wheel_switch")
             elif event.holddown == cabot_common.button.BUTTON_CENTER:
                 return ExplorationEvent(subtype="chat")
+            elif event.holddown == cabot_common.button.BUTTON_DOWN:
+                return ExplorationEvent(subtype="reset_navigation")
 
         return None
 
