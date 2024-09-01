@@ -13,6 +13,7 @@ from scipy.ndimage import gaussian_filter
 from shapely.geometry import Point, Polygon
 from skimage.morphology import skeletonize
 from sklearn.cluster import DBSCAN
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
@@ -21,6 +22,7 @@ from geometry_msgs.msg import Point
 from mf_localization_msgs.msg import MFLocalizeStatus
 from nav_msgs.msg import Odometry, OccupancyGrid
 from visualization_msgs.msg import Marker, MarkerArray
+from tf2_ros import TransformListener, Buffer
 
 
 
@@ -131,11 +133,26 @@ class CabotRvizPointDrawer(Node):
         self.color = colors
         self.coordinates = coordinates
     
+    def publish_clear_points(self):
+        """
+        Clear points on rviz
+        """
+        self.logger.info("Clearing points on rviz")
+        marker = MarkerArray()
+        marker_msg = Marker()
+        marker_msg.header.frame_id = "map"
+        marker_msg.header.stamp = self.get_clock().now().to_msg()
+        marker_msg.ns = "points"
+        marker_msg.action = Marker.DELETEALL
+        marker.markers.append(marker_msg)
+        self.publisher_.publish(marker)
+    
     def publish_points(self):
         """
         Draw points on rviz for visualization
         """
         self.logger.info("Publishing points on rviz")
+        self.publish_clear_points()
         marker = MarkerArray()
         for i, coord in enumerate(self.coordinates):
             marker_msg = Marker()
@@ -332,6 +349,7 @@ class FilterCandidates:
         self.map_y = map_data.map_y
         self.map_resolution = map_data.map_resolution
         self.map_height = map_data.map_height
+        self.map_data = map_data
 
         self.initial_coords = (0, 0)
         self.initial_orientation = 0
@@ -582,6 +600,13 @@ class FilterCandidates:
         dists = np.abs(a * candidates[:, 0] - candidates[:, 1] + b) / np.sqrt(a ** 2 + 1)
         return dists
 
+    def costmap_filter(self, candidates: np.ndarray) -> np.ndarray:
+        score_map = np.zeros(candidates.shape[0])
+        map_max_score = np.max(self.map_data.highlighted_map)
+        is_forbidden = self.map_data.highlighted_map[candidates[:, 0].astype(int), candidates[:, 1].astype(int)] < map_max_score - map_max_score * 0.1
+        score_map[is_forbidden] = 20
+        return score_map
+
     def filter(self, current_point, candidates, orientation, previous_destination) -> np.ndarray:
         # candidates: (n, 2); n: number of coordinates
         # orientation: (1,); current orientation in radian
@@ -613,9 +638,10 @@ class FilterCandidates:
         
         marker_filter = self.marker_filter(current_point, orientation, candidates, self.initial_orientation)
         replanning_filter = self.replanning_filter(previous_destination, candidates)
+        costmap_filter = self.costmap_filter(candidates)
         
         score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
-              + initial_pose_filter + marker_filter + replanning_filter
+              + initial_pose_filter + marker_filter + replanning_filter + costmap_filter
         return score_map
         
 
@@ -642,14 +668,12 @@ def set_next_point_based_on_skeleton(
         previous_destination: Optional[np.ndarray] = None,
         logger: Optional[Any] = None
     ):
-    print(f"map data: map_x: {map_x}, map_y: {map_y}, map_resolution: {map_resolution}, map_height: {map_height}")
     orientation = np.pi / 2 + orientation  # flip x axis
     
     # initialize map data
     map_data = MapData(map_x, map_y, map_resolution, map_height, map_array)
     cv2.imwrite(f"{log_dir}/highlighted_map.png", map_data.costmap)
     np.save(f"{log_dir}/highlighted_map.npy", map_data.highlighted_map)
-    print("intersection points", map_data.intersection_points.shape)
 
     # create candidate filter
     cand_filter = FilterCandidates(
@@ -685,15 +709,6 @@ def set_next_point_based_on_skeleton(
         cover_rate = np.sum(covered_map) / np.sum(base_map)
         print(f"cover rate: {cover_rate:.4f}")
 
-    # draw points on rviz
-    cand_coords_odom = []
-    for cand in map_data.intersection_points:
-        cand_coords_odom.append(convert_map_to_odom(cand[1], cand[0], map_x, map_y, map_resolution, map_height))
-    # add current point
-    current_coords_odom = convert_map_to_odom(coords[-1][0], coords[-1][1], map_x, map_y, map_resolution, map_height)
-    cand_coords_odom.append(current_coords_odom)
-    draw_points_on_rviz(cand_coords_odom)
-
     # for i, cand in enumerate(map_data.intersection_points):
     #     print(f"candidate {i}: {cand[::-1]} (x: {cand_coords_odom[i][0]:.2f}, y: {cand_coords_odom[i][1]:.2f})")
     
@@ -703,6 +718,24 @@ def set_next_point_based_on_skeleton(
     # if len(intersection_points) > 1000:
     #     intersection_points = intersection_points[np.random.choice(len(intersection_points), 1000)]
     # map_data.intersection_points = intersection_points
+
+    logger.info(f"candidates: {map_data.intersection_points}")
+    # add one point for each direction to make sure that the robot can move to the direction
+    # 3m away from the current point
+    additional_dist = 3 / map_resolution
+    additional_points = [
+        # front
+        coords[-1] + additional_dist * np.array([np.sin(orientation[-1]), np.cos(orientation[-1])]),
+        # back
+        coords[-1] - additional_dist * np.array([np.sin(orientation[-1]), np.cos(orientation[-1])]),
+        # left
+        coords[-1] + additional_dist * np.array([np.sin(orientation[-1] + np.pi / 2), np.cos(orientation[-1] + np.pi / 2)]),
+        # right
+        coords[-1] + additional_dist * np.array([np.sin(orientation[-1] - np.pi / 2), np.cos(orientation[-1] - np.pi / 2)])
+    ]
+    additional_points = np.asarray([[int(p[1]), int(p[0])] for p in additional_points])
+    map_data.intersection_points = np.concatenate([map_data.intersection_points, additional_points], axis=0)
+    logger.info(f"candidates with additional points: {map_data.intersection_points}")
     
     cand_score = cand_filter.filter(
         current_point=coords[-1], candidates=map_data.intersection_points,
@@ -748,12 +781,15 @@ def set_next_point_based_on_skeleton(
     
     sampled_points = []  # [[point, direction], ...]
     for direction, points in direction_to_points.items():
-        print(f"{direction}: {len(points)}")
+        if len(points) == 0:
+            logger.info(f"no candidate points in {direction}")
+            continue
+        logger.info(f"{direction}: {len(points)}")
         points_array = np.array(points)
         points_scores = filtered_map[points_array[:, 0], points_array[:, 1]]
         min_score = np.min(points_scores)
         if min_score > 500:
-            print(f"no candidate points in {direction}")
+            logger.info(f"no candidate points with score < 500 in {direction}")
             continue
         min_score_points = points_array[points_scores == min_score]
         min_score_points_scores = points_scores[points_scores == min_score]
@@ -768,9 +804,17 @@ def set_next_point_based_on_skeleton(
         sampled_point = min_score_points[np.random.choice(len(min_score_points))]
         sampled_points.append([sampled_point, direction, min_score])
 
+    cand_coords_odom = []
     for i, cand in enumerate(sampled_points):
         converted_cand = convert_map_to_odom(cand[0][1], cand[0][0], map_x, map_y, map_resolution, map_height)
+        cand_coords_odom.append(converted_cand)
         print(f"sampled point {i}: {cand[0][::-1]} ({cand[1]}) (x: {converted_cand[0]:.2f}, y: {converted_cand[1]:.2f}) (score: {cand[2]})")
+    
+    # draw points on rviz
+    # add current point
+    current_coords_odom = convert_map_to_odom(coords[-1][0], coords[-1][1], map_x, map_y, map_resolution, map_height)
+    cand_coords_odom.append(current_coords_odom)
+    draw_points_on_rviz(cand_coords_odom)
     
     # draw map and points
     plt.imshow(map_data.highlighted_map, cmap='gray')
