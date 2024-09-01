@@ -297,7 +297,6 @@ class CaBotImageNode(Node):
 
         if self.webcamera_image is not None:
             # make the resolution smaller
-            self.webcamera_image = cv2.resize(self.webcamera_image, (320, 240))
             webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
             self.latest_web_camera_image_pub.publish(webcamera_image_msg)
 
@@ -365,7 +364,8 @@ class CaBotImageNode(Node):
         self.left_image = left_image
         self.right_image = right_image
         if self.web_camera_manager.is_open():
-            self.webcamera_image = self.web_camera_manager.get_frame()     
+            self.webcamera_image = self.web_camera_manager.get_frame()   
+            self.webcamera_image = self.resize_images(self.webcamera_image, max_width=1920, max_height=1080)  
 
         self.front_marker_detected = self.detect_marker(front_image)
         self.left_marker_detected = self.detect_marker(left_image)
@@ -404,6 +404,18 @@ class CaBotImageNode(Node):
         if ids is not None:
             return True
         return False
+    
+    def resize_images(self, image, max_width=None, max_height=None):
+        image_width = image.shape[1]
+        image_height = image.shape[0]
+        if max_width is not None and image_width > max_width:
+            scale = max_width / image_width
+            image = cv2.resize(image, (max_width, int(image_height * scale)))
+        if max_height is not None and image_height > max_height:
+            scale = max_height / image_height
+            image = cv2.resize(image, (int(image_width * scale), max_height))
+
+        return image
 
     def loop(self):
         if self.max_loop > 0 and self.loop_count >= self.max_loop:
@@ -426,7 +438,7 @@ class CaBotImageNode(Node):
                 self.can_speak_explanation = False
                 self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
                 self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
-                next_loop_wait_time = 3.0
+                next_loop_wait_time = 1.0
             else:
                 self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
                 next_loop_wait_time = 0.1
@@ -663,7 +675,6 @@ class GPTExplainer():
                 use_webcamera = True
                     
                 # resize to 1080p
-                webcamera_image = self.resize_images(webcamera_image, max_width=1920, max_height=1080)
                 webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
                 images.append(webcamera_image_with_text)
 
@@ -837,7 +848,7 @@ class GPTExplainer():
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
-        # assume 1 character takes 0.15 seconds to speak (a bit longer than the average which is 0.1 seconds)
+        # assume 1 character takes 0.125 seconds to speak (a bit longer than the average which is 0.1 seconds)
         return len(text) * 0.15
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
