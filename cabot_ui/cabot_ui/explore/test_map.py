@@ -211,6 +211,7 @@ class MapData:
         self.highlighted_map = self.get_gaussian_map()
         self.skeleton_map = self.skeletonize(self.highlighted_map)
         self.intersection_points = self.find_intersection_points(self.skeleton_map)
+        self.intersection_points_num = len(self.intersection_points)
     
     def skeletonize(self, highlighted_map):
         return skeletonize(highlighted_map > np.quantile(highlighted_map, 0.8))
@@ -419,9 +420,9 @@ class FilterCandidates:
         if floor == 5:
             corridor_width_meter = 7.5  # corridor width in meter (5th floor): 7.5m
         elif floor == 3:
-            corridor_width_meter = 5
+            corridor_width_meter = 3
         elif floor == 7:
-            corridor_width_meter = 2.5
+            corridor_width_meter = 2
         else:
             corridor_width_meter = 3  # default value
         self.corridor_width = (corridor_width_meter / 2) / self.map_resolution  # convert meter to pixel
@@ -611,8 +612,14 @@ class FilterCandidates:
 
     def costmap_filter(self, candidates: np.ndarray) -> np.ndarray:
         score_map = np.zeros(candidates.shape[0])
-        map_max_score = np.max(self.map_data.highlighted_map)
-        is_forbidden = self.map_data.highlighted_map[candidates[:, 0].astype(int), candidates[:, 1].astype(int)] < map_max_score - map_max_score * 0.1
+        
+        candidates_without_additional = candidates[:self.map_data.intersection_points_num, :]
+        score_candidates_without_additional = self.map_data.highlighted_map[candidates_without_additional[:, 0].astype(int), candidates_without_additional[:, 1].astype(int)]
+        map_max_score = np.max(score_candidates_without_additional)
+        map_min_score = max(np.min(score_candidates_without_additional), 1)
+        
+        cand_on_map = self.map_data.highlighted_map[candidates[:, 0].astype(int), candidates[:, 1].astype(int)]
+        is_forbidden = cand_on_map < map_min_score
         score_map[is_forbidden] = 20
         return score_map
 
