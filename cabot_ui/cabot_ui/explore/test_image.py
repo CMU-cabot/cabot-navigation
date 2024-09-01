@@ -421,7 +421,7 @@ class CaBotImageNode(Node):
                 test_speak.speak_text(explain)
                 self.can_speak_explanation = False
                 self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
-                self.can_speak_timer = self.create_timer(wait_time, self.reset_can_speak)
+                self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
                 next_loop_wait_time = 3.0
             else:
                 self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
@@ -833,9 +833,8 @@ class GPTExplainer():
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
-        # 1 character takes 0.1 seconds
-        # but we make it shorter by 0.05 seconds beacause we want to keep doing the inference
-        return len(text) * 0.1
+        # assume 1 character takes 0.15 seconds to speak (a bit longer than the average which is 0.1 seconds)
+        return len(text) * 0.15
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it
