@@ -1,39 +1,42 @@
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-from sensor_msgs.msg import Image
-from nav_msgs.msg import Odometry
-import tf_transformations
-import numpy as np
-import cv2
-from cv2 import aruco
-from typing import Tuple, Dict, List, Any, Union, Optional
-import message_filters
 import base64
-import requests
-import textwrap
-import os
 import datetime
 import json
+import os
 import pickle
-from cv_bridge import CvBridge
 import re
-import time
-from packaging.version import Version
-from . import test_speak
-import json
-from cabot_msgs.msg import Log
-from copy import copy
-from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
-import torch
-from .log_maker import log_image_and_gpt_response
-from .test_semantic import extract_image_feature, concat_features, extract_text_feature
-import std_msgs.msg
-from PIL import Image as PILImage
-from .WebCameraManager import WebCameraManager
-import traceback
 import threading
+import time
+import textwrap
+from copy import copy
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import cv2
+import numpy as np
+import requests
+import torch
+from PIL import Image as PILImage
+from packaging.version import Version
+from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
+from cv2 import aruco
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+from nav_msgs.msg import Odometry
+import std_msgs.msg
+from tf2_ros import Buffer, TransformListener
+import tf_transformations
+import message_filters
+from cv_bridge import CvBridge
+
+from cabot_msgs.msg import Log
+from . import test_speak
+from .log_maker import log_image_and_gpt_response
+from .test_semantic import concat_features, extract_image_feature, extract_text_feature
+from .WebCameraManager import WebCameraManager
 from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION
+
 
 """
 This script will output the GPT-generated explanation from the images captured by the robot.
@@ -128,9 +131,6 @@ class CaBotImageNode(Node):
                 self.left_camera_topic_name = self.front_camera_topic_name
                 self.left_depth_topic_name = self.front_depth_topic_name
         
-        # odom subscriber
-        self.odom_topic_name = "/odom"
-        
         self.front_image = None
         self.front_depth = None
         self.left_image = None
@@ -163,18 +163,19 @@ class CaBotImageNode(Node):
         # self.depth_left_sub = message_filters.Subscriber(self, Image, self.left_depth_topic_name)
         self.image_right_sub = message_filters.Subscriber(self, Image, self.right_camera_topic_name)
         # self.depth_right_sub = message_filters.Subscriber(self, Image, self.right_depth_topic_name)
-        self.odom_sub = message_filters.Subscriber(self, Odometry, self.odom_topic_name)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
         
         self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
         self.touch_sub = self.create_subscription(std_msgs.msg.Int16, "/cabot/touch", self.touch_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
-        subscribers = [self.odom_sub, self.image_front_sub, self.image_left_sub, self.image_right_sub]
+        subscribers = [self.image_front_sub, self.image_left_sub, self.image_right_sub]
         
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
 
-        self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}, {self.odom_topic_name}")
+        self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}")
         self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
         
         self.gpt_explainer = GPTExplainer(
@@ -337,56 +338,61 @@ class CaBotImageNode(Node):
             self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
         self.cabot_nav_state = msg.data
     
-    def image_callback(self, msg_odom, msg_front, msg_left, msg_right):
+    def image_callback(self, msg_front, msg_left, msg_right):
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
         self.last_saved_images_time = time.time()
 
         # save the odom
-        quaternion = (msg_odom.pose.pose.orientation.x, msg_odom.pose.pose.orientation.y, msg_odom.pose.pose.orientation.z, msg_odom.pose.pose.orientation.w)
-        roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
-        odom = np.array([msg_odom.pose.pose.position.x, msg_odom.pose.pose.position.y, yaw])
-        self.odom = odom        
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
+            position = transform.transform.translation
+            quaternion = transform.transform.rotation
+            roll, pitch, yaw = tf_transformations.euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
+            odom = np.array([position.x, position.y, yaw])
+            self.odom = odom        
 
-        front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
-        left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
-        right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
+            front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
+            left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
+            right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
 
-        # flip left_image vertically and then horizontally
-        left_image = cv2.flip(left_image, -1)
+            # flip left_image vertically and then horizontally
+            left_image = cv2.flip(left_image, -1)
 
-        # convert colors from BGR to RGB for all images
-        front_image = cv2.cvtColor(front_image, cv2.COLOR_BGR2RGB)
-        left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
-        right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
-        
-        self.front_image = front_image
-        self.left_image = left_image
-        self.right_image = right_image
-        if self.web_camera_manager.is_open():
-            self.webcamera_image = self.web_camera_manager.get_frame()   
-            self.webcamera_image = self.resize_images(self.webcamera_image, max_width=1920, max_height=1080)  
+            # convert colors from BGR to RGB for all images
+            front_image = cv2.cvtColor(front_image, cv2.COLOR_BGR2RGB)
+            left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
+            right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
+            
+            self.front_image = front_image
+            self.left_image = left_image
+            self.right_image = right_image
+            if self.web_camera_manager.is_open():
+                self.webcamera_image = self.web_camera_manager.get_frame()    
+                self.webcamera_image = self.resize_images(self.webcamera_image, max_width=1920, max_height=1080)   
 
-        self.front_marker_detected = self.detect_marker(front_image)
-        self.left_marker_detected = self.detect_marker(left_image)
-        self.right_marker_detected = self.detect_marker(right_image)
+            self.front_marker_detected = self.detect_marker(front_image)
+            self.left_marker_detected = self.detect_marker(left_image)
+            self.right_marker_detected = self.detect_marker(right_image)
 
-        if not self.realsense_ready:
-            self.realsense_ready = True
-            self.logger.info("Realsense ready")
-            test_speak.speak_text("カメラが起動しました")
-            self.publish_latest_explained_info()
+            if not self.realsense_ready:
+                self.realsense_ready = True
+                self.logger.info("Realsense ready")
+                test_speak.speak_text("カメラが起動しました")
+                self.publish_latest_explained_info()
 
-        if not self.web_camera_ready and self.web_camera_manager.is_open():
-            self.logger.info("Web camera is open")
-            test_speak.speak_text("Webカメラが起動しました")
-            self.web_camera_ready = True
-            self.publish_latest_explained_info()
+            if not self.web_camera_ready and self.web_camera_manager.is_open():
+                self.logger.info("Web camera is open")
+                test_speak.speak_text("Webカメラが起動しました")
+                self.web_camera_ready = True
+                self.publish_latest_explained_info()
 
-        if self.webcam_timer is not None:
-            self.webcam_timer.cancel()
-        
-        self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
+            if self.webcam_timer is not None:
+                self.webcam_timer.cancel()
+            
+            self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
+        except Exception as e:
+            self.logger.error(f"Error in image callback: {e}")
 
     def detect_marker(self, image: np.ndarray) -> bool:
         # detect the marker in the image
