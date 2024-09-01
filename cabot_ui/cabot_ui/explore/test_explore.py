@@ -11,6 +11,7 @@ import tty, termios
 import time
 from typing import Optional
 from message_filters import ApproximateTimeSynchronizer, Subscriber
+from tf2_ros import TransformListener, Buffer
 
 
 """
@@ -70,11 +71,14 @@ class CaBotExplorationNode(Node):
         self.sub = self.create_subscription(String, "/cabot/event", self.stop_timer_callback, 10)
 
         # Subscriber for odom and map; use ApproximateTimeSynchronizer to sync the messages
-        self.odom_sub = Subscriber(self, Odometry, "/odom")
-        self.map_sub = Subscriber(self, OccupancyGrid, "/map")
+        # self.map_sub = Subscriber(self, OccupancyGrid, "/map")
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.ts = ApproximateTimeSynchronizer([self.odom_sub, self.map_sub], queue_size=10, slop=0.1)
-        self.ts.registerCallback(self.sync_callback)
+        # self.ts = ApproximateTimeSynchronizer([self.odom_sub, self.map_sub], queue_size=10, slop=0.1)
+        # self.ts = ApproximateTimeSynchronizer([self.map_sub], queue_size=10, slop=0.1)
+        # self.ts.registerCallback(self.sync_callback)
+        self.map_sub = self.create_subscription(OccupancyGrid, "/map", self.sync_callback, 10)
 
         self.map_x = 0
         self.map_y = 0
@@ -84,16 +88,23 @@ class CaBotExplorationNode(Node):
 
         self.timer = self.create_timer(0.01, self.timer_callback)
     
-    def sync_callback(self, odom_msg, map_msg):
+    def sync_callback(self, map_msg):
         self.logger.info("[CaBotExplorationNode] Synced callback called")
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
 
-        self.coordinates.append((odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y))
+            position = transform.transform.translation
+            self.coordinates.append((position.x, position.y))
 
-        self.map_x = map_msg.info.origin.position.x
-        self.map_y = map_msg.info.origin.position.y
-        self.map_width = map_msg.info.width
-        self.map_height = map_msg.info.height
-        self.map_resolution = map_msg.info.resolution
+            self.map_x = map_msg.info.origin.position.x
+            self.map_y = map_msg.info.origin.position.y
+            self.map_width = map_msg.info.width
+            self.map_height = map_msg.info.height
+            self.map_resolution = map_msg.info.resolution
+
+            self.logger.info(f"Position: x={position.x}, y={position.y}")
+        except Exception as e:
+            self.get_logger().warn(f"Could not transform base_link to map: {e}")
 
     def timer_callback(self):
         self.logger.info("[CabotExplorationNode] Exploration node started")

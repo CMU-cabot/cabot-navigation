@@ -65,6 +65,8 @@ inv_dir_map = {v: k for k, v in dir_map.items()}
 class CaBotMapNode(Node):
     def __init__(self):
         super().__init__("cabot_map_node")
+        self.logger = self.get_logger()
+        self.logger.info("[CaBotMapNode] CaBotMapNode is initialized")
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
@@ -88,7 +90,7 @@ class CaBotMapNode(Node):
         """
         Receive map data and save it to local variables
         """
-        print("map callback")
+        self.logger.info("[CaBotMapNode] map callback")
         self.map_x = msg.info.origin.position.x
         self.map_y = msg.info.origin.position.y
         self.map_width = msg.info.width
@@ -102,7 +104,7 @@ class CaBotMapNode(Node):
 
         # get occupancy grid data
         self.map_data = np.asarray(msg.data).reshape((msg.info.height, msg.info.width))
-        print(f"map data; x: {self.map_x:.5f}, y: {self.map_y:.5f}, width: {self.map_width}, height: {self.map_height}, resolution: {self.map_resolution:.5f}, orientation: {self.map_orientation:.5f}")
+        self.logger.info(f"[CaBotMapNode] map data; x: {self.map_x:.5f}, y: {self.map_y:.5f}, width: {self.map_width}, height: {self.map_height}, resolution: {self.map_resolution:.5f}, orientation: {self.map_orientation:.5f}")
 
     def odom_callback(self, msg):
         """
