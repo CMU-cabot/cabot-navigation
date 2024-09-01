@@ -35,6 +35,8 @@ class ExplorationMainLoop(Node):
         self.logger.info(f"log_dir: {self.log_dir}")
         self.note_pub = self.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.event_pub = self.create_publisher(std_msgs.msg.String, "/cabot/event", 10)
+        self.mode_pub = self.create_publisher(std_msgs.msg.String, "/cabot/mode", 10)
+
         self.camera_ready_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/camera_ready", self.camera_ready_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
         self.state_sub = self.create_subscription(std_msgs.msg.String, "/cabot/state", self.state_callback, 10)
@@ -43,8 +45,10 @@ class ExplorationMainLoop(Node):
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
         self.floor = self.declare_parameter('floor').value
+        
         self.in_button_control = False
         self.in_conversation = False
+        self.mode = ""
 
         self.camera_ready = False
         self.iter = 0
@@ -103,6 +107,33 @@ class ExplorationMainLoop(Node):
             self.in_conversation = True
         elif msg.data == "conversation_end":
             self.in_conversation = False
+        
+        # publish cabot mode
+        current_mode = self.mode
+        updated_mode = ""
+        if self.in_button_control:
+            if self.in_conversation:
+                updated_mode = "chat"
+            else:
+                updated_mode = "button"
+        else:
+            if self.in_conversation:
+                updated_mode = "chat"
+            else:
+                updated_mode = "auto"
+        
+        if current_mode != updated_mode:
+            if msg.data.endswith("start"):
+                self.logger.info(f"[CHILOG] [MODE] auto mode is OFF")
+                self.logger.info(f"[CHILOG] [MODE] {updated_mode} mode is ON")
+            elif msg.data.endswith("end"):
+                if current_mode != "" and current_mode != "auto":
+                    self.logger.info(f"[CHILOG] [MODE] {current_mode} mode is OFF")
+                if updated_mode == "auto":
+                    self.logger.info(f"[CHILOG] [MODE] auto mode is ON")
+        self.mode = updated_mode
+        self.logger.info(f"[Main Loop] Mode: {self.mode}")
+        self.mode_pub.publish(std_msgs.msg.String(data=self.mode))
 
     def plan_callback(self, msg):
         self.logger.info(f"[Main Loop] Received plan message")
