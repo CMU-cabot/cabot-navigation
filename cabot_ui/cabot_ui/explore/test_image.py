@@ -368,7 +368,7 @@ class CaBotImageNode(Node):
             self.left_image = left_image
             self.right_image = right_image
             if self.web_camera_manager.is_open():
-                self.webcamera_image = self.web_camera_manager.get_frame()    
+                self.webcamera_image = self.web_camera_manager.get_frame()
                 self.webcamera_image = self.resize_images(self.webcamera_image, max_width=1920, max_height=1080)   
 
             self.front_marker_detected = self.detect_marker(front_image)
