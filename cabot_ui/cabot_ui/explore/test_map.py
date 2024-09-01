@@ -90,7 +90,6 @@ class CaBotMapNode(Node):
         """
         Receive map data and save it to local variables
         """
-        self.logger.info("[CaBotMapNode] map callback")
         self.map_x = msg.info.origin.position.x
         self.map_y = msg.info.origin.position.y
         self.map_width = msg.info.width

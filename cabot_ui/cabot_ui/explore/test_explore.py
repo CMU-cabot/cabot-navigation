@@ -89,7 +89,6 @@ class CaBotExplorationNode(Node):
         self.timer = self.create_timer(0.01, self.timer_callback)
     
     def sync_callback(self, map_msg):
-        self.logger.info("[CaBotExplorationNode] Synced callback called")
         try:
             transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
 

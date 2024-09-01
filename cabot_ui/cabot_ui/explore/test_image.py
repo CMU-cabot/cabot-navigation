@@ -342,7 +342,6 @@ class CaBotImageNode(Node):
         self.last_saved_images_time = time.time()
 
         # save the odom
-        self.logger.info("image callback")
         try:
             transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
             position = transform.transform.translation
