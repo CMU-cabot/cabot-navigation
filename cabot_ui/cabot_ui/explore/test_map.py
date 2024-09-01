@@ -72,6 +72,9 @@ class CaBotMapNode(Node):
         self.map_sub = self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
 
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         self.map_x = 0
         self.map_y = 0
         self.map_width = 0
@@ -84,8 +87,6 @@ class CaBotMapNode(Node):
     def map_callback(self, msg):
         """
         Receive map data and save it to local variables
-        Args:
-            msg (OccupancyGrid): map data; x, y, width, height, resolution, orientation, data (map data as 1D array), etc.
         """
         print("map callback")
         self.map_x = msg.info.origin.position.x
@@ -103,24 +104,33 @@ class CaBotMapNode(Node):
         self.map_data = np.asarray(msg.data).reshape((msg.info.height, msg.info.width))
         print(f"map data; x: {self.map_x:.5f}, y: {self.map_y:.5f}, width: {self.map_width}, height: {self.map_height}, resolution: {self.map_resolution:.5f}, orientation: {self.map_orientation:.5f}")
 
-    
     def odom_callback(self, msg):
         """
         Receive odometry data and save it to local variables;
         If the map data is received, save the odometry data and exit the program
-        Args:
-            msg (Odometry): odometry data; x, y, orientation, etc.
         """
-        self.coordinates.append((msg.pose.pose.position.x, msg.pose.pose.position.y))
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
+            position = transform.transform.translation
+            quaternion = transform.transform.rotation
+            roll, pitch, yaw = tf_transformations.euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
 
-        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
-        roll, pitch, yaw = tf_transformations.euler_from_quaternion(quaternion)
-        self.orientation.append(yaw)  # yaw is the rotation around the z-axis; unit: radian
-        
-        if self.map_resolution != 0:
-            print(f"odom callback; x: {msg.pose.pose.position.x:.6f}, y: {msg.pose.pose.position.y:.6f}, yaw: {yaw:.6f}")
-            # save local costmap and exit
-            sys.exit(0)
+            # compare with odom-based position
+            # odom_x = msg.pose.pose.position.x
+            # odom_y = msg.pose.pose.position.y
+            # odom_quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+            # odom_roll, odom_pitch, odom_yaw = tf_transformations.euler_from_quaternion(odom_quaternion)
+            # self.get_logger().info(f"[CaBotMapNode] odom callback; tf_x: {position.x:.6f}, tf_y: {position.y:.6f}, tf_yaw: {yaw:.6f}, odom_x: {odom_x:.6f}, odom_y: {odom_y:.6f}, odom_yaw: {odom_yaw:.6f}")
+
+            self.coordinates.append((position.x, position.y))
+            self.orientation.append(yaw)  # yaw is the rotation around the z-axis; unit: radian
+            
+            if self.map_resolution != 0:
+                print(f"odom callback; x: {position.x:.6f}, y: {position.y:.6f}, yaw: {yaw:.6f}")
+                # save local costmap and exit
+                sys.exit(0)
+        except Exception as e:
+            self.get_logger().warn(f"Could not transform base_link to map: {e}")
 
 
 class CabotRvizPointDrawer(Node):
