@@ -407,13 +407,14 @@ class FilterCandidates:
         self.max_dist = 500
         self.min_dist = 50
         if floor == 5:
-            self.corridor_width = 75
+            corridor_width_meter = 7.5  # corridor width in meter (5th floor): 7.5m
         elif floor == 3:
-            self.corridor_width = 50  # TODO: check the value
+            corridor_width_meter = 5
         elif floor == 7:
-            self.corridor_width = 30
+            corridor_width_meter = 2.5
         else:
-            self.corridor_width = 70  # default value
+            corridor_width_meter = 3  # default value
+        self.corridor_width = (corridor_width_meter / 2) / self.map_resolution  # convert meter to pixel
 
         # for marker filter
         self.marker_a = marker_a
@@ -500,16 +501,6 @@ class FilterCandidates:
     def availability_filter(
             self, current_point: np.ndarray, orientation, candidates: np.ndarray
         ) -> np.ndarray:
-        # availability_from_image:
-        # {
-        #     "front_marker": bool,
-        #     "left_marker": bool,
-        #     "right_marker": bool,
-        #     "front_available": Optional[bool],
-        #     "left_available": Optional[bool],
-        #     "right_available": Optional[bool],
-        # }
-        
         # if availability is False, set 3m-radius circular area which center is 6m away from the current point to that direction as forbidden area
         front_availability = (not self.availability_from_image["front_marker"]) and self.availability_from_image["front_available"]
         left_availability = (not self.availability_from_image["left_marker"]) and self.availability_from_image["left_available"]
