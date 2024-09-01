@@ -331,6 +331,7 @@ class FilterCandidates:
     def __init__(
             self, 
             map_data: MapData, 
+            floor: int,
             do_dist_filter: bool = True, 
             do_forbidden_area_filter: bool = True, 
             do_trajectory_filter: bool = True,
@@ -405,7 +406,14 @@ class FilterCandidates:
 
         self.max_dist = 500
         self.min_dist = 50
-        self.corridor_width = 75
+        if floor == 5:
+            self.corridor_width = 75
+        elif floor == 3:
+            self.corridor_width = 50  # TODO: check the value
+        elif floor == 7:
+            self.corridor_width = 30
+        else:
+            self.corridor_width = 70  # default value
 
         # for marker filter
         self.marker_a = marker_a
@@ -647,6 +655,7 @@ class FilterCandidates:
 
 def set_next_point_based_on_skeleton(
         map_array: np.ndarray, 
+        floor: int,
         orientation: np.ndarray, 
         coords: np.ndarray, 
         map_resolution: float, 
@@ -678,18 +687,11 @@ def set_next_point_based_on_skeleton(
     # create candidate filter
     cand_filter = FilterCandidates(
         map_data, 
+        floor=floor,
         do_dist_filter=do_dist_filter,
         do_forbidden_area_filter=do_forbidden_area_filter,
         do_trajectory_filter=do_trajectory_filter,
         availability_from_image=availability_from_image,
-        # availability_from_image={
-        #     "front_marker": False,
-        #     "left_marker": False,
-        #     "right_marker": False,
-        #     "front_available": False,
-        #     "left_available": True,
-        #     "right_available": False
-        # },
         forbidden_area_centers=forbidden_centers,
         initial_pose_filter=follow_initial_orientation,
         log_dir=log_dir,
@@ -852,6 +854,7 @@ def set_next_point_based_on_skeleton(
 
 
 def main(
+        floor: int,
         do_dist_filter: bool = True,
         do_forbidden_area_filter: bool = True,
         do_trajectory_filter: bool = True,
@@ -940,7 +943,7 @@ def main(
     # next_point = set_next_point(map_data, orientation, coordinates, map_resolution, map_x, map_y, map_height)
     # print(f"Next point: {next_point}")
     output_point, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = set_next_point_based_on_skeleton(
-        map_data, orientation, coordinates, 
+        map_data, floor, orientation, coordinates, 
         map_resolution, map_x, map_y, map_height, 
         do_dist_filter=do_dist_filter, 
         do_forbidden_area_filter=do_forbidden_area_filter, 

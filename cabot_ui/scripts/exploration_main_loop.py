@@ -42,6 +42,7 @@ class ExplorationMainLoop(Node):
         self.state_control = StateControl(self)
         self.dist_filter = self.declare_parameter('dist_filter').value
         self.is_sim = self.declare_parameter('is_sim').value
+        self.floor = self.declare_parameter('floor').value
         self.in_button_control = False
         self.in_conversation = False
 
@@ -68,6 +69,7 @@ class ExplorationMainLoop(Node):
         self.previous_destination = np.asarray([0, 0])
 
         self.logger.info("ExplorationMainLoop initialized")
+        speak_text(f"現在、{self.floor}階の展示エリアにいます。")
 
     def event_callback(self, msg):
         self.logger.info(f"[Main Loop] Received event: {msg.data}")
@@ -301,6 +303,7 @@ class ExplorationMainLoop(Node):
             state_client.logger.info(f"Getting next point...\n")
             start = time.time()
             sampled_points, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = get_next_point(
+                floor=self.floor,
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
                 do_trajectory_filter=trajectory_filter, 
