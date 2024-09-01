@@ -525,7 +525,7 @@ class ExplorationChatServer(Node):
             if self.searched_location is not None:
                 # speak_text(f"{self.searched_location}に到着しました。")
                 if not self.searched_direction:
-                    speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。")
+                    speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。", force=True)
                 else:
                     try:
                         # compare self.searched_yaw and self.odom[2] and determine which direction is the searched direction in
@@ -546,9 +546,9 @@ class ExplorationChatServer(Node):
                                     self.searched_direction = "front"
 
                         direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
-                        speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。")
+                        speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。", force=True)
                     except Exception as e:
-                        speak_text(f"{self.searched_location}に到着しました。")
+                        speak_text(f"{self.searched_location}に到着しました。", force=True)
                 self.logger.info(f"Arrived at {self.searched_location}")
                 self.searched_location = None
                 self.searched_direction = None

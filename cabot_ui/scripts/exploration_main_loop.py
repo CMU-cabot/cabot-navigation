@@ -72,6 +72,8 @@ class ExplorationMainLoop(Node):
 
         self.previous_destination = np.asarray([0, 0])
 
+        self.did_go_around = False
+
         self.logger.info("ExplorationMainLoop initialized")
         speak_text(f"現在、{self.floor}階の展示エリアにいます。")
 
@@ -364,9 +366,10 @@ class ExplorationMainLoop(Node):
             if has_left_initial_area is False and dist_from_initial > 3.0:
                 has_left_initial_area = True
                 state_client.logger.info("Left the initial area")
-            if has_left_initial_area is True and dist_from_initial < 3.0:
+            if has_left_initial_area is True and dist_from_initial < 3.0 and not self.did_go_around:
                 state_client.logger.info("Initial coords reached; stopping the exploration")
-                speak_text("一周しました。探索を終了します。")
+                speak_text("一周しました。")
+                self.did_go_around = True
                 # break
 
             # calculate map's highlihgted area's diff 
