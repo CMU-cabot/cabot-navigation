@@ -431,7 +431,8 @@ class ExplorationMainLoop(Node):
                         selected_dir = "".join([x[0] for x in selected_dir.split("_")])
                     elif query_node.query_type == "search":
                         selected_dir = "coordinates"
-                        y, x = query_node.query_string.split(",")
+                        # y, x = query_node.query_string.split(",")
+                        x, y = query_node.query_string.split(",")
                     elif query_node.query_type == "auto":
                         selected_dir = "none"
                     else:
