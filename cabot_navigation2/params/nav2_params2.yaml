@@ -201,8 +201,8 @@ local_costmap:
           topic: /local/scan
           min_obstacle_height: -100.0
           max_obstacle_height: 100.0
-          obstacle_range: 4.0
-          raytrace_range: 5.0
+          obstacle_max_range: 4.0
+          raytrace_max_range: 5.0
           clearing: True
           marking: True
           inf_is_valid: True # default: False
@@ -242,8 +242,8 @@ global_costmap:
           topic: /local/scan
           min_obstacle_height: -100.0
           max_obstacle_height: 100.0
-          obstacle_range: 8.0
-          raytrace_range: 8.0
+          obstacle_max_range: 8.0
+          raytrace_max_range: 8.0
           clearing: True
           marking: True
           inf_is_valid: True # default: False
