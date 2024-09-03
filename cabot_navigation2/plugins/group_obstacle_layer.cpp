@@ -1,23 +1,45 @@
-// Copyright (c) 2024  Miraikan
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
+/*********************************************************************
+ *
+ * Software License Agreement (BSD License)
+ *
+ *  Copyright (c) 2008, 2013, Willow Garage, Inc.
+ *  Copyright (c) 2020, Samsung R&D Institute Russia
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Author: Eitan Marder-Eppstein
+ *         David V. Lu!!
+ *         Alexey Merzlyakov
+ *
+ * Reference tutorial:
+ * https://navigation.ros.org/tutorials/docs/writing_new_costmap2d_plugin.html
+ *********************************************************************/
 #include "cabot_navigation2/group_obstacle_layer.hpp"
 
 #include <algorithm>
@@ -52,25 +74,32 @@ GroupObstacleLayer::~GroupObstacleLayer()
 
 void GroupObstacleLayer::activate()
 {
-  nav2_costmap_2d::ObstacleLayer::activate();
+  nav2_costmap_2d::Layer::activate();
 }
 
 void GroupObstacleLayer::deactivate()
 {
-  nav2_costmap_2d::ObstacleLayer::deactivate();
+  nav2_costmap_2d::Layer::deactivate();
 }
 
 void GroupObstacleLayer::reset()
 {
-  nav2_costmap_2d::ObstacleLayer::reset();
+  nav2_costmap_2d::Layer::reset();
+}
+
+bool GroupObstacleLayer::isClearable()
+{
+  return true;
 }
 
 // This method is called at the end of plugin initialization.
 // It contains ROS parameter(s) declaration and initialization
 // of need_recalculation_ variable.
-void GroupObstacleLayer::onInitialize()
+void
+GroupObstacleLayer::onInitialize()
 {
   auto node = node_.lock();
+
   declareParameter("enabled", rclcpp::ParameterValue(true));
   node->get_parameter(name_ + "." + "enabled", enabled_);
 
@@ -100,18 +129,11 @@ void GroupObstacleLayer::onInitialize()
 // The method is called to ask the plugin: which area of costmap it needs to update.
 // Inside this method window bounds are re-calculated if need_recalculation_ is true
 // and updated independently on its value.
-void GroupObstacleLayer::updateBounds(
+void
+GroupObstacleLayer::updateBounds(
   double robot_x, double robot_y, double robot_yaw, double * min_x,
   double * min_y, double * max_x, double * max_y)
 {
-  auto node = node_.lock();
-
-  unsigned int x0, y0;
-  if (!worldToMap(robot_x, robot_y, x0, y0)) {
-    RCLCPP_DEBUG(node->get_logger(), "robot is out of map");
-    return;
-  }
-
   last_min_x_ = *min_x;
   last_min_y_ = *min_y;
   last_max_x_ = *max_x;
@@ -126,16 +148,17 @@ void GroupObstacleLayer::updateBounds(
     *max_y = std::numeric_limits<float>::max();
     need_recalculation_ = false;
   } else {
-    *min_x = robot_x - update_width / 2;
-    *min_y = robot_y - update_height / 2;
-    *max_x = robot_x + update_width / 2;
-    *max_y = robot_y + update_height / 2;
+    *min_x = robot_x - update_width / 2.0;
+    *min_y = robot_y - update_height / 2.0;
+    *max_x = robot_x + update_width / 2.0;
+    *max_y = robot_y + update_height / 2.0;
   }
 }
 
 // The method is called when footprint was changed.
 // Here it just resets need_recalculation_ variable.
-void GroupObstacleLayer::onFootprintChanged()
+void
+GroupObstacleLayer::onFootprintChanged()
 {
   need_recalculation_ = true;
 
@@ -148,11 +171,14 @@ void GroupObstacleLayer::onFootprintChanged()
 // It updates the costmap within its window bounds.
 // Inside this method the costmap gradient is generated and is writing directly
 // to the resulting costmap master_grid without any merging with previous layers.
-void GroupObstacleLayer::updateCosts(
-  nav2_costmap_2d::Costmap2D & master_grid,
-  int min_i, int min_j, int max_i, int max_j)
+void
+GroupObstacleLayer::updateCosts(
+  nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j,
+  int max_i,
+  int max_j)
 {
   auto node = node_.lock();
+  std::chrono::milliseconds s = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
   if (!enabled_) {
     return;
@@ -162,7 +188,6 @@ void GroupObstacleLayer::updateCosts(
   {
     return;
   }
-
   // master_array - is a direct pointer to the resulting master_grid.
   // master_grid - is a resulting costmap combined from all layers.
   // By using this pointer all layers will be overwritten!
@@ -175,7 +200,7 @@ void GroupObstacleLayer::updateCosts(
   // - updateWithTrueOverwrite()
   // In this case using master_array pointer is equal to modifying local costmap_
   // pointer and then calling updateWithTrueOverwrite():
-  // unsigned char * master_array = master_grid.getCharMap();
+  unsigned char * master_array = master_grid.getCharMap();
   unsigned int size_x = master_grid.getSizeInCellsX(), size_y = master_grid.getSizeInCellsY();
 
   // {min_i, min_j} - {max_i, max_j} - are update-window coordinates.
@@ -201,11 +226,15 @@ void GroupObstacleLayer::updateCosts(
 
       int lx, ly, cx, cy, rx, ry, rox, roy, lox, loy;
       nav2_costmap_2d::MapLocation l, c, r, ro, lo;
-      worldToMapNoBounds(left.x, left.y, lx, ly);
-      worldToMapNoBounds(center.x, center.y, cx, cy);
-      worldToMapNoBounds(right.x, right.y, rx, ry);
-      worldToMapNoBounds(right_offset.x, right_offset.y, rox, roy);
-      worldToMapNoBounds(left_offset.x, left_offset.y, lox, loy);
+      master_grid.worldToMapEnforceBounds(left.x, left.y, lx, ly);
+      master_grid.worldToMapEnforceBounds(center.x, center.y, cx, cy);
+      master_grid.worldToMapEnforceBounds(right.x, right.y, rx, ry);
+      master_grid.worldToMapEnforceBounds(right_offset.x, right_offset.y, rox, roy);
+      master_grid.worldToMapEnforceBounds(left_offset.x, left_offset.y, lox, loy);
+
+      RCLCPP_INFO(node->get_logger(), "Group point: x %.2f, y %.2f", left.x, left.y);
+      RCLCPP_INFO(node->get_logger(), "Group map point: x %d, y %d", lx, ly);
+
       l.x = (unsigned int)lx;
       l.y = (unsigned int)ly;
       c.x = (unsigned int)cx;
@@ -225,32 +254,21 @@ void GroupObstacleLayer::updateCosts(
       map_polygon.push_back(lo);
 
       std::vector<nav2_costmap_2d::MapLocation> polygon_cells;
+      master_grid.convexFillCells(map_polygon, polygon_cells);
 
       for (unsigned int i = 0; i < polygon_cells.size(); i++) {
-        unsigned int index = getIndex(polygon_cells[i].x, polygon_cells[i].y);
-        costmap_[index] = (unsigned char)cost_value;
+        unsigned int index = master_grid.getIndex(polygon_cells[i].x, polygon_cells[i].y);
+        if (master_array[index] < cost_value && cost_value < LETHAL_OBSTACLE) {
+          master_array[index] = cost_value;
+        }
       }
     }
     cost_value = cost_value * discount_factor;
   }
 
-  updateWithMax(master_grid, min_i, min_j, max_i, max_j);
-
-  // Simply computing one-by-one cost per each cell
-  /*
-  int gradient_index;
-  for (int j = min_j; j < max_j; j++) {
-    // Reset gradient_index each time when reaching the end of re-calculated window
-    // by OY axis.
-    gradient_index = 0;
-    for (int i = min_i; i < max_i; i++) {
-      int index = master_grid.getIndex(i, j);
-      // setting the gradient cost
-      unsigned char cost = LETHAL_OBSTACLE;
-      master_array[index] = 20.0;
-    }
-  }
-  */
+  //updateWithMax(master_grid, min_i, min_j, max_i, max_j);
+  std::chrono::milliseconds e = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+  RCLCPP_INFO(node->get_logger(), "GrouObstacleLayer update time cost: %d ms", e - s);
 }
 
 void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group)
@@ -258,10 +276,13 @@ void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupTimeA
   // Group sequences: First time, then groups
   auto node = node_.lock();
   last_group_ = group;
-  RCLCPP_INFO(node->get_logger(), "======================Group Received======================");
+  // RCLCPP_INFO(node->get_logger(), "======================Group Received======================");
 }
 
 }  // namespace cabot_navigation2
 
-#include <pluginlib/class_list_macros.hpp>
+// This is the macro allowing a cabot_navigation2::GroupObstacleLayer class
+// to be registered in order to be dynamically loadable of base type nav2_costmap_2d::Layer.
+// Usually places in the end of cpp-file where the loadable class written.
+#include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(cabot_navigation2::GroupObstacleLayer, nav2_costmap_2d::Layer)
