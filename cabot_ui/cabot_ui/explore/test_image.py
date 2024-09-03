@@ -165,16 +165,13 @@ class CaBotImageNode(Node):
         self.image_right_sub = message_filters.Subscriber(self, Image, self.right_camera_topic_name)
         # self.depth_right_sub = message_filters.Subscriber(self, Image, self.right_depth_topic_name)
         self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
         
         self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
         self.touch_sub = self.create_subscription(std_msgs.msg.Int16, "/cabot/touch", self.touch_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
         subscribers = [self.image_front_sub, self.image_left_sub, self.image_right_sub]
-        
-        self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
-        self.ts.registerCallback(self.image_callback)
 
         self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}")
         self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
@@ -220,6 +217,8 @@ class CaBotImageNode(Node):
         if self.web_camera_ready:
             self.publish_camera_ready()
             # self.get_web_camera_image() # use this only when after discussing with the team
+        self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
+        self.ts.registerCallback(self.image_callback)
 
     def get_web_camera_image(self):
         # Function to capture and schedule the next image capture
@@ -349,6 +348,7 @@ class CaBotImageNode(Node):
             transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
             position = transform.transform.translation
             quaternion = transform.transform.rotation
+            # self.logger.info(f"transform time: {transform.header.stamp.sec}.{transform.header.stamp.nanosec}")
             roll, pitch, yaw = tf_transformations.euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
             odom = np.array([position.x, position.y, yaw])
             self.odom = odom        
