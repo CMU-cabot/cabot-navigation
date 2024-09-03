@@ -7,6 +7,7 @@ import re
 import threading
 import time
 import textwrap
+import traceback
 from copy import copy
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -747,7 +748,7 @@ class GPTExplainer():
                 else:
                     self.logger.info(f"{extracted_json} {extracted_json}")
                     if extracted_json == "Error":
-                        extracted_json["description"] = ""
+                        extracted_json = {"description": ""}
                         self.logger.info(f"Error in GPTExplainer.explain: extracted_json is 'Error': {extracted_json}")
                     else:
                         extracted_json["description"] = extracted_json["description"]
