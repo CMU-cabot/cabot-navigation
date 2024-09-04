@@ -402,6 +402,14 @@ if [ $cart_mapping -eq 1 ]; then
         fi
     fi
 
+    # define and switch record_points variable
+    record_points=false  # VLP-16
+    if [ $gazebo -eq 1 ]; then
+        record_points=true
+    elif [ "${LIDAR_MODEL}" != "VLP16" ]; then
+        record_points=true
+    fi
+
     # find robot description from cabot_description package
     robot_desc_pkg_share_dir=`ros2 pkg prefix --share cabot_description`
     robot_xacro=$robot_desc_pkg_share_dir/robots/$robot.urdf.xacro.xml
@@ -422,7 +430,7 @@ if [ $cart_mapping -eq 1 ]; then
           record_wireless:=true \
           save_samples:=true \
           record_required:=true \
-          record_points:=$gazebo_bool \
+          record_points:=$record_points \
           use_xsens:=${USE_XSENS:-true} \
           use_arduino:=${USE_ARDUINO:-false} \
           use_esp32:=${USE_ESP32:-false} \

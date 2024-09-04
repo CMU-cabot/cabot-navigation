@@ -25,18 +25,23 @@ WORKDIR=/home/developer/post_process
 QUIT_WHEN_ROSBAG_FINISH=${QUIT_WHEN_ROSBAG_FINISH:-true}
 PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
+LIDAR_MODEL=${LIDAR_MODEL:-VLP16}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
 
 # topic
 points2_topic='/velodyne_points'
 imu_topic=/imu/data
-convert_points=true
+convert_points=true  # VLP16 (default LIDAR_MODEL)
 
 if [[ $gazebo -eq 1 ]]; then
     imu_topic=/cabot/imu/data
     convert_points=false
+elif [ "${LIDAR_MODEL}" != "VLP16" ]; then
+    convert_points=false
 fi
+
+echo "LIDAR_MODEL=$LIDAR_MODEL"
 
 function blue {
     echo -en "\033[36m"  ## blue
