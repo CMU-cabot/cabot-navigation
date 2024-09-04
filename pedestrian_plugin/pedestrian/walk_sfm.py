@@ -113,7 +113,7 @@ def onUpdate(**args):
             x = st['x']
             y = st['y']
             yaw = st['yaw']
-            vel = args['velocity']
+            vel = st['velocity']
             vx = vel*math.cos(yaw)
             vy = vel*math.sin(yaw)
             gx = x + math.cos(yaw) if st['goal_x'] is None else st['goal_x']
@@ -200,7 +200,7 @@ def onUpdate(**args):
         args['x'] = x
         args['y'] = y
         args['yaw'] = yaw
-        args['velocity'] = v
+        # args['velocity'] = v
         del indicies[name]
 
     # store the current state
