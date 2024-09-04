@@ -276,7 +276,6 @@ void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupTimeA
   // Group sequences: First time, then groups
   auto node = node_.lock();
   last_group_ = group;
-  // RCLCPP_INFO(node->get_logger(), "======================Group Received======================");
 }
 
 }  // namespace cabot_navigation2

@@ -130,6 +130,7 @@ add_library(cabot_planners SHARED
   plugins/cabot_planner_param.cpp
   plugins/cabot_planner_util.cpp
   plugins/navcog_path_util.cpp
+  plugins/cabot_path_forward_planner.cpp
 )
 
 target_compile_definitions(cabot_planners PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -290,6 +291,7 @@ add_executable(cabot_planner_test
   plugins/cabot_planner_param.cpp
   plugins/cabot_planner_util.cpp
   plugins/navcog_path_util.cpp
+  plugins/cabot_path_forward_planner.cpp
 )
 ament_target_dependencies(cabot_planner_test
   ${dependencies_test}
