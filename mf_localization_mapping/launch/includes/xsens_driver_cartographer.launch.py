@@ -36,7 +36,8 @@ def generate_launch_description():
             name='xsens_mti_node',
             output='screen',
             parameters=[parameters_file_path, {
-                "frame_id": "imu"
+                "frame_id": "imu",
+                "pub_transform": False
             }],
             arguments=[]
         )
