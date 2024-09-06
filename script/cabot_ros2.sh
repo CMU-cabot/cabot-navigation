@@ -94,6 +94,8 @@ export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
 : ${CABOT_GAMEPAD:=}
 : ${CABOT_USE_HANDLE_SIMULATOR:=0}
 
+: ${CABOT_LOW_OBSTABLE_DETECT_VERSION:=0}
+
 # optional variables
 # TODO
 : ${CABOT_INIT_SPEED:=1.0}
@@ -233,6 +235,7 @@ com="$command_prefix ros2 launch cabot_navigation2 bringup_launch.py \
     use_sim_time:=$use_sim_time \
     record_bt_log:=false \
     cabot_side:=$CABOT_SIDE \
+    low_obstacle_detect_version:=$CABOT_LOW_OBSTABLE_DETECT_VERSION \
     $command_postfix"
 echo $com
 eval $com

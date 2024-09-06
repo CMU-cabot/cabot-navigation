@@ -108,6 +108,8 @@ def generate_launch_description():
         name='check_gazebo_ready_node',
     )
 
+    use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
+
     xacro_for_cabot_model = PathJoinSubstitution([
         get_package_share_directory('cabot_description'),
         'robots',
@@ -240,6 +242,44 @@ def generate_launch_description():
                         ]
                     ),
                 ]
+            ),
+
+            # crop Livox point cloud only for simulator becasue Livox simulator has noise at close area
+            ComposableNodeContainer(
+                name='livox_container',
+                namespace='',
+                package='rclcpp_components',
+                executable='component_container',
+                composable_node_descriptions=[],
+            ),
+            LoadComposableNodes(
+                target_container='/livox_container',
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package='pcl_ros',
+                        plugin='pcl_ros::CropBox',
+                        namespace='',
+                        name='livox_crop_box_node',
+                        parameters=[{
+                            'use_sim_time': use_sim_time,
+                            'min_x': -0.3,
+                            'min_y': -0.3,
+                            'min_z': -0.3,
+                            'max_x': 0.3,
+                            'max_y': 0.3,
+                            'max_z': 0.3,
+                            'keep_organized': False,
+                            'negative': True,
+                            'input_frame': 'livox',
+                            'output_frame': 'livox',
+                        }],
+                        remappings=[
+                            ('/input',  '/livox/lidar_PointCloud2'),
+                            ('/output', '/livox/points')
+                        ]
+                    ),
+                ],
+                condition=IfCondition(use_livox)
             ),
 
             IncludeLaunchDescription(

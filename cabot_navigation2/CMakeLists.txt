@@ -28,11 +28,16 @@ find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(pcl_ros REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io)
+find_package(visualization_msgs REQUIRED)
 
 # find dependencies for test
 find_package(nav2_navfn_planner REQUIRED)
@@ -51,6 +56,7 @@ include_directories(
   include
 #  ${OPENMP_INCLUDES}
   ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -67,11 +73,15 @@ set(dependencies
   angles
   nav_msgs
   pluginlib
+  pcl_conversions
+  pcl_ros
   tf2
+  tf2_ros
   people_msgs
   queue_msgs
   sensor_msgs
   diagnostic_updater
+  visualization_msgs
   yaml_cpp_vendor
 #  OpenMP
 )
@@ -156,6 +166,43 @@ ament_target_dependencies(cabot_scan
   sensor_msgs
 )
 
+### clip ground filter
+add_executable(clip_ground_filter_node
+  src/abstract_ground_filter_node.cpp
+  src/clip_ground_filter_node.cpp
+)
+
+ament_target_dependencies(clip_ground_filter_node
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+  pcl_ros
+  tf2_ros
+)
+
+target_link_libraries(clip_ground_filter_node
+  ${PCL_LIBRARIES}
+)
+
+### ransac ground filter
+add_executable(ransac_ground_filter_node
+  src/abstract_ground_filter_node.cpp
+  src/ransac_ground_filter_node.cpp
+)
+
+ament_target_dependencies(ransac_ground_filter_node
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+  pcl_ros
+  tf2_ros
+  visualization_msgs
+)
+
+target_link_libraries(ransac_ground_filter_node
+  ${PCL_LIBRARIES}
+)
+
 ### cabot lifecycle manager
 add_executable(cabot_lifecycle_manager
   src/cabot_lifecycle_manager.cpp
@@ -185,6 +232,8 @@ install(TARGETS
   cabot_controllers
   cabot_scan
   cabot_lifecycle_manager
+  clip_ground_filter_node
+  ransac_ground_filter_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

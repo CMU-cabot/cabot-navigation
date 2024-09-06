@@ -29,6 +29,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
 from launch.actions import TimerAction
+from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -53,6 +54,8 @@ def generate_launch_description():
     footprint_radius = LaunchConfiguration('footprint_radius')
     offset = LaunchConfiguration('offset')
     cabot_side = LaunchConfiguration('cabot_side')
+    low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
+    use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, ' > 0'])
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -156,6 +159,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'cabot_side', default_value='left',
             description='cabot side (left -> user stands right) left/right'),
+
+        DeclareLaunchArgument(
+            'low_obstacle_detect_version', default_value='0',
+            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC'),
 
         # default navigator
         Node(
@@ -314,6 +321,88 @@ def generate_launch_description():
                         ]
         ),
 
+        # low obstacle detection
+        Node(
+            package='pointcloud_to_laserscan',
+            executable='pointcloud_to_laserscan_node',
+            namespace='',
+            name='livox_pointcloud_to_laserscan_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'target_frame': 'livox_footprint',
+                'transform_tolerance': 0.01,
+                'min_height': -2.0,  # origin is the ground right below the sensor
+                'max_height': 2.0,  # origin is the ground right below the sensor
+                'angle_min': -0.614,  # -35.2*M_PI/180
+                'angle_max': 0.614,  # 35.2*M_PI/180
+                'angle_increment': 0.00174,  # M_PI/180/10
+                'scan_time': 0.1,
+                'range_min': 0.05,
+                'range_max': 50.0,
+                'use_inf': True,
+                'inf_epsilon': 1.0,
+                # Concurrency level affects number of pointclouds queued for
+                # processing and number of threads used
+                # 0 : Detect number of cores
+                # 1 : Single threaded
+                # 2->inf : Parallelism level
+                'concurrency_level': 0
+            }],
+            remappings=[
+                ('/cloud_in', '/livox/points_filtered'),
+                ('/scan', '/livox_scan')
+            ],
+            condition=IfCondition(use_low_obstacle_detect)
+        ),
+
+        Node(
+            package='cabot_navigation2',
+            executable='clip_ground_filter_node',
+            namespace='',
+            name='clip_ground_filter_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'target_frame': 'livox_footprint',
+                'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
+                'ignore_noise': True,
+                'input_topic': '/livox/points',
+                'output_ground_topic': '/livox/points_ground',
+                'output_filtered_topic': '/livox/points_filtered',
+                'min_range': 0.05,
+                'max_range': 5.0,
+                'clip_height': 0.05
+            }],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 1']))
+        ),
+
+        Node(
+            package='cabot_navigation2',
+            executable='ransac_ground_filter_node',
+            namespace='',
+            name='ransac_ground_filter_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'target_frame': 'livox_footprint',
+                'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
+                'ignore_noise': True,
+                'input_topic': '/livox/points',
+                'output_ground_topic': '/livox/points_ground',
+                'output_filtered_topic': '/livox/points_filtered',
+                'min_range': 0.05,
+                'max_range': 5.0,
+                'ransac_max_iteration': 10000,
+                'ransac_probability': 0.999,
+                'ransac_eps_angle': 5.0,
+                'ransac_input_min_height': -0.50,
+                'ransac_input_max_height': 0.50,
+                'ransac_inlier_threshold': 0.01,
+                'ground_distance_threshold': 0.05,
+                'debug': False,
+                'debug_output_plane_topic': '/ground_filter/ransac_plane'
+            }],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 2']))
+        ),
+
         # others
         Node(
             package='cabot_common',
@@ -342,5 +431,13 @@ def generate_launch_description():
             name='cabot_scan',
             parameters=[configured_params],
             output='log'),
+
+        Node(
+            package='cabot_navigation2',
+            executable='cabot_scan',
+            name='cabot_livox_scan',
+            parameters=[configured_params],
+            output='log',
+            condition=IfCondition(use_low_obstacle_detect)),
 
     ])
