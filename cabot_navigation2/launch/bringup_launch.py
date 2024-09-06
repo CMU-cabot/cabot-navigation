@@ -66,33 +66,6 @@ def generate_launch_description():
                    ('/local/odom', '/odom'),
                    ]
 
-    # Set local, global costmap plugins
-    params_file = ReplaceString(
-        source_file=params_file,
-        replacements={'<local_costmap_plugins>':
-                      PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='True' else ",
-                                        "['obstacle_layer', 'inflation_layer']"])})
-    params_file = ReplaceString(
-        source_file=params_file,
-        replacements={'<global_costmap_plugins>':
-                      PythonExpression(["['static_layer', 'obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='True' else ",
-                                        "['static_layer', 'obstacle_layer', 'inflation_layer']"])})
-
-    params_file2 = ReplaceString(
-        source_file=params_file2,
-        replacements={'<local_costmap_plugins>':
-                      PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='True' else ",
-                                        "['obstacle_layer', 'inflation_layer']"])})
-    params_file2 = ReplaceString(
-        source_file=params_file2,
-        replacements={'<global_costmap_plugins>':
-                      PythonExpression(["['obstacle_layer', 'low_obstacle_layer', 'inflation_layer']",
-                                        " if '", use_low_obstacle_detect, "'=='True' else ",
-                                        "['obstacle_layer', 'inflation_layer']"])})
-
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {
         'use_sim_time': use_sim_time,
