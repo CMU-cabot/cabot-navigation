@@ -35,7 +35,7 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression
 
 
-from nav2_common.launch import ReplaceString, RewrittenYaml
+from nav2_common.launch import RewrittenYaml
 from cabot_common.launch import AppendLogDirPrefix
 
 
