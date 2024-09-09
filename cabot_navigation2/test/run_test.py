@@ -45,6 +45,7 @@ from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
 
 from cabot_common.util import callee_name
+from pedestrian_plugin_msgs.msg import Metric
 from people_msgs.msg import People, Person
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -171,6 +172,7 @@ class Tester:
             getattr(module, func)(self)
             self.evaluator_summary[func] = self.evaluator.get_evaluation_results()
             self.stop_evaluation()  # automatically stop metric evaluation
+
             success = self.print_result(self.result, func)
             self.register_action_result(func, self.result)
             self.cancel_subscription(func)
@@ -572,6 +574,31 @@ class Tester:
             case['success'] = True
 
         self.futures[uuid].add_done_callback(done_callback)
+
+    @wait_test()
+    def check_metric_successful(self, case, test_action):
+        logger.debug(f"{callee_name()} {test_action}")
+        metric_name = test_action['metric_name']
+        condition = test_action['condition']
+
+        def topic_callback(msg):
+            if msg.name == metric_name:
+                try:
+                    context = {'msg': msg, 'math': math}
+                    exec(f"result=({condition})", context)
+                    if context['result']:
+                        case['done'] = True
+                        case['success'] = True
+                        self.cancel_subscription(case)
+                    else:
+                        case['done'] = True
+                        case['success'] = False
+                        case['msg'] = msg
+                        self.cancel_subscription(case)
+                except:  # noqa: #722
+                    logger.error(traceback.format_exc())
+        sub = self.node.create_subscription(Metric, '/metric', topic_callback, 10)
+        self.add_subscription(case, sub)
 
     @wait_test()
     def check_topic(self, case, test_action):
