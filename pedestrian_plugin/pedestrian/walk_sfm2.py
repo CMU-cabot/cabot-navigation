@@ -33,24 +33,22 @@ from pedestrian_plugin_msgs.msg import Obstacles
 
 last_obstacles_states = None
 
-def obstacle_states_callback(msg):
-    global last_obstacles_states
-    last_obstacles_states = msg
-    # ros.info(f"obstacle_states={msg}")
+def obstacle_callback(msg):
+    state.obstacles = msg
 
 try:
     rclpy.init()
+    node = rclpy.create_node('walk_sfm2_node')
+    sub = node.create_subscription(Obstacles, '/obstacle', obstacle_callback, 10)
+
+    def loop():
+        ros.info("walk_sfm2_node loop is started")
+        rclpy.spin(node)
+
+    thread = threading.Thread(target=loop)
+    thread.start()
 except:
     pass
-node = rclpy.create_node('robot_cmd_vel')
-sub = node.create_subscription(Obstacles, '/obstacle', obstacle_states_callback, 10)
-
-def loop():
-    ros.info("loop is started")
-    rclpy.spin(node)
-
-thread = threading.Thread(target=loop)
-thread.start()
 
 # global state
 sim = pysocialforce.Simulator(
@@ -66,6 +64,7 @@ initialized = False
 
 def onUpdate(**args):
     global count, pRobot, initialized
+    ros.info(f"pedestrian.onUpdate {state.obstacles}")
     if not initialized:
         state.state.clear()
         initialized = True

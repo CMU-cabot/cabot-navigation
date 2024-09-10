@@ -65,7 +65,7 @@ void ObstaclePlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
       std::bind(&ObstaclePlugin::OnUpdate, this, std::placeholders::_1)));
 
   obstacle_id = manager.addPlugin(this->name, this);
-  RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin...");
+  RCLCPP_INFO(manager.get_logger(), "Loading obstacle plugin...");
 
   ObstaclePluginParams temp_params;
   sdf::ElementPtr child = this->sdf->GetFirstElement();
@@ -149,6 +149,7 @@ void ObstaclePlugin::Reset()
   // }
 
   auto pose = this->model->WorldPose();
+  auto rot = pose.Rot();
   auto rpy = pose.Rot().Euler();
   this->x = pose.Pos().X();
   this->y = pose.Pos().Y();
@@ -157,12 +158,17 @@ void ObstaclePlugin::Reset()
   this->pitch = rpy.Y();
   this->yaw = rpy.Z();
   this->dist = 0;
-  
-  gazebo::physics::ShapePtr shape_ptr = this->model->GetLink(this->name + "-link")->GetCollision(this->name+"-collision")->GetShape();
-  physics::BoxShapePtr box_ptr = boost::dynamic_pointer_cast<physics::BoxShape>(shape_ptr);
-  this->width = box_ptr->Size().X();
-  this->height = box_ptr->Size().Y();
-  this->depth = box_ptr->Size().Z();
+
+  pose.Rot() = ignition::math::Quaterniond(0, 0, 0);
+  this->model->SetWorldPose(pose);
+
+  auto bbox = this->model->BoundingBox();
+  this->width = bbox.Size()[0];
+  this->height = bbox.Size()[1];
+  this->depth = bbox.Size()[2];
+
+  pose.Rot() = rot;
+  this->model->SetWorldPose(pose);
 
   apply_parameters();
 }

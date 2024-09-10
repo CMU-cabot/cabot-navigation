@@ -19,3 +19,4 @@
 # THE SOFTWARE.
 
 state = {}
+obstacles = None

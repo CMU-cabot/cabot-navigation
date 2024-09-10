@@ -26,6 +26,7 @@
 #include <string>
 #include <map>
 #include <memory>
+#include <mutex>
 
 using namespace std::chrono_literals;  // NOLINT
 
@@ -37,6 +38,7 @@ class PythonModuleLoader
 {
 private:
   std::map<std::string, PyObject *> modules;
+  std::recursive_mutex mtx;
 
 public:
   PythonModuleLoader();

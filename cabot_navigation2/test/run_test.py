@@ -1156,6 +1156,9 @@ class ObstacleManager:
             <uri>{uri}</uri>
         </include>
         <static>1</static>
+        <plugin name="pedestrian_plugin_{name}" filename="libobstacle_plugin.so">
+          <module>pedestrian.obstacle</module>
+        </plugin>
     </model>
 </sdf>
 """

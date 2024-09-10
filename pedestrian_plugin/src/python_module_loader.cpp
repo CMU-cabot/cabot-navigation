@@ -75,6 +75,7 @@ PyObject * PythonModuleLoader::getFunc(const std::string & moduleName, const std
 
 PyObject * PythonModuleLoader::loadModule(const std::string & moduleName)
 {
+  std::lock_guard<std::recursive_mutex> guard(mtx);
   if (!Py_IsInitialized()) {
     PyImport_AppendInittab("ros", &PyInit_ros);
     Py_Initialize();
@@ -100,6 +101,7 @@ PyObject * PythonModuleLoader::loadModule(const std::string & moduleName)
 
 PyObject * PythonModuleLoader::getModule(const std::string & moduleName)
 {
+  std::lock_guard<std::recursive_mutex> guard(mtx);
   auto it = modules.find(moduleName);
   if (it != modules.end()) {
     return it->second;

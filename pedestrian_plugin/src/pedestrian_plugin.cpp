@@ -65,7 +65,7 @@ void PedestrianPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 
   // register only if the model is actor
   actor_id = manager.addPlugin(this->name, this, this->actor==nullptr);
-  RCLCPP_INFO(manager.get_logger(), "Loading Pedestrign plugin for %s...", this->name.c_str());
+  RCLCPP_INFO(manager.get_logger(), "Loading Pedestrian plugin for %s...", this->name.c_str());
 
   if (this->actor) {
     // TODO: move to a separated class/file
