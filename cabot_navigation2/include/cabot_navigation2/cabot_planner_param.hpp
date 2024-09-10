@@ -57,6 +57,7 @@ struct CaBotPlannerOptions
   bool adjust_start = false;
   bool use_navcog_path_on_failure = false;
   int interim_plan_publish_interval = 10;     // ms interval
+  int direction_averaging_count = 30;
 
   float max_obstacle_scan_distance = 7.5;
   float kdtree_search_radius = 2.5;
@@ -75,6 +76,7 @@ struct CaBotPlannerOptions
   float min_anchor_length = 0.1;
   float min_link_length = 0.01;
   float go_around_detect_threshold = M_PI * 4;
+  int debug_iteration_rate = 10;
 };
 
 class CaBotPlannerParam;

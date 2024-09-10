@@ -691,6 +691,7 @@ void CaBotPlannerParam::findObstacles(std::vector<Node> nodes)
   {
     memset(mark, 0, width * height * sizeof(uint16_t));
     std::vector<int> marks;
+    uint64_t start_node_index = 0;
 
     for (uint64_t i = 0; i < nodes.size(); i++) {
       int index = getIndexByPoint(nodes[i]);

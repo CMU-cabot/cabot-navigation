@@ -56,7 +56,11 @@ bool CostmapLayerCapture::capture()
 
 nav2_costmap_2d::Costmap2D * CostmapLayerCapture::getCostmap() {return &costmap_;}
 
-Point::Point() {}
+Point::Point()
+{
+  x = 0;
+  y = 0;
+}
 Point::Point(float _x, float _y)
 {
   x = _x;
@@ -98,6 +102,12 @@ void Point::operator*=(float s)
 {
   x *= s;
   y *= s;
+}
+Point Point::operator/(float s) const {return Point(x / s, y / s);}
+void Point::operator/=(float s)
+{
+  x /= s;
+  y /= s;
 }
 
 Line::Line()
