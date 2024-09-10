@@ -141,6 +141,7 @@ class PedestrianManager():
         name = actor['name'] if 'name' in actor else uuid
         module = actor['module'] if 'module' in actor else "pedestrian.pool"
         params = actor['params'] if 'params' in actor else {}
+        animation = actor['animation'] if 'animation' in actor else "walk.dae"
         params_xml = ""
         for k, v in params.items():
             t = identify_variable_type(v)
@@ -154,11 +155,11 @@ class PedestrianManager():
     <actor name="{name}">
         <pose>{xx} {yy} 0 0 0 0</pose>
         <skin>
-            <filename>run.dae</filename>
+            <filename>{animation}</filename>
             <scale>1.0</scale>
         </skin>
         <animation name="walking">
-            <filename>run.dae</filename>
+            <filename>{animation}</filename>
             <scale>1.0</scale>
             <interpolate_x>true</interpolate_x>
         </animation>

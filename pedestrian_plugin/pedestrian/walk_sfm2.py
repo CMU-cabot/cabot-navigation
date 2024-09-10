@@ -23,7 +23,7 @@ import math
 import pysocialforce
 import pysocialforce.scene
 import numpy as np
-from pedestrian import state #adjust to have a share indices between two group
+from pedestrian import state
 from pathlib import Path
 
 import rclpy
@@ -138,7 +138,7 @@ def onUpdate(**args):
             rvy = rv * math.sin(ryaw)
             grx = robot['x'] + math.cos(yaw)
             gry = robot['y'] + math.sin(yaw)
-            # temp.append([rx, ry, rvx, rvy, grx, gry]) # comment if we want ped to ignore robots
+            temp.append([rx, ry, rvx, rvy, grx, gry]) # comment if we want ped to ignore robots
 
         # add obstacle positions
         if last_obstacles_states:
