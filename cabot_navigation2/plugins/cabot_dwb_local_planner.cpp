@@ -89,12 +89,15 @@ CaBotDWBLocalPlanner::computeVelocityCommands(
   // adjust forward_prune_distance based on the current speed
   auto node = node_.lock();
   double temp = forward_prune_distance_;
+  double temp2 = prune_distance_;
   double current_speed = std::hypot(velocity.x, velocity.y);
   double max_speed_xy;
   node->get_parameter(dwb_plugin_name_ + ".max_speed_xy", max_speed_xy);
   forward_prune_distance_ = temp * std::max(0.25, std::min(1.0, (current_speed + 0.25) / max_speed_xy));
+  prune_distance_ = temp2 * std::max(0.25, std::min(1.0, (current_speed + 0.25) / max_speed_xy));
   prepareGlobalPlan(pose, transformed_plan, goal_pose);
   forward_prune_distance_ = temp;
+  prune_distance_ = temp2;
 
   nav2_costmap_2d::Costmap2D * costmap = costmap_ros_->getCostmap();
   std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap->getMutex()));
