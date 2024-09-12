@@ -28,7 +28,7 @@ from pathlib import Path
 
 import rclpy
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy  
-import threading
+from pedestrian import ros2_helper
 from pedestrian_plugin_msgs.msg import Obstacles
 
 last_obstacles_states = None
@@ -36,19 +36,11 @@ last_obstacles_states = None
 def obstacle_callback(msg):
     state.obstacles = msg
 
-try:
-    rclpy.init()
-    node = rclpy.create_node('walk_sfm2_node')
+node_name = "walk_sfm2_node"
+if not ros2_helper.exists(node_name):
+    node = rclpy.create_node(node_name)
     sub = node.create_subscription(Obstacles, '/obstacle', obstacle_callback, 10)
-
-    def loop():
-        ros.info("walk_sfm2_node loop is started")
-        rclpy.spin(node)
-
-    thread = threading.Thread(target=loop)
-    thread.start()
-except:
-    pass
+    ros2_helper.add_node(node_name, node)
 
 # global state
 sim = pysocialforce.Simulator(
