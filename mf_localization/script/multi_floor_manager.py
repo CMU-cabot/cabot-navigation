@@ -69,6 +69,7 @@ from cartographer_ros_msgs.srv import GetTrajectoryStates
 from cartographer_ros_msgs.srv import FinishTrajectory
 from cartographer_ros_msgs.srv import StartTrajectory
 from cartographer_ros_msgs.srv import ReadMetrics
+from cartographer_ros_msgs.srv import TrajectoryQuery
 
 import mf_localization.geoutil as geoutil
 import mf_localization.resource_utils as resource_utils
@@ -207,6 +208,32 @@ def convert_samples_coordinate(samples, from_anchor, to_anchor, floor):
     return samples2
 
 
+def compute_relative_pose(pose1: Pose, pose2: Pose) -> Pose:
+    relative_position = [
+        pose2.position.x - pose1.position.x,
+        pose2.position.y - pose1.position.y,
+        pose2.position.z - pose1.position.z,
+        1  # for homogeneous transformation
+    ]
+    q1 = [pose1.orientation.x, pose1.orientation.y, pose1.orientation.z, pose1.orientation.w]
+    q2 = [pose2.orientation.x, pose2.orientation.y, pose2.orientation.z, pose2.orientation.w]
+    q1_inv = tf_transformations.quaternion_inverse(q1)
+    R = tf_transformations.quaternion_matrix(q1_inv)  # homogeneous rotation matrix
+    rotated_relative_position = R.dot(relative_position)
+    relative_orientation = tf_transformations.quaternion_multiply(q1_inv, q2)
+
+    relative_pose = Pose()
+    relative_pose.position.x = rotated_relative_position[0]
+    relative_pose.position.y = rotated_relative_position[1]
+    relative_pose.position.z = rotated_relative_position[2]
+    relative_pose.orientation.x = relative_orientation[0]
+    relative_pose.orientation.y = relative_orientation[1]
+    relative_pose.orientation.z = relative_orientation[2]
+    relative_pose.orientation.w = relative_orientation[3]
+
+    return relative_pose
+
+
 class FloorManager:
     def __init__(self):
         self.node_id = None
@@ -228,9 +255,11 @@ class FloorManager:
         self.finish_trajectory: rclpy.client.Client = None
         self.start_trajectory: rclpy.client.Client = None
         self.read_metrics: rclpy.client.Client = None
+        self.trajectory_query: rclpy.client.Client = None
 
         # variables
         self.previous_fix_local_published = None
+        self.trajectory_initial_pose = None  # variable to keep the initial pose from /trajectory_query
 
         # variables - optimization
         self.constraints_count = 0
@@ -1117,12 +1146,31 @@ class MultiFloorManager:
         use_initial_pose = True
         relative_to_trajectory_id = 0
 
+        # compute relative pose
+        if floor_manager.trajectory_initial_pose is None:
+            # trajectory query (for the first time)
+            trajectory_query = floor_manager.trajectory_query
+            trajectory_query.wait_for_service()
+            req = TrajectoryQuery.Request(
+                trajectory_id=relative_to_trajectory_id
+            )
+            res: TrajectoryQuery.Response = trajectory_query.call(req)
+            trajectory = res.trajectory
+            trajectory_initial_pose: PoseStamped = trajectory[0]
+
+            self.logger.info(F"trajectory {relative_to_trajectory_id} initial pose = {trajectory_initial_pose}")
+            floor_manager.trajectory_initial_pose = trajectory_initial_pose
+
+        # compute relative pose to trajectory initial pose
+        relative_pose = compute_relative_pose(floor_manager.trajectory_initial_pose.pose, initial_pose)
+        self.logger.info(F"converted initial_pose ({initial_pose}) to relative_pose ({relative_pose}) on trajectory {relative_to_trajectory_id}")
+
         self.logger.info("prepare request")
         req = StartTrajectory.Request(
             configuration_directory=configuration_directory,
             configuration_basename=configuration_basename,
             use_initial_pose=use_initial_pose,
-            initial_pose=initial_pose,
+            initial_pose=relative_pose,
             relative_to_trajectory_id=relative_to_trajectory_id)
         res2 = start_trajectory.call(req)
         self.logger.info(F"start_trajectory response = {res2}")
@@ -2382,6 +2430,7 @@ if __name__ == "__main__":
             floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=node_service_callback_group)
             floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=node_service_callback_group)
             floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=node_service_callback_group)
+            floor_manager.trajectory_query = node.create_client(TrajectoryQuery, node_id+"/"+str(mode)+'/trajectory_query', callback_group=node_service_callback_group)
 
     multi_floor_manager.floor_list = list(floor_set)
 
