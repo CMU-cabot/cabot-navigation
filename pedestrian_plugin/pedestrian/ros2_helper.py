@@ -16,6 +16,7 @@ except:
 
 names = {}
 def add_node(name, node):
+    global names
     shared_executor.add_node(node)
     names[name] = True
 
