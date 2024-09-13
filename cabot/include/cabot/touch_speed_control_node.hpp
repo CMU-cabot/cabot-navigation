@@ -49,6 +49,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr touch_speed_switched_pub_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_touch_speed_active_mode_srv;
 };
-}
+
+}  // namespace CaBotSafety
 
 #endif  // CABOT__TOUCH_SPEED_CONTROL_NODE_HPP_
