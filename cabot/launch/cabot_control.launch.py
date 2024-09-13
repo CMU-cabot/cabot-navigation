@@ -180,7 +180,7 @@ def generate_launch_description():
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
         ),
-        # Cabot People SPeed Control
+        # Cabot People Speed Control
         Node(
             package='cabot',
             executable='people_speed_control_node',
@@ -195,6 +195,15 @@ def generate_launch_description():
             executable='tf_speed_control_node',
             namespace='/cabot',
             name='tf_speed_control_node',
+            output=output,
+            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+        ),
+        # Cabot Touch Speed Control
+        Node(
+            package='cabot',
+            executable='touch_speed_control_node',
+            namespace='/cabot',
+            name='touch_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
         ),

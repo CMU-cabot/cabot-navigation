@@ -74,6 +74,7 @@ add_library(safety_nodes SHARED
   src/safety/people_speed_control_node.cpp
   src/safety/speed_control_node.cpp
   src/safety/tf_speed_control_node.cpp
+  src/safety/touch_speed_control_node.cpp
   src/safety/util.cpp
 )
 
@@ -115,6 +116,11 @@ rclcpp_components_register_node(
   safety_nodes
   PLUGIN "CaBotSafety::TFSpeedControlNode"
   EXECUTABLE tf_speed_control_node
+)
+rclcpp_components_register_node(
+  safety_nodes
+  PLUGIN "CaBotSafety::TouchSpeedControlNode"
+  EXECUTABLE touch_speed_control_node
 )
 
 if(BUILD_TESTING)

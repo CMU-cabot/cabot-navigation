@@ -69,6 +69,10 @@ cabot:
     ros__parameters:
       limit_topic: /cabot/tf_speed
 
+  touch_speed_control_node:
+    ros__parameters:
+      touch_speed_max_inactive: 0.5
+
   speed_control_node_touch_true:
     ros__parameters:
       cmd_vel_input: /cabot/cmd_vel_adapter
