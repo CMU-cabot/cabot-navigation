@@ -6,6 +6,11 @@ import sys
 
 try:
     rclpy.init()
+except:
+    rclpy.shutdown()
+    rclpy.init()
+
+try:
     shared_executor = rclpy.executors.SingleThreadedExecutor()
     def loop():
         shared_executor.spin()
