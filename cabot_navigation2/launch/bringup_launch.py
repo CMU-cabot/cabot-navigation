@@ -184,6 +184,7 @@ def generate_launch_description():
             output='log',
             parameters=[configured_params],
             remappings=remappings+[('/plan', '/plan_temp')],
+            # arguments=["--ros-args", "--log-level", "debug"]
         ),
         Node(
             package='nav2_behaviors',

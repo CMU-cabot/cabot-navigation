@@ -150,6 +150,11 @@ void CaBotPlanner::configure(
   node->get_parameter(name + ".interim_plan_publish_interval", options_.interim_plan_publish_interval);
 
   declare_parameter_if_not_declared(
+    node, name + ".direction_averaging_count",
+    rclcpp::ParameterValue(defaultValue.direction_averaging_count));
+  node->get_parameter(name + ".direction_averaging_count", options_.direction_averaging_count);
+
+  declare_parameter_if_not_declared(
     node, name + ".max_obstacle_scan_distance",
     rclcpp::ParameterValue(defaultValue.max_obstacle_scan_distance));
   node->get_parameter(name + ".max_obstacle_scan_distance", options_.max_obstacle_scan_distance);
@@ -231,6 +236,11 @@ void CaBotPlanner::configure(
     node, name + ".private.go_around_detect_threshold",
     rclcpp::ParameterValue(defaultValue.go_around_detect_threshold));
   node->get_parameter(name + ".private.go_around_detect_threshold", options_.go_around_detect_threshold);
+
+  declare_parameter_if_not_declared(
+    node, name + ".private.debug_iteration_rate",
+    rclcpp::ParameterValue(defaultValue.debug_iteration_rate));
+  node->get_parameter(name + ".private.debug_iteration_rate", options_.debug_iteration_rate);
 
   // params for path width estimation
 
@@ -399,6 +409,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     if (param.get_name() == name_ + ".interim_plan_publish_interval") {
       options_.interim_plan_publish_interval = param.as_int();
     }
+    if (param.get_name() == name_ + ".direction_averaging_count") {
+      options_.direction_averaging_count = param.as_int();
+    }
 
     if (param.get_name() == name_ + ".max_obstacle_scan_distance") {
       options_.max_obstacle_scan_distance = param.as_double();
@@ -446,6 +459,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     }
     if (param.get_name() == name_ + ".private.go_around_detect_threshold") {
       options_.go_around_detect_threshold = param.as_double();
+    }
+    if (param.get_name() == name_ + ".private.debug_iteration_rate") {
+      options_.debug_iteration_rate = param.as_int();
     }
 
     // path width estimation
@@ -541,6 +557,7 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
   int max_iteration_count = param.options.max_iteration_count;
   std::chrono::duration<int64, std::ratio<1, 1000>> interim_plan_publish_interval(
     param.options.interim_plan_publish_interval);
+  int debug_iteration_rate = param.options.debug_iteration_rate;
 
   int total_count = 0;
   int i = 0;
@@ -549,7 +566,7 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
     plans[1].okay = false;
     i = 2;
   }
-  rclcpp::Rate r(1);
+  rclcpp::Rate r(debug_iteration_rate);
   for (; i < 3; i++) {
     CaBotPlan & plan = plans[i];
 
@@ -712,6 +729,7 @@ float CaBotPlanner::iterate(const CaBotPlannerParam & param, CaBotPlan & plan, i
   float min_distance_to_obstacle_group_cell = param.options.min_distance_to_obstacle_group_cell;
   float min_anchor_length = param.options.min_anchor_length;
   float min_link_length = param.options.min_link_length;
+  int direction_averaging_count = param.options.direction_averaging_count;
 
   RCLCPP_DEBUG(logger_, "iteration scale=%.5f", scale);
 
@@ -752,6 +770,8 @@ float CaBotPlanner::iterate(const CaBotPlannerParam & param, CaBotPlan & plan, i
   // ~4 could be useful, too many threads can cause too much overhead
   // usually, this section takes a few milli seconds
   // #pragma omp parallel for schedule(dynamic, 1)
+  uint64_t start_index = plan.start_index + 1;
+  double start_distance = 0;
   for (uint64_t i = plan.start_index + 1; i < newNodes.size() && i < plan.end_index; i++) {
     Node * n0 = &plan.nodes[i - 1];
     Node * n1 = &plan.nodes[i];
@@ -762,9 +782,27 @@ float CaBotPlanner::iterate(const CaBotPlannerParam & param, CaBotPlan & plan, i
       continue;
     }
 
-    auto direction = (*n1 - *n0).yaw();
-    auto right_yaw = (*n1 - *n0).yaw(-M_PI_2);
-    auto left_yaw = (*n1 - *n0).yaw(+M_PI_2);
+    // get average direction
+    Point direction(0, 0);
+    int count = 0;
+    int64_t first = std::max(1L, ((int64_t)i) - direction_averaging_count / 2);
+    int64_t last = std::min(plan.nodes.size() - 1, i + direction_averaging_count / 2);
+    for (uint64_t j = first; j < last; j++) {
+      Node * m0 = &plan.nodes[j - 1];
+      Node * m1 = &plan.nodes[j];
+      auto p = (*m1 - *m0);  // get a vector
+      // RCLCPP_INFO(logger_, "j=[%d], count=[%d] (%.2f, %.2f) (%.2f, %.2f)", j, count, m0->x, m0->y, m1->x, m1->y);
+      // RCLCPP_INFO(logger_, "j=[%d], count=[%d] (%.2f, %.2f) -> %.2f", j, count, p.x, p.y, p.hypot());
+      p = p / p.hypot();  // normalize the vector
+      direction += p;
+      count++;
+    }
+    // RCLCPP_INFO(logger_, "i=[%ld, %ld~%ld] (%.2f, %.2f) -> %.2f", i, first, last, direction.x, direction.y, direction.yaw());
+    if (direction.hypot() == 0) {  // cannot determine the average direction
+      continue;
+    }
+    auto right_yaw = (direction / count).yaw(-M_PI_2);
+    auto left_yaw = (direction / count).yaw(+M_PI_2);
 
     // gravity term with obstacles that the path collide
     std::vector<ObstacleGroup>::const_iterator ogit;
@@ -775,6 +813,14 @@ float CaBotPlanner::iterate(const CaBotPlannerParam & param, CaBotPlan & plan, i
       float d = ogit->distance(*n1);
       float size = ogit->getSize(*n1);
       float d2 = std::max(0.0f, d - size - obstacle_margin_cell);
+      if (d2 == 0.0f) {
+        if (i == start_index && d < 0.5) {
+          RCLCPP_INFO(logger_, "ignoring obstacle at start i=%ld / start_index=%ld", i, start_index);
+          start_index++;
+          start_distance += d;
+          continue;
+        }
+      }
       float yaw = 0;
       if (d2 < min_distance_to_obstacle_group_cell) {
         d2 = min_distance_to_obstacle_group_cell;

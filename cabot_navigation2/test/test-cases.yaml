@@ -11,6 +11,16 @@ tests:
   #   map: test-map-fill.yaml
   #   path: [-4.0, -4.0, +4.0, -4.0, +4.0, -1.0, -0.5, +3.0, +4.0, +3.0]
   #   skip: false
+  - label: case-obstacle-at-start
+    map: test-map4.yaml
+    map_obstacle: test-obstacle6.yaml
+    path: [+1.5, +3.3, -0.5, +3.0, +0.0, -1.0, +4.0, -1.0, +4.0, -4.0, -4.0, -4.0]
+    skip: true
+  - label: case-obstacle-at-start2
+    map: test-map4.yaml
+    map_obstacle: test-obstacle6.yaml
+    path: [+0.5, +4.5, +2.0, +3.0, -0.5, +3.0, +0.0, -1.0, +4.0, -1.0, +4.0, -4.0, -4.0, -4.0]
+    skip: false
   - label: case-out-of-map
     map: test-map-fill.yaml
     path: [-4.0, -4.0, +4.0, -4.0, +4.0, -1.0, +0.0, -1.0, -0.5, +3.0, +4.0, +3.0, +6.0, +3.0, +6.0, +6.0, +3.0, +6.0]

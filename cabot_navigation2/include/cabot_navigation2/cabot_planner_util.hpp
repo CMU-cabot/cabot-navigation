@@ -66,6 +66,8 @@ public:
   void operator+=(const Point & other);
   Point operator*(float s) const;
   void operator*=(float s);
+  Point operator/(float s) const;
+  void operator/=(float s);
 };
 
 class Line

@@ -241,12 +241,10 @@ std::vector<PathWidth> estimatePathWidthAndAdjust(
     if (curr_diff != 0) {
       p1->pose.position.x += curr_diff * cos(curr_yaw);
       p1->pose.position.y += curr_diff * sin(curr_yaw);
-      p2->pose.position.x += curr_diff * cos(curr_yaw);
-      p2->pose.position.y += curr_diff * sin(curr_yaw);
-
-      // if last pose (goal) is updated, publish as updated goal
-      if (p2 == path.poses.end() - 1) {
-        RCLCPP_INFO(util_logger_, "update goal position");
+      // do not modify the last pose
+      if (p2 != path.poses.end() - 1) {
+        p2->pose.position.x += curr_diff * cos(curr_yaw);
+        p2->pose.position.y += curr_diff * sin(curr_yaw);
       }
 
       RCLCPP_DEBUG(
