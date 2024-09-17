@@ -77,6 +77,12 @@ nav_msgs::msg::Path CabotPathForwardPlanner::createPlan(
   }
 
   global_path = *last_path_;
+  /*
+  for (auto it = global_path.poses.begin(); it != global_path.poses.end(); it++) {
+    auto pose = it;
+    RCLCPP_INFO(node_->get_logger(), "Path point: %.2f, %.2f", pose->pose.position.x, pose->pose.position.y);
+  }
+  */
 
   return global_path;
 }
@@ -86,7 +92,7 @@ void CabotPathForwardPlanner::pathCallBack(const nav_msgs::msg::Path::SharedPtr 
   // Group sequences: First time, then groups
   std::unique_lock<std::recursive_mutex> lock(mutex_);
   last_path_ = path;
-  RCLCPP_INFO(node_->get_logger(), "============Path Received==============");
+  //RCLCPP_INFO(node_->get_logger(), "============Path Received==============");
 }
 
 }  // namespace cabot_navigation2

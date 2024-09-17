@@ -547,7 +547,7 @@ planner_server:
       safe_margin: 0.25
       path_length_to_width_factor: 1.0
       adjust_start: true
-    Pathforward:
+    PathForward:
       plugin: "cabot_navigation2/CabotPathForwardPlanner"
       path_topic: "/path"
 
