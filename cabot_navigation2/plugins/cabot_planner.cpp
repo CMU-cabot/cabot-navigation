@@ -930,6 +930,13 @@ float CaBotPlanner::iterate(const CaBotPlannerParam & param, CaBotPlan & plan, i
   bool complete_flag = true;
   float total_diff = 0;
   for (uint64_t i = 0; i < newNodes.size(); i++) {
+    if (std::isnan(newNodes[i].x) || std::isnan(newNodes[i].y)) {
+      RCLCPP_ERROR(
+        logger_, "newNodes[%ld] has nan (%.2f, %.2f) - (%.2f, %.2f)",
+        i, newNodes[i].x, newNodes[i].y, plan.nodes[i].x, plan.nodes[i].y);
+      continue;
+    }
+
     float dx = newNodes[i].x - plan.nodes[i].x;
     float dy = newNodes[i].y - plan.nodes[i].y;
 
