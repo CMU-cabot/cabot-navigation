@@ -1,21 +1,26 @@
-#pragma once
+#ifndef CABOT_NAVIGATION2__CABOT_SAMPLING_MPC_CONTROLLER_HPP_
+#define CABOT_NAVIGATION2__CABOT_SAMPLING_MPC_CONTROLLER_HPP_
 
 #include <memory>
 #include "nav2_core/controller.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/point.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
-#include "group_prediction_msgs/msg/group_prediction.hpp"  // Assuming this is the correct message type for the human trajectories
 
-namespace mpc_controller
+#include "lidar_process_msgs/msg/group_time_array.hpp"
+#include "lidar_process_msgs/msg/group_array.hpp"
+#include "lidar_process_msgs/msg/group.hpp"
+
+namespace cabot_navigation2
 {
 
-class MPCController : public nav2_core::Controller
+class CaBotSamplingMPCController : public nav2_core::Controller
 {
 public:
-  MPCController() = default;
-  ~MPCController() = default;
+  CaBotSamplingMPCController() = default;
+  ~CaBotSamplingMPCController() = default;
 
   void configure(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
@@ -35,10 +40,9 @@ private:
   rclcpp::Logger logger_;
   std::shared_ptr<rclcpp::Node> node_;
   nav2_costmap_2d::Costmap2DROS *costmap_ros_;  // Pointer to the costmap
-  rclcpp::Subscription<group_prediction_msgs::msg::GroupPrediction>::SharedPtr human_trajectory_sub_;  // Human prediction subscriber
 
-  // Storage for the human trajectories
-  std::vector<group_prediction_msgs::msg::Trajectory> human_trajectories_;
+  // Storage for the group trajectories
+  std::vector<lidar_process_msgs::msg::GroupArray> group_trajectories_;
 
   // MPC-related variables
   double prediction_horizon_;
@@ -50,7 +54,9 @@ private:
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
 
-  void groupPredictionCallback(const group_prediction_msgs::msg::GroupPrediction::SharedPtr msg);
+  std::string group_topic_;
+  rclcpp::Subscription<lidar_process_msgs::msg::GroupTimeArray>::SharedPtr group_trajectory_sub_;  // group prediction subscriber
+  void groupPredictionCallback(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group_series);
 
   geometry_msgs::msg::Twist computeMPCControl(
     const geometry_msgs::msg::PoseStamped & pose,
@@ -74,8 +80,10 @@ private:
   double getCostFromCostmap(
     const geometry_msgs::msg::Pose & pose);
 
-  double calculateHumanTrajectoryCost(
+  double calculateaGroupTrajectoryCost(
     const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory);
 };
 
-} // namespace mpc_controller
+} // namespace cabot_navigation2
+
+#endif // CABOT_NAVIGATION2__CABOT_SAMPLING_MPC_CONTROLLER_HPP_
