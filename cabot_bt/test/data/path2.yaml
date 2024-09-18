@@ -1,0 +1,36 @@
+header:
+  stamp:
+    sec: 0
+    nanosec: 0
+  frame_id: local/odom
+poses:
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: local/odom
+  pose:
+    position:
+      x: 2.3530254342857315
+      y: -3.4121318032810586
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.9674952892025127
+      w: 0.25288903766463733
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: local/odom
+  pose:
+    position:
+      x: -0.2632573734885906
+      y: -1.944118087492098
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.9674952892025127
+      w: 0.25288903766463733

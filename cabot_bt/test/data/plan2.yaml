@@ -1,0 +1,1807 @@
+header:
+  stamp:
+    sec: 1726292579
+    nanosec: 293137289
+  frame_id: local/odom
+poses:
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.3499999999999988
+      y: -3.400000000000018
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.3223602294921877
+      y: -3.407785034179705
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.303556823730468
+      y: -3.3913101196289244
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.2836273193359373
+      y: -3.3762161254882983
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.2634162902832022
+      y: -3.361501312255877
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.243766784667968
+      y: -3.34604568481447
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.2239433288574206
+      y: -3.3308128356933775
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.203939819335937
+      y: -3.3158172607422056
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.1839157104492175
+      y: -3.300849151611345
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.164093017578124
+      y: -3.2856155395507987
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.144176483154296
+      y: -3.270504760742204
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.12425537109375
+      y: -3.255400848388689
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.1044189453125
+      y: -3.2401855468750167
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.084542083740234
+      y: -3.225022888183611
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.0646308898925776
+      y: -3.2099052429199393
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.0447555541992175
+      y: -3.19473953247072
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.0248352050781238
+      y: -3.179634094238299
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 2.0048591613769533
+      y: -3.164601898193377
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.9849311828613283
+      y: -3.1495071411132987
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.964966583251953
+      y: -3.134459686279314
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.9449630737304675
+      y: -3.119464111328142
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.9249404907226557
+      y: -3.1044944763183775
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.9049484252929672
+      y: -3.089483642578143
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.8849136352539047
+      y: -3.074530792236345
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.8648338317871085
+      y: -3.059637451171893
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.844760131835936
+      y: -3.044735717773454
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.8245918273925765
+      y: -3.0299636840820483
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.8043388366699213
+      y: -3.015306854248065
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.7839439392089842
+      y: -3.0008476257324386
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.7632530212402342
+      y: -2.9868164062500178
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.7425743103027331
+      y: -2.972767639160173
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.7218109130859363
+      y: -2.958842468261736
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.6998069763183592
+      y: -2.9469764709472823
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.6781295776367182
+      y: -2.9345222473144705
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.6567047119140623
+      y: -2.921640014648455
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.635334777832031
+      y: -2.9086654663086104
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.6133628845214831
+      y: -2.896739196777361
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.5915267944335936
+      y: -2.8845664978027514
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.569599914550781
+      y: -2.872556304931658
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.5475761413574203
+      y: -2.8607276916504087
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.5252983093261703
+      y: -2.849382019042986
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.5031890869140616
+      y: -2.8377120971679854
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.4810829162597647
+      y: -2.826036834716815
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.4589309692382804
+      y: -2.8144477844238462
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.4367614746093738
+      y: -2.802893066406268
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.4138458251953123
+      y: -2.7929000854492365
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.3909156799316404
+      y: -2.7829399108886896
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.3680099487304682
+      y: -2.7729240417480643
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.3451133728027331
+      y: -2.762886810302751
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.3222618103027335
+      y: -2.75274734497072
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.2992538452148432
+      y: -2.742967987060565
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.2763946533203123
+      y: -2.732846069335954
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.2536453247070307
+      y: -2.722480010986345
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.2309867858886703
+      y: -2.71191482543947
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.2083969116210929
+      y: -2.7012054443359546
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.1855796813964838
+      y: -2.690989685058611
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.1629295349121085
+      y: -2.680407714843767
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.1403991699218734
+      y: -2.66957321166994
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.117953491210936
+      y: -2.6585639953613462
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.0954132080078116
+      y: -2.6477516174316573
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.0729919433593738
+      y: -2.6366920471191584
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.0506568908691394
+      y: -2.6254615783691584
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.0283966064453116
+      y: -2.614082336425799
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 1.0061889648437488
+      y: -2.60260086059572
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.984020233154296
+      y: -2.5910453796386896
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.9619033813476561
+      y: -2.5793891906738455
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.9398300170898422
+      y: -2.5676521301269712
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.9177955627441401
+      y: -2.5558418273925962
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.8957931518554672
+      y: -2.543972015380877
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.8738304138183581
+      y: -2.5320289611816573
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.8518913269042967
+      y: -2.5200424194336115
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.8299827575683585
+      y: -2.5079994201660334
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.8081024169921873
+      y: -2.495906829834002
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.7862480163574217
+      y: -2.4837661743164237
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.764415740966796
+      y: -2.471587371826189
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.7425971984863269
+      y: -2.4593811035156428
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.7208106994628904
+      y: -2.447120666503924
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.6990310668945297
+      y: -2.434845733642595
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.6772514343261706
+      y: -2.422573089599627
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.6554664611816401
+      y: -2.410308074951189
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.6337173461914061
+      y: -2.397980499267595
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.6119621276855467
+      y: -2.3856628417968917
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.59018096923828
+      y: -2.37339172363283
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.5683586120605453
+      y: -2.361193847656267
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.546561431884764
+      y: -2.3489517211914244
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.5246536254882797
+      y: -2.3369071960449386
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.5026542663574203
+      y: -2.325032806396502
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.4805786132812484
+      y: -2.3132987976074393
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.4584434509277342
+      y: -2.3016784667968917
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.4363998413085932
+      y: -2.289885711669939
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.41430892944335884
+      y: -2.2781814575195494
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.3921798706054682
+      y: -2.266548919677751
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.3700256347656241
+      y: -2.2549659729004077
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.34794006347656126
+      y: -2.243251800537127
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.32578735351562393
+      y: -2.2316635131836104
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.30357971191406197
+      y: -2.220182800292987
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.28117752075195224
+      y: -2.2090858459472837
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.25885391235351474
+      y: -2.197831726074236
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.2364295959472651
+      y: -2.1867790222168146
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.21391983032226491
+      y: -2.175902557373064
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.19134445190429616
+      y: -2.16516189575197
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.1687248229980458
+      y: -2.1545158386230643
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.146221160888671
+      y: -2.1436256408691587
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.12367477416992134
+      y: -2.1328254699707205
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.1010910034179675
+      y: -2.1221031188965025
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.07840194702148384
+      y: -2.1116050720215025
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.05562667846679581
+      y: -2.101293945312518
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.03278427124023331
+      y: -2.091134643554705
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: 0.009695434570311967
+      y: -2.0815483093261893
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.013547515869141158
+      y: -2.0723419189453303
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.03688964843750053
+      y: -2.0633880615234546
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.06029510498046964
+      y: -2.054603576660174
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.08347091674804741
+      y: -2.0452285766601737
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.10670852661132901
+      y: -2.036009216308612
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.12999038696289134
+      y: -2.0268997192382994
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.15330810546875107
+      y: -2.01788406372072
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.17664566040039187
+      y: -2.008920288085955
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.20000000000000107
+      y: -2.0000000000000178
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.2500000000000009
+      y: -1.950000000000017
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+- header:
+    stamp:
+      sec: 0
+      nanosec: 0
+    frame_id: ''
+  pose:
+    position:
+      x: -0.2632573734885906
+      y: -1.944118087492098
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.9674952892025127
+      w: 0.25288903766463733
+

@@ -105,7 +105,16 @@ void CheckPathCondition::normalize_path(nav_msgs::msg::Path & path)
       }
     }
   }
-  temp.push_back(path.poses[path.poses.size() - 1]);
+  auto tx = temp[temp.size() - 1].pose.position.x;
+  auto ty = temp[temp.size() - 1].pose.position.y;
+  auto px = path.poses[path.poses.size() - 1].pose.position.x;
+  auto py = path.poses[path.poses.size() - 1].pose.position.y;
+  RCLCPP_INFO(
+    node_->get_logger(), "hypot (%.5f, %.5f) -> (%.5f, %.5f) %.5f",
+    tx, ty, px, py, std::hypot(px - tx, py - ty));
+  if (std::hypot(px - tx, py - ty) > MIN_DIST / 2) {
+    temp.push_back(path.poses[path.poses.size() - 1]);
+  }
   path.poses = temp;
 }
 

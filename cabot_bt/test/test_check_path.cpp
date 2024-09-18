@@ -92,6 +92,34 @@ TEST_F(CheckPathConditionTest, TestSimilarEnough) {
   EXPECT_TRUE(result);
 }
 
+TEST_F(CheckPathConditionTest, TestSimilarEnough2) {
+  // Build two dummy path messages from YAML
+  auto path = buildPathFromYaml("path2.yaml");
+  auto target_path = buildPathFromYaml("plan2.yaml");
+
+  conf_.blackboard->set<nav_msgs::msg::Path>("path", target_path);
+  conf_.blackboard->set<double>("average_threshold", 0.3);
+  check_path_condition_->path_callback(std::make_shared<nav_msgs::msg::Path>(path));
+  auto result = check_path_condition_->check_path();
+
+  // Check expected result
+  EXPECT_TRUE(result);
+}
+
+TEST_F(CheckPathConditionTest, TestSimilarEnough3) {
+  // Build two dummy path messages from YAML
+  auto path = buildPathFromYaml("path2.yaml");
+  auto target_path = buildPathFromYaml("plan3.yaml");
+
+  conf_.blackboard->set<nav_msgs::msg::Path>("path", target_path);
+  conf_.blackboard->set<double>("average_threshold", 0.3);
+  check_path_condition_->path_callback(std::make_shared<nav_msgs::msg::Path>(path));
+  auto result = check_path_condition_->check_path();
+
+  // Check expected result
+  EXPECT_TRUE(result);
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
