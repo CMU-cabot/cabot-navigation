@@ -74,7 +74,7 @@ class UserInterface(object):
         i18n.load_from_packages(packages)
 
         self.last_social_announce = None
-        self.last_notify_turn = None
+        self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
@@ -249,13 +249,14 @@ class UserInterface(object):
             msgs[0].data = str(Turn.Type.Avoiding)
             self._activity_log("cabot/turn_type", "Type.Avoiding")
         msgs[1].data = turn.angle
-        self.turn_type_pub.publish(msgs[0])
-        self.turn_angle_pub.publish(msgs[1])
-        self.last_notify_turn = self._node.get_clock().now()
-        self._activity_log("cabot/interface", "turn angle", str(turn.angle))
-        self._activity_log("cabot/interface", "notify", text)
-        self.vibrate(pattern)
-        self.read_aloud_vibration(pattern)
+        self.last_notify_turn[device] = self._node.get_clock().now()
+        if device == "directional_indicator":
+            self.turn_angle_pub.publish(msgs[1])
+        elif device == "vibrator":
+            self._activity_log("cabot/interface", "turn angle", str(turn.angle))
+            self._activity_log("cabot/interface", "notify", text)
+            self.vibrate(pattern)
+            self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
         vib = vibration.RIGHT_DEV
