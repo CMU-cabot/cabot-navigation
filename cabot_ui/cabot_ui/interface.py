@@ -217,9 +217,9 @@ class UserInterface(object):
         self.last_pose = kwargs
         self._pose_log()
 
-    def notify_turn(self, turn=None, pose=None):
-        if self.last_notify_turn and \
-           self._node.get_clock().now() - self.last_notify_turn < UserInterface.NOTIFY_TURN_INTERVAL:
+    def notify_turn(self, device=None, turn=None):
+        if self.last_notify_turn[device] and \
+                self._node.get_clock().now() - self.last_notify_turn[device] < UserInterface.NOTIFY_TURN_INTERVAL:
             return
         pattern = vibration.UNKNOWN
         text = ""
