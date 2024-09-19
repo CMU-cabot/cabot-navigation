@@ -57,6 +57,7 @@ install(PROGRAMS
   script/tf2_beacons_listener.py
   script/tf2_listener.py
   script/tracked_pose_listener.py
+  script/trajectory_based_interpolator.py
   script/trajectory_recorder.py
   script/trajectory_restarter.py
   script/str2str_node.py
