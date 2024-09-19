@@ -72,6 +72,8 @@ def generate_launch_description():
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
 
+    interpolate_samples_by_trajectory = LaunchConfiguration('interpolate_samples_by_trajectory')
+
     def configure_ros2_bag_play(context, node):
         cmd = node.cmd.copy()
         cmd.extend(['--clock', '--rate', rate])
@@ -136,6 +138,8 @@ def generate_launch_description():
         DeclareLaunchArgument('play_limited_topics', default_value='false'),
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
         DeclareLaunchArgument('quit_when_rosbag_finish', default_value='false'),
+
+        DeclareLaunchArgument('interpolate_samples_by_trajectory', default_value='false'),
 
         SetParameter('use_sim_time', ParameterValue(True)),
 
@@ -206,6 +210,7 @@ def generate_launch_description():
             args=[ros2_bag_play]
         ),
 
+        # write samples data and optimized trajectory data
         Node(
             name="tf2_beacons_listener",
             package="mf_localization",
@@ -213,7 +218,9 @@ def generate_launch_description():
             parameters=[{
                 'output': [bag_filename, '.loc.samples.json'],
                 'topics': wireless_topics,
-                'save_empty_beacon_sample': save_empty_beacon_sample
+                'save_empty_beacon_sample': save_empty_beacon_sample,
+                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_pose, '"=="true" else ""']),
+                'interpolate_by_trajectory': interpolate_samples_by_trajectory,
             }],
             condition=IfCondition(save_samples),
         ),
@@ -225,17 +232,6 @@ def generate_launch_description():
             executable="tracked_pose_listener.py",
             parameters=[{
                 "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
-            }],
-            condition=IfCondition(save_pose),
-        ),
-
-        # write optimized trajectory to csv file
-        Node(
-            name="trajectory_recorder",
-            package="mf_localization",
-            executable="trajectory_recorder.py",
-            parameters=[{
-                "output": PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_pose, '"=="true" else ""'])
             }],
             condition=IfCondition(save_pose),
         ),

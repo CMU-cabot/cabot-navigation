@@ -30,6 +30,9 @@ import rclpy.duration
 import tf2_ros
 from std_msgs.msg import String
 
+from trajectory_based_interpolator import TrajectoryBasedInterpolator
+from trajectory_recorder import TrajectoryRecorder
+
 
 class BeaconMapper:
     def __init__(self, node, save_empty_beacon_sample, data_inverval=1.2, position_interval=0.5, verbose=False):
@@ -151,12 +154,20 @@ def main():
     fingerprint_data_interval = node.declare_parameter("fingerprint_data_interval", 1.2).value  # should be larger than 1.0 s because beacon data interval is about 1.0 s.
     fingerprint_position_interval = node.declare_parameter("fingerprint_position_interval", 0.5).value  # to prevent the mapper from creating dummy fingerprint data at the same position
 
+    # use trajectory recorder extention
+    output_trajectory = node.declare_parameter("output_trajectory", '').value
+    interpolate_by_trajectory = node.declare_parameter("interpolate_by_trajectory", False).value
+    trajectory_recoder = None  # default
+
     mapper = BeaconMapper(node,
                           save_empty_beacon_sample=save_empty_beacon_sample,
                           data_inverval=fingerprint_data_interval,
                           position_interval=fingerprint_position_interval,
                           verbose=verbose
                           )
+
+    if output_trajectory != '' or interpolate_by_trajectory:
+        trajectory_recoder = TrajectoryRecorder(node, output_trajectory)
 
     subscribers = []
     for sub_topic in sub_topics:
@@ -184,11 +195,23 @@ def main():
     except KeyboardInterrupt:
         node.get_logger().info("caught KeyboardInterrupt")
 
+    # trajectory recorder post process
+    if trajectory_recoder is not None:
+        trajectory_recoder.on_shutdown()
+
     # save to a file after node shutdown
     if output and 0 < len(mapper._fingerprints):
         node.get_logger().info("output fingerprint data before exiting")
+        if interpolate_by_trajectory:
+            trajectory = trajectory_recoder.get_trajectory()
+            interpolator = TrajectoryBasedInterpolator(trajectory)
+            samples = interpolator.interpolate_samples(mapper._fingerprints)
+            node.get_logger().info(F"Reconstructed fingerprint poses from trajectory data. #samples={len(mapper._fingerprints)} -> #samples_converted={len(samples)}")
+        else:
+            samples = mapper._fingerprints
+
         with open(output, "w") as f:
-            json.dump(mapper._fingerprints, f)
+            json.dump(samples, f)
 
 
 if __name__ == "__main__":
