@@ -45,7 +45,6 @@ from rosidl_runtime_py import set_message_fields
 from tf_transformations import quaternion_from_euler
 
 from cabot_common.util import callee_name
-from pedestrian_plugin_msgs.msg import Metric
 from people_msgs.msg import People, Person
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -135,11 +134,43 @@ class Tester:
         self.result = {}
         self.test_summary = {}
         self.evaluator_summary = {}
+        self.condition_list = []
         # evaluation
         self.evaluator = None
 
     def set_evaluator(self, evaluator):
         self.evaluator = evaluator
+
+    def add_metric_condition(self, condition):
+        self.condition_list.append(condition)
+
+    def check_conditions(self, results, func):
+        if func not in self.result:
+            self.result[func] = []
+
+        for condition in self.condition_list:
+            matching_result = next((result for result in results if result["name"] == condition["name"]), None)
+
+            condition_result = {
+                "action": f"check_{condition['name']}",
+                "condition": f"{condition['condition']}"
+            }
+
+            if matching_result:
+                value = matching_result["value"]
+                condition_result["value"] = value
+
+                if eval(condition["condition"]):
+                    condition_result["success"] = True
+                    condition_result["error"] = False
+                else:
+                    condition_result["success"] = False
+                    condition_result["error"] = True
+            else:
+                condition_result["success"] = False
+                condition_result["error"] = True
+
+            self.result[func].append(condition_result)
 
     def test(self, module, test_pat, wait_ready=False):
         functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
@@ -170,8 +201,11 @@ class Tester:
             logger.info(f"Testing {func}")
             self.test_func_name = func
             getattr(module, func)(self)
-            self.evaluator_summary[func] = self.evaluator.get_evaluation_results()
             self.stop_evaluation()  # automatically stop metric evaluation
+            evaluation_results = self.evaluator.get_evaluation_results()
+            self.evaluator_summary[func] = self.evaluator.get_evaluation_results()
+            self.check_conditions(evaluation_results, func)
+            self.condition_list = []
 
             success = self.print_result(self.result, func)
             self.register_action_result(func, self.result)
@@ -209,9 +243,15 @@ class Tester:
             success2 = aResult['success']
             action = aResult['action']
             if success2:
-                logger.info(f" - {action}: Success")
+                if 'condition' in aResult:
+                    logger.info(f" - {action} ({aResult['condition']}): Success")
+                else:
+                    logger.info(f" - {action}: Success")
             else:
-                logger.error(f" - {action}: Failure")
+                if 'condition' in aResult:
+                    logger.error(f" - {action} ({aResult['condition']}): Failure")
+                else:
+                    logger.error(f" - {action}: Failure")
                 logger.error(f"{aResult['error']}")
         logger.info("--------------------------")
         return success
@@ -574,31 +614,6 @@ class Tester:
             case['success'] = True
 
         self.futures[uuid].add_done_callback(done_callback)
-
-    @wait_test()
-    def check_metric_successful(self, case, test_action):
-        logger.debug(f"{callee_name()} {test_action}")
-        metric_name = test_action['metric_name']
-        condition = test_action['condition']
-
-        def topic_callback(msg):
-            if msg.name == metric_name:
-                try:
-                    context = {'msg': msg, 'math': math}
-                    exec(f"result=({condition})", context)
-                    if context['result']:
-                        case['done'] = True
-                        case['success'] = True
-                        self.cancel_subscription(case)
-                    else:
-                        case['done'] = True
-                        case['success'] = False
-                        case['msg'] = msg
-                        self.cancel_subscription(case)
-                except:  # noqa: #722
-                    logger.error(traceback.format_exc())
-        sub = self.node.create_subscription(Metric, '/metric', topic_callback, 10)
-        self.add_subscription(case, sub)
 
     @wait_test()
     def check_topic(self, case, test_action):
