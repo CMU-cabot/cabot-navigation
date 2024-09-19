@@ -92,7 +92,6 @@ class Evaluator:
             self._evaluation_timer.cancel()
             self._evaluation_timer.destroy()
             self._evaluation_timer = None
-        self.reset()
 
     def get_evaluation_results(self):
         results = []
