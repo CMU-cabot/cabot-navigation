@@ -36,6 +36,7 @@ def main():
     parser.add_argument("--gnss", default=None, help="gnss log csv file")
     parser.add_argument("--fixed_frame_pose", default=None, help="fixed frame pose data csv file")
     parser.add_argument("--gnss_status_threshold", default=2, type=int, help="status threshold for gnss data. gnss data with gnss_status_threshold<=status are used to evaluate error")
+    parser.add_argument("-p", "--plot", default=False, action="store_true", help="plot errors")
     args = parser.parse_args()
     status_threshold = args.gnss_status_threshold
 
@@ -75,7 +76,11 @@ def main():
 
     plt.legend()
     plt.gca().set_aspect('equal')
-    plt.show()
+
+    if args.plot:
+        plt.show()
+    else:
+        plt.cla()
 
     # error evaluation
     if args.gnss is not None:
@@ -94,27 +99,30 @@ def main():
                 error_data.append([point.timestamp, point.x, point.y, error])
         error_data = np.array(error_data)
 
-        print(F"error stats: count={len(error_data)}, mean={np.mean(error_data[:, 3])}, min={np.min(error_data[:, 3])}, 95%-ile={np.percentile(error_data[:, 3], q=95)}, max={np.max(error_data[:, 3])}")
+        print(F"trajectory and gnss ({status_threshold}<=status) error stats: count={len(error_data)}, mean={np.mean(error_data[:, 3])}, min={np.min(error_data[:, 3])}, 95%-ile={np.percentile(error_data[:, 3], q=95)}, max={np.max(error_data[:, 3])}")
 
-        # plot error time series
-        plt.scatter(error_data[:, 0], error_data[:, 3])
-        plt.xlabel("timestamp")
-        plt.ylabel("error [m]")
-        plt.show()
+        if args.plot:
+            # plot error time series
+            plt.scatter(error_data[:, 0], error_data[:, 3])
+            plt.xlabel("timestamp")
+            plt.ylabel("error [m]")
+            plt.show()
 
-        # plot error histogram
-        plt.hist(error_data[:, 3], bins=1000, cumulative=True, density=True, histtype="step")
-        plt.xlim(0)
-        plt.ylim([0, 1])
-        plt.xlabel("error [m]")
-        plt.ylabel("cumularive distribution")
-        plt.show()
+            # plot error histogram
+            plt.hist(error_data[:, 3], bins=1000, cumulative=True, density=True, histtype="step")
+            plt.xlim(0)
+            plt.ylim([0, 1])
+            plt.xlabel("error [m]")
+            plt.ylabel("cumularive distribution")
+            plt.show()
 
-        # plot error distribution
-        plt.scatter(error_data[:, 1], error_data[:, 2], c=error_data[:, 3])
-        plt.colorbar(label="error [m]")
-        plt.gca().set_aspect('equal')
-        plt.show()
+            # plot error distribution
+            plt.scatter(error_data[:, 1], error_data[:, 2], c=error_data[:, 3])
+            plt.colorbar(label="error [m]")
+            plt.gca().set_aspect('equal')
+            plt.show()
+        else:
+            plt.cla()
 
 
 if __name__ == "__main__":
