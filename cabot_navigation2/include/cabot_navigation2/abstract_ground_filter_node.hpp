@@ -64,9 +64,19 @@ public:
   ~AbstractGroundFilterNode();
 
 protected:
-  virtual void filterGround(const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) = 0;
+  virtual void filterGround(const rclcpp::Time & time, const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) = 0;
 
   std::string target_frame_;
+  float min_range_;
+  float max_range_;
+  float min_height_;
+  float max_height_;
+  bool publish_debug_ground_;
+  std::string output_debug_ground_topic_;
+  float ground_distance_threshold_;
+
+  tf2_ros::TransformListener * tf_listener_;
+  tf2_ros::Buffer * tf_buffer_;
 
 private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr input);
@@ -76,11 +86,6 @@ private:
   std::string input_topic_;
   std::string output_ground_topic_;
   std::string output_filtered_topic_;
-  float min_range_;
-  float max_range_;
-
-  tf2_ros::TransformListener * tf_listener_;
-  tf2_ros::Buffer * tf_buffer_;
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr ground_pointcloud_pub_;
