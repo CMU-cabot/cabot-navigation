@@ -46,6 +46,41 @@ people_vis:
     people_topic: "people"
     vis_topic: "people_vis"
 
+grid_map_visualization:
+  ros__parameters:
+    grid_map_topic: /ground_filter_ground
+    grid_map_visualizations: [ground_filter_binary_observe_ground_grid, ground_filter_observe_ground_z_points, ground_filter_binary_free_grid, ground_filter_free_ground_z_points, ground_filter_binary_interpolated_grid, ground_filter_interpolated_ground_z_points]
+    ground_filter_binary_observe_ground_grid:
+      type: occupancy_grid
+      params:
+        layer: binary_observe_ground
+        data_min: 0.0
+        data_max: 1.0
+    ground_filter_observe_ground_z_points:
+      type: point_cloud
+      params:
+        layer: observe_ground_z
+    ground_filter_binary_free_grid:
+      type: occupancy_grid
+      params:
+        layer: binary_free
+        data_min: 0.0
+        data_max: 1.0
+    ground_filter_free_ground_z_points:
+      type: point_cloud
+      params:
+        layer: free_ground_z
+    ground_filter_binary_interpolated_grid:
+      type: occupancy_grid
+      params:
+        layer: binary_interpolated
+        data_min: 0.0
+        data_max: 1.0
+    ground_filter_interpolated_ground_z_points:
+      type: point_cloud
+      params:
+        layer: interpolated_ground_z
+
 
 amcl:
   ros__parameters:

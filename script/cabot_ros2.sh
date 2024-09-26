@@ -95,6 +95,7 @@ export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
 : ${CABOT_USE_HANDLE_SIMULATOR:=0}
 
 : ${CABOT_LOW_OBSTABLE_DETECT_VERSION:=0}
+: ${CABOT_PUBLISH_LOW_OBSTABLE_GROUND:=0}
 
 # optional variables
 # TODO
@@ -132,6 +133,8 @@ fi
 pid=
 use_sim_time=false
 if [ $CABOT_GAZEBO -eq 1 ]; then use_sim_time=true; fi
+publish_low_obstacle_ground=false
+if [ $CABOT_PUBLISH_LOW_OBSTABLE_GROUND -eq 1 ]; then publish_low_obstacle_ground=true; fi
 
 # configuration for cabot site scripts
 gazebo=$CABOT_GAZEBO   # read by config script
@@ -236,6 +239,7 @@ com="$command_prefix ros2 launch cabot_navigation2 bringup_launch.py \
     record_bt_log:=false \
     cabot_side:=$CABOT_SIDE \
     low_obstacle_detect_version:=$CABOT_LOW_OBSTABLE_DETECT_VERSION \
+    publish_low_obstacle_ground:=$publish_low_obstacle_ground \
     $command_postfix"
 echo $com
 eval $com
