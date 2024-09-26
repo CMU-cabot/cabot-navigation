@@ -15,9 +15,6 @@
 #include "lidar_process_msgs/msg/group_array.hpp"
 #include "lidar_process_msgs/msg/group.hpp"
 
-#include <pluginlib/class_loader.hpp>
-#include <pluginlib/class_list_macros.hpp>
-
 #include <cabot_navigation2/util.hpp>
 
 using nav2_util::declare_parameter_if_not_declared;
@@ -38,14 +35,13 @@ struct Trajectory
 class CaBotSamplingMPCController : public nav2_core::Controller
 {
 public:
-  CaBotSamplingMPCController() = default;
-  ~CaBotSamplingMPCController() = default;
+  CaBotSamplingMPCController();
+  ~CaBotSamplingMPCController() override;
 
   void configure(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-    std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros);
-
+    std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
   void cleanup() override;
   void activate() override;
   void deactivate() override;
@@ -57,14 +53,14 @@ public:
 
   void setPlan(const nav_msgs::msg::Path & path) override;
 
-  bool cancel()
-  {
-    return true;
-  }
+  // bool cancel()
+  // {
+  //   return true;
+  // }
 
   void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
-  void reset() {}
+  // void reset() {}
 
 private:
   rclcpp::Logger logger_;

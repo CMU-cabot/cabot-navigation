@@ -7,9 +7,9 @@ namespace cabot_navigation2
 {
 
 void CaBotSamplingMPCController::configure(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+    std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   node_ = parent;
   auto node = node_.lock();
@@ -108,12 +108,17 @@ geometry_msgs::msg::TwistStamped CaBotSamplingMPCController::computeVelocityComm
 
   auto node = node_.lock();
 
-  // Call your MPC function to compute the optimal control action
-  geometry_msgs::msg::Twist control_cmd = computeMPCControl(pose, velocity, global_plan);
-
   geometry_msgs::msg::TwistStamped velocity_cmd;
   velocity_cmd.header.stamp = node->now();
   velocity_cmd.header.frame_id = "base_link";
+
+  if (global_plan.poses.size() == 0)
+  {
+    return velocity_cmd;
+  }
+
+  // Call your MPC function to compute the optimal control action
+  geometry_msgs::msg::Twist control_cmd = computeMPCControl(pose, velocity, global_plan);
   velocity_cmd.twist = control_cmd;
 
   return velocity_cmd;
