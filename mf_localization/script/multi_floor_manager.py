@@ -1110,10 +1110,15 @@ class MultiFloorManager:
     def finish_trajectory(self):
         # try to finish the current trajectory
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
+
+        # wait for services
         get_trajectory_states = floor_manager.get_trajectory_states
+        self.logger.info(F"wait for {get_trajectory_states.srv_name} service")
         get_trajectory_states.wait_for_service()
         finish_trajectory = floor_manager.finish_trajectory
+        self.logger.info(F"wait for {finish_trajectory.srv_name} service")
         finish_trajectory.wait_for_service()
+
         req = GetTrajectoryStates.Request()
         res0 = get_trajectory_states.call(req)
         self.logger.info(F"{res0}")
@@ -1138,6 +1143,7 @@ class MultiFloorManager:
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
         start_trajectory = floor_manager.start_trajectory
+        self.logger.info(F"wait for {start_trajectory.srv_name} service")
         start_trajectory.wait_for_service()
 
         # start trajectory
@@ -1150,6 +1156,7 @@ class MultiFloorManager:
         if floor_manager.trajectory_initial_pose is None:
             # trajectory query (for the first time)
             trajectory_query = floor_manager.trajectory_query
+            self.logger.info(F"wait for {trajectory_query.srv_name} service")
             trajectory_query.wait_for_service()
             req = TrajectoryQuery.Request(
                 trajectory_id=relative_to_trajectory_id
@@ -1780,7 +1787,7 @@ class MultiFloorManager:
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
         read_metrics = floor_manager.read_metrics
-        self.logger.info("waiting read_metrics service")
+        self.logger.info(F"wait for {read_metrics.srv_name} service")
         read_metrics.wait_for_service()
 
         req = ReadMetrics.Request()
