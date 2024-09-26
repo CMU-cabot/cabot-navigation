@@ -35,7 +35,9 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
   output_ground_topic_("/livox/points_ground"),
   output_filtered_topic_("/livox/points_filtered"),
   min_range_(0.05),
-  max_range_(10.0)
+  max_range_(10.0),
+  publish_debug_ground_(false),
+  output_debug_ground_topic_("/ground_filter_ground")
 {
   RCLCPP_INFO(get_logger(), "NodeClass Constructor");
   RCLCPP_INFO(get_logger(), "Livox Point Cloud Node - %s", __FUNCTION__);
@@ -52,6 +54,8 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
   output_filtered_topic_ = declare_parameter("output_filtered_topic", output_filtered_topic_);
   min_range_ = declare_parameter("min_range", min_range_);
   max_range_ = declare_parameter("max_range", max_range_);
+  publish_debug_ground_ = declare_parameter("publish_debug_ground", publish_debug_ground_);
+  output_debug_ground_topic_ = declare_parameter("output_debug_ground_topic", output_debug_ground_topic_);
 
   tf_buffer_ = new tf2_ros::Buffer(get_clock());
   tf_listener_ = new tf2_ros::TransformListener(*tf_buffer_, this);

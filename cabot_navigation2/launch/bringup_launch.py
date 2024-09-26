@@ -55,6 +55,8 @@ def generate_launch_description():
     offset = LaunchConfiguration('offset')
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
+    publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
+
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, ' > 0'])
 
     remappings = [('/tf', 'tf'),
@@ -162,7 +164,11 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'low_obstacle_detect_version', default_value='0',
-            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC'),
+            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC, 3: remove groud by grid map'),
+
+        DeclareLaunchArgument(
+            'publish_low_obstacle_ground', default_value='false',
+            description='publish ground to detect low obstacles only for debug purpose'),
 
         # default navigator
         Node(
@@ -371,6 +377,8 @@ def generate_launch_description():
                 'output_filtered_topic': '/livox/points_filtered',
                 'min_range': 0.05,
                 'max_range': 5.0,
+                'publish_debug_ground': publish_low_obstacle_ground,
+                'output_debug_ground_topic': '/ground_filter_ground',
                 'clip_height': 0.05
             }],
             condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 1']))
@@ -391,17 +399,58 @@ def generate_launch_description():
                 'output_filtered_topic': '/livox/points_filtered',
                 'min_range': 0.05,
                 'max_range': 5.0,
+                'publish_debug_ground': publish_low_obstacle_ground,
+                'output_debug_ground_topic': '/ground_filter_ground',
                 'ransac_max_iteration': 10000,
                 'ransac_probability': 0.999,
                 'ransac_eps_angle': 5.0,
                 'ransac_input_min_height': -0.50,
                 'ransac_input_max_height': 0.50,
                 'ransac_inlier_threshold': 0.01,
-                'ground_distance_threshold': 0.05,
-                'debug': False,
-                'debug_output_plane_topic': '/ground_filter/ransac_plane'
+                'ground_distance_threshold': 0.05
             }],
             condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 2']))
+        ),
+
+        Node(
+            package='cabot_navigation2',
+            executable='grid_map_ground_filter_node',
+            namespace='',
+            name='grid_map_ground_filter_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'target_frame': 'livox_footprint',
+                'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
+                'ignore_noise': True,
+                'input_topic': '/livox/points',
+                'output_ground_topic': '/livox/points_ground',
+                'output_filtered_topic': '/livox/points_filtered',
+                'min_range': 0.05,
+                'max_range': 5.0,
+                'publish_debug_ground': publish_low_obstacle_ground,
+                'output_debug_ground_topic': '/ground_filter_ground',
+                'odom_topic': '/odom',
+                'grid_map_resolution': 0.05,
+                'grid_map_length': 10.0,
+                'grid_num_points_raio_threshold': 0.5,
+                'grid_var_threshold': 0.025,
+                'grid_prob_prior': 0.5,
+                'grid_prob_free': 0.35,
+                'grid_prob_occupied': 0.9,
+                'grid_occupancy_threshold': 0.65,
+                'ground_update_rate': 0.5,
+                'ground_distance_threshold': 0.05
+            }],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 3']))
+        ),
+
+        Node(
+            package='grid_map_visualization',
+            executable='grid_map_visualization',
+            namespace='',
+            name='grid_map_visualization',
+            parameters=[configured_params],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 3']))
         ),
 
         # others

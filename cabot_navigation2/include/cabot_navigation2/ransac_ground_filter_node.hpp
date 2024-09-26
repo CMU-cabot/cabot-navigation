@@ -46,8 +46,6 @@ private:
   float ransac_input_max_height_;
   float ransac_inlier_threshold_;
   float ground_distance_threshold_;
-  bool debug_;
-  std::string debug_output_plane_topic_;
 
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr debug_plane_pub_;
 };  // class RansacGroundFilterNode
