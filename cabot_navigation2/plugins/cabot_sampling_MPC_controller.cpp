@@ -1,4 +1,5 @@
 #include "cabot_navigation2/cabot_sampling_MPC_controller.hpp"
+#include "rclcpp/parameter_events_filter.hpp"
 #include <vector>
 #include <cmath>
 
@@ -10,36 +11,46 @@ void CaBotSamplingMPCController::configure(
   std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
   const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
 {
-  node_ = parent.lock();
-  logger_ = node_->get_logger();
+  node_ = parent;
+  auto node = node_.lock();
+  logger_ = rclcpp::get_logger("CaBotSamplingMPCController");
   costmap_ros_ = costmap_ros.get();  // Get pointer to the costmap
+  name_ = name;
+  tf_ = tf;
 
   // Load parameters
-  declareParameter("group_topic", rclcpp::ParameterValue("/group_predictions"));
-  node->get_parameter(name_ + "." + "group_topic", group_topic_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".group_topic", rclcpp::ParameterValue("/group_predictions"));
+  node->get_parameter(name_ + ".group_topic", group_topic_);
 
-  declareParameter("prediction_horizon", rclcpp::ParameterValue(4.8)); // seconds
-  node->get_parameter(name_ + "." + "prediction_horizon", prediction_horizon_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".prediction_horizon", rclcpp::ParameterValue(4.8)); // seconds
+  node->get_parameter(name_ + ".prediction_horizon", prediction_horizon_);
 
-  declareParameter("sampling_rate", rclcpp::ParameterValue(0.4)); // seconds
-  node->get_parameter(name_ + "." + "sampling_rate", sampling_rate_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".sampling_rate", rclcpp::ParameterValue(0.4)); // seconds
+  node->get_parameter(name_ + ".sampling_rate", sampling_rate_);
 
-  declareParameter("max_linear_velocity", rclcpp::ParameterValue(1.0)); // m/s
-  node->get_parameter(name_ + "." + "max_linear_velocity", max_linear_velocity_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".max_linear_velocity", rclcpp::ParameterValue(1.0)); // m/s
+  node->get_parameter(name_ + ".max_linear_velocity", max_linear_velocity_);
 
-  declareParameter("max_angular_velocity", rclcpp::ParameterValue(M_PI / 6)); // rad/s
-  node->get_parameter(name_ + "." + "max_angular_velocity", max_angular_velocity_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".max_angular_velocity", rclcpp::ParameterValue(M_PI / 6)); // rad/s
+  node->get_parameter(name_ + ".max_angular_velocity", max_angular_velocity_);
 
-  declareParameter("lookahead_distance", rclcpp::ParameterValue(0.5)); // meters
-  node->get_parameter(name_ + "." + "lookahead_distance", lookahead_distance_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".lookahead_distance", rclcpp::ParameterValue(0.5)); // meters
+  node->get_parameter(name_ + ".lookahead_distance", lookahead_distance_);
 
-  declareParameter("discount_factor", rclcpp::ParameterValue(0.9)); // Discount factor for future time steps
-  node->get_parameter(name_ + "." + "discount_factor", discount_factor_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".discount_factor", rclcpp::ParameterValue(0.9)); // Discount factor for future time steps
+  node->get_parameter(name_ + ".discount_factor", discount_factor_);
 
   last_visited_index_ = 0; // Initialize the last visited index to the start of the path
 
   // Subscribe to group trajectory prediction topic
-  group_trajectory_sub_ = node_->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
+  group_trajectory_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
       group_topic_, 10, std::bind(&CaBotSamplingMPCController::groupPredictionCallback, this, std::placeholders::_1));
 
   RCLCPP_INFO(logger_, "MPC controller configured with prediction horizon: %.2f, sampling rate: %.2f",
@@ -68,10 +79,30 @@ void CaBotSamplingMPCController::deactivate()
   RCLCPP_INFO(logger_, "Deactivating MPC controller");
 }
 
+void CaBotSamplingMPCController::setPlan(const nav_msgs::msg::Path & path)
+{
+  auto node = node_.lock();
+  // Transform global path into the robot's frame
+  global_plan = path;
+}
+
+void CaBotSamplingMPCController::setSpeedLimit(const double & speed_limit, const bool & percentage)
+{
+  if (percentage)
+  {
+    max_linear_velocity_ *= speed_limit;
+    max_angular_velocity_ *= speed_limit;
+  } else {
+    double ratio = speed_limit / max_linear_velocity_;
+    max_linear_velocity_ = speed_limit;
+    max_angular_velocity_ *= ratio;
+  }
+}
+
 geometry_msgs::msg::TwistStamped CaBotSamplingMPCController::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & pose,
   const geometry_msgs::msg::Twist & velocity,
-  nav_msgs::msg::Path & global_plan)
+  nav2_core::GoalChecker * goal_checker)
 {
   // This wrapper fucntion calls the function that computes the velocity commands
 
@@ -102,19 +133,47 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   // Get the local goal
   geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
 
+  // Generate all the trajectories based on sampled velocities
+  std::vector<Trajectory> trajectories = generateTrajectoriesSimple(pose, velocity);
+
+  // Loop over the generated trajectories and calculate their costs
+  for (const auto & trajectory : trajectories)
+  {
+    double cost = calculateCost(pose, trajectory, global_plan, local_goal);
+
+    // Update the best control if this trajectory has a lower cost
+    if (cost < min_cost)
+    {
+      min_cost = cost;
+      best_control = trajectory.control;  // Assuming we store the control input corresponding to each trajectory
+    }
+  }
+
+  return best_control;
+}
+
+std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  std::vector<Trajectory> trajectories;
+
   // Sample a set of velocities and predict the corresponding trajectories
   for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += 0.1)
   {
     for (double angular_vel = -max_angular_velocity_; angular_vel <= max_angular_velocity_; angular_vel += 0.1)
     {
-      // Generate a predicted trajectory
+      // Generate a single trajectory
       std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+      geometry_msgs::msg::Twist control;
+      control.linear.x = linear_vel;
+      control.angular.z = angular_vel;
 
       // Start with the current pose
-      geometry_msgs::msg::PoseStamped current_pose = pose;
-      double current_x = current_pose.pose.position.x;
-      double current_y = current_pose.pose.position.y;
-      double current_theta = tf2::getYaw(current_pose.pose.orientation);
+      geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+      double current_x = current_pose_copy.pose.position.x;
+      double current_y = current_pose_copy.pose.position.y;
+      double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
 
       // Predict the trajectory over the prediction horizon
       for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
@@ -134,20 +193,12 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
         trajectory.push_back(predicted_pose);
       }
 
-      // Calculate the cost for this trajectory
-      double cost = calculateCost(pose, trajectory, global_plan, local_goal);
-
-      // Update the best control if this trajectory has a lower cost
-      if (cost < min_cost)
-      {
-        min_cost = cost;
-        best_control.linear.x = linear_vel;
-        best_control.angular.z = angular_vel;
-      }
+      // Store this trajectory
+      trajectories.push_back(Trajectory(control, trajectory));
     }
   }
 
-  return best_control;
+  return trajectories;
 }
 
 geometry_msgs::msg::PoseStamped CaBotSamplingMPCController::getLookaheadPoint(
@@ -194,7 +245,7 @@ bool CaBotSamplingMPCController::hasReachedLookaheadPoint(
 
 double CaBotSamplingMPCController::calculateCost(
   const geometry_msgs::msg::PoseStamped & current_pose,
-  const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory,
+  const Trajectory trajectory,
   const nav_msgs::msg::Path & global_plan,
   const geometry_msgs::msg::PoseStamped & local_goal)
 {
@@ -203,22 +254,25 @@ double CaBotSamplingMPCController::calculateCost(
 
   double cost = 0.0;
 
+  std::vector<geometry_msgs::msg::PoseStamped> sampled_trajectory = trajectory.trajectory;
+
   // Calculate the distance from the end of the sampled trajectory to the local goal
   if (!sampled_trajectory.empty())
   {
     const auto & final_pose = sampled_trajectory.back();
 
-    double dx = final_pose.pose.position.x - local_goal.pose.position.x;
-    double dy = final_pose.pose.position.y - local_goal.pose.position.y;
-    double goal_dist = std::sqrt(dx * dx + dy * dy);
+    double goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
+    double goal_cost = std::min(goal_dist / 10.0, 1.0) * 255.0;  // 255 if goal_dist > 10
 
-    cost += goal_dist;  // Accumulate the cost based on distance to the local goal
+    cost += goal_cost;  // Accumulate the cost based on distance to the local goal
   }
 
   // Add costmap-related cost
+  double discount = 1.0;
   for (const auto & pose : sampled_trajectory)
   {
-    cost += getCostFromCostmap(pose.pose);
+    cost += getCostFromCostmap(pose.pose) * discount;
+    discount *= discount_factor_;
   }
 
   // Add group trajectory-related cost
@@ -261,25 +315,61 @@ double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
   {
     const geometry_msgs::msg::PoseStamped & robot_pose = sampled_trajectory[t];
     double discount = std::pow(discount_factor_, t);  // Apply discount factor for future time steps
+    
+    lidar_process_msgs::msg::GroupArray current_groups = group_trajectories_[t];
 
     // Compare the robot trajectory at time t with group trajectories at the same time
-    for (const auto & group_traj : group_trajectories_)
+    for (const auto & group : current_groups.groups)
     {
-      if (t < group_traj.poses.size())  // Make sure the group trajectory has enough points
-      {
-        const geometry_msgs::msg::Pose & group_pose = group_traj.poses[t];
+      Safety::Point p1(group.left.x, group.left.y);
+      Safety::Point p2(group.center.x, group.center.y);
+      Safety::Point p3(group.right.x, group.right.y);
+      Safety::Point p4(group.right_offset.x, group.right_offset.y);
+      Safety::Point p5(group.left_offset.x, group.left_offset.y);
 
-        double dx = robot_pose.pose.position.x - group_pose.position.x;
-        double dy = robot_pose.pose.position.y - group_pose.position.y;
-        double distance = std::sqrt(dx * dx + dy * dy);
+      Safety::Line l1(p1, p2);
+      Safety::Line l2(p2, p3);
+      Safety::Line l3(p3, p4);
+      Safety::Line l4(p4, p5);
+      Safety::Line l5(p5, p1);
 
-        // Add the discounted distance to the group trajectory to the cost
-        group_cost += discount * distance;
-      }
+      Safety::Point robot_point(robot_pose.pose.position.x, robot_pose.pose.position.y);
+      Safety::Point closest_p1 = l1.closestPoint(robot_point);
+      Safety::Point closest_p2 = l2.closestPoint(robot_point);
+      Safety::Point closest_p3 = l3.closestPoint(robot_point);
+      Safety::Point closest_p4 = l4.closestPoint(robot_point);
+      Safety::Point closest_p5 = l5.closestPoint(robot_point);
+
+      double d1 = pointDist(robot_point, closest_p1);
+      double d2 = pointDist(robot_point, closest_p2);
+      double d3 = pointDist(robot_point, closest_p3);
+      double d4 = pointDist(robot_point, closest_p4);
+      double d5 = pointDist(robot_point, closest_p5);
+
+      // Add the discounted distance to the group trajectory to the cost
+      group_cost += discount * std::min({d1, d2, d3, d4, d5});
     }
   }
 
   return group_cost;
+}
+
+double CaBotSamplingMPCController::pointDist(
+    const geometry_msgs::msg::Point & p1,
+    const geometry_msgs::msg::Point & p2)
+{
+  double dx = p1.x - p2.x;
+  double dy = p1.y - p2.y;
+  return std::sqrt(dx * dx + dy * dy);
+}
+
+double CaBotSamplingMPCController::pointDist(
+    const Safety::Point p1,
+    const Safety::Point p2)
+{
+  double dx = p1.x - p2.x;
+  double dy = p1.y - p2.y;
+  return std::sqrt(dx * dx + dy * dy);
 }
 
 }  // namespace cabot_navigation2

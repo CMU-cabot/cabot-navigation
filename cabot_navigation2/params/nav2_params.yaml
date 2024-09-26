@@ -167,7 +167,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
-    controller_plugins: ["FollowPath", "FollowPathElevator"]
+    controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.
@@ -325,6 +325,15 @@ controller_server:
       trans_stopped_velocity: 0.25
       slowing_factor: 5.0
       stateful: True
+    MPCFollowPath:
+      plugin: "cabot_navigation2::CaBotSamplingMPCController"
+      group_topic: "/group_predictions"
+      prediction_horizon: 4.8
+      sampling_rate: 0.4
+      max_linear_velocity: 1.0
+      max_angular_velocity: 0.52359877559
+      lookahead_distance: 0.5
+      discount_factor: 0.9
 
 controller_server_rclcpp_node:
   ros__parameters:

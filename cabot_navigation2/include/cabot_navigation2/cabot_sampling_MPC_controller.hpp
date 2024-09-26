@@ -3,6 +3,8 @@
 
 #include <memory>
 #include "nav2_core/controller.hpp"
+#include "nav2_util/node_utils.hpp"
+
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/point.hpp"
@@ -13,8 +15,25 @@
 #include "lidar_process_msgs/msg/group_array.hpp"
 #include "lidar_process_msgs/msg/group.hpp"
 
+#include <pluginlib/class_loader.hpp>
+#include <pluginlib/class_list_macros.hpp>
+
+#include <cabot_navigation2/util.hpp>
+
+using nav2_util::declare_parameter_if_not_declared;
+
 namespace cabot_navigation2
 {
+
+struct Trajectory
+{
+  geometry_msgs::msg::Twist control;
+  std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+  Trajectory(
+    geometry_msgs::msg::Twist control,
+    std::vector<geometry_msgs::msg::PoseStamped> trajectory
+  );
+};
 
 class CaBotSamplingMPCController : public nav2_core::Controller
 {
@@ -25,7 +44,7 @@ public:
   void configure(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros) override;
+    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros);
 
   void cleanup() override;
   void activate() override;
@@ -34,12 +53,28 @@ public:
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & velocity,
-    nav_msgs::msg::Path & global_plan) override;
+    nav2_core::GoalChecker * goal_checker) override;
+
+  void setPlan(const nav_msgs::msg::Path & path) override;
+
+  bool cancel()
+  {
+    return true;
+  }
+
+  void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
+
+  void reset() {}
 
 private:
   rclcpp::Logger logger_;
-  std::shared_ptr<rclcpp::Node> node_;
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+  std::shared_ptr<tf2_ros::Buffer> tf_;
+  std::string name_;
   nav2_costmap_2d::Costmap2DROS *costmap_ros_;  // Pointer to the costmap
+  rclcpp::Clock::SharedPtr clock_;
+
+  nav_msgs::msg::Path global_plan;
 
   // Storage for the group trajectories
   std::vector<lidar_process_msgs::msg::GroupArray> group_trajectories_;
@@ -62,6 +97,10 @@ private:
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & velocity,
     nav_msgs::msg::Path & global_plan);
+  
+  std::vector<Trajectory> generateTrajectoriesSimple(
+    const geometry_msgs::msg::PoseStamped & current_pose,
+    const geometry_msgs::msg::Twist & velocity);
 
   geometry_msgs::msg::PoseStamped getLookaheadPoint(
     const geometry_msgs::msg::PoseStamped & current_pose,
@@ -73,15 +112,23 @@ private:
 
   double calculateCost(
     const geometry_msgs::msg::PoseStamped & current_pose,
-    const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory,
+    const Trajectory sampled_trajectory,
     const nav_msgs::msg::Path & global_plan,
     const geometry_msgs::msg::PoseStamped & local_goal);
 
   double getCostFromCostmap(
     const geometry_msgs::msg::Pose & pose);
 
-  double calculateaGroupTrajectoryCost(
+  double calculateGroupTrajectoryCost(
     const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory);
+
+  double pointDist(
+    const geometry_msgs::msg::Point & p1,
+    const geometry_msgs::msg::Point & p2);
+
+  double pointDist(
+    const Safety::Point p1,
+    const Safety::Point p2);
 };
 
 } // namespace cabot_navigation2

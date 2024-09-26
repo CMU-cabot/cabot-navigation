@@ -174,6 +174,8 @@ ament_target_dependencies(cabot_lifecycle_manager
 add_library(cabot_controllers SHARED
   plugins/cabot_rotation_shim_controller.cpp
   plugins/cabot_dwb_local_planner.cpp
+  plugins/cabot_sampling_MPC_controller.cpp
+  plugins/util.cpp
 )
 ament_target_dependencies(cabot_controllers
   dwb_core
@@ -181,6 +183,7 @@ ament_target_dependencies(cabot_controllers
   nav2_rotation_shim_controller
   nav2_util
   pluginlib
+  lidar_process_msgs
 )
 
 install(TARGETS
