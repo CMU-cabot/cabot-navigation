@@ -26,6 +26,7 @@ services:
     environment:
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
+      - PORT_ACCESS=127.0.0.1:9090  # only localhost can access this server (default) can be overriden with the env variable
     command:
       - "./server"
       - "run"
@@ -34,7 +35,7 @@ services:
       mongodb:
         condition: service_healthy
     ports:
-      - 127.0.0.1:9090:9090  # only localhost can access this server
+      - ${PORT_ACCESS}:9090
     networks:
       - mongodb_network
     healthcheck:
