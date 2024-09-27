@@ -105,7 +105,6 @@ public:
   ~ObstaclePluginManager();
   size_t addPlugin(std::string name, ObstaclePlugin * plugin);
   void removePlugin(std::string name);
-  //void publishPeopleIfReady();
   void publishObstaclesIfReady();
   void updateRobotPose(geometry_msgs::msg::Pose robot_pose);
   void updateObstacleMessage(std::string name, pedestrian_plugin_msgs::msg::Obstacle obstacle);
@@ -127,17 +126,13 @@ private:
   geometry_msgs::msg::Pose::SharedPtr robot_pose_;
   std::map<std::string, ObstaclePlugin *> pluginMap_;
   std::map<std::string, pedestrian_plugin_msgs::msg::Obstacle> obstaclesMap_;
-  //std::map<std::string, bool> peopleReadyMap_;
   std::map<std::string, bool> obstaclesReadyMap_;
   builtin_interfaces::msg::Time::SharedPtr stamp_;
   pedestrian_plugin_msgs::msg::Agent::SharedPtr robotAgent_;
-  //std::map<std::string, pedestrian_plugin_msgs::msg::Agent> humanAgentsMap_;
   std::map<std::string, pedestrian_plugin_msgs::msg::Agent> obstacleAgentsMap_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Obstacles>::SharedPtr obstacle_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>::SharedPtr collision_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Metric>::SharedPtr metric_pub_;
-  // rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agent>::SharedPtr robot_pub_;
-  // rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr human_pub_;
   rclcpp::Publisher<pedestrian_plugin_msgs::msg::Agents>::SharedPtr obstacle_agents_pub_;
   rclcpp::Service<pedestrian_plugin_msgs::srv::PluginUpdate>::SharedPtr service_;
 };

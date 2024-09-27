@@ -38,8 +38,6 @@ using namespace gazebo;  // NOLINT
 
 GZ_REGISTER_MODEL_PLUGIN(ObstaclePlugin)
 
-//#define WALKING_ANIMATION "walking"
-
 // ObstaclePlugin implementation
 
 ObstaclePlugin::ObstaclePlugin()
@@ -56,7 +54,6 @@ void ObstaclePlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 {
   this->sdf = _sdf;
   this->model = _model;
-  //this->actor = boost::dynamic_pointer_cast<physics::Actor>(_model);
   this->name = this->model->GetName();
   this->world = this->model->GetWorld();
 
@@ -133,20 +130,6 @@ void ObstaclePlugin::Reset()
 {
   std::lock_guard<std::recursive_mutex> guard(manager.mtx);
   RCLCPP_INFO(manager.get_logger(), "Reset");
-
-  // if (this->actor) {
-  //   auto skelAnims = this->actor->SkeletonAnimations();
-  //   auto it = skelAnims.find(WALKING_ANIMATION);
-  //   if (it == skelAnims.end()) {
-  //     gzerr << "Skeleton animation " << WALKING_ANIMATION << " not found.\n";
-  //   } else {
-  //     // Create custom trajectory
-  //     this->trajectoryInfo.reset(new physics::TrajectoryInfo());
-  //     this->trajectoryInfo->type = WALKING_ANIMATION;
-  //     this->trajectoryInfo->duration = 1.0;
-  //     this->actor->SetCustomTrajectory(this->trajectoryInfo);
-  //   }
-  // }
 
   auto pose = this->model->WorldPose();
   auto rpy = pose.Rot().Euler();
@@ -259,17 +242,11 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
     }
 
     // set actor values to pDict
-    //PythonUtils::setDictItemAsFloat(pDict, "time", _info.simTime.Float());
-    //PythonUtils::setDictItemAsFloat(pDict, "dt", dt);
     PythonUtils::setDictItemAsFloat(pDict, "x", this->x);
     PythonUtils::setDictItemAsFloat(pDict, "y", this->y);
-    //PythonUtils::setDictItemAsFloat(pDict, "z", this->z);
-    //PythonUtils::setDictItemAsFloat(pDict, "roll", this->roll);
-    //PythonUtils::setDictItemAsFloat(pDict, "pitch", this->pitch);
     PythonUtils::setDictItemAsFloat(pDict, "yaw", this->yaw);
     PythonUtils::setDictItemAsFloat(pDict, "obstacle_width", this->width);
     PythonUtils::setDictItemAsFloat(pDict, "obstacle_height", this->height);
-    //PythonUtils::setDictItemAsFloat(pDict, "obstacle_depth", this->depth);
     PythonUtils::setDictItemAsFloat(pDict, "robot_radius", robot_radius);
 
     PyObject * aname = PyUnicode_DecodeFSDefault(this->model->GetName().c_str());
@@ -319,9 +296,6 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
       obstacle.size.x = this->width;
       obstacle.size.y = this->height;
       obstacle.size.z = this->depth;
-      // if (dd / dt < 0.1) {
-      //   person.tags.push_back("stationary");
-      // }
       manager.updateObstacleMessage(this->model->GetName(), obstacle);
 
       // update obstacle agent

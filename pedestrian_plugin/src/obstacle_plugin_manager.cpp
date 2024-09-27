@@ -131,8 +131,6 @@ ObstaclePluginManager::ObstaclePluginManager()
   obstacle_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Obstacles>("/obstacle", 10); // tentative
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>("/collision_obstacle", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
-  //robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
-  //human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);
   obstacle_agents_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/obstacle_states", 10);
   service_ = node_->create_service<pedestrian_plugin_msgs::srv::PluginUpdate>(
     "/obstacle_plugin_update",
@@ -173,20 +171,6 @@ void ObstaclePluginManager::publishObstaclesIfReady()
     obstacleAgentsMsg.header.frame_id = "map_global";
     obstacle_agents_pub_->publish(obstacleAgentsMsg);
 
-/*
-    // publish robot and human messages
-    robotAgent_->header.stamp = *stamp_;
-    robotAgent_->header.frame_id = "map_global";
-    robot_pub_->publish(*robotAgent_);
-
-    pedestrian_plugin_msgs::msg::Agents humanAgentsMsg;
-    for (auto it : humanAgentsMap_) {
-      humanAgentsMsg.agents.push_back(it.second);
-    }
-    humanAgentsMsg.header.stamp = *stamp_;
-    humanAgentsMsg.header.frame_id = "map_global";
-    human_pub_->publish(humanAgentsMsg);
-*/
     obstaclesReadyMap_.clear();
   }
 }
