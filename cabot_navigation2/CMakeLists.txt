@@ -65,6 +65,7 @@ set(dependencies
   nav2_lifecycle_manager
   nav2_costmap_2d
   nav2_core
+  nav2_util w
   angles
   nav_msgs
   pluginlib

@@ -32,7 +32,7 @@ struct Trajectory
   );
 };
 
-class CaBotSamplingMPCController : public nav2_core::Controller
+class CaBotSamplingMPCController : public nav2_core::Controller     
 {
 public:
   CaBotSamplingMPCController();
@@ -63,7 +63,7 @@ public:
   // void reset() {}
 
 private:
-  rclcpp::Logger logger_;
+  rclcpp::Logger logger_ = rclcpp::get_logger("CaBotSamplingMPCController");
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::string name_;
@@ -79,7 +79,11 @@ private:
   double prediction_horizon_;
   double sampling_rate_;
   double max_linear_velocity_;
+  double linear_sample_size_;
+  double linear_sample_resolution_;
   double max_angular_velocity_;
+  double angular_sample_size_;
+  double angular_sample_resolution_;
   double lookahead_distance_;
   double discount_factor_;  // Discount factor for future time steps
 

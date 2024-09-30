@@ -331,7 +331,9 @@ controller_server:
       prediction_horizon: 4.8
       sampling_rate: 0.4
       max_linear_velocity: 1.0
+      linear_sample_size: 10.0
       max_angular_velocity: 0.52359877559
+      angular_sample_size: 10.0
       lookahead_distance: 0.5
       discount_factor: 0.9
 

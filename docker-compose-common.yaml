@@ -112,7 +112,7 @@ services:
     extends: ros2
     command:
       - "/launch.sh"
-      # - "-c"                  # core dump
+      - "-c"                  # core dump
       - "navigation"
 
   gazebo-base:

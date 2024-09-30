@@ -6,6 +6,21 @@
 namespace cabot_navigation2
 {
 
+Trajectory::Trajectory(
+    geometry_msgs::msg::Twist control_,
+    std::vector<geometry_msgs::msg::PoseStamped> trajectory_)
+: control(control_),
+  trajectory(trajectory_)
+{
+}
+
+CaBotSamplingMPCController::CaBotSamplingMPCController() {
+
+}
+CaBotSamplingMPCController::~CaBotSamplingMPCController() {
+  
+}
+
 void CaBotSamplingMPCController::configure(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
@@ -13,7 +28,6 @@ void CaBotSamplingMPCController::configure(
 {
   node_ = parent;
   auto node = node_.lock();
-  logger_ = rclcpp::get_logger("CaBotSamplingMPCController");
   costmap_ros_ = costmap_ros.get();  // Get pointer to the costmap
   name_ = name;
   tf_ = tf;
@@ -36,8 +50,16 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".max_linear_velocity", max_linear_velocity_);
 
   declare_parameter_if_not_declared(
+    node, name_ + ".linear_sample_size", rclcpp::ParameterValue(3.0)); 
+  node->get_parameter(name_ + ".linear_sample_size", linear_sample_size_);
+
+  declare_parameter_if_not_declared(
     node, name_ + ".max_angular_velocity", rclcpp::ParameterValue(M_PI / 6)); // rad/s
   node->get_parameter(name_ + ".max_angular_velocity", max_angular_velocity_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".angular_sample_size", rclcpp::ParameterValue(3.0)); 
+  node->get_parameter(name_ + ".angular_sample_size", angular_sample_size_);
 
   declare_parameter_if_not_declared(
     node, name_ + ".lookahead_distance", rclcpp::ParameterValue(0.5)); // meters
@@ -46,6 +68,9 @@ void CaBotSamplingMPCController::configure(
   declare_parameter_if_not_declared(
     node, name_ + ".discount_factor", rclcpp::ParameterValue(0.9)); // Discount factor for future time steps
   node->get_parameter(name_ + ".discount_factor", discount_factor_);
+
+  linear_sample_resolution_ = max_linear_velocity_ / linear_sample_size_;
+  angular_sample_resolution_ = max_angular_velocity_ * 2.0 / angular_sample_size_;
 
   last_visited_index_ = 0; // Initialize the last visited index to the start of the path
 
@@ -164,9 +189,9 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
   std::vector<Trajectory> trajectories;
 
   // Sample a set of velocities and predict the corresponding trajectories
-  for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += 0.1)
+  for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution_)
   {
-    for (double angular_vel = -max_angular_velocity_; angular_vel <= max_angular_velocity_; angular_vel += 0.1)
+    for (double angular_vel = -max_angular_velocity_; angular_vel <= max_angular_velocity_; angular_vel += angular_sample_resolution_)
     {
       // Generate a single trajectory
       std::vector<geometry_msgs::msg::PoseStamped> trajectory;
@@ -318,41 +343,44 @@ double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
   // Iterate over each time step in the sampled trajectory
   for (size_t t = 0; t < num_time_steps; ++t)
   {
-    const geometry_msgs::msg::PoseStamped & robot_pose = sampled_trajectory[t];
-    double discount = std::pow(discount_factor_, t);  // Apply discount factor for future time steps
-    
-    lidar_process_msgs::msg::GroupArray current_groups = group_trajectories_[t];
-
-    // Compare the robot trajectory at time t with group trajectories at the same time
-    for (const auto & group : current_groups.groups)
+    if (t < group_trajectories_.size())
     {
-      Safety::Point p1(group.left.x, group.left.y);
-      Safety::Point p2(group.center.x, group.center.y);
-      Safety::Point p3(group.right.x, group.right.y);
-      Safety::Point p4(group.right_offset.x, group.right_offset.y);
-      Safety::Point p5(group.left_offset.x, group.left_offset.y);
+      const geometry_msgs::msg::PoseStamped & robot_pose = sampled_trajectory[t];
+      double discount = std::pow(discount_factor_, t);  // Apply discount factor for future time steps
+      
+      lidar_process_msgs::msg::GroupArray current_groups = group_trajectories_[t];
 
-      Safety::Line l1(p1, p2);
-      Safety::Line l2(p2, p3);
-      Safety::Line l3(p3, p4);
-      Safety::Line l4(p4, p5);
-      Safety::Line l5(p5, p1);
+      // Compare the robot trajectory at time t with group trajectories at the same time
+      for (const auto & group : current_groups.groups)
+      {
+        Safety::Point p1(group.left.x, group.left.y);
+        Safety::Point p2(group.center.x, group.center.y);
+        Safety::Point p3(group.right.x, group.right.y);
+        Safety::Point p4(group.right_offset.x, group.right_offset.y);
+        Safety::Point p5(group.left_offset.x, group.left_offset.y);
 
-      Safety::Point robot_point(robot_pose.pose.position.x, robot_pose.pose.position.y);
-      Safety::Point closest_p1 = l1.closestPoint(robot_point);
-      Safety::Point closest_p2 = l2.closestPoint(robot_point);
-      Safety::Point closest_p3 = l3.closestPoint(robot_point);
-      Safety::Point closest_p4 = l4.closestPoint(robot_point);
-      Safety::Point closest_p5 = l5.closestPoint(robot_point);
+        Safety::Line l1(p1, p2);
+        Safety::Line l2(p2, p3);
+        Safety::Line l3(p3, p4);
+        Safety::Line l4(p4, p5);
+        Safety::Line l5(p5, p1);
 
-      double d1 = pointDist(robot_point, closest_p1);
-      double d2 = pointDist(robot_point, closest_p2);
-      double d3 = pointDist(robot_point, closest_p3);
-      double d4 = pointDist(robot_point, closest_p4);
-      double d5 = pointDist(robot_point, closest_p5);
+        Safety::Point robot_point(robot_pose.pose.position.x, robot_pose.pose.position.y);
+        Safety::Point closest_p1 = l1.closestPoint(robot_point);
+        Safety::Point closest_p2 = l2.closestPoint(robot_point);
+        Safety::Point closest_p3 = l3.closestPoint(robot_point);
+        Safety::Point closest_p4 = l4.closestPoint(robot_point);
+        Safety::Point closest_p5 = l5.closestPoint(robot_point);
 
-      // Add the discounted distance to the group trajectory to the cost
-      group_cost += discount * std::min({d1, d2, d3, d4, d5});
+        double d1 = pointDist(robot_point, closest_p1);
+        double d2 = pointDist(robot_point, closest_p2);
+        double d3 = pointDist(robot_point, closest_p3);
+        double d4 = pointDist(robot_point, closest_p4);
+        double d5 = pointDist(robot_point, closest_p5);
+
+        // Add the discounted distance to the group trajectory to the cost
+        group_cost += discount * std::min({d1, d2, d3, d4, d5});
+      }
     }
   }
 
