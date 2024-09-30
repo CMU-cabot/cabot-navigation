@@ -39,7 +39,7 @@ repositories:
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
-    version: main
+    version: hatakeyam/cabot3-k1-description
 
   docker/home/ros2_ws/src/rosbridge_suite:
     type: git
