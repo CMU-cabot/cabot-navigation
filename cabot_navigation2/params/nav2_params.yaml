@@ -336,6 +336,8 @@ controller_server:
       angular_sample_size: 10.0
       lookahead_distance: 0.5
       discount_factor: 0.9
+      obstacle_costval: 250.0
+      time_cost: 50.0
 
 controller_server_rclcpp_node:
   ros__parameters:

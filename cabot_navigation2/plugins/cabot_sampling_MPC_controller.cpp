@@ -2,6 +2,7 @@
 #include "rclcpp/parameter_events_filter.hpp"
 #include <vector>
 #include <cmath>
+#include <limits>
 
 namespace cabot_navigation2
 {
@@ -68,6 +69,14 @@ void CaBotSamplingMPCController::configure(
   declare_parameter_if_not_declared(
     node, name_ + ".discount_factor", rclcpp::ParameterValue(0.9)); // Discount factor for future time steps
   node->get_parameter(name_ + ".discount_factor", discount_factor_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".obstacle_costval", rclcpp::ParameterValue(250.0));
+  node->get_parameter(name_ + ".obstacle_costval", obstacle_costval_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".time_cost", rclcpp::ParameterValue(50.0));
+  node->get_parameter(name_ + ".time_cost", time_cost_);
 
   linear_sample_resolution_ = max_linear_velocity_ / linear_sample_size_;
   angular_sample_resolution_ = max_angular_velocity_ * 2.0 / angular_sample_size_;
@@ -286,24 +295,48 @@ double CaBotSamplingMPCController::calculateCost(
 
   std::vector<geometry_msgs::msg::PoseStamped> sampled_trajectory = trajectory.trajectory;
 
-  // Calculate the distance from the end of the sampled trajectory to the local goal
-  if (!sampled_trajectory.empty())
-  {
-    const auto & final_pose = sampled_trajectory.back();
-
-    double goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
-    double goal_cost = std::min(goal_dist / 10.0, 1.0) * 255.0;  // 255 if goal_dist > 10
-
-    cost += goal_cost;  // Accumulate the cost based on distance to the local goal
-  }
-
   // Add costmap-related cost
   double discount = 1.0;
+  double step_cost;
+  double goal_dist;
+  geometry_msgs::msg::PoseStamped final_pose;
+  // if the trajectory pass through obstacle then it is invalid
+  // if the trajectory pass through goal then trajectory is cut short.
+  int trunc_length = 0;
   for (const auto & pose : sampled_trajectory)
   {
-    cost += getCostFromCostmap(pose.pose) * discount;
+    step_cost = getCostFromCostmap(pose.pose);
+    if (step_cost >= obstacle_costval_)
+    {
+      cost = std::numeric_limits<double>::infinity();
+      // break;
+      return cost;
+    }
+    cost += step_cost * discount;
     discount *= discount_factor_;
+    final_pose = pose;
+    // calculate goal dist at the same time
+    goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
+    trunc_length += 1;
+    cost += time_cost_;
+    if (goal_dist <= lookahead_distance_)
+    {
+      break;
+    }
   }
+  cost += goal_dist;
+  sampled_trajectory.resize(trunc_length);
+
+  // Calculate the distance from the end of the sampled trajectory to the local goal
+  // if (!sampled_trajectory.empty())
+  // {
+  //   // const auto & final_pose = sampled_trajectory.back();
+
+  //   double goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
+  //   double goal_cost = std::min(goal_dist / 10.0, 1.0) * 255.0;  // 255 if goal_dist > 10
+
+  //   cost += goal_cost;  // Accumulate the cost based on distance to the local goal
+  // }
 
   // Add group trajectory-related cost
   cost += calculateGroupTrajectoryCost(sampled_trajectory);

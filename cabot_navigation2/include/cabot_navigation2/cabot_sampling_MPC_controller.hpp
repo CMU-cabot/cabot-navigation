@@ -86,6 +86,8 @@ private:
   double angular_sample_resolution_;
   double lookahead_distance_;
   double discount_factor_;  // Discount factor for future time steps
+  double obstacle_costval_;
+  double time_cost_; // fixed cost for reaching the goal faster
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
 
