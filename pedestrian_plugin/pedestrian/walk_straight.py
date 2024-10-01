@@ -1,4 +1,4 @@
-# Copyright (c) 2024  Carnegie Mellon University
+# Copyright (c) 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,13 +20,16 @@
 
 import ros
 import math
+import time
 from pedestrian import state
 
 stopped = False
+start_time = None
 
 
 def onUpdate(**args):
     global stopped
+    global start_time
 
     # parameters
     name = args['name']
@@ -37,6 +40,7 @@ def onUpdate(**args):
     stop_distance = args.get('stop_distance', 0.0)  # [m]
     radius = args.get('radius', 0.4)  # [m]
     args['radius'] = radius
+    stop_time = args.get('stop_time', 0.0)  # [s]
 
     # plugin variables
     x = args['x']
@@ -73,6 +77,13 @@ def onUpdate(**args):
         stopped = True
     if stopped:
         vel = 0.0
+
+    # wait for movement
+    if start_time is None:
+        start_time = time.time()
+    time_diff = time.time() - start_time
+    if time_diff < stop_time:
+        vel = 0
 
     # update actor variables
     args['x'] += vel * dt * math.cos(yaw)

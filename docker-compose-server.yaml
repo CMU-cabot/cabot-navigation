@@ -34,7 +34,7 @@ services:
       mongodb:
         condition: service_healthy
     ports:
-      - 127.0.0.1:9090:9090  # only localhost can access this server
+      - ${PORT_ACCESS:-127.0.0.1:9090}:9090  # only localhost can access this server (default) can be overriden with the env variable
     networks:
       - mongodb_network
     healthcheck:

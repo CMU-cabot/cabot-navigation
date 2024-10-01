@@ -64,6 +64,7 @@ function help()
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
+    echo "-P <port>    expose port to outside (set port like 80, 9090, ...)"
 }
 
 pwd=`pwd`
@@ -76,8 +77,9 @@ ignore_error=0
 verbose=0
 clean_server=0
 location_tools=0
+port_access=127.0.0.1:9090
 
-while getopts "hd:p:fvcCl" arg; do
+while getopts "hd:p:fvcClP:" arg; do
     case $arg in
         h)
             help
@@ -104,6 +106,9 @@ while getopts "hd:p:fvcCl" arg; do
             ;;
 	l)
 	    location_tools=1
+	    ;;
+	P)
+	    port_access=0.0.0.0:$OPTARG
 	    ;;
     esac
 done
@@ -229,10 +234,10 @@ fi
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 if [ -e $data_dir/server.env ]; then
     if [[ $verbose -eq 1 ]]; then
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
+        PORT_ACCESS=$port_access ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
         ENV_FILE=$data_dir/server.env docker compose --ansi never -f docker-compose-server.yaml logs -f
     else
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
+        PORT_ACCESS=$port_access ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
