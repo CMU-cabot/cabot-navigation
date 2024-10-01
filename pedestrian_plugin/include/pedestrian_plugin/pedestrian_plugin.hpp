@@ -1,4 +1,4 @@
-// Copyright (c) 2024  Carnegie Mellon University
+// Copyright (c) 2024  Carnegie Mellon University and Miraikan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -52,6 +52,7 @@ private:
   void print_pyobject(PyObject * obj);
   sdf::ElementPtr sdf;
   physics::ActorPtr actor;
+  physics::ModelPtr model;
   physics::WorldPtr world;
   std::string name;
   std::string module_name;

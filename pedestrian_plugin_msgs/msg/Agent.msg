@@ -1,4 +1,4 @@
-# Copyright (c) 2024  IBM Corporation
+# Copyright (c) 2024  IBM Corporation and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,7 @@
 # types
 uint8 PERSON=1
 uint8 ROBOT=2
+uint8 OBSTACLE=3
 
 # behavior states
 uint8 INACTIVE=0
