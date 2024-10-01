@@ -78,6 +78,10 @@ void CaBotSamplingMPCController::configure(
     node, name_ + ".time_cost", rclcpp::ParameterValue(50.0));
   node->get_parameter(name_ + ".time_cost", time_cost_);
 
+  declare_parameter_if_not_declared(
+    node, name_ + ".max_goal_dist", rclcpp::ParameterValue(10.0));
+  node->get_parameter(name_ + ".max_goal_dist", max_goal_dist_);
+
   linear_sample_resolution_ = max_linear_velocity_ / linear_sample_size_;
   angular_sample_resolution_ = max_angular_velocity_ * 2.0 / angular_sample_size_;
 
@@ -324,7 +328,7 @@ double CaBotSamplingMPCController::calculateCost(
       break;
     }
   }
-  cost += goal_dist;
+  cost += std::min(goal_dist / max_goal_dist_, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
   sampled_trajectory.resize(trunc_length);
 
   // Calculate the distance from the end of the sampled trajectory to the local goal
@@ -411,8 +415,14 @@ double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
         double d4 = pointDist(robot_point, closest_p4);
         double d5 = pointDist(robot_point, closest_p5);
 
+        double min_dist = std::min({d1, d2, d3, d4, d5});
+        if (pointInPentagon(robot_point, p1, p2, p3, p4, p5))
+        {
+          min_dist = -min_dist;
+        }
+
         // Add the discounted distance to the group trajectory to the cost
-        group_cost += discount * std::min({d1, d2, d3, d4, d5});
+        group_cost += discount * std::exp(-min_dist) * 255.0;
       }
     }
   }
@@ -436,6 +446,44 @@ double CaBotSamplingMPCController::pointDist(
   double dx = p1.x - p2.x;
   double dy = p1.y - p2.y;
   return std::sqrt(dx * dx + dy * dy);
+}
+
+bool CaBotSamplingMPCController::pointInPentagon(
+  Safety::Point robot_point,
+  Safety::Point p1,
+  Safety::Point p2,
+  Safety::Point p3,
+  Safety::Point p4,
+  Safety::Point p5)
+{
+  Safety::Line l1_1(robot_point, p1);
+  Safety::Line l1_2(robot_point, p2);
+  double cross_1 = l1_1.cross(l1_2);
+
+  Safety::Line l2_1(robot_point, p2);
+  Safety::Line l2_2(robot_point, p3);
+  double cross_2 = l2_1.cross(l2_2);
+
+  Safety::Line l3_1(robot_point, p3);
+  Safety::Line l3_2(robot_point, p4);
+  double cross_3 = l3_1.cross(l3_2);
+
+  Safety::Line l4_1(robot_point, p4);
+  Safety::Line l4_2(robot_point, p5);
+  double cross_4 = l4_1.cross(l4_2);
+
+  Safety::Line l5_1(robot_point, p5);
+  Safety::Line l5_2(robot_point, p1);
+  double cross_5 = l5_1.cross(l5_2);
+
+  // if all the cross products have the same sign
+  if (((cross_1 > 0) && (cross_2 > 0) && (cross_3 > 0) && (cross_4 > 0) && (cross_5 > 0)) ||
+      ((cross_1 < 0) && (cross_2 < 0) && (cross_3 < 0) && (cross_4 < 0) && (cross_5 < 0)))
+    {
+      return true;
+    } else {
+      return false;
+    }
 }
 
 }  // namespace cabot_navigation2

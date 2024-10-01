@@ -88,6 +88,7 @@ private:
   double discount_factor_;  // Discount factor for future time steps
   double obstacle_costval_;
   double time_cost_; // fixed cost for reaching the goal faster
+  double max_goal_dist_;
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
 
@@ -131,6 +132,14 @@ private:
   double pointDist(
     const Safety::Point p1,
     const Safety::Point p2);
+
+  bool pointInPentagon(
+    Safety::Point robot_point,
+    Safety::Point p1,
+    Safety::Point p2,
+    Safety::Point p3,
+    Safety::Point p4,
+    Safety::Point p5);
 };
 
 } // namespace cabot_navigation2
