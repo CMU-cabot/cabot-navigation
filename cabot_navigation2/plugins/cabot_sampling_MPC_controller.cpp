@@ -71,6 +71,10 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".lookahead_distance", lookahead_distance_);
 
   declare_parameter_if_not_declared(
+    node, name_ + ".goal_distance", rclcpp::ParameterValue(0.5)); // meters
+  node->get_parameter(name_ + ".goal_distance", goal_distance_);
+
+  declare_parameter_if_not_declared(
     node, name_ + ".discount_factor", rclcpp::ParameterValue(0.9)); // Discount factor for future time steps
   node->get_parameter(name_ + ".discount_factor", discount_factor_);
 
@@ -83,11 +87,24 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".time_cost", time_cost_);
 
   declare_parameter_if_not_declared(
-    node, name_ + ".max_goal_dist", rclcpp::ParameterValue(10.0));
-  node->get_parameter(name_ + ".max_goal_dist", max_goal_dist_);
+    node, name_ + ".focus_goal_dist", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".focus_goal_dist", focus_goal_dist_);
 
-  linear_sample_resolution_ = max_linear_velocity_ / linear_sample_size_;
-  angular_sample_resolution_ = max_angular_velocity_ * 2.0 / angular_sample_size_;
+  declare_parameter_if_not_declared(
+    node, name_ + ".goal_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".goal_cost_wt", goal_cost_wt_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".obs_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".obs_cost_wt", obs_cost_wt_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".group_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".group_cost_wt", group_cost_wt_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".time_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".time_cost_wt", time_cost_wt_);
 
   last_visited_index_ = 0; // Initialize the last visited index to the start of the path
 
@@ -212,10 +229,15 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
 {
   std::vector<Trajectory> trajectories;
 
+  double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
+
   // Sample a set of velocities and predict the corresponding trajectories
-  for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution_)
+  for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution)
   {
-    for (double angular_vel = -max_angular_velocity_; angular_vel <= max_angular_velocity_; angular_vel += angular_sample_resolution_)
+    double linear_portion = linear_vel / max_linear_velocity_;
+    double angular_vel_lim = (1 - linear_portion) * max_angular_velocity_;
+    double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
+    for (double angular_vel = -angular_vel_lim; angular_vel <= angular_vel_lim; angular_vel += angular_sample_resolution)
     {
       // Generate a single trajectory
       std::vector<geometry_msgs::msg::PoseStamped> trajectory;
@@ -327,20 +349,27 @@ double CaBotSamplingMPCController::calculateCost(
       // break;
       return cost;
     }
-    cost += step_cost * discount;
+    // cost += obs_cost_wt_ * step_cost * discount;
     discount *= discount_factor_;
     final_pose = pose;
     // calculate goal dist at the same time
     goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
     trunc_length += 1;
-    cost += time_cost_;
-    if (goal_dist <= lookahead_distance_)
+    // cost += time_cost_wt_ * time_cost_;
+    if (goal_dist <= goal_distance_)
     {
       break;
     }
   }
-  double true_goal_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
-  cost += std::min(goal_dist / true_goal_dist, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
+  //double true_goal_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
+  //cost += std::min(goal_dist / true_goal_dist, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
+  if (goal_dist > focus_goal_dist_)
+  {
+    cost += goal_cost_wt_ * (goal_dist - focus_goal_dist_);
+  } else {
+    cost += goal_cost_wt_ * (1.0 / focus_goal_dist_ - 1.0 / goal_dist);
+  }
+  
   sampled_trajectory.resize(trunc_length);
 
   // Calculate the distance from the end of the sampled trajectory to the local goal
@@ -355,7 +384,7 @@ double CaBotSamplingMPCController::calculateCost(
   // }
 
   // Add group trajectory-related cost
-  cost += calculateGroupTrajectoryCost(sampled_trajectory);
+  cost += group_cost_wt_ * calculateGroupTrajectoryCost(sampled_trajectory);
 
   return cost;
 }
@@ -428,13 +457,13 @@ double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
         double d5 = pointDist(robot_point, closest_p5);
 
         double min_dist = std::min({d1, d2, d3, d4, d5});
-        if (pointInPentagon(robot_point, p1, p2, p3, p4, p5))
+        if (isPointInPentagon(robot_point, p1, p2, p3, p4, p5))
         {
           min_dist = -min_dist;
         }
 
         // Add the discounted distance to the group trajectory to the cost
-        group_cost += discount * std::exp(-min_dist) * 255.0;
+        group_cost += discount * std::exp(-min_dist);
       }
     }
   }
@@ -460,7 +489,7 @@ double CaBotSamplingMPCController::pointDist(
   return std::sqrt(dx * dx + dy * dy);
 }
 
-bool CaBotSamplingMPCController::pointInPentagon(
+bool CaBotSamplingMPCController::isPointInPentagon(
   Safety::Point robot_point,
   Safety::Point p1,
   Safety::Point p2,

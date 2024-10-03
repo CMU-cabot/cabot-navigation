@@ -80,15 +80,20 @@ private:
   double sampling_rate_;
   double max_linear_velocity_;
   double linear_sample_size_;
-  double linear_sample_resolution_;
   double max_angular_velocity_;
   double angular_sample_size_;
-  double angular_sample_resolution_;
   double lookahead_distance_;
+  double goal_distance_;
   double discount_factor_;  // Discount factor for future time steps
   double obstacle_costval_;
   double time_cost_; // fixed cost for reaching the goal faster
-  double max_goal_dist_;
+  double focus_goal_dist_;
+
+  // Cost weights
+  double goal_cost_wt_;
+  double obs_cost_wt_;
+  double group_cost_wt_;
+  double time_cost_wt_;
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
 
@@ -136,7 +141,7 @@ private:
     const Safety::Point p1,
     const Safety::Point p2);
 
-  bool pointInPentagon(
+  bool isPointInPentagon(
     Safety::Point robot_point,
     Safety::Point p1,
     Safety::Point p2,
