@@ -39,6 +39,10 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".group_topic", group_topic_);
 
   declare_parameter_if_not_declared(
+    node, name_ + ".traj_vis_topic", rclcpp::ParameterValue("/control_output_vis"));
+  node->get_parameter(name_ + ".traj_vis_topic", traj_vis_topic_);
+
+  declare_parameter_if_not_declared(
     node, name_ + ".prediction_horizon", rclcpp::ParameterValue(4.8)); // seconds
   node->get_parameter(name_ + ".prediction_horizon", prediction_horizon_);
 
@@ -90,6 +94,9 @@ void CaBotSamplingMPCController::configure(
   // Subscribe to group trajectory prediction topic
   group_trajectory_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
       group_topic_, 10, std::bind(&CaBotSamplingMPCController::groupPredictionCallback, this, std::placeholders::_1));
+
+  // Publish selected trajectory for visualization purposes
+  trajectory_visualization_pub_ = node->create_publisher<nav_msgs::msg::Path>(traj_vis_topic_, 10);
 
   RCLCPP_INFO(logger_, "MPC controller configured with prediction horizon: %.2f, sampling rate: %.2f",
     prediction_horizon_, sampling_rate_);
@@ -175,6 +182,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
 
   // Get the local goal
   geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
+  nav_msgs::msg::Path best_trajectory;
 
   // Generate all the trajectories based on sampled velocities
   std::vector<Trajectory> trajectories = generateTrajectoriesSimple(pose, velocity);
@@ -189,8 +197,11 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
     {
       min_cost = cost;
       best_control = trajectory.control;  // Assuming we store the control input corresponding to each trajectory
+      best_trajectory.header = pose.header;
+      best_trajectory.poses = trajectory.trajectory;
     }
   }
+  trajectory_visualization_pub_->publish(best_trajectory);
 
   return best_control;
 }
@@ -328,7 +339,8 @@ double CaBotSamplingMPCController::calculateCost(
       break;
     }
   }
-  cost += std::min(goal_dist / max_goal_dist_, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
+  double true_goal_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
+  cost += std::min(goal_dist / true_goal_dist, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
   sampled_trajectory.resize(trunc_length);
 
   // Calculate the distance from the end of the sampled trajectory to the local goal

@@ -96,6 +96,9 @@ private:
   rclcpp::Subscription<lidar_process_msgs::msg::GroupTimeArray>::SharedPtr group_trajectory_sub_;  // group prediction subscriber
   void groupPredictionCallback(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group_series);
 
+  std::string traj_vis_topic_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr trajectory_visualization_pub_;
+
   geometry_msgs::msg::Twist computeMPCControl(
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & velocity,

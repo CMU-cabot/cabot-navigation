@@ -328,17 +328,18 @@ controller_server:
     MPCFollowPath:
       plugin: "cabot_navigation2::CaBotSamplingMPCController"
       group_topic: "/group_predictions"
+      traj_vis_topic: "/control_output_vis"
       prediction_horizon: 4.8
       sampling_rate: 0.4
       max_linear_velocity: 1.0
       linear_sample_size: 10.0
       max_angular_velocity: 0.52359877559
       angular_sample_size: 10.0
-      lookahead_distance: 0.5
+      lookahead_distance: 2.0
       discount_factor: 0.9
       obstacle_costval: 250.0
-      time_cost: 50.0
-      max_goal_dist: 10.0
+      time_cost: 5.0
+      max_goal_dist: 10.0 # unused
 
 controller_server_rclcpp_node:
   ros__parameters:
