@@ -162,7 +162,8 @@ class CabotUIManager(NavigationInterface, object):
                 self._logger.error("menu is not initialized")
 
             if self.speed_menu:
-                self.speed_menu._max = min(1.65, self._node.declare_parameter("max_speed", 1.0).value)
+                max_speed = min(1.65, self._node.declare_parameter("max_speed", 1.0).value)
+                self.speed_menu._max = max_speed
                 init_speed = self.speed_menu.value
                 try:
                     desc = ParameterDescriptor()
@@ -170,7 +171,7 @@ class CabotUIManager(NavigationInterface, object):
                     self._node.declare_parameter('init_speed', None, descriptor=desc)
                     temp = self._node.get_parameter("init_speed").value
                     if temp is not None:
-                        init_speed = temp
+                        init_speed = min(temp, max_speed)
                 except:  # noqa: #722
                     self._logger.error(traceback.format_exc())
                     pass
