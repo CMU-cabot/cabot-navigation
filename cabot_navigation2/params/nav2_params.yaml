@@ -231,14 +231,15 @@ controller_server:
       trajectory_generator_name: "dwb_plugins::StandardTrajectoryGenerator"
       debug_trajectory_details: True
     #  prune_plan: True # default: True
-      prune_distance: 2.0 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
+      prune_distance: 3.2 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
+      forward_prune_distance: 3.2
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 1.0
+      max_vel_x: 1.65
       max_vel_y: 0.0
       max_vel_theta: 1.0
       min_speed_xy: 0.0
-      max_speed_xy: 1.0
+      max_speed_xy: 1.65
       min_speed_theta: 0.0
     # Add high threshold velocity for turtlebot 3 issue.
     # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
