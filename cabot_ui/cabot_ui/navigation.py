@@ -378,7 +378,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_loop_handler = None
         self.lock = threading.Lock()
 
-        self._max_speed = node.declare_parameter("max_speed", 1.1).value
+        self._max_speed = node.declare_parameter("max_speed", 2.0).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
         self._speed_poi_params = node.declare_parameter("speed_poi_params", [0.5, 0.5, 0.5]).value
 

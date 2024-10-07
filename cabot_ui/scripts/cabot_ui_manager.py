@@ -162,6 +162,7 @@ class CabotUIManager(NavigationInterface, object):
                 self._logger.error("menu is not initialized")
 
             if self.speed_menu:
+                self.speed_menu._max = min(1.65, self._node.declare_parameter("max_speed", 1.0).value)
                 init_speed = self.speed_menu.value
                 try:
                     desc = ParameterDescriptor()

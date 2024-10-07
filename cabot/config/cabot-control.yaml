@@ -18,7 +18,7 @@ cabot:
       base_frame: base_footprint
       offset_frame: base_control_shift
       publish_tf: true
-      max_speed: 1.0
+      max_speed: 2.0
       cmd_vel_input: /cmd_vel
       cmd_vel_output: /cabot/cmd_vel_adapter
       target_rate: 20
@@ -33,7 +33,7 @@ cabot:
       base_frame: local/base_footprint
       offset_frame: local/base_footprint
       publish_tf: true
-      max_speed: 1.0
+      max_speed: 2.0
       # do nothing with cmd_vel
       cmd_vel_input: /cmd_vel_
       cmd_vel_output: /cabot/cmd_vel_adapter_
@@ -49,6 +49,7 @@ cabot:
       min_speed: 0.0
       min_distance: 1.0
       limit_factor: 1.0
+      max_speed: 2.0
       front_angle_in_degree: 28.95  # 1.0 * sin(x/2) * 2 = 0.8
 
   people_speed_control_node: # old name cabot_e_people_speed:
@@ -68,6 +69,7 @@ cabot:
       social_distance_x: 2.0
       social_distance_y: 0.5
       use_velocity_obstacle: true
+      max_speed_: 2.0
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
@@ -75,10 +77,12 @@ cabot:
       tf_decel_timeout: 0.3
       tf_timeout: 0.5
       min_speed: 0.001
+      max_speed: 2.0
 
   touch_speed_control_node:
     ros__parameters:
       touch_speed_max_inactive: 0.5
+      max_speed: 2.0
 
   speed_control_node_touch_true:
     ros__parameters:
