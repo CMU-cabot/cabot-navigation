@@ -194,7 +194,7 @@ class BufferProxy():
         if not future.done():
             if not event.wait(1.0):
                 # Timed out. remove_pending_request() to free resources
-                self.remove_pending_request(future)
+                self.lookup_transform_service.remove_pending_request(future)
                 raise RuntimeError("timeout")
         if future.exception() is not None:
             raise future.exception()
@@ -281,6 +281,8 @@ class ControlBase(object):
             return ros_pose
         except RuntimeError:
             self._logger.debug("cannot get current_ros_pose")
+        except:
+            self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_pose(self, frame=None) -> geoutil.Pose:
@@ -298,6 +300,8 @@ class ControlBase(object):
             return current_pose
         except RuntimeError:
             self._logger.debug("cannot get current_local_pose")
+        except:
+            self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_odom_pose(self):
