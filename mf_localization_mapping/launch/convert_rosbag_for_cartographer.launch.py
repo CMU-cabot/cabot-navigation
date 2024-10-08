@@ -49,6 +49,8 @@ def generate_launch_description():
     scan = LaunchConfiguration('scan')
     points2 = LaunchConfiguration('points2')
     imu = LaunchConfiguration('imu')
+    fix = LaunchConfiguration('fix')
+    fix_velocity = LaunchConfiguration('fix_velocity')
     rate = LaunchConfiguration('rate')
     convert_points = LaunchConfiguration('convert_points')
     convert_imu = LaunchConfiguration('convert_imu')
@@ -58,6 +60,7 @@ def generate_launch_description():
 
     def configure_ros2_bag_play_arguments(context, node):
         cmd = node.cmd.copy()
+        cmd.extend(['--clock'])
         if float(start.perform(context)) > 0.0:
             cmd.extend(['--start-offset', start])
         if convert_points.perform(context) == 'true' or convert_imu.perform(context) == 'true':
@@ -81,6 +84,8 @@ def generate_launch_description():
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
         DeclareLaunchArgument('points2', default_value='velodyne_points'),
         DeclareLaunchArgument('imu', default_value='imu/data'),
+        DeclareLaunchArgument('fix', default_value='fix'),
+        DeclareLaunchArgument('fix_velocity', default_value='fix_velocity'),
         DeclareLaunchArgument('rate', default_value='1.0'),
         DeclareLaunchArgument('convert_points', default_value='false'),
         DeclareLaunchArgument('convert_imu', default_value='false'),
@@ -121,7 +126,18 @@ def generate_launch_description():
         ),
 
         ExecuteProcess(
-            cmd=['ros2', 'bag', 'record', imu, scan, points2,  '/beacons',  '/wireless/beacons',  '/wireless/wifi',  '/esp32/wifi', '-o', save_filename],
+            cmd=['ros2', 'bag', 'record',
+                 imu,
+                 scan,
+                 points2,
+                 '/beacons',
+                 '/wireless/beacons',
+                 '/wireless/wifi',
+                 '/esp32/wifi',
+                 fix,
+                 fix_velocity,
+                 '--use-sim-time',
+                 '-o', save_filename],
             on_exit=ShutdownAction(),
         ),
 

@@ -14,7 +14,10 @@ endif()
 
 install(PROGRAMS
   script/check_topic_size.py
+  script/compare_trajectory_and_gnss.py
+  script/export_gnss_fix.py
   script/extract_floormap_info_from_yaml.py
+  script/extract_node_options.py
   script/filter_rss_samples.py
   script/timeout_thread.py
   script/topic_checker.py

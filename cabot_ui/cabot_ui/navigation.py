@@ -194,7 +194,7 @@ class BufferProxy():
         if not future.done():
             if not event.wait(1.0):
                 # Timed out. remove_pending_request() to free resources
-                self.remove_pending_request(future)
+                self.lookup_transform_service.remove_pending_request(future)
                 raise RuntimeError("timeout")
         if future.exception() is not None:
             raise future.exception()
@@ -281,6 +281,8 @@ class ControlBase(object):
             return ros_pose
         except RuntimeError:
             self._logger.debug("cannot get current_ros_pose")
+        except:  # noqa: E722
+            self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_pose(self, frame=None) -> geoutil.Pose:
@@ -298,6 +300,8 @@ class ControlBase(object):
             return current_pose
         except RuntimeError:
             self._logger.debug("cannot get current_local_pose")
+        except:  # noqa: E722
+            self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_odom_pose(self):
@@ -312,6 +316,8 @@ class ControlBase(object):
             return current_pose
         except RuntimeError:
             self._logger.debug("cannot get current_local_odom_pose")
+        except:  # noqa: E722
+            self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_global_pose(self):
@@ -792,6 +798,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except RuntimeError:
             self._logger.info("could not get position", throttle_duration_sec=3)
             return
+        except:  # noqa: E722
+            self._logger.debug(traceback.format_exc())
+            return
 
         # wait data is analyzed
         if not self._datautil.is_analyzed:
@@ -819,31 +828,31 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # isolate error handling
         try:
             self._check_info_poi(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
             self._check_nearby_facility(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
             self._check_speed_limit(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
             self._check_turn(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
             self._check_queue_wait(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
             self._check_social(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
             self._check_goal(self.current_pose)
-        except Exception:
+        except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
 
     def _check_info_poi(self, current_pose):
