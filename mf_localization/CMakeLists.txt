@@ -56,6 +56,9 @@ install(PROGRAMS
   script/multi_floor_wireless_rss_localizer.py
   script/tf2_beacons_listener.py
   script/tf2_listener.py
+  script/tracked_pose_listener.py
+  script/trajectory_based_interpolator.py
+  script/trajectory_recorder.py
   script/trajectory_restarter.py
   script/str2str_node.py
   script/ublox_converter.py
