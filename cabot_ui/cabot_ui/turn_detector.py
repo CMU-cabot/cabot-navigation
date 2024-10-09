@@ -66,7 +66,8 @@ class Turn:
         else:
             self.text = F"Unknown ({angle:.2f})"
 
-        self.passed = False
+        self.passed_directional_indicator = False
+        self.passed_vibrator = False
 
     def __str__(self):
         return F"<Turn at ({self.start.x}, {self.start.y}), {self.angle}, type({self.turn_type})>"
