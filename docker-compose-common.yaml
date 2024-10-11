@@ -266,6 +266,9 @@ services:
         output:
           - type=registry
     environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
@@ -335,6 +338,9 @@ services:
   localization-prod-base:
     image: cmucal/cabot-localization
     environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display

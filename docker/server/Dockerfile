@@ -20,7 +20,7 @@
 
 FROM ubuntu:focal
 
-ARG TZ="Etc/UTC"
+ARG TZ=UTC
 
 ENV TZ=$TZ \
 	DEBIAN_FRONTEND="noninteractive"
@@ -37,7 +37,8 @@ RUN apt update && \
 	maven \
 	git \
 	curl \
-	jq
+	jq \
+	gosu
 
 
 ENV USERNAME runner_user
@@ -93,6 +94,12 @@ RUN cd QueryService/QueryService && \
 COPY server.xml /home/$USERNAME/wlp/usr/servers/defaultServer/
 COPY server-data.sh /home/$USERNAME
 COPY server-init.sh /home/$USERNAME
+COPY entrypoint.sh /entrypoint.sh
+
+USER root
+RUN chmod +x /entrypoint.sh
+USER $USERNAME
 
 WORKDIR /home/$USERNAME/wlp/bin
+ENTRYPOINT ["/entrypoint.sh"]
 
