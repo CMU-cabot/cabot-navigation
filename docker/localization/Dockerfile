@@ -209,6 +209,7 @@ RUN apt update && \
     ros-${ROS_DISTRO}-tf2-geometry-msgs \
     ros-${ROS_DISTRO}-velodyne-description \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    gosu \
     && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
@@ -277,7 +278,11 @@ RUN useradd -m $USERNAME && \
     usermod  --uid $UID $USERNAME && \
     groupmod --gid $UID $USERNAME
 
-USER $USERNAME
+COPY ros_entrypoint.sh /ros_entrypoint.sh
+RUN sed -i 's:custom_ws:cartographer_ws:' /ros_entrypoint.sh
+RUN chmod +x /ros_entrypoint.sh
+
+#USER $USERNAME
 
 ENV HOME /home/$USERNAME
 WORKDIR $HOME/loc_ws
@@ -286,7 +291,10 @@ RUN mkdir -p $HOME/loc_ws/src && \
     mkdir -p $HOME/loc_ws/script
 
 COPY --from=build $HOME/loc_ws/install $HOME/loc_ws/install
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
-COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_mf_localization/script src/cabot_mf_localization/script
+COPY --from=build $HOME/loc_ws/script $HOME/loc_ws/script
+COPY --from=build $HOME/loc_ws/src/cabot_mf_localization/script $HOME/loc_ws/src/cabot_mf_localization/script
+#COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
+#COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_mf_localization/script src/cabot_mf_localization/script
 
+ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD [ "/launch.sh" ]
