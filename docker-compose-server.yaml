@@ -20,15 +20,16 @@
 
 services:
   map_server:
-    build: ./docker/server
+    build: 
+      context: ./docker/server
+      args:
+        - USERNAME=runner_user
     env_file:
-      - ${ENV_FILE:-.empty-env}
+      - .env
     environment:
       - 'HULOP_MAP_SERVICE=localhost:9090/map'
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
       - TZ=${HOST_TZ}
-      - S_UID
-      - S_GID
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
@@ -50,7 +51,12 @@ services:
       retries: 10  # increased from 5, needs more time to launch on Jetson
 
   map_data:
-    build: ./docker/server
+    build: 
+      context: ./docker/server
+      args:
+        - USERNAME=runner_user
+    env_file:
+      - .env
     depends_on:
       map_server:
         condition: service_healthy
