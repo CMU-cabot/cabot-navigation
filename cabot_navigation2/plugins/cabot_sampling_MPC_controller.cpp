@@ -235,7 +235,8 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
   for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution)
   {
     double linear_portion = linear_vel / max_linear_velocity_;
-    double angular_vel_lim = (1 - linear_portion) * max_angular_velocity_;
+    // double angular_vel_lim = (1 - linear_portion) * max_angular_velocity_;
+    double angular_vel_lim = max_angular_velocity_;
     double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
     for (double angular_vel = -angular_vel_lim; angular_vel <= angular_vel_lim; angular_vel += angular_sample_resolution)
     {
@@ -285,6 +286,7 @@ geometry_msgs::msg::PoseStamped CaBotSamplingMPCController::getLookaheadPoint(
   // on the global plan
 
   geometry_msgs::msg::PoseStamped lookahead_point;
+  lookahead_point = global_plan.poses.back();
 
   double current_x = current_pose.pose.position.x;
   double current_y = current_pose.pose.position.y;
@@ -336,17 +338,17 @@ double CaBotSamplingMPCController::calculateCost(
   double discount = 1.0;
   double step_cost;
   double goal_dist;
+  double min_goal_dist = std::numeric_limits<double>::infinity();
   geometry_msgs::msg::PoseStamped final_pose;
   // if the trajectory pass through obstacle then it is invalid
   // if the trajectory pass through goal then trajectory is cut short.
-  int trunc_length = 0;
+  // int trunc_length = 0;
   for (const auto & pose : sampled_trajectory)
   {
     step_cost = getCostFromCostmap(pose.pose);
     if (step_cost >= obstacle_costval_)
     {
       cost = std::numeric_limits<double>::infinity();
-      // break;
       return cost;
     }
     // cost += obs_cost_wt_ * step_cost * discount;
@@ -354,23 +356,28 @@ double CaBotSamplingMPCController::calculateCost(
     final_pose = pose;
     // calculate goal dist at the same time
     goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
-    trunc_length += 1;
-    // cost += time_cost_wt_ * time_cost_;
-    if (goal_dist <= goal_distance_)
+    if (goal_dist < min_goal_dist)
     {
-      break;
+      min_goal_dist = goal_dist;
     }
+    // trunc_length += 1;
+    // cost += time_cost_wt_ * time_cost_;
+    // if (goal_dist <= goal_distance_)
+    // {
+    //  break;
+    // }
   }
-  //double true_goal_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
+
   //cost += std::min(goal_dist / true_goal_dist, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
-  if (goal_dist > focus_goal_dist_)
+  double current_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
+  if (current_dist > focus_goal_dist_)
   {
     cost += goal_cost_wt_ * (goal_dist - focus_goal_dist_);
   } else {
     cost += goal_cost_wt_ * (1.0 / focus_goal_dist_ - 1.0 / goal_dist);
   }
   
-  sampled_trajectory.resize(trunc_length);
+  // sampled_trajectory.resize(trunc_length);
 
   // Calculate the distance from the end of the sampled trajectory to the local goal
   // if (!sampled_trajectory.empty())

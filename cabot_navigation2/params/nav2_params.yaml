@@ -335,12 +335,12 @@ controller_server:
       linear_sample_size: 10.0
       max_angular_velocity: 0.52359877559
       angular_sample_size: 10.0
-      lookahead_distance: 1.0
+      lookahead_distance: 2.0
       goal_distance: 0.5
       discount_factor: 0.9
       obstacle_costval: 250.0
       time_cost: 5.0
-      focus_goal_dist: 0.0001
+      focus_goal_dist: 1.0
       goal_cost_wt: 0.35
       obs_cost_wt: 1.0
       group_cost_wt: 0.65
@@ -363,7 +363,7 @@ local_costmap:
       width: 10
       height: 10
       resolution: 0.05
-      plugins: ["obstacle_layer", "inflation_layer", "group_obstacle_layer"]
+      plugins: ["obstacle_layer", "inflation_layer"] # , "group_obstacle_layer"]
       robot_radius: 0.45
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
