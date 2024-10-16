@@ -28,6 +28,7 @@ services:
         - USERNAME=runner_user
     env_file:
       - .env
+      - ${ENV_FILE:-.empty-env}
     environment:
       - TZ=${HOST_TZ}
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
@@ -56,6 +57,7 @@ services:
         - USERNAME=runner_user
     env_file:
       - .env
+      - ${ENV_FILE:-.empty-env}
     depends_on:
       map_server:
         condition: service_healthy
