@@ -26,6 +26,7 @@ services:
         - USERNAME=runner_user
     env_file:
       - .env
+      - ${ENV_FILE:-.empty-env}
     environment:
       - 'HULOP_MAP_SERVICE=localhost:9090/map'
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
@@ -57,6 +58,7 @@ services:
         - USERNAME=runner_user
     env_file:
       - .env
+      - ${ENV_FILE:-.empty-env}
     depends_on:
       map_server:
         condition: service_healthy
