@@ -80,6 +80,8 @@ private:
     RCLCPP_INFO(get_logger(), "tf speed control - %s", __FUNCTION__);
 
     limit_topic_ = declare_parameter("limit_topic", limit_topic_);
+    map_frame_ = declare_parameter("map_frame", map_frame_);
+    robot_base_frame_ = declare_parameter("robot_base_frame", robot_base_frame_);
     min_speed_ = declare_parameter("min_speed", min_speed_);  // [m/s]
     max_speed_ = declare_parameter("max_speed", max_speed_);  // [m/s]
     check_rate_ = declare_parameter("check_rate", check_rate_);  // [Hz]
