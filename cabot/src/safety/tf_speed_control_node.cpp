@@ -90,7 +90,9 @@ private:
 
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
-    timer_ = create_wall_timer(
+    // create timer instance by rclcpp::create_timer to use ROS clock for simulation
+    timer_ = rclcpp::create_timer(
+      this, this->get_clock(),
       std::chrono::duration<double>(1.0 / check_rate_),
       std::bind(&TFSpeedControlNode::tfCheckLoop, this));
   }
