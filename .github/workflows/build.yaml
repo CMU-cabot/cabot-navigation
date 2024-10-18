@@ -17,12 +17,26 @@ jobs:
     steps:
     - name: Maximize build space
       run:  |
+            docker system prune -a --volumes -f # delete unnecessary preinstalled docker images
+            sudo apt purge -y \
+              ^aspnetcore* \
+              azure-cli* \
+              ^dotnet-* \
+              firefox* \
+              google-chrome-stable* \
+              google-cloud-* \
+              ^llvm* \
+              ^mongodb* \
+              ^mysql* \
+              php*
+            sudo apt-get autoremove -y
+            sudo apt-get autoclean -y
             sudo rm -rf /usr/local/lib/android # will release about 10 GB if you don't need Android
             sudo rm -rf /usr/share/dotnet # will release about 20GB if you don't need .NET
-            sudo rm -rf /opt/ghc
+            sudo rm -rf /opt/ghc #test_delete
+            sudo rm -rf /usr/local/.ghcup
             echo "Available storage:"
-            df -h
-            docker system prune -a --volumes -f # delete unnecessary preinstalled docker images
+            sudo df -h
 
     - uses: actions/checkout@v4
 
