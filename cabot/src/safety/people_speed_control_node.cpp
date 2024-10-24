@@ -340,9 +340,9 @@ private:
       double theta_left = normalizedAngle(RPy + s);
 
       auto compute_velocity = [&](double theta) -> std::optional<double> {
-        double t = -vy / sin(theta);
-        return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
-      };
+          double t = -vy / sin(theta);
+          return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
+        };
 
       if (std::abs(theta_right) < e || std::abs(theta_right - M_PI) < e) {
         addVOInterval(compute_velocity(theta_left), vo_intervals);
@@ -547,8 +547,12 @@ private:
     double current_start = interval_a.first;
     double current_end = interval_a.second;
     for (const auto & b : intervals_b) {
-      if (b.second <= current_start) continue;
-      if (b.first >= current_end) continue;
+      if (b.second <= current_start) {
+        continue;
+      }
+      if (b.first >= current_end) {
+        continue;
+      }
       if (b.first > current_start) {
         result.emplace_back(current_start, std::min(current_end, b.first));
       }
@@ -590,8 +594,12 @@ private:
 
   inline double normalizedAngle(double theta)
   {
-    while (theta > M_PI) theta -= 2.0 * M_PI;
-    while (theta <= -M_PI) theta += 2.0 * M_PI;
+    while (theta > M_PI) {
+      theta -= 2.0 * M_PI;
+    }
+    while (theta <= -M_PI) {
+      theta += 2.0 * M_PI;
+    }
     return theta;
   }
 };  // class PeopleSpeedControlNode
