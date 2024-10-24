@@ -80,6 +80,12 @@ geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCom
         RCLCPP_DEBUG(
           logger_,
           "Robot is not within the new path's rough heading, rotating to heading...");
+        if (angular_distance_pub_ == nullptr) {
+          angular_distance_pub_ = node->create_publisher<std_msgs::msg::Float64>("angular_distance", rclcpp::QoS(10));
+        }
+        std_msgs::msg::Float64 msg;
+        msg.data = static_cast<double>(angular_distance_to_heading);
+        angular_distance_pub_->publish(msg);
         return computeRotateToHeadingCommand(angular_distance_to_heading, pose, velocity);
       } else {
         RCLCPP_DEBUG(
