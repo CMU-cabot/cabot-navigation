@@ -44,6 +44,7 @@ def generate_launch_description():
     plan_topic = LaunchConfiguration('plan_topic')
     show_topology = LaunchConfiguration('show_topology')
     announce_no_touch = LaunchConfiguration('announce_no_touch')
+    max_speed = LaunchConfiguration('max_speed')
 
     def hoge(text):
         return text
@@ -105,10 +106,15 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_ANNOUNCE_NO_TOUCH', default_value='false'),
             description='True if you want to announce detection of no touch'
         ),
+        DeclareLaunchArgument(
+            'max_speed',
+            default_value=EnvironmentVariable('CABOT_MAX_SPEED', default_value='1.0'),
+            description='Set maximum speed of the robot'
+        ),
         Node(
             package="cabot_ui",
             executable="cabot_ui_manager.py",
-            name="cabot_ui_manager",
+            # name="cabot_ui_manager",  # must not set name because it makes multiple nodes with different names
             parameters=[{
                 'init_speed': init_speed,
                 'anchor_file': anchor_file,
@@ -116,7 +122,8 @@ def generate_launch_description():
                 'global_map_name': global_map_name,
                 'plan_topic': plan_topic,
                 'menu_file': menu_file,
-            }, NamespaceParameterFile('cabot_ui_manager', config_path)],
+                'max_speed': max_speed,
+            }, NamespaceParameterFile('cabot_ui_manager_navigation', config_path)],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
             ],
