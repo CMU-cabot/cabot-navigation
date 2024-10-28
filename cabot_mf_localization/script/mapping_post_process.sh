@@ -26,12 +26,16 @@ QUIT_WHEN_ROSBAG_FINISH=${QUIT_WHEN_ROSBAG_FINISH:-true}
 PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
 LIDAR_MODEL=${LIDAR_MODEL:-VLP16}
+MAPPING_USE_GNSS=${MAPPING_USE_GNSS:-false}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
 
 # topic
 points2_topic='/velodyne_points'
 imu_topic=/imu/data
+fix_topic=/ublox/fix
+fix_velocity_topic=/ublox/fix_velocity
+fix_filtered_topic=/ublox/fix_filtered
 convert_points=true  # VLP16 (default LIDAR_MODEL)
 
 if [[ $gazebo -eq 1 ]]; then
@@ -43,6 +47,11 @@ fi
 
 echo "LIDAR_MODEL=$LIDAR_MODEL"
 
+function red {
+    echo -en "\033[31m"  ## red
+    echo $@
+    echo -en "\033[0m"  ## reset color
+}
 function blue {
     echo -en "\033[36m"  ## blue
     echo $@
@@ -73,6 +82,8 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted ]]; then
     ros2 launch mf_localization_mapping convert_rosbag_for_cartographer.launch.py \
 	      points2:=${points2_topic} \
 	      imu:=${imu_topic} \
+	      fix:=${fix_topic} \
+	      fix_velocity:=${fix_velocity_topic} \
 	      rate:=${PLAYBAG_RATE_PC2_CONVERT} \
 	      convert_points:=$convert_points \
 	      bag_filename:=$WORKDIR/${BAG_FILENAME}
@@ -90,11 +101,26 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json ]] || [[ ! 
 	      rate:=${PLAYBAG_RATE_CARTOGRAPHER} \
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
 	      bag_filename:=$WORKDIR/${BAG_FILENAME}.carto-converted"
+
     if [ $cabot_model != "" ]; then
         com="$com cabot_model:=$cabot_model"
     else
         com="$com robot:=$robot"
     fi
+
+    # outdoor mapping
+    if [ "$MAPPING_USE_GNSS" = true ]; then
+        com="$com \
+            save_pose:=true \
+            fix:=$fix_filtered_topic \
+            configuration_basename:=cartographer_2d_mapping_gnss.lua \
+            interpolate_samples_by_trajectory:=true \
+            "
+    fi
+
+    # copy output to a file
+    com="$com | tee $WORKDIR/${BAG_FILENAME}.carto-converted.log"
+
     echo $com
     eval $com
 else
@@ -102,7 +128,7 @@ else
     blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.pbstream"
 fi
 
-
+# convert pbstream to pgm
 if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.pgm ]]; then
     ros2 run cartographer_ros cartographer_pbstream_to_ros_map \
 	   -pbstream_filename $WORKDIR/${BAG_FILENAME}.carto-converted.pbstream \
@@ -129,4 +155,30 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt ]]; then
         | tee -a $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt
 else
     blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt"
+fi
+
+# post process for mapping with gnss data
+if [ "$MAPPING_USE_GNSS" = true ]; then
+    # extract option info from log
+    if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.node-options.yaml ]]; then
+        ros2 run mf_localization_mapping extract_node_options.py \
+            -i $WORKDIR/${BAG_FILENAME}.carto-converted.log \
+            -o $WORKDIR/${BAG_FILENAME}.carto-converted.node-options.yaml
+    else
+        blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.node-options.yaml"
+    fi
+
+    # export gnss from bag
+    if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv ]]; then
+        ros2 run mf_localization_mapping export_gnss_fix.py \
+            -i $WORKDIR/${BAG_FILENAME}.carto-converted \
+            -o $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv
+    else
+        blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv"
+    fi
+
+    # calculate error between trajectory and gnss
+    ros2 run mf_localization_mapping compare_trajectory_and_gnss.py \
+        --trajectory $WORKDIR/${BAG_FILENAME}.carto-converted.trajectory.csv \
+        --gnss $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv --plot
 fi

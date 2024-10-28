@@ -72,6 +72,8 @@ def generate_launch_description():
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
 
+    interpolate_samples_by_trajectory = LaunchConfiguration('interpolate_samples_by_trajectory')
+
     def configure_ros2_bag_play(context, node):
         cmd = node.cmd.copy()
         cmd.extend(['--clock', '--rate', rate])
@@ -89,14 +91,18 @@ def generate_launch_description():
             cmd.append(['/', scan])
             cmd.append(['/', imu])
             cmd.append('/beacons')
+            cmd.append('/esp32/wifi')
             cmd.append('/wireless/beacons')
             cmd.append('/wireless/wifi')
+            cmd.append('/ublox/fix')
+            cmd.append('/ublox/fix_velocity')
         if convert_imu.perform(context) == 'true' or convert_points.perform(context) == 'true':
             cmd.append('--remap')
-        if convert_imu.perform(context) == 'true':
-            cmd.append([imu, ':=', imu_temp])
-        if convert_points.perform(context) == 'true':
-            cmd.append([points2, ':=', points2_temp])
+            if convert_imu.perform(context) == 'true':
+                cmd.append([imu, ':=', imu_temp])
+            if convert_points.perform(context) == 'true':
+                cmd.append([points2, ':=', points2_temp])
+        cmd.append('--')
         cmd.append([bag_filename])
         node.cmd.clear()
         # needs to be normalized
@@ -113,7 +119,7 @@ def generate_launch_description():
         DeclareLaunchArgument('convert_imu', default_value='false'),
         DeclareLaunchArgument('convert_esp32', default_value='false'),
         DeclareLaunchArgument('robot', default_value='rover'),
-        DeclareLaunchArgument('cabot_model', default_value='cabot_model'),
+        DeclareLaunchArgument('cabot_model', default_value=''),
         DeclareLaunchArgument('wireless_topics', default_value="['/wireless/beacons','/wireless/wifi','/beacons','/esp32/wifi']"),
         DeclareLaunchArgument('rate', default_value='1.0'),
         DeclareLaunchArgument('start', default_value='0'),
@@ -132,6 +138,8 @@ def generate_launch_description():
         DeclareLaunchArgument('play_limited_topics', default_value='false'),
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
         DeclareLaunchArgument('quit_when_rosbag_finish', default_value='false'),
+
+        DeclareLaunchArgument('interpolate_samples_by_trajectory', default_value='false'),
 
         SetParameter('use_sim_time', ParameterValue(True)),
 
@@ -202,6 +210,7 @@ def generate_launch_description():
             args=[ros2_bag_play]
         ),
 
+        # write samples data and optimized trajectory data
         Node(
             name="tf2_beacons_listener",
             package="mf_localization",
@@ -209,18 +218,20 @@ def generate_launch_description():
             parameters=[{
                 'output': [bag_filename, '.loc.samples.json'],
                 'topics': wireless_topics,
-                'save_empty_beacon_sample': save_empty_beacon_sample
+                'save_empty_beacon_sample': save_empty_beacon_sample,
+                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_pose, '"=="true" else ""']),
+                'interpolate_by_trajectory': interpolate_samples_by_trajectory,
             }],
             condition=IfCondition(save_samples),
         ),
 
         # write pose to csv file
         Node(
-            name="tf2_listener",
+            name="tracked_pose_listener",
             package="mf_localization",
-            executable="tf2_listener.py",
+            executable="tracked_pose_listener.py",
             parameters=[{
-                "output": PythonExpression(['"', bag_filename, '.pose.csv" if "', save_pose, '"=="true" else ""'])
+                "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
             }],
             condition=IfCondition(save_pose),
         ),

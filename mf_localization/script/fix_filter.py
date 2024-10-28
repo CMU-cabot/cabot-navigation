@@ -29,11 +29,12 @@ from sensor_msgs.msg import NavSatFix
 
 class FixFilterNode:
     def __init__(self, node, status_threshold, stdev_threshold):
-        self.node = node
-        self.status_threshold = status_threshold
-        self.stdev_threshold = stdev_threshold
-        self.fix_sub = self.node.create_subscription(NavSatFix, "fix", self.fix_callback, 10)
-        self.fix_pub = self.node.create_publisher(NavSatFix, "fix_filtered", 10)
+        self._node = node
+        self._clock = node.get_clock()
+        self._status_threshold = status_threshold
+        self._stdev_threshold = stdev_threshold
+        self._fix_sub = self._node.create_subscription(NavSatFix, "fix", self.fix_callback, 10)
+        self._fix_pub = self._node.create_publisher(NavSatFix, "fix_filtered", 10)
 
     def fix_callback(self, msg: NavSatFix):
         navsat_status = msg.status
@@ -41,10 +42,10 @@ class FixFilterNode:
         position_covariance = np.reshape(msg.position_covariance, (3, 3))
         stdev = np.sqrt(position_covariance[0, 0])
 
-        if self.status_threshold <= status and stdev <= self.stdev_threshold:
-            msg.header.stamp = self.clock.now()
+        if self._status_threshold <= status and stdev <= self._stdev_threshold:
+            msg.header.stamp = self._clock.now().to_msg()
             msg.altitude = 0.0
-            self.fix_pub.publish(msg)
+            self._fix_pub.publish(msg)
 
 
 def main():
@@ -55,10 +56,7 @@ def main():
 
     FixFilterNode(node, status_threshold, stdev_threshold)
 
-    try:
-        rclpy.spin(node)
-    except:  # noqa: E722
-        pass
+    rclpy.spin(node)
 
 
 if __name__ == "__main__":
