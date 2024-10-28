@@ -639,8 +639,12 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
     social_distance_y: 0.5
-/can_sender_node:
-    motor_pi_gain: [1.0,4.0]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         if mode == geojson.NavigationMode.Narrow:
             params = """
@@ -671,8 +675,12 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
-/can_sender_node:
-    motor_pi_gain: [1.0,4.0]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -703,8 +711,12 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
-/can_sender_node:
-    motor_pi_gain: [1.0,4.0]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         if mode == geojson.NavigationMode.ClimbUpStep:
             params = """
@@ -731,8 +743,12 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
-/can_sender_node:
-    motor_pi_gain: [1.0,4.0]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         if mode == geojson.NavigationMode.ClimbDownStep:
             params = """
@@ -759,8 +775,12 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
-/can_sender_node:
-    motor_pi_gain: [1.0,4.0]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         data = yaml.safe_load(params)
         return data
