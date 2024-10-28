@@ -371,21 +371,31 @@ private:
         social_speed_limit = std::min(social_speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
       }
 
-      if (social_speed_limit < min_speed_) {
-        social_speed_limit = 0;
-      }
-
       RCLCPP_INFO(
         get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
         it->name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, social_speed_limit,
         max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
+    }
 
-      if (social_speed_limit < max_speed_) {
+    double people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
+
+    for (auto it = input->people.begin(); it != input->people.end(); it++) {
+      tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
+
+      auto v_local = robot_to_map_global_rotation_tf2 * v_frame;
+
+      double vx = v_local.x();
+
+      if (people_speed_limit < min_speed_) {
+        people_speed_limit = 0;
+      }
+
+      if (people_speed_limit < max_speed_) {
         std_msgs::msg::String msg;
 
-        if (fabs(social_speed_limit) < 0.01) {
+        if (fabs(people_speed_limit) < 0.01) {
           msg.data = "navigation;event;people_speed_stopped";
-        } else if (vx > 0.25 && social_speed_limit < max_speed_ * 0.75) {
+        } else if (vx > 0.25 && people_speed_limit < max_speed_ * 0.75) {
           msg.data = "navigation;event;people_speed_following";
         }
 
@@ -395,8 +405,6 @@ private:
         }
       }
     }
-
-    double people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
 
     std_msgs::msg::Float32 msg;
     msg.data = people_speed_limit;
