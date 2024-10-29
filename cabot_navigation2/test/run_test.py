@@ -996,7 +996,7 @@ class ObstacleManager:
     def obstacle_states_callback(self, msg):
         if len(self.remaining) < len(msg.agents):
             remaining_names = [rem.name for rem in self.remaining]
-            #agent_names = [agent.name for agent in msg.agents]
+            # agent_names = [agent.name for agent in msg.agents]
             for agent in msg.agents:
                 if agent.name not in remaining_names:
                     obstacle = Door.from_dict(**{
@@ -1005,9 +1005,9 @@ class ObstacleManager:
                         "y": agent.position.position.y,
                         "z": agent.position.position.z,
                         "yaw": agent.yaw,
-                        "width": 0, # Agent.msg does not provide this parameter
-                        "height": 0, # Agent.msg does not provide this parameter
-                        "depth": 0 # Agent.msg does not provide this parameter
+                        "width": 0,  # Agent.msg does not provide this parameter
+                        "height": 0,  # Agent.msg does not provide this parameter
+                        "depth": 0  # Agent.msg does not provide this parameter
                         })
                     self.remaining.append(obstacle)
 
@@ -1054,6 +1054,7 @@ class ObstacleManager:
         if self.remaining:
             future = self.delete_door(name=self.remaining[0].name)
             self.remaining.pop(0)
+
             def done_callback(future):
                 self.clean(callback)
             future.add_done_callback(done_callback)
@@ -1086,7 +1087,7 @@ class ObstacleManager:
         )
 
     def spawn_obstacle(self, **kwargs):
-        rclpy.spin_once(node, timeout_sec=1) # wait until topic /obstacle_states ready
+        rclpy.spin_once(node, timeout_sec=1)  # wait until topic /obstacle_states ready
         door = Door.from_dict(**kwargs)
         if kwargs['name'] in [rem.name for rem in self.remaining]:
             # add suffix '_NUMBER' if the name already exists

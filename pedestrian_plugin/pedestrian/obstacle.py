@@ -26,10 +26,12 @@ from pedestrian.check_polygon_collision import isCircleCollidingWithPolygon
 
 count = 0
 
-def calc2DPointRotZ(x,y,yaw):
+
+def calc2DPointRotZ(x, y, yaw):
     x_rotated = x*math.cos(yaw) - y*math.sin(yaw)
     y_rotated = x*math.sin(yaw) + y*math.cos(yaw)
     return {'x': x_rotated, 'y': y_rotated}
+
 
 def onUpdate(**args):
     global count
@@ -47,15 +49,15 @@ def onUpdate(**args):
         obstacle_width = args['obstacle_width']
         obstacle_height = args['obstacle_height']
         obstacle_yaw = args['yaw']
-        circle_center_point = {'x':rx-x,'y':ry-y}
+        circle_center_point = {'x': rx-x, 'y': ry-y}
         robot_radius = args['robot_radius']
         polygon_vertex_points = [
-            calc2DPointRotZ(-obstacle_width/2.,-obstacle_height/2.,obstacle_yaw),
-            calc2DPointRotZ(+obstacle_width/2.,-obstacle_height/2.,obstacle_yaw),
-            calc2DPointRotZ(+obstacle_width/2.,+obstacle_height/2.,obstacle_yaw),
-            calc2DPointRotZ(-obstacle_width/2.,+obstacle_height/2.,obstacle_yaw)
+            calc2DPointRotZ(-obstacle_width/2., -obstacle_height/2., obstacle_yaw),
+            calc2DPointRotZ(+obstacle_width/2., -obstacle_height/2., obstacle_yaw),
+            calc2DPointRotZ(+obstacle_width/2., +obstacle_height/2., obstacle_yaw),
+            calc2DPointRotZ(-obstacle_width/2., +obstacle_height/2., obstacle_yaw)
             ]
-        is_collision_detected = isCircleCollidingWithPolygon(circle_center_point,robot_radius,polygon_vertex_points)
+        is_collision_detected = isCircleCollidingWithPolygon(circle_center_point, robot_radius, polygon_vertex_points)
 
         dx = rx - x
         dy = ry - y
