@@ -138,8 +138,8 @@ void ObstaclePlugin::Reset()
   this->pitch = rpy.Y();
   this->yaw = rpy.Z();
   this->dist = 0;
-  
-  gazebo::physics::ShapePtr shape_ptr = this->model->GetLink(this->name + "-link")->GetCollision(this->name+"-collision")->GetShape();
+
+  gazebo::physics::ShapePtr shape_ptr = this->model->GetLink(this->name + "-link")->GetCollision(this->name + "-collision")->GetShape();
   physics::BoxShapePtr box_ptr = boost::dynamic_pointer_cast<physics::BoxShape>(shape_ptr);
   this->width = box_ptr->Size().X();
   this->height = box_ptr->Size().Y();
@@ -262,7 +262,7 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
       auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
       auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
       auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
-      
+
       // variables only get from the module
       auto [[maybe_unused]] radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
       auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);

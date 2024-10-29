@@ -126,7 +126,7 @@ ParamValue ObstaclePluginParams::getParam(std::string name)
 ObstaclePluginManager::ObstaclePluginManager()
 : node_(gazebo_ros::Node::Get())
 {
-  obstacle_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Obstacles>("/obstacle", 10); // tentative
+  obstacle_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Obstacles>("/obstacle", 10);  // tentative
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::ObstacleCollision>("/collision_obstacle", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   obstacle_agents_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/obstacle_states", 10);
@@ -143,7 +143,8 @@ size_t ObstaclePluginManager::addPlugin(std::string name, ObstaclePlugin * plugi
   return pluginMap_.size();
 }
 
-void ObstaclePluginManager::removePlugin(std::string name) {
+void ObstaclePluginManager::removePlugin(std::string name)
+{
   pluginMap_.erase(name);
   obstacleAgentsMap_.erase(name);
   obstaclesReadyMap_.erase(name);

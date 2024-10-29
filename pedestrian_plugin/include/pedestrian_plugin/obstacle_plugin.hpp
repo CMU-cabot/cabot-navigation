@@ -73,9 +73,9 @@ private:
   double pitch;
   double yaw;
   double dist;
-  double width; //  x axis length
-  double height; //  y axis length
-  double depth; //  z axis length
+  double width;  // x axis length
+  double height;  // y axis length
+  double depth;  // z axis length
   int obstacle_id;
 
   ObstaclePluginParams plugin_params;
