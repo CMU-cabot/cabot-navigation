@@ -264,7 +264,7 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
       auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
 
       // variables only get from the module
-      auto [[maybe_unused]] radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
+      [[maybe_unused]] auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
       auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
 
       auto dx = newX - this->x;
