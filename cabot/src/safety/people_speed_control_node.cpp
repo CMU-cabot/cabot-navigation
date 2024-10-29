@@ -287,10 +287,9 @@ private:
     auto robot_to_map_global_rotation_tf2 = robot_to_map_global_transform_tf2;
     robot_to_map_global_rotation_tf2.setOrigin(tf2::Vector3(0, 0, 0));
 
-    double social_speed_limit = max_speed_;
-    std::vector<std::pair<double, double>> vo_intervals;
-
     std::lock_guard<std::mutex> lock(thread_sync_);
+    // Social Distance
+    double social_speed_limit = max_speed_;
     for (auto it = input->people.begin(); it != input->people.end(); it++) {
       tf2::Vector3 p_frame(it->position.x, it->position.y, 0);
       tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
@@ -301,47 +300,9 @@ private:
       double x = p_local.x();
       double y = p_local.y();
       double vx = v_local.x();
-      double vy = v_local.y();
-      double vr = last_odom_.twist.twist.linear.x;
-
-      // velocity obstacle
-      constexpr double pr = 1.0;
-      constexpr auto e = std::numeric_limits<double>::epsilon();
 
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
-      double s = asin(pr / dist);
-      double theta_right = normalizedAngle(RPy - s);
-      double theta_left = normalizedAngle(RPy + s);
-
-      auto compute_velocity = [&](double theta) -> std::optional<double> {
-          double t = -vy / sin(theta);
-          return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
-        };
-
-      if (std::abs(theta_right) < e || std::abs(theta_right - M_PI) < e) {
-        addVOInterval(compute_velocity(theta_left), vo_intervals);
-      } else if (std::abs(theta_left) < e || std::abs(theta_left - M_PI) < e) {
-        addVOInterval(compute_velocity(theta_right), vo_intervals);
-      } else {
-        std::optional<double> v_right = compute_velocity(theta_right);
-        std::optional<double> v_left = compute_velocity(theta_left);
-
-        if (v_right && v_left) {
-          double v_min = std::min(v_right.value(), v_left.value());
-          double v_max = std::max(v_right.value(), v_left.value());
-          if (0.0 < v_min && v_min < max_speed_) {
-            vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
-          }
-        } else {
-          addVOInterval(v_right, vo_intervals);
-          addVOInterval(v_left, vo_intervals);
-        }
-      }
-
-      addVOMarker(dist, pr, vx, vy, theta_right, theta_left, map_to_robot_tf2);
-
-      // social distance
       double sdx = abs(social_distance_x_ * cos(RPy));
       double sdy = abs(social_distance_y_ * sin(RPy));
       double min_path_dist = 100;
@@ -394,6 +355,58 @@ private:
           event_pub_->publish(msg);
         }
       }
+    }
+
+    // Velocity Obstacle
+    std::vector<std::pair<double, double>> vo_intervals;
+    for (auto it = input->people.begin(); it != input->people.end(); it++) {
+      tf2::Vector3 p_frame(it->position.x, it->position.y, 0);
+      tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
+
+      auto p_local = robot_to_map_global_transform_tf2 * p_frame;
+      auto v_local = robot_to_map_global_rotation_tf2 * v_frame;
+
+      double x = p_local.x();
+      double y = p_local.y();
+      double vx = v_local.x();
+      double vy = v_local.y();
+      double vr = last_odom_.twist.twist.linear.x;
+
+      constexpr double pr = 1.0;
+      constexpr auto e = std::numeric_limits<double>::epsilon();
+
+      double RPy = atan2(y, x);
+      double dist = hypot(x, y);
+      double s = asin(pr / dist);
+      double theta_right = normalizedAngle(RPy - s);
+      double theta_left = normalizedAngle(RPy + s);
+
+      auto compute_velocity = [&](double theta) -> std::optional<double> {
+          double t = -vy / sin(theta);
+          return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
+        };
+
+      if (std::abs(theta_right) < e || std::abs(theta_right - M_PI) < e) {
+        addVOInterval(compute_velocity(theta_left), vo_intervals);
+      } else if (std::abs(theta_left) < e || std::abs(theta_left - M_PI) < e) {
+        addVOInterval(compute_velocity(theta_right), vo_intervals);
+      } else {
+        std::optional<double> v_right = compute_velocity(theta_right);
+        std::optional<double> v_left = compute_velocity(theta_left);
+
+        if (v_right && v_left) {
+          double v_min = std::min(v_right.value(), v_left.value());
+          double v_max = std::max(v_right.value(), v_left.value());
+          if (0.0 < v_min && v_min < max_speed_) {
+            vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
+          }
+        } else {
+          addVOInterval(v_right, vo_intervals);
+          addVOInterval(v_left, vo_intervals);
+        }
+      }
+
+      addVOMarker(dist, pr, vx, vy, theta_right, theta_left, map_to_robot_tf2);
     }
 
     double people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
