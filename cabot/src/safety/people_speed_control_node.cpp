@@ -262,28 +262,17 @@ private:
     }
 
     geometry_msgs::msg::TransformStamped map_to_robot_msg;
-    try {
-      map_to_robot_msg = tfBuffer->lookupTransform(
-        "map", "base_footprint",
-        rclcpp::Time(0), rclcpp::Duration(std::chrono::duration<double>(1.0)));
-    } catch (tf2::TransformException & ex) {
-      RCLCPP_WARN(get_logger(), "%s", ex.what());
+    tf2::Stamped<tf2::Transform> map_to_robot_tf2;
+    if (!lookupTransform("map", "base_footprint", map_to_robot_msg, map_to_robot_tf2)) {
       return;
     }
-    tf2::Stamped<tf2::Transform> map_to_robot_tf2;
-    tf2::fromMsg(map_to_robot_msg, map_to_robot_tf2);
 
     geometry_msgs::msg::TransformStamped robot_to_map_global_msg;
-    try {
-      robot_to_map_global_msg = tfBuffer->lookupTransform(
-        "base_footprint", input->header.frame_id,
-        rclcpp::Time(0), rclcpp::Duration(std::chrono::duration<double>(1.0)));
-    } catch (tf2::TransformException & ex) {
-      RCLCPP_WARN(get_logger(), "%s", ex.what());
+    tf2::Stamped<tf2::Transform> robot_to_map_global_transform_tf2;
+    if (!lookupTransform("base_footprint", input->header.frame_id, robot_to_map_global_msg, robot_to_map_global_transform_tf2)) {
       return;
     }
-    tf2::Stamped<tf2::Transform> robot_to_map_global_transform_tf2;
-    tf2::fromMsg(robot_to_map_global_msg, robot_to_map_global_transform_tf2);
+
     auto robot_to_map_global_rotation_tf2 = robot_to_map_global_transform_tf2;
     robot_to_map_global_rotation_tf2.setOrigin(tf2::Vector3(0, 0, 0));
 
@@ -550,6 +539,23 @@ private:
       result.emplace_back(current_start, current_end);
     }
     return result;
+  }
+
+  bool lookupTransform(
+    const std::string & target_frame, const std::string & source_frame,
+    geometry_msgs::msg::TransformStamped & transform_msg,
+    tf2::Stamped<tf2::Transform> & transform_tf2)
+  {
+    try {
+      transform_msg = tfBuffer->lookupTransform(
+        target_frame, source_frame,
+        rclcpp::Time(0), rclcpp::Duration(std::chrono::duration<double>(1.0)));
+      tf2::fromMsg(transform_msg, transform_tf2);
+    } catch (tf2::TransformException & ex) {
+      RCLCPP_WARN(get_logger(), "%s", ex.what());
+      return false;
+    }
+    return true;
   }
 
   double findMaxValue(const std::vector<std::pair<double, double>> & intervals)
