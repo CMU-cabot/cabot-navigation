@@ -398,6 +398,12 @@ private:
       double theta_right = normalizedAngle(RPy - s);
       double theta_left = normalizedAngle(RPy + s);
 
+      addVOMarker(dist, pr, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+
+      if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
+        continue;
+      }
+
       auto compute_velocity = [&](double theta) -> std::optional<double> {
           double t = -vy / sin(theta);
           return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
@@ -422,8 +428,6 @@ private:
           addVOInterval(v_left, vo_intervals);
         }
       }
-
-      addVOMarker(dist, pr, vx, vy, theta_right, theta_left, map_to_robot_tf2);
     }
 
     double people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
@@ -567,6 +571,19 @@ private:
       result.emplace_back(current_start, current_end);
     }
     return result;
+  }
+
+  bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
+  {
+    if (vx == 0.0 && vy == 0.0) {
+      return true;
+    }
+
+    double inv_person_vel_angle = normalizedAngle(atan2(-vy, -vx));
+    if (theta_left < theta_right) {
+      return inv_person_vel_angle <= theta_left || inv_person_vel_angle >= theta_right;
+    }
+    return theta_right <= inv_person_vel_angle && inv_person_vel_angle <= theta_left;
   }
 
   bool lookupTransform(
