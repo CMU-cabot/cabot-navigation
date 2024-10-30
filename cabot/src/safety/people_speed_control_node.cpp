@@ -477,8 +477,8 @@ private:
     double visualized_dist = dist + pr;
 
     CaBotSafety::Point origin_point(vx, vy);
-    CaBotSafety::Point right_point(cos(theta_right) * visualized_dist, sin(theta_right) * visualized_dist);
-    CaBotSafety::Point left_point(cos(theta_left) * visualized_dist, sin(theta_left) * visualized_dist);
+    CaBotSafety::Point right_point(vx + cos(theta_right) * visualized_dist, vy + sin(theta_right) * visualized_dist);
+    CaBotSafety::Point left_point(vx + cos(theta_left) * visualized_dist, vy + sin(theta_left) * visualized_dist);
 
     origin_point.transform(map_to_robot_tf2);
     right_point.transform(map_to_robot_tf2);
