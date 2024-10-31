@@ -36,6 +36,7 @@ function help {
     echo "-l                    build using local registry"
     echo "-P <platform>         specify platform"
     echo "                      build linux/arm64 and linux/amd64 if not specified"
+    echo "-s                    buildx bake map_server"
     echo "-t <tags>             additional tags"
 }
 
@@ -43,8 +44,9 @@ platform=
 base_name=cabot-base
 local=0
 tags=
+build_server=0
 
-while getopts "hb:ilP:t:" arg; do
+while getopts "hb:ilP:t:s" arg; do
     case $arg in
     h)
         help
@@ -67,6 +69,9 @@ while getopts "hb:ilP:t:" arg; do
     P)
         platform=${OPTARG}
         ;;
+    s)
+        build_server=1
+        ;;
     t)
         tags=${OPTARG}
 	;;
@@ -74,7 +79,7 @@ while getopts "hb:ilP:t:" arg; do
 done
 shift $((OPTIND-1))
 
-if [[ -z $base_name ]]; then
+if [[ -z $base_name ]] && [[ $build_server -eq 0 ]]; then
     help
     exit 1
 fi
@@ -119,10 +124,19 @@ if [[ -n $platform ]]; then
 fi
 
 # bake
-com="docker buildx bake -f docker-compose.yaml $platform_option $@"
-export BASE_IMAGE=$base_name
-echo $com
-eval $com
+bake_commands=()
+if [[ $build_server -eq 1 ]]; then
+    server_com="docker buildx bake -f docker-compose-server.yaml map_server $platform_option"
+    echo $server_com
+    eval $server_com
+fi
+
+if [[ -n $base_name ]]; then
+    base_com="docker buildx bake -f docker-compose.yaml $platform_option $@"
+    export BASE_IMAGE=$base_name
+    echo $base_com
+    eval $base_com
+fi
 
 # reset buildx builder to default
 docker buildx use default
@@ -130,14 +144,29 @@ docker buildx use default
 # copy images from local registry
 # this can override image tag
 if [[ $local -eq 1 ]]; then
-    tags=($(eval "$com --print" 2> /dev/null | jq -r '.target[].tags[] | split("/")[-1]' | jq --raw-input | jq -r --slurp 'join(" ")'))
-    for tag in "${tags[@]}"; do
-        echo "Pulling tag ($tag) from $REGISTRY (platform=$(uname -m))"
-        com="docker pull localhost:9092/$tag"
-        echo $com
-        eval $com
-        com="docker image tag localhost:9092/$tag cmucal/$tag"
-        echo $com
-        eval $com
-    done
+    if [[ -n $base_name ]]; then
+        base_tags=($(eval "$base_com --print" 2> /dev/null | jq -r '.target[].tags[] | split("/")[-1]' | jq --raw-input | jq -r --slurp 'join(" ")'))
+        for tag in "${base_tags[@]}"; do
+            echo "Pulling tag ($tag) from $REGISTRY (platform=$(uname -m))"
+            com="docker pull localhost:9092/$tag"
+            echo $com
+            eval $com
+            com="docker image tag localhost:9092/$tag cmucal/$tag"
+            echo $com
+            eval $com
+        done
+    fi
+    
+    if [[ $build_server -eq 1 ]]; then
+        server_tags=($(eval "$server_com --print" 2> /dev/null | jq -r '.target[].tags[] | split("/")[-1]' | jq --raw-input | jq -r --slurp 'join(" ")'))
+        for tag in "${server_tags[@]}"; do
+            echo "Pulling tag ($tag) from $REGISTRY (platform=$(uname -m))"
+            com="docker pull localhost:9092/$tag"
+            echo $com
+            eval $com
+            com="docker image tag localhost:9092/$tag cmucal/$tag"
+            echo $com
+            eval $com
+        done
+    fi
 fi

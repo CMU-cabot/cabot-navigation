@@ -24,13 +24,21 @@ services:
       context: ./docker/server
       args:
         - USERNAME=runner_user
+      x-bake:
+        tags:
+          - ${REGISTRY}/cabot-server:latest
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     env_file:
-      - .env
       - ${ENV_FILE:-.empty-env}
+      - .env
     environment:
       - 'HULOP_MAP_SERVICE=localhost:9090/map'
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
-      - TZ=${HOST_TZ}
+      - HOST_TZ
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
@@ -57,8 +65,8 @@ services:
       args:
         - USERNAME=runner_user
     env_file:
-      - .env
       - ${ENV_FILE:-.empty-env}
+      - .env
     depends_on:
       map_server:
         condition: service_healthy
