@@ -7,6 +7,9 @@
 namespace cabot_navigation2
 {
 
+Trajectory::Trajectory() {
+}
+
 Trajectory::Trajectory(
     geometry_msgs::msg::Twist control_,
     std::vector<geometry_msgs::msg::PoseStamped> trajectory_)
@@ -16,10 +19,9 @@ Trajectory::Trajectory(
 }
 
 CaBotSamplingMPCController::CaBotSamplingMPCController() {
-
 }
+
 CaBotSamplingMPCController::~CaBotSamplingMPCController() {
-  
 }
 
 void CaBotSamplingMPCController::configure(
@@ -213,6 +215,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
     if (cost < min_cost)
     {
       min_cost = cost;
+      last_trajectory_ = Trajectory(trajectory.control, trajectory.trajectory);
       best_control = trajectory.control;  // Assuming we store the control input corresponding to each trajectory
       best_trajectory.header = pose.header;
       best_trajectory.poses = trajectory.trajectory;
@@ -337,12 +340,16 @@ double CaBotSamplingMPCController::calculateCost(
   // Add costmap-related cost
   double discount = 1.0;
   double step_cost;
+  double goal_cost;
   double goal_dist;
-  double min_goal_dist = std::numeric_limits<double>::infinity();
-  geometry_msgs::msg::PoseStamped final_pose;
-  // if the trajectory pass through obstacle then it is invalid
-  // if the trajectory pass through goal then trajectory is cut short.
-  // int trunc_length = 0;
+  double current_dist;
+  double min_goal_dist;
+
+  current_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
+  min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * prediction_horizon_);
+
+  goal_cost = 0;
+  int idx = 0;
   for (const auto & pose : sampled_trajectory)
   {
     step_cost = getCostFromCostmap(pose.pose);
@@ -351,44 +358,16 @@ double CaBotSamplingMPCController::calculateCost(
       cost = std::numeric_limits<double>::infinity();
       return cost;
     }
-    // cost += obs_cost_wt_ * step_cost * discount;
     discount *= discount_factor_;
-    final_pose = pose;
-    // calculate goal dist at the same time
-    goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
-    if (goal_dist < min_goal_dist)
-    {
-      min_goal_dist = goal_dist;
-    }
-    // trunc_length += 1;
-    // cost += time_cost_wt_ * time_cost_;
-    // if (goal_dist <= goal_distance_)
-    // {
-    //  break;
-    // }
-  }
 
-  //cost += std::min(goal_dist / true_goal_dist, 1.0) * 255.0;  // 255 if goal_dist > max_goal_dist_
-  double current_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
-  if (current_dist > focus_goal_dist_)
-  {
-    cost += goal_cost_wt_ * (goal_dist - focus_goal_dist_);
-  } else {
-    cost += goal_cost_wt_ * (1.0 / focus_goal_dist_ - 1.0 / goal_dist);
+    // calculate goal dist at the same time
+    goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+    goal_cost += discount * ((goal_dist - min_goal_dist) / (current_dist - min_goal_dist));
+
+    idx++;
   }
   
-  // sampled_trajectory.resize(trunc_length);
-
-  // Calculate the distance from the end of the sampled trajectory to the local goal
-  // if (!sampled_trajectory.empty())
-  // {
-  //   // const auto & final_pose = sampled_trajectory.back();
-
-  //   double goal_dist = pointDist(final_pose.pose.position, local_goal.pose.position);
-  //   double goal_cost = std::min(goal_dist / 10.0, 1.0) * 255.0;  // 255 if goal_dist > 10
-
-  //   cost += goal_cost;  // Accumulate the cost based on distance to the local goal
-  // }
+  cost += goal_cost_wt_ * goal_cost;
 
   // Add group trajectory-related cost
   cost += group_cost_wt_ * calculateGroupTrajectoryCost(sampled_trajectory);

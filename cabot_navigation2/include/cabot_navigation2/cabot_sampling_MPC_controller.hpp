@@ -26,6 +26,7 @@ struct Trajectory
 {
   geometry_msgs::msg::Twist control;
   std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+  Trajectory();
   Trajectory(
     geometry_msgs::msg::Twist control,
     std::vector<geometry_msgs::msg::PoseStamped> trajectory
@@ -96,6 +97,7 @@ private:
   double time_cost_wt_;
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
+  Trajectory last_trajectory_;
 
   std::string group_topic_;
   rclcpp::Subscription<lidar_process_msgs::msg::GroupTimeArray>::SharedPtr group_trajectory_sub_;  // group prediction subscriber
