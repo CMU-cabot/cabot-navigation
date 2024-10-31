@@ -295,15 +295,24 @@ private:
     robot_to_map_global_rotation_tf2.setOrigin(tf2::Vector3(0, 0, 0));
 
     std::lock_guard<std::mutex> lock(thread_sync_);
-    // Social Distance
-    double social_speed_limit = max_speed_;
-    for (auto it = input->people.begin(); it != input->people.end(); it++) {
-      auto person = *it;
-      tf2::Vector3 p_frame(it->position.x, it->position.y, 0);
-      tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
+
+    std::vector<std::pair<tf2::Vector3, tf2::Vector3>> transformed_people;
+    for (const auto & person : input->people) {
+      tf2::Vector3 p_frame(person.position.x, person.position.y, 0);
+      tf2::Vector3 v_frame(person.velocity.x, person.velocity.y, 0);
 
       auto p_local = robot_to_map_global_transform_tf2 * p_frame;
       auto v_local = robot_to_map_global_rotation_tf2 * v_frame;
+
+      transformed_people.emplace_back(p_local, v_local);
+    }
+
+    // Social Distance
+    double social_speed_limit = max_speed_;
+    for (size_t i = 0; i < input->people.size(); ++i) {
+      const auto & person = input->people[i];
+      const auto & p_local = transformed_people[i].first;
+      const auto & v_local = transformed_people[i].second;
 
       double x = p_local.x();
       double y = p_local.y();
@@ -317,8 +326,6 @@ private:
 
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
-      double sdx = abs(social_distance_x_ * cos(RPy));
-      double sdy = abs(social_distance_y_ * sin(RPy));
       double min_path_dist = 100;
 
       if (RPy < social_distance_min_angle_ || social_distance_max_angle_ < RPy) {
@@ -355,7 +362,7 @@ private:
 
       RCLCPP_INFO(
         get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
-        it->name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, social_speed_limit,
+        person.name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, social_speed_limit,
         max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
 
       if (social_speed_limit < max_speed_) {
@@ -376,21 +383,18 @@ private:
 
     // Velocity Obstacle
     std::vector<std::pair<double, double>> vo_intervals;
-    for (auto it = input->people.begin(); it != input->people.end(); it++) {
-      tf2::Vector3 p_frame(it->position.x, it->position.y, 0);
-      tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
-
-      auto p_local = robot_to_map_global_transform_tf2 * p_frame;
-      auto v_local = robot_to_map_global_rotation_tf2 * v_frame;
+    for (size_t i = 0; i < input->people.size(); ++i) {
+      const auto & person = input->people[i];
+      const auto & p_local = transformed_people[i].first;
+      const auto & v_local = transformed_people[i].second;
 
       double x = p_local.x();
       double y = p_local.y();
       double vx = v_local.x();
       double vy = v_local.y();
-      double vr = last_odom_.twist.twist.linear.x;
 
       constexpr double pr = 1.0;
-      constexpr auto e = std::numeric_limits<double>::epsilon();
+      constexpr double e = std::numeric_limits<double>::epsilon();
 
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
@@ -414,8 +418,8 @@ private:
       } else if (std::abs(theta_left) < e || std::abs(theta_left - M_PI) < e) {
         addVOInterval(compute_velocity(theta_right), vo_intervals);
       } else {
-        std::optional<double> v_right = compute_velocity(theta_right);
-        std::optional<double> v_left = compute_velocity(theta_left);
+        auto v_right = compute_velocity(theta_right);
+        auto v_left = compute_velocity(theta_left);
 
         if (v_right && v_left) {
           double v_min = std::min(v_right.value(), v_left.value());
@@ -575,7 +579,8 @@ private:
 
   bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
   {
-    if (vx == 0.0 && vy == 0.0) {
+    constexpr double e = std::numeric_limits<double>::epsilon();
+    if (std::abs(vx) < e && std::abs(vy) < e) {
       return true;
     }
 
