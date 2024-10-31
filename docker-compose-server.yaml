@@ -18,7 +18,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-version: "2.3"
 
 services:
   map_server:
@@ -26,11 +25,19 @@ services:
       context: ./docker/server
       args:
         - USERNAME=runner_user
+      x-bake:
+        tags:
+          - ${REGISTRY}/cabot-server:latest
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     env_file:
-      - .env
       - ${ENV_FILE:-.empty-env}
+      - .env
     environment:
-      - TZ=${HOST_TZ}
+      - HOST_TZ
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
     command:
@@ -56,8 +63,8 @@ services:
       args:
         - USERNAME=runner_user
     env_file:
-      - .env
       - ${ENV_FILE:-.empty-env}
+      - .env
     depends_on:
       map_server:
         condition: service_healthy
