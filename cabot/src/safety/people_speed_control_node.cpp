@@ -384,7 +384,6 @@ private:
     // Velocity Obstacle
     std::vector<std::pair<double, double>> vo_intervals;
     for (size_t i = 0; i < input->people.size(); ++i) {
-      const auto & person = input->people[i];
       const auto & p_local = transformed_people[i].first;
       const auto & v_local = transformed_people[i].second;
 
