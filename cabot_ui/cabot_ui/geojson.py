@@ -145,7 +145,8 @@ class Properties(object):
         "hulop_tags": None,
         "hulop_poi_external_category": None,
         "hulop_show_labels_zoomlevel": None,
-        "hulop_road_width": 1.5
+        "hulop_road_width": 1.5,
+        "rt_struct": 7
         }
 
     def __getattr__(self, name):
@@ -412,13 +413,16 @@ class NavigationMode(enum.Enum):
     Standard = 0
     Narrow = 1
     Tight = 2
+    Crosswalk = 5
 
     @classmethod
-    def get_mode(cls, width):
+    def get_mode(cls, width, rt_struct):
         if width < 1.0:
             return NavigationMode.Tight
         if width < 1.2:
             return NavigationMode.Narrow
+        if rt_struct == 3 or rt_struct == 4:
+            return NavigationMode.Crosswalk
         return NavigationMode.Standard
 
 
@@ -485,7 +489,10 @@ class Link(Object):
 
     @property
     def navigation_mode(self):
-        return NavigationMode.get_mode(self.properties.hulop_road_width)
+        return NavigationMode.get_mode(
+            width=self.properties.hulop_road_width,
+            rt_struct=self.properties.rt_struct
+            )
 
     @property
     def length(self):
