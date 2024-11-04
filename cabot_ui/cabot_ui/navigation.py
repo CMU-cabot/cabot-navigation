@@ -435,6 +435,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._start_loop()
 
     def _localize_status_callback(self, msg):
+        self._logger.info(F"_localize_status_callback {msg}")
         self.localize_status = msg.status
 
     def process_event(self, event):
@@ -789,6 +790,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         try:
             self.current_pose = self.current_local_pose()
             self.delegate.update_pose(ros_pose=self.current_ros_pose(),
+                                      current_pose=self.current_pose,
                                       global_position=self.current_global_pose(),
                                       current_floor=self.current_floor,
                                       global_frame=self._global_map_name

@@ -33,6 +33,9 @@ Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
 
+import json
+import os
+import requests
 import signal
 import sys
 import threading
@@ -382,6 +385,27 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        if event.subtype == "description":
+            self._logger.info("Request Description")
+            if self._interface.last_pose:
+                gp = self._interface.last_pose['global_position']
+                self._logger.info(F"Request Description at {gp}")
+                try:
+                    host = os.environ.get("CABOT_DESCRIPTION_SERVER", "http://localhost:8000")
+                    self._interface.requesting_describe_surround()
+                    req = requests.get(
+                        F"{host}/description?lat={gp.lat}&lng={gp.lng}&rotation={gp.r}&max_distance=100"
+                    )
+                    data = json.loads(req.text)
+                    if req.status_code != requests.codes.ok:
+                        self._logger.error(F"Request Error {data=}")
+                        return
+                    self._logger.info(F"Request result {data['description']=}")
+                    self._interface.describe_surround(data['description'])
+                except Exception as error:
+                    self._logger.error(F"Request Error {error=}")
+
+
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
             self.activity_log("cabot_ui/navigation", "in preparation")
@@ -568,20 +592,22 @@ class EventMapper(object):
         return None
 
     def map_button_to_navigation(self, event):
-        if event.type == "button" and event.down:
-            if event.button == cabot_common.button.BUTTON_UP:
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
-            if event.button == cabot_common.button.BUTTON_DOWN:
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="speeddown")
-            if event.button == cabot_common.button.BUTTON_LEFT:
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="pause")
-            if event.button == cabot_common.button.BUTTON_RIGHT:
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
-            if event.button == cabot_common.button.BUTTON_CENTER:
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="idle")
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="description")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
