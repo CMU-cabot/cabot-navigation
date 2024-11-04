@@ -597,7 +597,7 @@ class EventMapper(object):
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="idle")
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="description")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
