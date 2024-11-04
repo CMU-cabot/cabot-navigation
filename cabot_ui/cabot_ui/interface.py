@@ -364,3 +364,11 @@ class UserInterface(object):
     def please_return_position(self):
         self._activity_log("cabot/interface", "navigation", "please_return_position")
         self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
+
+    def requesting_describe_surround(self):
+        self._activity_log("cabot/interface", "requesting_describe_surround", "")
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"))
+
+    def describe_surround(self, description):
+        self._activity_log("cabot/interface", "describe_surround", description)
+        self.speak(description)
