@@ -43,6 +43,12 @@
 #include <std_msgs/msg/string.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
+namespace
+{
+constexpr double pr = 1.0;
+constexpr double epsilon = std::numeric_limits<double>::epsilon();
+}  // namespace
+
 namespace CaBotSafety
 {
 // utility struct and functions
@@ -392,16 +398,13 @@ private:
       double vx = v_local.x();
       double vy = v_local.y();
 
-      constexpr double pr = 1.0;
-      constexpr double e = std::numeric_limits<double>::epsilon();
-
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
       double s = asin(pr / dist);
       double theta_right = normalizedAngle(RPy - s);
       double theta_left = normalizedAngle(RPy + s);
 
-      addVOMarker(dist, pr, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+      addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
 
       if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
         continue;
@@ -412,9 +415,9 @@ private:
           return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
         };
 
-      if (std::abs(theta_right) < e || std::abs(theta_right - M_PI) < e) {
+      if (std::abs(theta_right) < epsilon || std::abs(theta_right - M_PI) < epsilon) {
         addVOInterval(compute_velocity(theta_left), vo_intervals);
-      } else if (std::abs(theta_left) < e || std::abs(theta_left - M_PI) < e) {
+      } else if (std::abs(theta_left) < epsilon || std::abs(theta_left - M_PI) < epsilon) {
         addVOInterval(compute_velocity(theta_right), vo_intervals);
       } else {
         auto v_right = compute_velocity(theta_right);
@@ -474,7 +477,7 @@ private:
   }
 
   void addVOMarker(
-    double dist, double pr, double vx, double vy, double theta_right, double theta_left,
+    double dist, double vx, double vy, double theta_right, double theta_left,
     const tf2::Stamped<tf2::Transform> & map_to_robot_tf2)
   {
     double visualized_dist = dist + pr;
@@ -536,12 +539,12 @@ private:
       });
     std::vector<std::pair<double, double>> merged;
     std::pair<double, double> current = sorted_intervals[0];
-    for (size_t i = 0; i < sorted_intervals.size(); ++i) {
-      if (current.second >= sorted_intervals[i].first) {
-        current.second = std::max(current.second, sorted_intervals[i].second);
+    for (const auto & sorted_interval : sorted_intervals) {
+      if (current.second >= sorted_interval.first) {
+        current.second = std::max(current.second, sorted_interval.second);
       } else {
         merged.emplace_back(current);
-        current = sorted_intervals[i];
+        current = sorted_interval;
       }
     }
     merged.emplace_back(current);
@@ -578,8 +581,7 @@ private:
 
   bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
   {
-    constexpr double e = std::numeric_limits<double>::epsilon();
-    if (std::abs(vx) < e && std::abs(vy) < e) {
+    if (std::abs(vx) < epsilon && std::abs(vy) < epsilon) {
       return true;
     }
 
