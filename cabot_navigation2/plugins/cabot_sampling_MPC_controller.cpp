@@ -7,13 +7,16 @@
 namespace cabot_navigation2
 {
 
-Trajectory::Trajectory() {
+Trajectory::Trajectory() 
+: initialized(false)
+{
 }
 
 Trajectory::Trajectory(
     geometry_msgs::msg::Twist control_,
     std::vector<geometry_msgs::msg::PoseStamped> trajectory_)
-: control(control_),
+: initialized(true),
+  control(control_),
   trajectory(trajectory_)
 {
 }
@@ -108,7 +111,13 @@ void CaBotSamplingMPCController::configure(
     node, name_ + ".time_cost_wt", rclcpp::ParameterValue(1.0));
   node->get_parameter(name_ + ".time_cost_wt", time_cost_wt_);
 
+  declare_parameter_if_not_declared(
+    node, name_ + ".energy_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".energy_cost_wt", energy_cost_wt_);
+
   last_visited_index_ = 0; // Initialize the last visited index to the start of the path
+
+  last_trajectory_ = Trajectory();
 
   // Subscribe to group trajectory prediction topic
   group_trajectory_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
@@ -148,6 +157,7 @@ void CaBotSamplingMPCController::setPlan(const nav_msgs::msg::Path & path)
   auto node = node_.lock();
   // Transform global path into the robot's frame
   global_plan = path;
+  last_trajectory_ = Trajectory();
 }
 
 void CaBotSamplingMPCController::setSpeedLimit(const double & speed_limit, const bool & percentage)
@@ -339,16 +349,21 @@ double CaBotSamplingMPCController::calculateCost(
 
   // Add costmap-related cost
   double discount = 1.0;
-  double step_cost;
-  double goal_cost;
+  double step_cost = 0.0;
+  double goal_cost = 0.0;
+  double energy_cost = 0.0;
   double goal_dist;
   double current_dist;
   double min_goal_dist;
+  double energy_dist;
+  double max_energy_dist;
+
+  geometry_msgs::msg::PoseStamped last_pose;
 
   current_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
+  // min is fastest way to goal
   min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * prediction_horizon_);
 
-  goal_cost = 0;
   int idx = 0;
   for (const auto & pose : sampled_trajectory)
   {
@@ -364,10 +379,21 @@ double CaBotSamplingMPCController::calculateCost(
     goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
     goal_cost += discount * ((goal_dist - min_goal_dist) / (current_dist - min_goal_dist));
 
+    
+    if (last_trajectory_.initialized)
+    {
+      last_pose = last_trajectory_.trajectory[idx];
+      energy_dist = pointDist(pose.pose.position, last_pose.pose.position);
+      // max if going two opposite ways
+      max_energy_dist = 2 * max_linear_velocity_ * ((idx + 1) * sampling_rate_);
+      energy_cost += discount * energy_dist / max_energy_dist;
+    }
+    
     idx++;
   }
   
   cost += goal_cost_wt_ * goal_cost;
+  cost += energy_cost_wt_ * energy_cost;
 
   // Add group trajectory-related cost
   cost += group_cost_wt_ * calculateGroupTrajectoryCost(sampled_trajectory);

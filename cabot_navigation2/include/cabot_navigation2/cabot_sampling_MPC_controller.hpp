@@ -24,6 +24,7 @@ namespace cabot_navigation2
 
 struct Trajectory
 {
+  bool initialized;
   geometry_msgs::msg::Twist control;
   std::vector<geometry_msgs::msg::PoseStamped> trajectory;
   Trajectory();
@@ -95,6 +96,7 @@ private:
   double obs_cost_wt_;
   double group_cost_wt_;
   double time_cost_wt_;
+  double energy_cost_wt_;
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
   Trajectory last_trajectory_;
