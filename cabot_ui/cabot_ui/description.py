@@ -1,6 +1,8 @@
 import rclpy.logging
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from nav_msgs.msg import Path
+from cabot_msgs.msg import Log
 from cv_bridge import CvBridge
 import cv2
 import base64
@@ -8,6 +10,7 @@ import numpy as np
 import requests
 import json
 import os
+import math
 
 class Description:
     DESCRIPTION_API = 'description'
@@ -19,6 +22,7 @@ class Description:
         self.max_size = 512
         self.max_distance = node.declare_parameter("description_max_distance", 100).value
         self.last_images = {'left': None, 'front': None, 'right': None}
+        self.last_plan_distance = None
         self.host = os.environ.get("CABOT_DESCRIPTION_SERVER", "http://localhost:8000")
         self._logger = rclpy.logging.get_logger("cabot_ui_manager.description")
         
@@ -42,6 +46,7 @@ class Description:
                 10
             )
         }
+        self.plan_sub = self.node.create_subscription(Path, '/plan', self.plan_callback, 10)
 
     def image_callback(self, position: str, msg: Image):
         try:
@@ -49,6 +54,19 @@ class Description:
             self.last_images[position] = msg
         except Exception as e:
             self._logger.error(f'Error processing {position} image: {e}')
+
+    def plan_callback(self, msg):
+        prev = None
+        dist = 0
+        for pose in msg.poses:
+            if prev is None:
+                prev = pose
+                continue
+            dx = pose.pose.position.x - prev.pose.position.x
+            dy = pose.pose.position.y - prev.pose.position.y
+            dist += math.sqrt(dx * dx + dy * dy)
+            prev = pose
+        self.last_plan_distance = dist
 
     def request_description(self, gp):
         self._logger.info(F"Request Description at {gp}")
@@ -64,9 +82,12 @@ class Description:
         except Exception as error:
             self._logger.error(F"Request Error {error=}")
 
-    def request_description_with_images(self, gp):
+    def request_description_with_images(self, gp, length_index=0):
         self._logger.info(F"Request Description with images at {gp}")
         image_data_list = []
+        distance_to_travel = 100
+        if self.last_plan_distance:
+            distance_to_travel = self.last_plan_distance
         for position, img_msg in self.last_images.items():
             if img_msg is not None:
                 try:
@@ -105,8 +126,12 @@ class Description:
             headers = {'Content-Type': 'application/json'}
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
+            lat = gp.lat
+            lng = gp.lng
+            rotation = gp.r
+            max_distance = self.max_distance
             response = requests.post(
-                F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}?lat={gp.lat}&lng={gp.lng}&rotation={gp.r}&max_distance={self.max_distance}",
+                F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
                 data=json_data
             )
