@@ -40,10 +40,10 @@ from cabot_common import vibration
 class UserInterface(object):
     SOCIAL_ANNOUNCE_INTERVAL = Duration(seconds=15.0)
     NOTIFY_TURN_INTERVAL = Duration(seconds=5.0)
-    PRIORITY_REQUIRED = 3
-    PRIORITY_HIGH = 2
-    PRIORITY_NORMAL = 1
-    PRIORITY_LOW = 0
+    PRIORITY_REQUIRED = 90
+    PRIORITY_HIGH = 60
+    PRIORITY_NORMAL = 30
+    PRIORITY_LOW = 10
 
     def __init__(self, node: Node):
         self._node = node
