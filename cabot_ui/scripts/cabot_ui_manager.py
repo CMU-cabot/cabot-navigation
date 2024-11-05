@@ -393,14 +393,15 @@ class CabotUIManager(NavigationInterface, object):
             self._navigation.set_pause_control(True)
 
         if event.subtype == "description":
-            self._logger.info("Request Description")
+            # TODO: needs to reset last_plan_distance when arrived/paused
+            self._logger.info(F"Request Description duration={event.param}")
             if self._interface.last_pose:
                 self._interface.requesting_describe_surround()
                 gp = self._interface.last_pose['global_position']
-                result = self._description.request_description_with_images(gp)
+                length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
+                result = self._description.request_description_with_images(gp, length_index=length_index)
                 if result:
                     self._interface.describe_surround(result['description'])
-
 
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
@@ -547,6 +548,7 @@ class CabotUIManager(NavigationInterface, object):
 class EventMapper(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
+        self.description_duration = 0
 
     def push(self, event):
         # state = self._manager.state
@@ -588,6 +590,9 @@ class EventMapper(object):
         return None
 
     def map_button_to_navigation(self, event):
+        if event.type == "button" and not event.down and self.description_duration > 0:
+            self.description_duration = 0
+            return NavigationEvent(subtype="description", param=self.description_duration)
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
@@ -600,10 +605,10 @@ class EventMapper(object):
             if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
-            if event.holddown == cabot_common.button.BUTTON_LEFT:
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="description")
+                self.description_duration = event.duration
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
