@@ -33,6 +33,9 @@ Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
 
+import json
+import os
+import requests
 import signal
 import sys
 import threading
@@ -57,13 +60,14 @@ from cabot_ui.status import State, StatusManager
 from cabot_ui.interface import UserInterface
 from cabot_ui.navigation import Navigation, NavigationInterface
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.description import Description
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 
 
 class CabotUIManager(NavigationInterface, object):
-    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node):
+    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
         self._node = node
         self._logger = self._node.get_logger()
         CaBotRclpyUtil.initialize(self._node)
@@ -81,6 +85,7 @@ class CabotUIManager(NavigationInterface, object):
         self._interface.delegate = self
         self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
+        self._description = Description(desc_node)
         # self._exploration = Exploration()
         # self._exploration.delegate = self
 
@@ -382,6 +387,16 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        if event.subtype == "description":
+            self._logger.info("Request Description")
+            if self._interface.last_pose:
+                self._interface.requesting_describe_surround()
+                gp = self._interface.last_pose['global_position']
+                result = self._description.request_description_with_images(gp)
+                if result:
+                    self._interface.describe_surround(result['description'])
+
+
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
             self.activity_log("cabot_ui/navigation", "in preparation")
@@ -568,20 +583,22 @@ class EventMapper(object):
         return None
 
     def map_button_to_navigation(self, event):
-        if event.type == "button" and event.down:
-            if event.button == cabot_common.button.BUTTON_UP:
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
-            if event.button == cabot_common.button.BUTTON_DOWN:
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="speeddown")
-            if event.button == cabot_common.button.BUTTON_LEFT:
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="pause")
-            if event.button == cabot_common.button.BUTTON_RIGHT:
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
-            if event.button == cabot_common.button.BUTTON_CENTER:
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="idle")
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="description")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
@@ -613,15 +630,18 @@ if __name__ == "__main__":
     srv_node = Node("cabot_ui_manager_navigation_service", start_parameter_services=False)
     act_node = Node("cabot_ui_manager_navigation_actions", start_parameter_services=False)
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
-    nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node]
+    desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
+    nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
     executors = [MultiThreadedExecutor(),
                  MultiThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  MultiThreadedExecutor(),
-                 SingleThreadedExecutor()]
-    names = ["node", "tf", "nav", "srv", "act", "soc"]
-    manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node)
+                 SingleThreadedExecutor(),
+                 SingleThreadedExecutor(),
+                 ]
+    names = ["node", "tf", "nav", "srv", "act", "soc", "desc"]
+    manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node)
 
     threads = []
     for tnode, executor, name in zip(nodes, executors, names):

@@ -356,6 +356,16 @@ class Latlng(object):
         raise RuntimeError(F"need to pass a Latlng object ({type(obj)})")
 
 
+class LatlngPose(Latlng):
+    def __init__(self, latlng, r):
+        self.lat = latlng.lat
+        self.lng = latlng.lng
+        self.r = r
+
+    def __repr__(self):
+        return F"[{self.lat:.7f}, {self.lng:.7f}] @ {self.r:.2f}"
+
+
 class Anchor(Latlng):
     """represent an anchor point. init with lat, lng, and rotate"""
     def __init__(self, **kwargs):
@@ -436,7 +446,13 @@ def local2global(xy, anchor):
     anchor.y = temp.y
     mer = xy2mercator(xy, anchor)
     latlng = mercator2latlng(mer)
-    return latlng
+    r = xy.r - (90 + anchor.rotate) / 180.0 * math.pi
+    while r > math.pi:
+        r -= math.pi*2
+    while r < -math.pi:
+        r += math.pi*2
+    latlngr = LatlngPose(latlng, r)
+    return latlngr
 
 
 def get_anchor(anchor_file=None):
