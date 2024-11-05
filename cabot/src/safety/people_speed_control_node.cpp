@@ -624,8 +624,18 @@ private:
     if (social_speed_limit <= 0.0) {
       return social_speed_limit;
     }
+
     auto merged_intervals = mergeIntervals(intervals);
-    auto substract_intervals = substractIntervals({0.0, social_speed_limit}, merged_intervals);
+    double vr = last_odom_.twist.twist.linear.x;
+    double max_speed_limit = social_speed_limit;
+
+    for (const auto & merged_interval : merged_intervals) {
+      if (merged_interval.first < vr && vr < merged_interval.second) {
+        max_speed_limit = std::min(vr, max_speed_);
+      }
+    }
+
+    auto substract_intervals = substractIntervals({0.0, max_speed_limit}, merged_intervals);
     if (substract_intervals.empty()) {
       return social_speed_limit;
     }
