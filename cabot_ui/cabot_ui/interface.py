@@ -45,7 +45,6 @@ class UserInterface(object):
     PRIORITY_NORMAL = 1
     PRIORITY_LOW = 0
 
-
     def __init__(self, node: Node):
         self._node = node
         self.visualizer = visualizer.instance(node)
