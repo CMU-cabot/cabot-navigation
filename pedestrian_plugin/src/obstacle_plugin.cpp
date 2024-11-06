@@ -255,34 +255,6 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
     auto pRet = PyObject_Call(pFunc, pArgs, pDict);
 
     if (pRet != NULL && PyDict_Check(pRet)) {
-      // Obstacles do not move. Following variables are not necessary.
-      auto newX = PythonUtils::getDictItemAsDouble(pRet, "x", 0.0);
-      auto newY = PythonUtils::getDictItemAsDouble(pRet, "y", 0.0);
-      auto newZ = PythonUtils::getDictItemAsDouble(pRet, "z", 0.0);
-      auto newRoll = PythonUtils::getDictItemAsDouble(pRet, "roll", 0.0);
-      auto newPitch = PythonUtils::getDictItemAsDouble(pRet, "pitch", 0.0);
-      auto newYaw = PythonUtils::getDictItemAsDouble(pRet, "yaw", 0.0);
-
-      // variables only get from the module
-      [[maybe_unused]] auto radius = PythonUtils::getDictItemAsDouble(pRet, "radius", 0.4);
-      auto progress = PythonUtils::getDictItemAsDouble(pRet, "progress", 1);
-
-      auto dx = newX - this->x;
-      auto dy = newY - this->y;
-      auto dz = newZ - this->z;
-      auto dd = std::sqrt(dx * dx + dy * dy + dz * dz);
-      if (progress == 0.0) {
-        dd = 0.0;
-      }
-      auto newDist = this->dist + dd;
-
-      ignition::math::Pose3d pose;
-      pose.Pos().X(newX);
-      pose.Pos().Y(newY);
-      pose.Pos().Z(newZ);
-      pose.Rot() = ignition::math::Quaterniond(newRoll, newPitch, newYaw);
-      this->model->SetWorldPose(pose);
-
       // code depends on being obstacle as Obstacle msg...
       pedestrian_plugin_msgs::msg::Obstacle obstacle;
       obstacle.name = this->name;
@@ -308,15 +280,6 @@ void ObstaclePlugin::OnUpdate(const common::UpdateInfo & _info)
       obstacleAgent.velocity.linear.z = 0;
       obstacleAgent.linear_vel = 0;
       manager.updateObstacleAgent(obstacleAgent.name, obstacleAgent);
-
-      this->x = newX;
-      this->y = newY;
-      this->z = newZ;
-      this->roll = newRoll;
-      this->pitch = newPitch;
-      this->yaw = newYaw;
-      this->dist = newDist;
-
 
       Py_DECREF(pRet);
     } else {
