@@ -117,6 +117,10 @@ private:
     const geometry_msgs::msg::PoseStamped & current_pose,
     const geometry_msgs::msg::Twist & velocity);
 
+  std::vector<Trajectory> generateTrajectoriesImproved(
+    const geometry_msgs::msg::PoseStamped & current_pose,
+    const geometry_msgs::msg::Twist & velocity);
+
   geometry_msgs::msg::PoseStamped getLookaheadPoint(
     const geometry_msgs::msg::PoseStamped & current_pose,
     const nav_msgs::msg::Path & global_plan);

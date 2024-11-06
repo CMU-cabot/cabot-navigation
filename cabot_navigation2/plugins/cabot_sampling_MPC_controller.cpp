@@ -214,7 +214,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   nav_msgs::msg::Path best_trajectory;
 
   // Generate all the trajectories based on sampled velocities
-  std::vector<Trajectory> trajectories = generateTrajectoriesSimple(pose, velocity);
+  std::vector<Trajectory> trajectories = generateTrajectoriesImproved(pose, velocity);
 
   // Loop over the generated trajectories and calculate their costs
   for (const auto & trajectory : trajectories)
@@ -240,6 +240,7 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
   const geometry_msgs::msg::PoseStamped & current_pose,
   const geometry_msgs::msg::Twist & velocity)
 {
+  // This function samples trajectories that follow a fixed linear and angular velocities
   std::vector<Trajectory> trajectories;
 
   double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
@@ -285,6 +286,76 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
 
       // Store this trajectory
       trajectories.push_back(Trajectory(control, trajectory));
+    }
+  }
+
+  return trajectories;
+}
+
+std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesImproved(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  // This function samples trajectories that follow a fixed linear velocity
+  // But the angular velocity can change in the middle of the duration
+  std::vector<Trajectory> trajectories;
+
+  double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
+
+  // Sample a set of linear velocities
+  for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution)
+  {
+    double angular_vel_lim = max_angular_velocity_;
+    double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
+
+    // Sample initial and secondary angular velocities
+    for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
+    {
+      for (double secondary_angular_vel = -angular_vel_lim; secondary_angular_vel <= angular_vel_lim; secondary_angular_vel += angular_sample_resolution)
+      {
+        // Start with the current pose and initial control
+        geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+        double current_x = current_pose_copy.pose.position.x;
+        double current_y = current_pose_copy.pose.position.y;
+        double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
+
+        std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+        geometry_msgs::msg::Twist initial_control;
+        initial_control.linear.x = linear_vel;
+        initial_control.angular.z = initial_angular_vel;
+
+        // Determine the time at which to switch to the secondary angular velocity
+        double switch_time = prediction_horizon_ / 2.0;
+
+        // Predict the trajectory over the prediction horizon
+        for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+        {
+          // Use initial angular velocity before switch time, secondary after
+          double angular_vel;
+          if (t < switch_time) {
+            angular_vel = initial_angular_vel;
+          } else {
+            angular_vel = secondary_angular_vel;
+          }
+
+          // Simulate robot dynamics
+          current_x += linear_vel * sampling_rate_ * cos(current_theta);
+          current_y += linear_vel * sampling_rate_ * sin(current_theta);
+          current_theta += angular_vel * sampling_rate_;
+
+          geometry_msgs::msg::PoseStamped predicted_pose;
+          predicted_pose.pose.position.x = current_x;
+          predicted_pose.pose.position.y = current_y;
+          tf2::Quaternion q;
+          q.setRPY(0, 0, current_theta);
+          predicted_pose.pose.orientation = tf2::toMsg(q);
+
+          trajectory.push_back(predicted_pose);
+        }
+
+        // Store this trajectory with its initial control
+        trajectories.push_back(Trajectory(initial_control, trajectory));
+      }
     }
   }
 
