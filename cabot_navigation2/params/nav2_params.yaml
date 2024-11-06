@@ -332,20 +332,20 @@ controller_server:
       prediction_horizon: 3.2
       sampling_rate: 0.4
       max_linear_velocity: 1.0
-      linear_sample_size: 10.0
-      max_angular_velocity: 0.52359877559 # pi / 6
-      angular_sample_size: 10.0
+      linear_sample_size: 5.0
+      max_angular_velocity: 1.0
+      angular_sample_size: 16.0
       lookahead_distance: 2.0
       goal_distance: 0.5
       discount_factor: 0.9
       obstacle_costval: 250.0
       time_cost: 5.0
       focus_goal_dist: 0.5
-      goal_cost_wt: 0.5
-      group_cost_wt: 0.5
+      goal_cost_wt: 0.4
+      group_cost_wt: 0.55
       obs_cost_wt: 1.0
       time_cost_wt: 1.0
-      energy_cost_wt: 0.0
+      energy_cost_wt: 0.05
 
 controller_server_rclcpp_node:
   ros__parameters:

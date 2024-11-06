@@ -420,6 +420,7 @@ double CaBotSamplingMPCController::calculateCost(
 
   // Add costmap-related cost
   double discount = 1.0;
+  double cumulative_discount = 0.0;
   double step_cost = 0.0;
   double goal_cost = 0.0;
   double energy_cost = 0.0;
@@ -445,12 +446,13 @@ double CaBotSamplingMPCController::calculateCost(
       return cost;
     }
     discount *= discount_factor_;
+    cumulative_discount += discount;
 
     // calculate goal dist at the same time
     goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
     goal_cost += discount * ((goal_dist - min_goal_dist) / (current_dist - min_goal_dist));
 
-    
+    /*
     if (last_trajectory_.initialized)
     {
       last_pose = last_trajectory_.trajectory[idx];
@@ -459,8 +461,18 @@ double CaBotSamplingMPCController::calculateCost(
       max_energy_dist = 2 * max_linear_velocity_ * ((idx + 1) * sampling_rate_);
       energy_cost += discount * energy_dist / max_energy_dist;
     }
+    */
     
     idx++;
+  }
+
+  if (last_trajectory_.initialized)
+  {
+    geometry_msgs::msg::Twist curr_control = trajectory.control;
+    geometry_msgs::msg::Twist prev_control = last_trajectory_.control;
+    double linear_energy_cost = std::abs(curr_control.linear.x - prev_control.linear.x) / max_linear_velocity_;
+    double angular_energy_cost = std::abs(curr_control.angular.z - prev_control.angular.z) / (2 * max_angular_velocity_);
+    energy_cost = cumulative_discount * (linear_energy_cost + angular_energy_cost) / 2;
   }
   
   cost += goal_cost_wt_ * goal_cost;
