@@ -736,7 +736,14 @@ class Tester:
 
     @wait_test()
     def delete_door(self, case, test_action):
-        self.delete_obstacle(case, test_action)
+        uuid = test_action['uuid']
+        self.futures[uuid] = ObstacleManager.instance().delete_door(**test_action)
+
+        def done_callback(future):
+            logger.debug(future.result())
+            case['done'] = True
+            case['success'] = True
+        self.futures[uuid].add_done_callback(done_callback)
 
     @wait_test()
     def delete_obstacle(self, case, test_action):
