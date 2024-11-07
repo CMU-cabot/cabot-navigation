@@ -29,7 +29,7 @@ class Description:
         self.subscriptions = {
             'left': self.node.create_subscription(
                 Image,
-                '/rs2/color/image_raw',  # Change this to your left image topic name
+                '/rs3/color/image_raw',  # Change this to your left image topic name
                 lambda msg: self.image_callback('left', msg),
                 10
             ),
@@ -41,11 +41,19 @@ class Description:
             ),
             'right': self.node.create_subscription(
                 Image,
-                '/rs3/color/image_raw',  # Change this to your right image topic name
+                '/rs2/color/image_raw',  # Change this to your right image topic name
                 lambda msg: self.image_callback('right', msg),
                 10
             )
         }
+
+        # rotate modes
+        self.image_rotate_modes = {
+            'left': cv2.ROTATE_180,
+            'front': cv2.ROTATE_180,
+            'right': None
+        }
+
         self.plan_sub = self.node.create_subscription(Path, '/plan', self.plan_callback, 10)
 
     def image_callback(self, position: str, msg: Image):
@@ -92,7 +100,15 @@ class Description:
             if img_msg is not None:
                 try:
                     # Convert ROS Image message to OpenCV image
-                    cv_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
+                    cv_image_raw = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
+
+                    # Rotate image if necessary
+                    rotate_mode = self.image_rotate_modes[position]
+                    if rotate_mode is not None:
+                        cv_image = cv2.rotate(cv_image_raw, rotate_mode)
+                        self._logger.info(f'Rotating {position} image: with {rotate_mode}')
+                    else:
+                        cv_image = cv_image_raw
                     
                     # Resize image while keeping the aspect ratio
                     h, w = cv_image.shape[:2]
