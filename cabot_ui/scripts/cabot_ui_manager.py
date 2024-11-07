@@ -591,8 +591,9 @@ class EventMapper(object):
 
     def map_button_to_navigation(self, event):
         if event.type == "button" and not event.down and self.description_duration > 0:
+            navigation_event = NavigationEvent(subtype="description", param=self.description_duration)
             self.description_duration = 0
-            return NavigationEvent(subtype="description", param=self.description_duration)
+            return navigation_event
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
