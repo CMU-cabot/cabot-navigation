@@ -24,6 +24,7 @@
 #include <tf2/utils.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <rcutils/logging.h>
 
 #include <cmath>
 #include <limits>
@@ -297,6 +298,8 @@ private:
       return;
     }
 
+    int logger_level = rcutils_logging_get_logger_level(this->get_logger().get_name());
+
     auto robot_to_map_global_rotation_tf2 = robot_to_map_global_transform_tf2;
     robot_to_map_global_rotation_tf2.setOrigin(tf2::Vector3(0, 0, 0));
 
@@ -404,7 +407,9 @@ private:
       double theta_right = normalizedAngle(RPy - s);
       double theta_left = normalizedAngle(RPy + s);
 
-      addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+      if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+        addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+      }
 
       if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
         continue;
@@ -443,8 +448,10 @@ private:
     // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
     limit_pub_->publish(msg);
 
-    addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit);
-    CaBotSafety::commit(vis_pub_);
+    if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+      addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit);
+      CaBotSafety::commit(vis_pub_);
+    }
   }
 
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr input)
