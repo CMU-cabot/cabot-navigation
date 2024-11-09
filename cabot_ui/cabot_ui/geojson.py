@@ -40,7 +40,7 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
-from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil, SpeechPriority
 
 
 class RouteStruct(enum.Enum):
@@ -628,6 +628,10 @@ class Entrance(geoutil.TargetPlace):
     def floor(self):
         return self.node.floor
 
+    @property
+    def speech_priority(self):
+        return SpeechPriority.LOW
+
     def update_anchor(self, anchor):
         self.anchor = anchor
 
@@ -796,6 +800,10 @@ class POI(Facility, geoutil.TargetPlace):
     @property
     def floor(self):
         return self._get_prop('hulop_height')
+
+    @property
+    def speech_priority(self):
+        return SpeechPriority.REQUIRED
 
     def approaching_statement(self):
         return None
