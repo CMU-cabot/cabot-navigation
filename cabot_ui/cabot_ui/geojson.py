@@ -744,6 +744,8 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = DoorPOI
                 if category == '_nav_info_':
                     cls = InfoPOI
+                if category == '_nav_entrance_':
+                    cls = EntrancePOI
                 if category == '_cabot_speed_':
                     cls = SpeedPOI
                 if category == '_nav_elevator_cab_':
@@ -860,6 +862,25 @@ class InfoPOI(POI):
 
     def approached_statement(self):
         return self.name
+
+
+class EntrancePOI(POI):
+    """Nav Entrance POI class"""
+
+    @classmethod
+    def marshal(cls, dic):
+        """marshal Entrance POI object"""
+        return cls(**dic)
+
+    def __init__(self, **dic):
+        super(EntrancePOI, self).__init__(**dic)
+
+    def approached_statement(self):
+        return self.name
+
+    @property
+    def speech_priority(self):
+        return SpeechPriority.LOW
 
 
 class SpeedPOI(POI):
