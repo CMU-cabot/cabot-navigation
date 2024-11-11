@@ -305,8 +305,11 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesImproved
   // Sample a set of linear velocities
   for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution)
   {
-    double angular_vel_lim = max_angular_velocity_;
-    double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
+    double linear_portion = linear_vel / max_linear_velocity_;
+    double angular_vel_lim = (1.0 - linear_portion) * max_angular_velocity_;
+    double angular_sample_resolution = max_angular_velocity_ / angular_sample_size_;
+    // double angular_vel_lim = max_angular_velocity_;
+    // double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
 
     // Sample initial and secondary angular velocities
     for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
