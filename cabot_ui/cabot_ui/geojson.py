@@ -40,7 +40,7 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
-from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil, SpeechPriority
 
 
 class Geometry(object):
@@ -607,6 +607,10 @@ class Entrance(geoutil.TargetPlace):
     def floor(self):
         return self.node.floor
 
+    @property
+    def speech_priority(self):
+        return SpeechPriority.LOW
+
     def update_anchor(self, anchor):
         self.anchor = anchor
 
@@ -740,6 +744,8 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = DoorPOI
                 if category == '_nav_info_':
                     cls = InfoPOI
+                if category == '_nav_entrance_':
+                    cls = EntrancePOI
                 if category == '_cabot_speed_':
                     cls = SpeedPOI
                 if category == '_nav_elevator_cab_':
@@ -775,6 +781,10 @@ class POI(Facility, geoutil.TargetPlace):
     @property
     def floor(self):
         return self._get_prop('hulop_height')
+
+    @property
+    def speech_priority(self):
+        return SpeechPriority.REQUIRED
 
     def approaching_statement(self):
         return None
@@ -852,6 +862,25 @@ class InfoPOI(POI):
 
     def approached_statement(self):
         return self.name
+
+
+class EntrancePOI(POI):
+    """Nav Entrance POI class"""
+
+    @classmethod
+    def marshal(cls, dic):
+        """marshal Entrance POI object"""
+        return cls(**dic)
+
+    def __init__(self, **dic):
+        super(EntrancePOI, self).__init__(**dic)
+
+    def approached_statement(self):
+        return self.name
+
+    @property
+    def speech_priority(self):
+        return SpeechPriority.LOW
 
 
 class SpeedPOI(POI):
