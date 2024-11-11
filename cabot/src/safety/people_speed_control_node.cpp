@@ -46,8 +46,8 @@
 
 namespace
 {
-constexpr double pr = 1.0;
-constexpr double epsilon = std::numeric_limits<double>::epsilon();
+constexpr double pr = 1.0;  // robot radius + person radius + margin
+constexpr double epsilon = std::numeric_limits<double>::epsilon();  // machine epsilon
 }  // namespace
 
 namespace CaBotSafety
