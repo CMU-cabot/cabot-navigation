@@ -1,4 +1,4 @@
-cadiagnostic_aggregator:
+diagnostic_aggregator:
   ros__parameters:
     pub_rate: 1.0
     path: CaBot
@@ -140,3 +140,15 @@ cadiagnostic_aggregator:
         - "hesai"
       remove_prefix:
         - "hesai_lidar: "
+
+    discard_ublox:
+      type: diagnostic_aggregator/DiscardAnalyzer
+      path: discard
+      contains:
+        - "ublox: TMODE3"
+
+    hard_ublox:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: ublox GNSS"
+      contains:
+        - "ublox: fix"
