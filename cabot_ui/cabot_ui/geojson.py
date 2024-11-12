@@ -43,6 +43,20 @@ from cabot_ui import geoutil, i18n
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 
+class RouteStruct(enum.Enum):
+    """ Route Struct Class """
+    """ See p.14 of https://www.mlit.go.jp/common/001244374.pdf """
+    Sidewalk = 1
+    SidewalkNotSeparatedFromRoadway = 2
+    Crosswalk = 3
+    CrosswalkWithoutSurfaceMarking = 4
+    Underpass = 5
+    PedestrianBridge = 6
+    InFacility = 7
+    OtherRouteStruct = 8
+    Unknown = 99
+
+
 class Geometry(object):
     """Geometry class"""
 
@@ -146,7 +160,7 @@ class Properties(object):
         "hulop_poi_external_category": None,
         "hulop_show_labels_zoomlevel": None,
         "hulop_road_width": 1.5,
-        "rt_struct": 7
+        "rt_struct": RouteStruct.InFacility
         }
 
     def __getattr__(self, name):
@@ -408,18 +422,6 @@ class Object(object):
     def copy(self):
         return copy.deepcopy(self)
 
-class RouteStruct(enum.Enum):
-    """ Route Struct Class """
-    """ See p.14 of https://www.mlit.go.jp/common/001244374.pdf """
-    Sidewalk = 1
-    SidewalkNotSeparatedFromRoadway = 2
-    Crosswalk = 3
-    CrosswalkWithoutSurfaceMarking = 4
-    Underpass = 5
-    PedestrianBridge = 6
-    InFacility = 7
-    OtherRouteStruct = 8
-    Unknown = 99
 
 class NavigationMode(enum.Enum):
     Standard = 0
