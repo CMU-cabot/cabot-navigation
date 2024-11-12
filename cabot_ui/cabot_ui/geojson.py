@@ -408,6 +408,18 @@ class Object(object):
     def copy(self):
         return copy.deepcopy(self)
 
+class RouteStruct(enum.Enum):
+    """ Route Struct Class """
+    """ See p.14 of https://www.mlit.go.jp/common/001244374.pdf """
+    Sidewalk = 1
+    SidewalkNotSeparatedFromRoadway = 2
+    Crosswalk = 3
+    CrosswalkWithoutSurfaceMarking = 4
+    Underpass = 5
+    PedestrianBridge = 6
+    InFacility = 7
+    OtherRouteStruct = 8
+    Unknown = 99
 
 class NavigationMode(enum.Enum):
     Standard = 0
@@ -421,7 +433,7 @@ class NavigationMode(enum.Enum):
             return NavigationMode.Tight
         if width < 1.2:
             return NavigationMode.Narrow
-        if rt_struct == 3 or rt_struct == 4:
+        if rt_struct == RouteStruct.Crosswalk or rt_struct == RouteStruct.CrosswalkWithoutSurfaceMarking:
             return NavigationMode.Crosswalk
         return NavigationMode.Standard
 
