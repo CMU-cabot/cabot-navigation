@@ -37,6 +37,7 @@ function help {
     echo "-P <platform>         specify platform"
     echo "                      build linux/arm64 and linux/amd64 if not specified"
     echo "-s                    buildx bake map_server"
+    echo "-L                    buildx bake location_tools"
     echo "-t <tags>             additional tags"
 }
 
@@ -45,8 +46,9 @@ base_name=cabot-base
 local=0
 tags=
 build_server=0
+location_tools=0
 
-while getopts "hb:ilP:t:s" arg; do
+while getopts "hb:ilP:t:s:L" arg; do
     case $arg in
     h)
         help
@@ -71,6 +73,9 @@ while getopts "hb:ilP:t:s" arg; do
         ;;
     s)
         build_server=1
+        ;;
+    L)
+        location_tools=1
         ;;
     t)
         tags=${OPTARG}
@@ -131,6 +136,12 @@ if [[ $build_server -eq 1 ]]; then
     eval $server_com
 fi
 
+if [[ $location_tools -eq 1 ]]; then
+    location_com="docker buildx bake -f docker-compose-location-tools.yaml location_tools $platform_option"
+    echo $location_com
+    eval $location_com
+fi
+
 if [[ -n $base_name ]]; then
     base_com="docker buildx bake -f docker-compose.yaml $platform_option $@"
     export BASE_IMAGE=$base_name
@@ -160,6 +171,19 @@ if [[ $local -eq 1 ]]; then
     if [[ $build_server -eq 1 ]]; then
         server_tags=($(eval "$server_com --print" 2> /dev/null | jq -r '.target[].tags[] | split("/")[-1]' | jq --raw-input | jq -r --slurp 'join(" ")'))
         for tag in "${server_tags[@]}"; do
+            echo "Pulling tag ($tag) from $REGISTRY (platform=$(uname -m))"
+            com="docker pull localhost:9092/$tag"
+            echo $com
+            eval $com
+            com="docker image tag localhost:9092/$tag cmucal/$tag"
+            echo $com
+            eval $com
+        done
+    fi
+    
+    if [[ $location_tools -eq 1 ]]; then
+        location_tags=($(eval "$location_com --print" 2> /dev/null | jq -r '.target[].tags[] | split("/")[-1]' | jq --raw-input | jq -r --slurp 'join(" ")'))
+        for tag in "${location_tags[@]}"; do
             echo "Pulling tag ($tag) from $REGISTRY (platform=$(uname -m))"
             com="docker pull localhost:9092/$tag"
             echo $com

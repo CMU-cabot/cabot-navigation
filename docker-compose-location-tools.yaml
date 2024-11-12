@@ -24,6 +24,16 @@ services:
     build:
       context: ./docker/server
       dockerfile: Dockerfile.location-tools
+      args:
+        - USERNAME=runner_user
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/location-tools:latest
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     env_file:
       - ${ENV_FILE:-.empty-env}
     environment:

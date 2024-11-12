@@ -26,7 +26,7 @@ services:
         - USERNAME=runner_user
       x-bake:
         tags:
-          - ${REGISTRY}/cabot-server:latest
+          - ${REGISTRY:-cmucal}/cabot-server:latest
         platforms:
           - linux/amd64
           - linux/arm64
