@@ -3,6 +3,9 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 namespace cabot_navigation2
 {
@@ -46,6 +49,10 @@ void CaBotSamplingMPCController::configure(
   declare_parameter_if_not_declared(
     node, name_ + ".traj_vis_topic", rclcpp::ParameterValue("/control_output_vis"));
   node->get_parameter(name_ + ".traj_vis_topic", traj_vis_topic_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".loc_goal_vis_topic", rclcpp::ParameterValue("/local_goal_vis"));
+  node->get_parameter(name_ + ".loc_goal_vis_topic", loc_goal_vis_topic_);
 
   declare_parameter_if_not_declared(
     node, name_ + ".prediction_horizon", rclcpp::ParameterValue(4.8)); // seconds
@@ -126,6 +133,10 @@ void CaBotSamplingMPCController::configure(
   // Publish selected trajectory for visualization purposes
   trajectory_visualization_pub_ = node->create_publisher<nav_msgs::msg::Path>(traj_vis_topic_, 10);
 
+  // Publish current local goal for visualization purposes
+  local_goal_visualization_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(loc_goal_vis_topic_, 10);
+  loc_goal_vis_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotSamplingMPCController::localGoalVisualizationCallback, this));
+
   RCLCPP_INFO(logger_, "MPC controller configured with prediction horizon: %.2f, sampling rate: %.2f",
     prediction_horizon_, sampling_rate_);
 }
@@ -135,6 +146,31 @@ void CaBotSamplingMPCController::groupPredictionCallback(const lidar_process_msg
   // Group sequences: First time, then groups
   auto node = node_.lock();
   group_trajectories_ = group->group_sequences;
+}
+
+void CaBotSamplingMPCController::localGoalVisualizationCallback()
+{
+  auto node = node_.lock();
+  auto vis_msg = visualization_msgs::msg::Marker();
+
+  double marker_size = 0.75;
+
+  vis_msg.header.stamp = node->now();
+  vis_msg.header.frame_id = "map";
+  vis_msg.ns = "cabot_navigation2";
+  vis_msg.id = 0;
+  vis_msg.type = 2;
+  vis_msg.action = 0;
+  vis_msg.pose = curr_local_goal_.pose;
+  vis_msg.scale.x = marker_size;
+  vis_msg.scale.y = marker_size;
+  vis_msg.scale.z = marker_size;
+  vis_msg.color.r = 1.0;
+  vis_msg.color.g = 0.0;
+  vis_msg.color.b = 0.0;
+  vis_msg.color.a = 1.0;
+
+  local_goal_visualization_pub_->publish(vis_msg);
 }
 
 void CaBotSamplingMPCController::cleanup()
@@ -211,6 +247,10 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
 
   // Get the local goal
   geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
+  curr_local_goal_ = local_goal;
+  RCLCPP_INFO(logger_, "Local goal is: x %.2f, y %.2f",
+    local_goal.pose.position.x, local_goal.pose.position.y);
+
   nav_msgs::msg::Path best_trajectory;
 
   // Generate all the trajectories based on sampled velocities
@@ -306,10 +346,10 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesImproved
   for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution)
   {
     double linear_portion = linear_vel / max_linear_velocity_;
-    double angular_vel_lim = (1.0 - linear_portion) * max_angular_velocity_;
-    double angular_sample_resolution = max_angular_velocity_ / angular_sample_size_;
-    // double angular_vel_lim = max_angular_velocity_;
-    // double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
+    // double angular_vel_lim = (1.0 - linear_portion) * max_angular_velocity_;
+    // double angular_sample_resolution = max_angular_velocity_ / angular_sample_size_;
+    double angular_vel_lim = max_angular_velocity_;
+    double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
 
     // Sample initial and secondary angular velocities
     for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)

@@ -15,6 +15,8 @@
 #include "lidar_process_msgs/msg/group_array.hpp"
 #include "lidar_process_msgs/msg/group.hpp"
 
+#include "visualization_msgs/msg/marker.hpp"
+
 #include <cabot_navigation2/util.hpp>
 
 using nav2_util::declare_parameter_if_not_declared;
@@ -100,6 +102,7 @@ private:
 
   int last_visited_index_; // Keep track of the last visited point in the global plan
   Trajectory last_trajectory_;
+  geometry_msgs::msg::PoseStamped curr_local_goal_;
 
   std::string group_topic_;
   rclcpp::Subscription<lidar_process_msgs::msg::GroupTimeArray>::SharedPtr group_trajectory_sub_;  // group prediction subscriber
@@ -107,6 +110,11 @@ private:
 
   std::string traj_vis_topic_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr trajectory_visualization_pub_;
+
+  std::string loc_goal_vis_topic_;
+  rclcpp::TimerBase::SharedPtr loc_goal_vis_timer_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr local_goal_visualization_pub_;
+  void localGoalVisualizationCallback();
 
   geometry_msgs::msg::Twist computeMPCControl(
     const geometry_msgs::msg::PoseStamped & pose,

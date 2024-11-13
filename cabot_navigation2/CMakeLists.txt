@@ -18,6 +18,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(nav2_lifecycle_manager REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_core REQUIRED)
@@ -61,6 +62,7 @@ if(NOT DEBUG)
 
 set(dependencies
   geometry_msgs
+  visualization_msgs
   rclcpp
   nav2_lifecycle_manager
   nav2_costmap_2d
@@ -269,6 +271,7 @@ if(DEBUG)
 set(dependencies_test
   diagnostic_updater
   geometry_msgs
+  visualization_msgs
   sensor_msgs
   people_msgs
   queue_msgs

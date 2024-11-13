@@ -329,6 +329,7 @@ controller_server:
       plugin: "cabot_navigation2::CaBotSamplingMPCController"
       group_topic: "/group_predictions"
       traj_vis_topic: "/control_output_vis"
+      loc_goal_vis_topic: "/local_goal_vis"
       prediction_horizon: 3.2
       sampling_rate: 0.4
       max_linear_velocity: 1.0

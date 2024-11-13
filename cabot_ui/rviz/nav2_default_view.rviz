@@ -838,6 +838,19 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /control_output_vis
       Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Marker
+      Namespaces:
+        cabot_navigation2: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_goal_vis
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
