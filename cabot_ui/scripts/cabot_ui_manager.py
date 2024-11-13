@@ -614,18 +614,18 @@ if __name__ == "__main__":
     act_node = Node("cabot_ui_manager_navigation_actions", start_parameter_services=False)
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
     nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node]
-    executors = [MultiThreadedExecutor(),
-                 MultiThreadedExecutor(),
-                 SingleThreadedExecutor(),
-                 SingleThreadedExecutor(),
-                 MultiThreadedExecutor(),
-                 SingleThreadedExecutor()]
+    executor_types = [MultiThreadedExecutor,
+                      MultiThreadedExecutor,
+                      SingleThreadedExecutor,
+                      SingleThreadedExecutor,
+                      MultiThreadedExecutor,
+                      SingleThreadedExecutor]
     names = ["node", "tf", "nav", "srv", "act", "soc"]
     manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node)
 
     threads = []
-    for tnode, executor, name in zip(nodes, executors, names):
-        def run_node(target_node, executor, name):
+    for tnode, executor_type, name in zip(nodes, executor_types, names):
+        def run_node(target_node, executor_type, name):
             def _run_node():
                 # debug code to analyze the bottle neck of nodes
                 # high frequency spinning node should have smaller number of waits
@@ -633,6 +633,7 @@ if __name__ == "__main__":
                 # import time
                 # count = 0
                 # start = time.time()
+                executor = executor_type()
                 executor.add_node(target_node)
                 try:
                     while rclpy.ok():
@@ -645,13 +646,18 @@ if __name__ == "__main__":
                         #                               f"  guards {len(list(target_node.guards))}\n"
                         #                               f"  waitables {len(list(target_node.waitables))}\n",
                         #                               throttle_duration_sec=1.0)
-                        executor.spin_once()
+                        try:
+                            executor.spin_once()
+                        except rclpy._rclpy_pybind11.InvalidHandle:
+                            target_node.get_logger().error(F"caught rclpy._rclpy_pybind11.InvalidHandle exception for {name} node, so recreate executor")
+                            executor = executor_type()
+                            executor.add_node(target_node)
                 except:  # noqa: 722
                     pass
                 target_node.destroy_node()
             return _run_node
 
-        thread = threading.Thread(target=run_node(tnode, executor, name))
+        thread = threading.Thread(target=run_node(tnode, executor_type, name))
         thread.start()
         threads.append(thread)
 
