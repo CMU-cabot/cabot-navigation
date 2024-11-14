@@ -747,6 +747,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"goal: {goal}")
         try:
             goal.enter()
+        except rclpy._rclpy_pybind11.InvalidHandle:
+            raise
         except:  # noqa: E722
             import traceback
             self._logger.error(traceback.format_exc())
@@ -776,6 +778,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         try:
             if process:
                 process[0](*process[1:])
+        except rclpy._rclpy_pybind11.InvalidHandle:
+            raise
         except:  # noqa: 722
             self._logger.error(traceback.format_exc())
 
@@ -1439,5 +1443,7 @@ class NavigationParamManager:
             self.node.get_logger().info(f"call request_parameter {node_name}, {param_list}")
             try:
                 self.request_parameter(node_name, param_list, sub_callback)
+            except rclpy._rclpy_pybind11.InvalidHandle:
+                raise
             except:  # noqa: 722
                 self.node.get_logger().error(traceback.format_exc())
