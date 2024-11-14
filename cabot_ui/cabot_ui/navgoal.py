@@ -564,8 +564,6 @@ class Goal(geoutil.TargetPlace):
             self._logger.error(traceback.format_exc())
 
     def _cancel(self, callback=None):
-        self._is_canceled = True
-
         if len(self._handles) > 0:
             (handle, cancel_callback) = self._handles.pop(0)
             future = handle.cancel_goal_async()
@@ -598,6 +596,7 @@ class Goal(geoutil.TargetPlace):
 
             self._logger.info(f"sent cancel goal: {len(self._handles)} handles remaining")
         else:
+            self._is_canceled = True
             if callback:
                 callback()
             self._logger.info("done cancel goal")

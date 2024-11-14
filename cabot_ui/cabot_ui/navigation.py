@@ -465,8 +465,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"Current floor is {self.current_floor}")
 
     def _current_frame_callback(self, msg):
-        if self.current_frame != msg.data:
-            self.wait_for_restart_navigation()
+        # Fixme: disabled restart by current_frame callback 20241114
+        # if self.current_frame != msg.data:
+        #     self.wait_for_restart_navigation()
         self.current_frame = msg.data
         self._logger.info(F"Current frame is {self.current_frame}")
 
@@ -1066,6 +1067,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._last_estimated_goal_check = now
 
         if goal.is_canceled:
+            goal.reset()
             self._stop_loop()
             self._current_goal = None
             self._goal_index = max(-1, self._goal_index - 1)
