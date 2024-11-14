@@ -42,6 +42,7 @@ import nav2_msgs.action
 import std_msgs.msg
 import nav_msgs.msg
 import geometry_msgs.msg
+import unique_identifier_msgs.msg
 from ament_index_python.packages import get_package_share_directory
 from action_msgs.msg import GoalStatus
 
@@ -411,6 +412,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.path_pub = node.create_publisher(nav_msgs.msg.Path, path_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         path_all_output = node.declare_parameter("path_all_topic", "/path_all").value
         self.path_all_pub = node.create_publisher(nav_msgs.msg.Path, path_all_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.goal_id_pub = node.create_publisher(unique_identifier_msgs.msg.UUID, "/debug/goal_id", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.updated_goal_sub = node.create_subscription(geometry_msgs.msg.PoseStamped, "/updated_goal", self._goal_updated_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -1064,11 +1066,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._last_estimated_goal_check = now
 
         if goal.is_canceled:
-            self.delegate.goal_canceled(goal)
-            self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             self._stop_loop()
             self._current_goal = None
             self._goal_index = max(-1, self._goal_index - 1)
+            self.delegate.goal_canceled(goal)
+            self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             return
 
         if not goal.is_completed:
@@ -1162,6 +1164,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("_navigate_to_pose_sent_goal")
         self._logger.info(F"navigate to pose, threading.get_ident {threading.get_ident()}")
         goal_handle = future.result()
+        self.goal_id_pub.publish(goal_handle.goal_id)
         gh_cb(goal_handle)
         self._logger.info(F"get goal handle {goal_handle}")
         get_result_future = goal_handle.get_result_async()
