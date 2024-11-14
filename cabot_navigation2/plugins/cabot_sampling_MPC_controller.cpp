@@ -122,6 +122,10 @@ void CaBotSamplingMPCController::configure(
     node, name_ + ".energy_cost_wt", rclcpp::ParameterValue(1.0));
   node->get_parameter(name_ + ".energy_cost_wt", energy_cost_wt_);
 
+  declare_parameter_if_not_declared(
+    node, name_ + ".smooth_wt", rclcpp::ParameterValue(0.1));
+  node->get_parameter(name_ + ".smooth_wt", smooth_wt_);
+
   last_visited_index_ = 0; // Initialize the last visited index to the start of the path
 
   last_trajectory_ = Trajectory();
@@ -194,6 +198,7 @@ void CaBotSamplingMPCController::setPlan(const nav_msgs::msg::Path & path)
   // Transform global path into the robot's frame
   global_plan = path;
   last_trajectory_ = Trajectory();
+  last_visited_index_ = 0;
 }
 
 void CaBotSamplingMPCController::setSpeedLimit(const double & speed_limit, const bool & percentage)
@@ -256,6 +261,16 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   // Generate all the trajectories based on sampled velocities
   std::vector<Trajectory> trajectories = generateTrajectoriesImproved(pose, velocity);
 
+  double prev_v;
+  double prev_w;
+  if (last_trajectory_.initialized) {
+    prev_v = last_trajectory_.control.linear.x;
+    prev_w = last_trajectory_.control.angular.z;
+  } else{
+    prev_v = 0;
+    prev_w = 0;
+  }
+
   // Loop over the generated trajectories and calculate their costs
   for (const auto & trajectory : trajectories)
   {
@@ -272,6 +287,10 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
     }
   }
   trajectory_visualization_pub_->publish(best_trajectory);
+
+  // smooth the control with prior control
+  best_control.linear.x = (1 - smooth_wt_) * best_control.linear.x + smooth_wt_ * prev_v;
+  best_control.angular.z = (1 - smooth_wt_) * best_control.angular.z + smooth_wt_ * prev_w;
 
   return best_control;
 }

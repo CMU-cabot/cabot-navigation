@@ -92,6 +92,7 @@ private:
   double obstacle_costval_;
   double time_cost_; // fixed cost for reaching the goal faster
   double focus_goal_dist_;
+  double smooth_wt_;
 
   // Cost weights
   double goal_cost_wt_;

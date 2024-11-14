@@ -336,7 +336,7 @@ controller_server:
       linear_sample_size: 5.0
       max_angular_velocity: 1.0
       angular_sample_size: 16.0
-      lookahead_distance: 2.0
+      lookahead_distance: 2.5
       goal_distance: 0.5
       discount_factor: 0.9
       obstacle_costval: 250.0
@@ -347,6 +347,7 @@ controller_server:
       obs_cost_wt: 1.0
       time_cost_wt: 1.0
       energy_cost_wt: 0.0
+      smooth_wt: 0.1
 
 controller_server_rclcpp_node:
   ros__parameters:
