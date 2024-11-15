@@ -1,4 +1,4 @@
-// Copyright 2020, 2024 Carnegie Mellon University and Miraikan
+// Copyright 2020 Carnegie Mellon University
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,6 @@
 #include <tf2/LinearMath/Transform.h>
 
 #include <algorithm>
-#include <array>
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
@@ -91,9 +90,6 @@ void add_arrow(
 void add_text(
   rclcpp::Time now, std::string text, Point point,
   float size = 0.5, float r = 0, float g = 0, float b = 0, float a = 1);
-void add_triangle(
-  rclcpp::Time now, const std::array<Point, 3> & points,
-  float size = 1.0, float r = 0, float g = 0, float b = 0, float a = 1);
 }  // namespace CaBotSafety
 
 #endif  // CABOT__UTIL_HPP_
