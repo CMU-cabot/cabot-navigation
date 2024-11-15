@@ -675,6 +675,7 @@ if __name__ == "__main__":
                             executor.spin_once()
                         except rclpy._rclpy_pybind11.InvalidHandle:
                             target_node.get_logger().error(F"caught rclpy._rclpy_pybind11.InvalidHandle exception for {name} node, so recreate executor")
+                            target_node.get_logger().error(F"traceback = {traceback.format_exc()}")
                             executor = executor_type()
                             executor.add_node(target_node)
                 except:  # noqa: 722
