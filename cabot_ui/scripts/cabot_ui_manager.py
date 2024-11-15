@@ -642,7 +642,7 @@ if __name__ == "__main__":
                       MultiThreadedExecutor,
                       SingleThreadedExecutor,
                       SingleThreadedExecutor,
-                      MultiThreadedExecutor,
+                      SingleThreadedExecutor,
                       SingleThreadedExecutor,
                       SingleThreadedExecutor]
     names = ["node", "tf", "nav", "srv", "act", "soc", "desc"]
