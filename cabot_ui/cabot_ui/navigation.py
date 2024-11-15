@@ -1294,6 +1294,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"go to floor {floor}")
         self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
 
+        class GotoFloorTaskResult():
+            def __init__(self):
+                pass
+
         class GotoFloorTask():
             def __init__(self, nav):
                 self._nav = nav
@@ -1301,9 +1305,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger = nav._logger
                 self.buffer = nav.buffer
                 self.delegate = nav.delegate
-                self.future = self._node.executor.create_task(self.handler)
-                self.future.add_done_callback(lambda x: callback(True))
+                self.future = rclpy.task.Future()
                 self.rate = self._nav._node.create_rate(2)
+                self.thread = threading.Thread(target=self.run)
+                self.thread.start()
                 self.cancelled = False
 
             def cancel_goal_async(self):
@@ -1316,16 +1321,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.cancelled = True
                 return self.cancel_future
 
-            def handler(self):
-                try:
-                    self._handle()
-                except:  # noqa: #722
-                    self._logger.error(traceback.format_exc())
-
-            def _handle(self):
+            def run(self):
                 first = True
                 while rclpy.ok():
-                    self.rate.sleep()
+                    time.sleep(0.5)
                     self._logger.info(F"GotoFloorTask loop cancelled={self.cancelled}")
                     if self.cancelled:
                         self._logger.info("GotoFloorTask cancelled")
@@ -1343,7 +1342,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
                             tf2_ros.ExtrapolationException):
                         self._logger.warn(F"Could not find tf from map to {self._nav.current_frame}")
-                self.future.done()
+                self.future.set_result(GotoFloorTaskResult())
+                callback(self.future)
 
         task = GotoFloorTask(self)
         gh_callback(task)
