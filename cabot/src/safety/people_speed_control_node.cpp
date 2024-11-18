@@ -75,6 +75,7 @@ public:
   double delay_;
   double social_distance_x_;
   double social_distance_y_;
+  double social_distance_min_radius_;
   double no_people_topic_max_speed_;
   bool no_people_flag_;
 
@@ -113,6 +114,7 @@ public:
     delay_(0.5),
     social_distance_x_(2.0),
     social_distance_y_(1.0),
+    social_distance_min_radius_(0.45),
     no_people_topic_max_speed_(0.5),
     no_people_flag_(false)
   {
@@ -152,6 +154,7 @@ public:
     max_acc_ = declare_parameter("max_acc_", max_acc_);
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
+    social_distance_min_radius_ = declare_parameter("social_distance_min_radius", social_distance_min_radius_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
 
     RCLCPP_INFO(
@@ -253,6 +256,9 @@ public:
       if (param.get_name() == "social_distance_y") {
         social_distance_y_ = param.as_double();
       }
+      if (param.get_name() == "social_distance_min_radius") {
+        social_distance_min_radius_ = param.as_double();
+      }
     }
     results->successful = true;
     return *results;
@@ -307,6 +313,12 @@ private:
 
       double x = p_local.x();
       double y = p_local.y();
+      // ignore people if it is in the minimum radius
+      if (std::hypot(x, y) <= social_distance_min_radius_) {
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl ignore %s, (%.2f %.2f)", person.name.c_str(), x, y);
+        continue;
+      }
+
       double vx = v_local.x();
 
       double RPy = atan2(y, x);
@@ -366,11 +378,17 @@ private:
     // Velocity Obstacle
     std::vector<std::pair<double, double>> vo_intervals;
     for (size_t i = 0; i < input->people.size(); ++i) {
+      const auto & person = input->people[i];
       const auto & p_local = transformed_people[i].first;
       const auto & v_local = transformed_people[i].second;
 
       double x = p_local.x();
       double y = p_local.y();
+      // ignore people if it is in the minimum radius
+      if (std::hypot(x, y) <= social_distance_min_radius_) {
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl ignore %s, (%.2f %.2f)", person.name.c_str(), x, y);
+        continue;
+      }
       double vx = v_local.x();
       double vy = v_local.y();
 
