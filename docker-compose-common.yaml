@@ -44,6 +44,7 @@ services:
       - CABOT_INITY
       - CABOT_INITZ
       - CABOT_INITA
+      - CABOT_SPEED_POI_PARAMS
 # ROS2/DDS
       - ROS_LOG_DIR
       - RMW_IMPLEMENTATION

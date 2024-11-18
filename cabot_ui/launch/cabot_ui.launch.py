@@ -44,6 +44,7 @@ def generate_launch_description():
     plan_topic = LaunchConfiguration('plan_topic')
     show_topology = LaunchConfiguration('show_topology')
     announce_no_touch = LaunchConfiguration('announce_no_touch')
+    speed_poi_params = LaunchConfiguration('speed_poi_params')
 
     def hoge(text):
         return text
@@ -105,6 +106,11 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_ANNOUNCE_NO_TOUCH', default_value='false'),
             description='True if you want to announce detection of no touch'
         ),
+        DeclareLaunchArgument(
+            'speed_poi_params',
+            default_value=EnvironmentVariable('CABOT_SPEED_POI_PARAMS', default_value='[0.5, 0.5, 0.5]'),
+            description='[target_distance, expected_deceleration, expected_delay]'
+        ),
         Node(
             package="cabot_ui",
             executable="cabot_ui_manager.py",
@@ -116,6 +122,7 @@ def generate_launch_description():
                 'global_map_name': global_map_name,
                 'plan_topic': plan_topic,
                 'menu_file': menu_file,
+                'speed_poi_params': speed_poi_params,
             }, NamespaceParameterFile('cabot_ui_manager', config_path)],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
