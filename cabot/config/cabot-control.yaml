@@ -58,6 +58,9 @@ cabot:
       limit_topic: /cabot/people_speed
       odom_topic: /odom
       plan_topic: /plan
+      social_limit_topic: /cabot/social_speed
+      velocity_obstacle_limit_topic: /cabot/velocity_obstacle_speed
+      unconstrained_velocity_obstacle_limit_topic: /cabot/unconstrained_velocity_obstacle_speed
       # Social Distancing setting
       # X (front): may need to bigger in larger place
       # Y (side) : need to be small to avoid strange speed down when people are walking through very close
