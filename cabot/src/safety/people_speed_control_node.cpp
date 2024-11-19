@@ -79,6 +79,8 @@ public:
   double social_distance_x_;
   double social_distance_y_;
   double social_distance_min_radius_;
+  double social_distance_min_angle_;  // [rad]
+  double social_distance_max_angle_;  // [rad]
   double no_people_topic_max_speed_;
   double velocity_obstacle_weight_;  // parameter to enable/disable velocity obstacle
   bool no_people_flag_;
@@ -125,6 +127,8 @@ public:
     social_distance_x_(2.0),
     social_distance_y_(1.0),
     social_distance_min_radius_(0.45),
+    social_distance_min_angle_(-M_PI_2),
+    social_distance_max_angle_(M_PI_2),
     no_people_topic_max_speed_(0.5),
     velocity_obstacle_weight_(1.0),
     no_people_flag_(false)
@@ -174,6 +178,8 @@ public:
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
     social_distance_min_radius_ = declare_parameter("social_distance_min_radius", social_distance_min_radius_);
+    social_distance_min_angle_ = declare_parameter("social_distance_min_angle", social_distance_min_angle_);
+    social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
     velocity_obstacle_weight_ = declare_parameter("velocity_obstacle_weight", velocity_obstacle_weight_);
 
@@ -279,6 +285,12 @@ public:
       if (param.get_name() == "social_distance_min_radius") {
         social_distance_min_radius_ = param.as_double();
       }
+      if (param.get_name() == "social_distance_min_angle") {
+        social_distance_min_angle_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_max_angle") {
+        social_distance_max_angle_ = param.as_double();
+      }
       if (param.get_name() == "velocity_obstacle_weight") {
         velocity_obstacle_weight_ = param.as_double();
       }
@@ -348,10 +360,12 @@ private:
       double dist = hypot(x, y);
       double min_path_dist = 100;
 
-      if (abs(RPy) > M_PI_2) {
-        RCLCPP_INFO(get_logger(), "PeopleSpeedControl person is back %.2f", RPy);
+      if (RPy < social_distance_min_angle_ || social_distance_max_angle_ < RPy){
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl person %s (RPy=%.2f) is out of angle range [%.2f, %.2f]",
+                    person.name.c_str(), RPy, social_distance_min_angle_, social_distance_max_angle_);
         continue;
       }
+
       auto max_v = [](double D, double A, double d)
         {
           return (-2 * A * d + sqrt(4 * A * A * d * d + 8 * A * D)) / 2;
