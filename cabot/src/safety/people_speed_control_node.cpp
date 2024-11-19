@@ -63,6 +63,9 @@ public:
   std::string odom_topic_;
   std::string plan_topic_;
   std::string event_topic_;
+  std::string social_limit_topic_;
+  std::string velocity_obstacle_limit_topic_;
+  std::string unconstrained_velocity_obstacle_limit_topic_;
   std::string set_social_distance_topic_;
   std::string get_social_distance_topic_;
 
@@ -77,6 +80,7 @@ public:
   double social_distance_y_;
   double social_distance_min_radius_;
   double no_people_topic_max_speed_;
+  double velocity_obstacle_weight_;  // parameter to enable/disable velocity obstacle
   bool no_people_flag_;
 
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
@@ -85,6 +89,9 @@ public:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr event_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr social_limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr velocity_obstacle_limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr unconstrained_velocity_obstacle_limit_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr set_social_distance_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr get_social_distance_pub_;
   std::mutex thread_sync_;
@@ -104,6 +111,9 @@ public:
     odom_topic_("/odom"),
     plan_topic_("/plan"),
     event_topic_("/event"),
+    social_limit_topic_("/social_limit"),
+    velocity_obstacle_limit_topic_("/velocity_obstacle_limit"),
+    unconstrained_velocity_obstacle_limit_topic_("/unconstrained_velocity_obstacle_limit"),
     set_social_distance_topic_("/set_social_distance"),
     get_social_distance_topic_("/get_social_distance"),
     map_frame_("map"),
@@ -116,6 +126,7 @@ public:
     social_distance_y_(1.0),
     social_distance_min_radius_(0.45),
     no_people_topic_max_speed_(0.5),
+    velocity_obstacle_weight_(1.0),
     no_people_flag_(false)
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Constructor");
@@ -149,6 +160,14 @@ public:
     event_topic_ = declare_parameter("event_topic", event_topic_);
     event_pub_ = create_publisher<std_msgs::msg::String>(event_topic_, 100);
 
+    // publishers for intermediate speed limit values
+    social_limit_topic_ = declare_parameter("social_limit_topic", social_limit_topic_);
+    social_limit_pub_ = create_publisher<std_msgs::msg::Float32>(social_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+    velocity_obstacle_limit_topic_ = declare_parameter("velocity_obstacle_limit_topic", velocity_obstacle_limit_topic_);
+    velocity_obstacle_limit_pub_ = create_publisher<std_msgs::msg::Float32>(velocity_obstacle_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+    unconstrained_velocity_obstacle_limit_topic_ = declare_parameter("unconstrained_velocity_obstacle_limit_topic", unconstrained_velocity_obstacle_limit_topic_);
+    unconstrained_velocity_obstacle_limit_pub_ = create_publisher<std_msgs::msg::Float32>(unconstrained_velocity_obstacle_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+
     max_speed_ = declare_parameter("max_speed_", max_speed_);
     min_speed_ = declare_parameter("min_speed_", min_speed_);
     max_acc_ = declare_parameter("max_acc_", max_acc_);
@@ -156,6 +175,7 @@ public:
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
     social_distance_min_radius_ = declare_parameter("social_distance_min_radius", social_distance_min_radius_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
+    velocity_obstacle_weight_ = declare_parameter("velocity_obstacle_weight", velocity_obstacle_weight_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -258,6 +278,9 @@ public:
       }
       if (param.get_name() == "social_distance_min_radius") {
         social_distance_min_radius_ = param.as_double();
+      }
+      if (param.get_name() == "velocity_obstacle_weight") {
+        velocity_obstacle_weight_ = param.as_double();
       }
     }
     results->successful = true;
@@ -432,12 +455,22 @@ private:
       }
     }
 
-    double people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
+    // unnconstrained velocity obstacle speed
+    double unconstrained_vo_speed_limit = computeSafeSpeedLimit(max_speed_, vo_intervals);
+    // velocity obstacle speed constrained with social speed limit
+    double velocity_obstacle_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
+    // weighted average
+    double people_speed_limit = (1.0 - velocity_obstacle_weight_) * social_speed_limit
+                                + velocity_obstacle_weight_ * velocity_obstacle_speed_limit;
 
     std_msgs::msg::Float32 msg;
     msg.data = people_speed_limit;
     // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
     limit_pub_->publish(msg);
+
+    social_limit_pub_->publish(std_msgs::msg::Float32().set__data(social_speed_limit));
+    velocity_obstacle_limit_pub_->publish(std_msgs::msg::Float32().set__data(velocity_obstacle_speed_limit));
+    unconstrained_velocity_obstacle_limit_pub_->publish(std_msgs::msg::Float32().set__data(unconstrained_vo_speed_limit));
 
     if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
       addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit);
