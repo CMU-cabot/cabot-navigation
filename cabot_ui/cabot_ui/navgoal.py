@@ -1,4 +1,4 @@
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2020, 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -639,6 +639,12 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
     social_distance_y: 0.5
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         if mode == geojson.NavigationMode.Narrow:
             params = """
@@ -669,6 +675,12 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -699,6 +711,76 @@ class Nav2Params:
     complete_stop: [false,false,true,false,true,false,true]
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+"""
+        if mode == geojson.NavigationMode.ClimbUpStep:
+            params = """
+/planner_server:
+    CaBot.path_adjusted_center: 0.0
+    CaBot.path_adjusted_minimum_path_width: 0.0
+    CaBot.path_width: 0.0
+    CaBot.min_iteration_count: 5
+    CaBot.max_iteration_count: 10
+    CaBot.ignore_people: True
+/footprint_publisher:
+    footprint_mode: 0
+/controller_server:
+    FollowPath.max_vel_x: 0.3
+    FollowPath.sim_time: 1.7
+    cabot_goal_checker.xy_goal_tolerance: 0.5
+/global_costmap/global_costmap:
+    people_obstacle_layer.people_enabled: False
+    inflation_layer.inflation_radius: 0.75
+/local_costmap/local_costmap:
+    inflation_layer.inflation_radius: 0.75
+/cabot/lidar_speed_control_node:
+    min_distance: 1.0
+/cabot/people_speed_control_node:
+    social_distance_x: 1.0
+    social_distance_y: 0.50
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+"""
+        if mode == geojson.NavigationMode.ClimbDownStep:
+            params = """
+/planner_server:
+    CaBot.path_adjusted_center: 0.0
+    CaBot.path_adjusted_minimum_path_width: 0.0
+    CaBot.path_width: 0.0
+    CaBot.min_iteration_count: 5
+    CaBot.max_iteration_count: 10
+    CaBot.ignore_people: True
+/footprint_publisher:
+    footprint_mode: 0
+/controller_server:
+    FollowPath.max_vel_x: 0.3
+    FollowPath.sim_time: 1.7
+    cabot_goal_checker.xy_goal_tolerance: 0.5
+/global_costmap/global_costmap:
+    people_obstacle_layer.people_enabled: False
+    inflation_layer.inflation_radius: 0.75
+/local_costmap/local_costmap:
+    inflation_layer.inflation_radius: 0.75
+/cabot/lidar_speed_control_node:
+    min_distance: 1.0
+/cabot/people_speed_control_node:
+    social_distance_x: 1.0
+    social_distance_y: 0.50
+/cabot/odrive_can_node_right:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
+/cabot/odrive_can_node_left:
+    vel_gain: 1.0
+    vel_integrator_gain: 4.0
 """
         data = yaml.safe_load(params)
         return data
@@ -819,6 +901,7 @@ class NavGoal(Goal):
     def nav_params(self):
         new_mode = self.navcog_routes[self.route_index][2]
         self.mode = new_mode
+        self.delegate.activity_log("cabot/navigation", "change_mode", f"{self.mode}")
         return Nav2Params.get_parameters_for(new_mode)
 
     def enter(self):
