@@ -1,4 +1,5 @@
 # Copyright (c) 2020  Carnegie Mellon University
+# Copyright (c) 2024  ALPS ALPINE CO., LTD.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -71,7 +72,7 @@ class NavigationInterface(object):
     def update_pose(self, **kwargs):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def notify_turn(self, turn=None):
+    def notify_turn(self, device=None, turn=None):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def notify_human(self, angle=0):
@@ -357,7 +358,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.queue_wait_pois = []
         self.speed_pois = []
         self.turns = []
-        self.notified_turns = []
+        self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self.i_am_ready = False
         self._sub_goals = None
@@ -365,6 +366,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._current_goal = None
         self._last_estimated_goal_check = None
         self._last_estimated_goal = None
+
+        # speed = 0.50 m/sec
+        self._notify_vib_threshold = 0.85
+        self._notify_di_threshold = 0.25
 
         # self.client = None
         self._loop_handle = None
@@ -661,7 +666,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             callback()
 
         self.turns = []
-        self.notified_turns = []
+        self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         if self._current_goal:
             self._goal_index -= 1
@@ -741,7 +746,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.info_pois = []
             self.queue_wait_pois = []
         self.turns = []
-        self.notified_turns = []
+        self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self._logger.info(F"goal: {goal}")
         try:
@@ -922,34 +927,40 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
-                if turn.passed:
+                if turn.passed_vibrator and turn.passed_directional_indicator:
                     continue
                 try:
                     dist = turn.distance_to(current_pose)
-                    if dist < 0.25:
-                        turn.passed = True
-                        self._logger.info(F"notify turn {turn}")
+                    if dist < self._notify_vib_threshold and not turn.passed_vibrator:
+                        turn.passed_vibrator = True
+                        self._logger.info(F"notify turn by vibrator {turn}")
 
                         if turn.turn_type == Turn.Type.Avoiding:
                             # give avoiding announce
                             self._logger.info("social_navigation avoiding turn")
                             self.social_navigation.turn = turn
 
-                        if self._check_already_notified_turn_nearby(turn):
-                            self.delegate.notify_turn(turn=turn)
+                        if self._check_already_notified_turn_nearby(device="vibrator", turn=turn):
+                            self.delegate.notify_turn(device="vibrator", turn=turn)
+                    elif dist < self._notify_di_threshold and not turn.passed_directional_indicator:
+                        turn.passed_directional_indicator = True
+                        self._logger.info(F"notify turn by directional indicator {turn}")
+
+                        if self._check_already_notified_turn_nearby(device="directional_indicator", turn=turn):
+                            self.delegate.notify_turn(device="directional_indicator", turn=turn)
                 except:  # noqa: E722
                     import traceback
                     self._logger.error(traceback.format_exc())
                     self._logger.error("could not convert pose for checking turn POI",
                                        throttle_duration_sec=3)
 
-    def _check_already_notified_turn_nearby(self, turn: Turn):
+    def _check_already_notified_turn_nearby(self, device: str, turn: Turn):
         result = True
-        for other in self.notified_turns:
+        for other in self.notified_turns[device]:
             if other.distance_to(turn) < Navigation.TURN_NEARBY_THRESHOLD:
                 result = False
-        self.notified_turns.append(turn)
-        self._logger.info(f"_check_already_notified_turn_nearby, {result}, {turn}")
+        self.notified_turns[device].append(turn)
+        self._logger.info(f"_check_already_notified_turn_nearby, {device}, {result}, {turn}")
         return result
 
     def _check_queue_wait(self, current_pose):
@@ -1235,9 +1246,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         angle = turn_yaw * 180 / math.pi
         pose = self.current_pose.to_pose_stamped_msg(self._global_map_name)
         if abs(angle) >= 180/3:
-            self.delegate.notify_turn(turn=Turn(pose, angle, Turn.Type.Normal))
+            self.delegate.notify_turn(device="vibrator", turn=Turn(pose, angle, Turn.Type.Normal))
         elif abs(angle) >= 180/6:
-            self.delegate.notify_turn(turn=Turn(pose, angle, Turn.Type.Avoiding))
+            self.delegate.notify_turn(device="vibrator", turn=Turn(pose, angle, Turn.Type.Avoiding))
         self._logger.info(F"notify turn {turn_yaw}")
 
     def goto_floor(self, floor, gh_callback, callback):
