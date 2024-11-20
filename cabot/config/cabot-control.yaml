@@ -8,7 +8,7 @@ cabot:
   clearing_tf_node:
     ros__parameters:
       target_rate: 20
-      target_frame: velodyne
+      target_frame: velodyne_base_link
 
   odom_adapter_node:
     ros__parameters:
