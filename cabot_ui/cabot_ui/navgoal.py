@@ -1,4 +1,4 @@
-# Copyright (c) 2022, 2024  Carnegie Mellon University and Miraikan
+# Copyright (c) 2022  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -700,36 +700,6 @@ class Nav2Params:
 /cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
 """
-        if mode == geojson.NavigationMode.Crosswalk:
-            params = """
-/planner_server:
-    CaBot.path_adjusted_center: 0.0
-    CaBot.path_adjusted_minimum_path_width: 0.0
-    CaBot.path_width: 0.0
-    CaBot.min_iteration_count: 5
-    CaBot.max_iteration_count: 10
-    CaBot.ignore_people: True
-/footprint_publisher:
-    footprint_mode: 3
-/controller_server:
-    FollowPath.max_vel_x: 1.0
-    FollowPath.sim_time: 0.5
-    cabot_goal_checker.xy_goal_tolerance: 0.1
-/global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
-    inflation_layer.inflation_radius: 0.45
-/local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.45
-/cabot/lidar_speed_control_node:
-    min_distance: 0.60
-/cabot/people_speed_control_node:
-    social_distance_x: 1.0
-    social_distance_y: 0.50
-/cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
-"""
         data = yaml.safe_load(params)
         return data
 
@@ -897,8 +867,6 @@ class NavGoal(Goal):
         if status == GoalStatus.STATUS_SUCCEEDED:
             if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
                 self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
-            if self.mode == geojson.NavigationMode.Crosswalk:
-                self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
 
         if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
             self.route_index += 1
