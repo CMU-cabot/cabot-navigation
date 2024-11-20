@@ -1,4 +1,5 @@
 // Copyright (c) 2024  Carnegie Mellon University
+// Copyright (c) 2024  ALPS ALPINE CO., LTD.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +22,7 @@
 #ifndef CABOT_NAVIGATION2__CABOT_ROTATION_SHIM_CONTROLLER_HPP_
 #define CABOT_NAVIGATION2__CABOT_ROTATION_SHIM_CONTROLLER_HPP_
 #include <nav2_rotation_shim_controller/nav2_rotation_shim_controller.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 namespace cabot_navigation2
 {
@@ -32,6 +34,9 @@ public:
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
+
+private:
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr angular_distance_pub_;
 
 protected:
   geometry_msgs::msg::TwistStamped

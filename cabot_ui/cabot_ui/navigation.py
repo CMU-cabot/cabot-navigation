@@ -436,6 +436,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
+        turn_end_output = node.declare_parameter("turn_end_topic", "/turn_end").value
+        self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
         self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
@@ -927,7 +930,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
-                if turn.passed_vibrator and turn.passed_directional_indicator:
+                if turn.passed:
+                    dist_to_end = numpy.sqrt((current_pose.x - turn.end.pose.position.x)**2 + (current_pose.y - turn.end.pose.position.y)**2)
+                    self._logger.info(F"Distance to turn end: {dist_to_end}")
+                    if dist_to_end < 0.75:
+                        msg = std_msgs.msg.Bool()
+                        msg.data = True
+                        self.turn_end_pub.publish(msg)
                     continue
                 try:
                     dist = turn.distance_to(current_pose)
