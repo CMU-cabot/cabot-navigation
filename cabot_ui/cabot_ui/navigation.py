@@ -938,8 +938,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                         msg.data = True
                         self.turn_end_pub.publish(msg)
                     continue
-                # if turn.passed_vibrator and turn.passed_directional_indicator:
-                #     continue
                 try:
                     dist = turn.distance_to(current_pose)
                     if dist < self._notify_vib_threshold and not turn.passed_vibrator:
