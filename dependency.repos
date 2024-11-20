@@ -44,9 +44,9 @@ repositories:
   cabot-common:
     type: git
     url: https://github.com/CMU-cabot/cabot-common
-    version: main
+    version: dev
 
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
-    version: main
+    version: dev
