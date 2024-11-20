@@ -34,12 +34,12 @@ repositories:
   cabot-common:
     type: git
     url: https://github.com/CMU-cabot/cabot-common
-    version: yushim/kx-merge-check
+    version: dev
 
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
-    version: yushim/kx-merge-check
+    version: dev
 
   docker/home/ros2_ws/src/rosbridge_suite:
     type: git
