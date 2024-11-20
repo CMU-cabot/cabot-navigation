@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright (c) 2020, 2022  Carnegie Mellon University
+# Copyright (c) 2024  ALPS ALPINE CO., LTD.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -160,8 +161,8 @@ class CabotUIManager(NavigationInterface, object):
     def update_pose(self, **kwargs):
         self._interface.update_pose(**kwargs)
 
-    def notify_turn(self, turn=None):
-        self._interface.notify_turn(turn=turn)
+    def notify_turn(self, device=None, turn=None):
+        self._interface.notify_turn(device=device, turn=turn)
 
     def notify_human(self, angle=0):
         self._interface.notify_human(angle=angle)
