@@ -301,7 +301,11 @@ fi
 dccom="docker compose -f $dcfile"
 
 ## launch server
-./server-launch.sh -c -p $CABOT_SITE
+if [ $prodimg -eq 1 ]; then
+ ./server-launch.sh -c -p $CABOT_SITE -P
+else
+ ./server-launch.sh -c -p $CABOT_SITE
+fi
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"

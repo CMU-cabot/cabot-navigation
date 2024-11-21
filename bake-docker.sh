@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024  Carnegie Mellon University
+# Copyright (c) 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@
 #   - It is also advisable to specify the platform (-p) in this case.
 
 function help {
-    echo "Usage: $0 [-i] [-l] [-b <base_name>] [-P <platform>]"
+    echo "Usage: $0 [-i] [-l] [-b <base_name>] [-P <platform>] [-s] [-L]"
     echo ""
     echo "-h                    show this help"
     echo "-b <base_name>        bake with base_name"
@@ -48,7 +48,7 @@ tags=
 build_server=0
 location_tools=0
 
-while getopts "hb:ilP:t:s:L" arg; do
+while getopts "hb:ilP:sLt" arg; do
     case $arg in
     h)
         help
@@ -129,15 +129,18 @@ if [[ -n $platform ]]; then
 fi
 
 # bake
-bake_commands=()
+base_com=
+server_com=
+location_com=
+
 if [[ $build_server -eq 1 ]]; then
-    server_com="docker buildx bake -f docker-compose-server.yaml map_server $platform_option"
+    server_com="docker buildx bake -f docker-compose-server.yaml $platform_option"
     echo $server_com
     eval $server_com
 fi
 
 if [[ $location_tools -eq 1 ]]; then
-    location_com="docker buildx bake -f docker-compose-location-tools.yaml location_tools $platform_option"
+    location_com="docker buildx bake -f docker-compose-location-tools.yaml  $platform_option"
     echo $location_com
     eval $location_com
 fi

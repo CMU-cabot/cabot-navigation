@@ -64,6 +64,7 @@ function help()
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
+    echo "-P           prodcuct image "
 }
 
 pwd=`pwd`
@@ -76,8 +77,9 @@ ignore_error=0
 verbose=0
 clean_server=0
 location_tools=0
+prodimg_server=0
 
-while getopts "hd:p:fvcCl" arg; do
+while getopts "hd:p:fvcCl:P" arg; do
     case $arg in
         h)
             help
@@ -104,6 +106,9 @@ while getopts "hd:p:fvcCl" arg; do
             ;;
 	l)
 	    location_tools=1
+	    ;;
+	P)  
+	    prodimg_server=1
 	    ;;
     esac
 done
@@ -134,8 +139,12 @@ if [[ $clean_server -eq 2 ]]; then
     exit 0
 fi
 
-	if [[ $location_tools -eq 1 ]]; then
-    docker compose -f docker-compose-location-tools.yaml up -d
+    if [[ $location_tools -eq 1 ]]; then
+        if [ $prodimg -eq 1 ]; then
+            docker compose -f docker-compose-location-tools-prodimg.yaml up -d
+        else
+            docker compose -f docker-compose-location-tools.yaml up -d
+        fi
     exit 0
 fi
 
@@ -226,19 +235,29 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
    exit 2
 fi
 
+dcfile=docker-compose
+if [[ $prodimg_server -eq 1 ]]; then
+    dcfile="${dcfile}-server-prodimg"
+    blue "map_server-prod"
+else 
+    dcfile="${dcfile}-server"
+    blue "map_server"
+fi
+dcfile="${dcfile}.yaml"
+
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 if [ -e $data_dir/server.env ]; then
     if [[ $verbose -eq 1 ]]; then
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
-        ENV_FILE=$data_dir/server.env docker compose --ansi never -f docker-compose-server.yaml logs -f
+        ENV_FILE=$data_dir/server.env docker compose -f $dcfile up -d 
+        ENV_FILE=$data_dir/server.env docker compose --ansi never -f $dcfile logs -f
     else
-        ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
+        ENV_FILE=$data_dir/server.env docker compose -f $dcfile up -d 
     fi
 else
     if [[ $verbose -eq 1 ]]; then
-        docker compose -f docker-compose-server.yaml up -d
+        docker compose -f $dcfile up -d 
         docker compose --ansi never -f docker-compose-server.yaml logs -f
     else
-        docker compose -f docker-compose-server.yaml up -d
+        docker compose -f $dcfile up -d 
     fi
 fi
