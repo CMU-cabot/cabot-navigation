@@ -96,6 +96,12 @@ class CabotUIManager(NavigationInterface, object):
         msg.data = str(e)
         self._eventPub.publish(msg)
 
+        # request language
+        e = NavigationEvent("gethandleside", None)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
         self._touchModeProxy = self._node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
 
         self._userSpeedEnabledProxy = self._node.create_client(std_srvs.srv.SetBool, "/cabot/user_speed_enabled", callback_group=MutuallyExclusiveCallbackGroup())
@@ -346,6 +352,13 @@ class CabotUIManager(NavigationInterface, object):
         # operations indepent from the navigation state
         if event.subtype == "language":
             self._interface.change_language(event.param)
+
+        if event.subtype == "handleside":
+            self._logger.info(f"calling set_handle_side")
+            try:
+                self._navigation.set_handle_side(event.param)
+            except:
+                self._logger.error(traceback.format_exc())
 
         if event.subtype == "speedup":
             self.speed_menu.prev()

@@ -550,6 +550,29 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # public interfaces
 
+    def set_handle_side(self, side):
+        self._logger.info("set_handle_side is called")
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_handle_side, side))
+
+    def _set_handle_side(self, side):
+        self._logger.info("_set_handle_side is called")
+        def callback(result):
+            self.delegate.activity_log("cabot/navigation", "set_handle_side", "side")
+            self._logger.info(f"set_handle_side {side=}, {result=}")
+        if side == "left":
+            offset_sign = +1.0
+        elif side == "right":
+            offset_sign = -1.0
+        else:
+            self._logger.info(f"set_handle_side {side=} should be 'left' or 'right'")
+            return
+        self.change_parameters({
+            "/footprint_publisher": {
+                "offset_sign": offset_sign
+            }
+        }, callback)
+
     # wrap execution by a queue
     def set_destination(self, destination):
         self.destination = destination
