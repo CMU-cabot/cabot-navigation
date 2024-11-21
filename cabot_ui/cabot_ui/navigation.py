@@ -557,6 +557,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def _set_handle_side(self, side):
         self._logger.info("_set_handle_side is called")
+
         def callback(result):
             self.delegate.activity_log("cabot/navigation", "set_handle_side", "side")
             self._logger.info(f"set_handle_side {side=}, {result=}")

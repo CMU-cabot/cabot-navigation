@@ -354,11 +354,8 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.change_language(event.param)
 
         if event.subtype == "handleside":
-            self._logger.info(f"calling set_handle_side")
-            try:
-                self._navigation.set_handle_side(event.param)
-            except:
-                self._logger.error(traceback.format_exc())
+            self._logger.info("calling set_handle_side")
+            self._navigation.set_handle_side(event.param)
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
