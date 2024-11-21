@@ -42,7 +42,8 @@ class Description:
         self.max_distance = node.declare_parameter("description_max_distance", 100).value
         self.last_images = {'left': None, 'front': None, 'right': None}
         self.last_plan_distance = None
-        self.host = os.environ.get("CABOT_DESCRIPTION_SERVER", "http://localhost:8000")
+        self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
+        self.enabled = os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", False)
         self._logger = rclpy.logging.get_logger("cabot_ui_manager.description")
 
         self.subscriptions = {
@@ -67,10 +68,13 @@ class Description:
         }
 
         # rotate modes
+        rotate_left = os.environ.get("CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT", False)
+        rotate_front = os.environ.get("CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT", False)
+        rotate_right = os.environ.get("CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT", False)
         self.image_rotate_modes = {
-            'left': cv2.ROTATE_180,
-            'front': cv2.ROTATE_180,
-            'right': None
+            'left': cv2.ROTATE_180 if rotate_left else None,
+            'front': cv2.ROTATE_180 if rotate_front else None,
+            'right': cv2.ROTATE_180 if rotate_right else None,
         }
 
         self.plan_sub = self.node.create_subscription(Path, '/plan', self.plan_callback, 10)
@@ -110,6 +114,8 @@ class Description:
             self._logger.error(F"Request Error {error=}")
 
     def request_description_with_images(self, gp, length_index=0):
+        if not self.enabled:
+            return None
         self._logger.info(F"Request Description with images at {gp}")
         image_data_list = []
         distance_to_travel = 100

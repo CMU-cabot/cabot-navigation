@@ -389,7 +389,7 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
-        if event.subtype == "description":
+        if event.subtype == "description" and self._description.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
             if self._interface.last_pose:
