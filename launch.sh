@@ -324,7 +324,11 @@ fi
 dccom="docker compose -f $dcfile -p $launch_prefix"
 
 ## launch server
-./server-launch.sh -c -p $CABOT_SITE -E "$environment"
+if [ $prodimg -eq 1 ]; then
+ ./server-launch.sh -c -p $CABOT_SITE -P -E "$environment"
+else
+ ./server-launch.sh -c -p $CABOT_SITE -E "$environment"
+fi
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"

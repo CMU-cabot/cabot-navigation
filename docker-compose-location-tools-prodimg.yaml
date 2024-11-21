@@ -18,12 +18,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+version: "2.3"
 
 services:
   location_tools:
     extends:
       file: docker-compose-common.yaml
-      service: location_tools-dev
+      service: location_tools-prod
           
   mongodb_lt:
     extends:

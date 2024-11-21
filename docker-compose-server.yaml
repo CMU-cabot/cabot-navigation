@@ -20,81 +20,22 @@
 
 services:
   map_server:
-    build: 
-      context: ./docker/server
-      args:
-        - USERNAME=runner_user
-      x-bake:
-        tags:
-          - ${REGISTRY:-cmucal}/cabot-server:latest
-        platforms:
-          - linux/amd64
-          - linux/arm64
-        output:
-          - type=registry
-    env_file:
-      - ${ENV_FILE:-.empty-env}
-      - .env
-    environment:
-      - 'HULOP_MAP_SERVICE=localhost:9090/map'
-      - 'HULOP_MAP_SERVICE_USE_HTTP=true'
-      - HOST_TZ
-      - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
-      - 'EDITOR_API_KEY=local-server-editor-api-key'
-      - 'SEARCH_BY_FLOOR_ENABLED=true'
-    command:
-      - "./server"
-      - "run"
-      - "defaultServer"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    ports:
-      - ${PORT_ACCESS:-127.0.0.1}:${MAP_SERVER_PORT:-9090}:9090  # only localhost can access this server (default) can be overriden with the env variable
-    networks:
-      - mongodb_network
-    healthcheck:
-      test: curl -f localhost:9090/map/login.jsp || exit 1
-      interval: 3s
-      timeout: 3s
-      retries: 10  # increased from 5, needs more time to launch on Jetson
-
+    extends:
+      file: docker-compose-common.yaml
+      service: map_server-dev
+      
   map_data:
-    build: 
-      context: ./docker/server
-      args:
-        - USERNAME=runner_user
-    env_file:
-      - ${ENV_FILE:-.empty-env}
-      - .env
-    depends_on:
-      map_server:
-        condition: service_healthy
-    command:
-      - "bash"
-      - "-c"
-      - "/home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /server_data/MapData.geojson"
-    volumes:
-      - ${CABOT_SERVER_DATA_MOUNT:-./doc}:/server_data
-    networks:
-      - mongodb_network
-
+    extends:
+      file: docker-compose-common.yaml
+      service: map_data
+      depend_on:
+        map_server:
+          condition: service_healthy
+          
   mongodb:
-#    image : mongo:3.4.3  # there is no aarch64 image for this version
-    image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
-    environment:
-      - PUID=1000
-      - PGID=1000
-#    volumes:                # do not make persistent db
-#      - ./mongodb/database:/data/db
-    networks:
-      - mongodb_network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb:27017/test --quiet
-      interval: 3s
-      timeout: 3s
-      retries: 5
-
+    extends:
+      file: docker-compose-common-server.yaml
+      service: mongodb                    
 
 networks:
   mongodb_network:

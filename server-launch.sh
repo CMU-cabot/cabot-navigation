@@ -64,8 +64,9 @@ function help()
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
-    echo "-P <port>    expose port to outside (set port like 80, 9090, ...)"
+    echo "-X <port>    expose port to outside (set port like 80, 9090, ...)"
     echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
+    echo "-P           prodcuct image "
 }
 
 pwd=`pwd`
@@ -82,8 +83,9 @@ port_access=127.0.0.1
 environment=
 launch_prefix=
 MAP_SERVER_PORT=9090
+prodimg_server=0
 
-while getopts "hd:E:p:fvcClP:" arg; do
+while getopts "hd:E:p:fvcClX:P" arg; do
     case $arg in
         h)
             help
@@ -114,9 +116,11 @@ while getopts "hd:E:p:fvcClP:" arg; do
 	l)
 	    location_tools=1
 	    ;;
-	P)
+	X)
 	    port_access=0.0.0.0
             export MAP_SERVER_PORT=$OPTARG
+	P)  
+	    prodimg_server=1
 	    ;;
     esac
 done
@@ -154,7 +158,11 @@ if [[ $clean_server -eq 2 ]]; then
 fi
 
 if [[ $location_tools -eq 1 ]]; then
-    docker compose -p $launch_prefix -f docker-compose-location-tools.yaml up -d
+    if [ $prodimg -eq 1 ]; then
+        docker compose -p $launch_prefix -f docker-compose-location-tools-prodimg.yaml up -d
+    else
+        docker compose -p $launch_prefix -f docker-compose-location-tools.yaml up -d
+    fi
     exit 0
 fi
 
@@ -246,21 +254,31 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
    exit 2
 fi
 
+dcfile=docker-compose
+if [[ $prodimg_server -eq 1 ]]; then
+    dcfile="${dcfile}-server-prodimg"
+    blue "map_server-prod"
+else 
+    dcfile="${dcfile}-server"
+    blue "map_server"
+fi
+dcfile="${dcfile}.yaml"
+
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 export PORT_ACCESS=$port_access
 if [ -e $data_dir/server.env ]; then
     export ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
-        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix -f $dcfile up -d
+        docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
     else
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix -f $dcfile up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
-        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix -f $dcfile up -d
+        docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
     else
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix -f $dcfile up -d
     fi
 fi

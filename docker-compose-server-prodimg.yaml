@@ -18,17 +18,26 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+version: "2.3"
 
 services:
-  location_tools:
+  map_server:
     extends:
       file: docker-compose-common.yaml
-      service: location_tools-dev
+      service: map_server-prod
+      
+  map_data:
+    extends:
+      file: docker-compose-common.yaml
+      service: map_data
+      depend_on:
+        map_server:
+          condition: service_healthy
           
-  mongodb_lt:
+  mongodb:
     extends:
       file: docker-compose-common.yaml
-      service: mongodb_lt                    
+      service: mongodb                    
 
 networks:
   mongodb_network:
