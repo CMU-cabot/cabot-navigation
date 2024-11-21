@@ -938,6 +938,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         target_distance = self._speed_poi_params[0]  # meters
         expected_deceleration = self._speed_poi_params[1]  # meters/seconds^2
         expected_delay = self._speed_poi_params[2]  # seconds
+
         def max_v(D, A, d):
             return (-2 * A * d + math.sqrt(4 * A * A * d * d + 8 * A * D)) / 2
 

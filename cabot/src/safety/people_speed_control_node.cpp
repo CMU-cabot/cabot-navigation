@@ -357,9 +357,10 @@ private:
       double sdy = abs(social_distance_y_ * sin(RPy));
       double min_path_dist = 100;
 
-      if (RPy < social_distance_min_angle_ || social_distance_max_angle_ < RPy){
-        RCLCPP_INFO(get_logger(), "PeopleSpeedControl person %s (RPy=%.2f) is out of angle range [%.2f, %.2f]",
-                    person.name.c_str(), RPy, social_distance_min_angle_, social_distance_max_angle_);
+      if (RPy < social_distance_min_angle_ || social_distance_max_angle_ < RPy) {
+        RCLCPP_INFO(
+          get_logger(), "PeopleSpeedControl person %s (RPy=%.2f) is out of angle range [%.2f, %.2f]",
+          person.name.c_str(), RPy, social_distance_min_angle_, social_distance_max_angle_);
         continue;
       }
 
