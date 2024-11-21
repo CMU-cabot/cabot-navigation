@@ -30,25 +30,23 @@ repositories:
     type: git
     url: https://github.com/CMU-cabot/tf2_web_republisher
     version: ros2
+  docker/ros2/rosbridge_suite:
+    type: git
+    url: https://github.com/CMU-cabot/rosbridge_suite
+    version: ros2-dev
+  # temporal fix until PR is merged and released
+  # https://github.com/ros/bond_core/pull/97
+  docker/ros2/bond_core:
+    type: git
+    url: https://github.com/CMU-cabot/bond_core.git
+    version: galactic-fix
 
   cabot-common:
     type: git
     url: https://github.com/CMU-cabot/cabot-common
-    version: main
+    version: dev
 
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
-    version: main
-
-  docker/home/ros2_ws/src/rosbridge_suite:
-    type: git
-    url: https://github.com/CMU-cabot/rosbridge_suite
-    version: ros2-dev
-
-  # temporal fix until PR is merged and released
-  # https://github.com/ros/bond_core/pull/97
-  docker/home/ros2_ws/src/bond_core:
-    type: git
-    url: https://github.com/CMU-cabot/bond_core.git
-    version: galactic-fix
+    version: dev

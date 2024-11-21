@@ -8,7 +8,7 @@ cabot:
   clearing_tf_node:
     ros__parameters:
       target_rate: 20
-      target_frame: velodyne
+      target_frame: velodyne_base_link
 
   odom_adapter_node:
     ros__parameters:
@@ -68,6 +68,8 @@ cabot:
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
       limit_topic: /cabot/tf_speed
+      tf_decel_timeout: 0.3
+      tf_timeout: 0.5
 
   touch_speed_control_node:
     ros__parameters:

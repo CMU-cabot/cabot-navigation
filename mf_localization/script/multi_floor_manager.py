@@ -1418,9 +1418,9 @@ class MultiFloorManager:
         # disable gnss adjust in indoor invironments
         if self.indoor_outdoor_mode == IndoorOutdoorMode.INDOOR:
             # reset all gnss adjust
-            for floor in self.gnss_adjuster_dict.keys():
-                for area in self.gnss_adjuster_dict[floor].keys():
-                    self.gnss_adjuster_dict[floor][area].reset()
+            for _floor in self.gnss_adjuster_dict.keys():
+                for _area in self.gnss_adjuster_dict[_floor].keys():
+                    self.gnss_adjuster_dict[_floor][_area].reset()
 
         # use different covariance threshold for initial localization and tracking
         if (self.gnss_localization_time is None) and (self.mode is None):
