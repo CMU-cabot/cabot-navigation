@@ -446,13 +446,16 @@ def local2global(xy, anchor):
     anchor.y = temp.y
     mer = xy2mercator(xy, anchor)
     latlng = mercator2latlng(mer)
-    r = xy.r - (90 + anchor.rotate) / 180.0 * math.pi
-    while r > math.pi:
-        r -= math.pi*2
-    while r < -math.pi:
-        r += math.pi*2
-    latlngr = LatlngPose(latlng, r)
-    return latlngr
+    if hasattr(xy, 'r'):
+        r = xy.r - (90 + anchor.rotate) / 180.0 * math.pi
+        while r > math.pi:
+            r -= math.pi*2
+        while r < -math.pi:
+            r += math.pi*2
+        latlngr = LatlngPose(latlng, r)
+        return latlngr
+    else:
+        return latlng
 
 
 def get_anchor(anchor_file=None):
