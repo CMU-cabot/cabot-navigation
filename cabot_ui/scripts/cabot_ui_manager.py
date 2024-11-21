@@ -34,9 +34,6 @@ Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
 
-import json
-import os
-import requests
 import signal
 import sys
 import threading

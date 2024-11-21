@@ -1,16 +1,35 @@
+# Copyright (c) 2024  Carnegie Mellon University
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import rclpy.logging
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from nav_msgs.msg import Path
-from cabot_msgs.msg import Log
 from cv_bridge import CvBridge
 import cv2
 import base64
-import numpy as np
 import requests
 import json
 import os
 import math
+
 
 class Description:
     DESCRIPTION_API = 'description'
@@ -25,7 +44,7 @@ class Description:
         self.last_plan_distance = None
         self.host = os.environ.get("CABOT_DESCRIPTION_SERVER", "http://localhost:8000")
         self._logger = rclpy.logging.get_logger("cabot_ui_manager.description")
-        
+
         self.subscriptions = {
             'left': self.node.create_subscription(
                 Image,
@@ -93,7 +112,7 @@ class Description:
                 try:
                     # Convert ROS Image message to OpenCV image
                     cv_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
-                    
+
                     # Resize image while keeping the aspect ratio
                     h, w = cv_image.shape[:2]
                     if max(h, w) > self.max_size:
@@ -103,14 +122,14 @@ class Description:
                         resized_image = cv2.resize(cv_image, (new_w, new_h), interpolation=cv2.INTER_AREA)
                     else:
                         resized_image = cv_image
-                    
+
                     # Convert OpenCV image to JPEG
                     _, buffer = cv2.imencode('.jpg', resized_image)
-                    
+
                     # Encode JPEG to base64 and create image URI
                     base64_image = base64.b64encode(buffer).decode('utf-8')
                     image_uri = f'data:image/jpeg;base64,{base64_image}'
-                    
+
                     # Prepare JSON data
                     image_data_list.append({
                         'position': position,
@@ -120,7 +139,7 @@ class Description:
                     self._logger.error(f'Error converting {position} image: {e}')
             else:
                 self._logger.warn(f'No {position} image available to process.')
-        
+
         # Send HTTP request with the image data
         try:
             headers = {'Content-Type': 'application/json'}
