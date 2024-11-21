@@ -294,6 +294,7 @@ private:
 
     std::lock_guard<std::mutex> lock(thread_sync_);
     for (auto it = input->people.begin(); it != input->people.end(); it++) {
+      auto person = *it;
       tf2::Vector3 p_frame(it->position.x, it->position.y, 0);
       tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
 
