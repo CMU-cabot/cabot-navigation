@@ -407,11 +407,11 @@ private:
       double theta_right = normalizedAngle(RPy - s);
       double theta_left = normalizedAngle(RPy + s);
 
-      if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
-        addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+      if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
+        continue;
       }
 
-      if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
+      if (!willCollideWithinTime(x, y, vx, vy)) {
         continue;
       }
 
@@ -420,10 +420,11 @@ private:
           return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
         };
 
+      bool is_limited = false;
       if (std::abs(theta_right) < epsilon || std::abs(theta_right - M_PI) < epsilon) {
-        addVOInterval(compute_velocity(theta_left), vo_intervals);
+        is_limited = addVOInterval(compute_velocity(theta_left), vo_intervals);
       } else if (std::abs(theta_left) < epsilon || std::abs(theta_left - M_PI) < epsilon) {
-        addVOInterval(compute_velocity(theta_right), vo_intervals);
+        is_limited = addVOInterval(compute_velocity(theta_right), vo_intervals);
       } else {
         auto v_right = compute_velocity(theta_right);
         auto v_left = compute_velocity(theta_left);
@@ -433,11 +434,16 @@ private:
           double v_max = std::max(v_right.value(), v_left.value());
           if (0.0 < v_min && v_min < max_speed_) {
             vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
+            is_limited = true;
           }
         } else {
-          addVOInterval(v_right, vo_intervals);
-          addVOInterval(v_left, vo_intervals);
+          is_limited |= addVOInterval(v_right, vo_intervals);
+          is_limited |= addVOInterval(v_left, vo_intervals);
         }
+      }
+
+      if (is_limited && logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+        addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
       }
     }
 
@@ -522,14 +528,6 @@ private:
     CaBotSafety::add_text(this->get_clock()->now(), buff, start_point);
   }
 
-  void addVOInterval(
-    std::optional<double> v, std::vector<std::pair<double, double>> & vo_intervals)
-  {
-    if (v && 0.0 < v.value() && v.value() < max_speed_) {
-      vo_intervals.emplace_back(v.value(), max_speed_);
-    }
-  }
-
   std::vector<std::pair<double, double>> mergeIntervals(const std::vector<std::pair<double, double>> & intervals)
   {
     if (intervals.empty()) {
@@ -586,6 +584,22 @@ private:
     return result;
   }
 
+  bool willCollideWithinTime(double x_rel, double y_rel, double vx, double vy)
+  {
+    if (std::abs(vy) < epsilon) {
+      return false;
+    }
+
+    constexpr double time_horizon = 5.0;
+    double collision_time = -y_rel / vy;
+    double collision_x = x_rel + collision_time * vx;
+    if (0.0 <= collision_x && collision_time <= max_speed_ * collision_time &&
+        0.0 <= collision_time && collision_time <= time_horizon) {
+      return true;
+    }
+    return false;
+  }
+
   bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
   {
     if (std::abs(vx) < epsilon && std::abs(vy) < epsilon) {
@@ -597,6 +611,16 @@ private:
       return inv_person_vel_angle <= theta_left || inv_person_vel_angle >= theta_right;
     }
     return theta_right <= inv_person_vel_angle && inv_person_vel_angle <= theta_left;
+  }
+
+  bool addVOInterval(
+    std::optional<double> v, std::vector<std::pair<double, double>> & vo_intervals)
+  {
+    if (v && 0.0 < v.value() && v.value() < max_speed_) {
+      vo_intervals.emplace_back(v.value(), max_speed_);
+      return true;
+    }
+    return false;
   }
 
   bool lookupTransform(
