@@ -65,6 +65,9 @@ public:
   double delay_;
   double social_distance_x_;
   double social_distance_y_;
+  double social_distance_min_radius_;
+  double social_distance_min_angle_;  // [rad]
+  double social_distance_max_angle_;  // [rad]
   double no_people_topic_max_speed_;
   bool no_people_flag_;
 
@@ -103,6 +106,9 @@ public:
     delay_(0.5),
     social_distance_x_(2.0),
     social_distance_y_(1.0),
+    social_distance_min_radius_(0.45),
+    social_distance_min_angle_(-M_PI_2),
+    social_distance_max_angle_(M_PI_2),
     no_people_topic_max_speed_(0.5),
     no_people_flag_(false)
   {
@@ -142,6 +148,9 @@ public:
     max_acc_ = declare_parameter("max_acc_", max_acc_);
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
+    social_distance_min_radius_ = declare_parameter("social_distance_min_radius", social_distance_min_radius_);
+    social_distance_min_angle_ = declare_parameter("social_distance_min_angle", social_distance_min_angle_);
+    social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
 
     RCLCPP_INFO(
@@ -243,6 +252,15 @@ public:
       if (param.get_name() == "social_distance_y") {
         social_distance_y_ = param.as_double();
       }
+      if (param.get_name() == "social_distance_min_radius") {
+        social_distance_min_radius_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_min_angle") {
+        social_distance_min_angle_ = param.as_double();
+      }
+      if (param.get_name() == "social_distance_max_angle") {
+        social_distance_max_angle_ = param.as_double();
+      }
     }
     results->successful = true;
     return *results;
@@ -276,6 +294,7 @@ private:
 
     std::lock_guard<std::mutex> lock(thread_sync_);
     for (auto it = input->people.begin(); it != input->people.end(); it++) {
+      auto person = *it;
       tf2::Vector3 p_frame(it->position.x, it->position.y, 0);
       tf2::Vector3 v_frame(it->velocity.x, it->velocity.y, 0);
 
@@ -284,6 +303,12 @@ private:
 
       double x = p_local.x();
       double y = p_local.y();
+      // ignore people if it is in the minimum radius
+      if (std::hypot(x, y) <= social_distance_min_radius_) {
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl ignore %s, (%.2f %.2f)", person.name.c_str(), x, y);
+        continue;
+      }
+
       double vx = v_local.x();
       double vy = v_local.y();
       double vr = last_odom_.twist.twist.linear.x;
@@ -332,10 +357,13 @@ private:
       double sdy = abs(social_distance_y_ * sin(RPy));
       double min_path_dist = 100;
 
-      if (abs(RPy) > M_PI_2) {
-        RCLCPP_INFO(get_logger(), "PeopleSpeedControl person is back %.2f", RPy);
+      if (RPy < social_distance_min_angle_ || social_distance_max_angle_ < RPy) {
+        RCLCPP_INFO(
+          get_logger(), "PeopleSpeedControl person %s (RPy=%.2f) is out of angle range [%.2f, %.2f]",
+          person.name.c_str(), RPy, social_distance_min_angle_, social_distance_max_angle_);
         continue;
       }
+
       auto max_v = [](double D, double A, double d)
         {
           return (-2 * A * d + sqrt(4 * A * A * d * d + 8 * A * D)) / 2;
