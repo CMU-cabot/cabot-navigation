@@ -206,9 +206,10 @@ class DataUtil(object):
         # links = geojson.Object.get_objects_by_type(geojson.Link)
         doors = geojson.Object.get_objects_by_type(geojson.DoorPOI)
         infos = geojson.Object.get_objects_by_type(geojson.InfoPOI)
+        entrances = geojson.Object.get_objects_by_type(geojson.EntrancePOI)
         speeds = geojson.Object.get_objects_by_type(geojson.SpeedPOI)
 
-        for poi in doors+infos+speeds:
+        for poi in doors+infos+entrances+speeds:
             min_link, min_dist = geojson.Object.get_nearest_link(poi)
             if min_link is None:
                 CaBotRclpyUtil.debug(F"poi {poi._id} ({poi.floor}) is not registered.")
