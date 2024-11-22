@@ -91,10 +91,3 @@ class CaBotRclpyUtil(object):
     @classmethod
     def time_zero(cls):
         return Time(seconds=0, nanoseconds=0, clock_type=cls.instance().clock.clock_type)
-
-
-class SpeechPriority:
-    REQUIRED = 90
-    HIGH = 60
-    NORMAL = 30
-    LOW = 10

@@ -25,7 +25,7 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil, SpeechPriority
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 import std_msgs.msg
 import cabot_msgs.msg
@@ -35,6 +35,13 @@ from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
+
+
+class SpeechPriority:
+    REQUIRED = 90
+    HIGH = 60
+    NORMAL = 30
+    LOW = 10
 
 
 class UserInterface(object):

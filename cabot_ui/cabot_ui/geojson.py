@@ -40,7 +40,8 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
-from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil, SpeechPriority
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.interface import SpeechPriority
 
 
 class RouteStruct(enum.Enum):
