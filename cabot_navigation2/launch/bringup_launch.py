@@ -74,8 +74,8 @@ def generate_launch_description():
         'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
         'inflation_radius': PythonExpression([footprint_radius, "+ 0.25"]),
-        'offset_normal': PythonExpression([offset, " if '", cabot_side, "'=='left' else -", offset]),
-        'offset_small': PythonExpression(["0.1 if '", cabot_side, "'=='left' else -0.1"])
+        'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
+        'offset_normal': offset
     }
 
     configured_params = RewrittenYaml(
@@ -90,8 +90,8 @@ def generate_launch_description():
         'default_bt_xml_filename': default_bt_xml_file2,
         'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
-        'offset_normal': PythonExpression([offset, " if '", cabot_side, "'=='left' else -", offset]),
-        'offset_small': PythonExpression(["0.1 if '", cabot_side, "'=='left' else -0.1"])
+        'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
+        'offset_normal': offset
     }
 
     configured_params2 = RewrittenYaml(

@@ -114,3 +114,6 @@ IN_FRONT: "in front of you"
 RIGHT_SIDE: "on your right"
 LEFT_SIDE: "on your left"
 APPROACEHD_TO_FACILITY: "{0} is {1}"
+
+## Describe Surround
+REQUESTING_DESCRIBE_SURROUND: "Requesting surrounding situation"

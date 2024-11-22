@@ -380,6 +380,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._max_speed = node.declare_parameter("max_speed", 1.1).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
+        self._speed_poi_params = node.declare_parameter("speed_poi_params", [0.5, 0.5, 0.5]).value
 
         self._global_map_name = node.declare_parameter("global_map_name", "map_global").value
         self.visualizer.global_map_name = self._global_map_name
@@ -445,6 +446,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._start_loop()
 
     def _localize_status_callback(self, msg):
+        self._logger.info(F"_localize_status_callback {msg}")
         self.localize_status = msg.status
 
     def process_event(self, event):
@@ -549,6 +551,30 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._current_goal.update_goal(msg)
 
     # public interfaces
+
+    def set_handle_side(self, side):
+        self._logger.info("set_handle_side is called")
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_handle_side, side))
+
+    def _set_handle_side(self, side):
+        self._logger.info("_set_handle_side is called")
+
+        def callback(result):
+            self.delegate.activity_log("cabot/navigation", "set_handle_side", "side")
+            self._logger.info(f"set_handle_side {side=}, {result=}")
+        if side == "left":
+            offset_sign = +1.0
+        elif side == "right":
+            offset_sign = -1.0
+        else:
+            self._logger.info(f"set_handle_side {side=} should be 'left' or 'right'")
+            return
+        self.change_parameters({
+            "/footprint_publisher": {
+                "offset_sign": offset_sign
+            }
+        }, callback)
 
     # wrap execution by a queue
     def set_destination(self, destination):
@@ -799,6 +825,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         try:
             self.current_pose = self.current_local_pose()
             self.delegate.update_pose(ros_pose=self.current_ros_pose(),
+                                      current_pose=self.current_pose,
                                       global_position=self.current_global_pose(),
                                       current_floor=self.current_floor,
                                       global_frame=self._global_map_name
@@ -903,7 +930,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger.info(F"_check_nearby_facility passed {entrance._id}")
                 self.delegate.passed_poi(poi=entrance)
 
+    """
+     robot              target     POI
+     o->                     |--D--o
+     The robot will decrease the speed towards the target and keep speed until passing the POI
+     THe robot velocity is calculated based on expected deceleration and delay
+    """
     def _check_speed_limit(self, current_pose):
+        target_distance = self._speed_poi_params[0]  # meters
+        expected_deceleration = self._speed_poi_params[1]  # meters/seconds^2
+        expected_delay = self._speed_poi_params[2]  # seconds
+
         def max_v(D, A, d):
             return (-2 * A * d + math.sqrt(4 * A * A * d * d + 8 * A * D)) / 2
 
@@ -913,7 +950,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
-                    limit = min(limit, max(poi.limit, max_v(max(0, dist-0.5), 0.5, 0.5)))
+                    limit = min(limit, max(poi.limit, max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)))
+                    self._logger.debug(f"SpeedPOI {max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)=}")
+                    self._logger.debug(f"SpeedPOI {dist=}, {target_distance=}, {expected_deceleration=}, {expected_delay=}, {limit=}, {poi.limit=}")
                 if limit < self._max_speed:
                     self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
@@ -1270,6 +1309,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"go to floor {floor}")
         self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
 
+        class GotoFloorTaskResult():
+            def __init__(self):
+                pass
+
         class GotoFloorTask():
             def __init__(self, nav):
                 self._nav = nav
@@ -1277,9 +1320,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger = nav._logger
                 self.buffer = nav.buffer
                 self.delegate = nav.delegate
-                self.future = self._node.executor.create_task(self.handler)
-                self.future.add_done_callback(lambda x: callback(True))
+                self.future = rclpy.task.Future()
                 self.rate = self._nav._node.create_rate(2)
+                self.thread = threading.Thread(target=self.run)
+                self.thread.start()
                 self.cancelled = False
 
             def cancel_goal_async(self):
@@ -1292,16 +1336,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.cancelled = True
                 return self.cancel_future
 
-            def handler(self):
-                try:
-                    self._handle()
-                except:  # noqa: #722
-                    self._logger.error(traceback.format_exc())
-
-            def _handle(self):
+            def run(self):
                 first = True
                 while rclpy.ok():
-                    self.rate.sleep()
+                    time.sleep(0.5)
                     self._logger.info(F"GotoFloorTask loop cancelled={self.cancelled}")
                     if self.cancelled:
                         self._logger.info("GotoFloorTask cancelled")
@@ -1319,7 +1357,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
                             tf2_ros.ExtrapolationException):
                         self._logger.warn(F"Could not find tf from map to {self._nav.current_frame}")
-                self.future.done()
+                self.future.set_result(GotoFloorTaskResult())
+                callback(self.future)
 
         task = GotoFloorTask(self)
         gh_callback(task)
