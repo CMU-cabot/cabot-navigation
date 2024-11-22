@@ -95,6 +95,8 @@ from diagnostic_msgs.msg import DiagnosticStatus
 import std_msgs.msg
 from cabot_msgs.srv import LookupTransform
 
+from ublox_converter import UbloxConverterNode
+
 
 def json2anchor(jobj):
     return geoutil.Anchor(lat=jobj["lat"],
@@ -1431,6 +1433,10 @@ class MultiFloorManager:
         # do not use unreliable gnss fix
         if fix.status.status == NavSatStatus.STATUS_NO_FIX \
                 or fix_rejection_position_covariance < fix.position_covariance[0]:
+            # log before gnss-based initial localization
+            if self.gnss_localization_time is None:
+                self.logger.info(F"gnss_fix_callback: waiting for position_covariance convergence (cov[0]={fix.position_covariance[0]}, covariance_threshold={fix_rejection_position_covariance})",
+                                 throttle_duration_sec=1.0)
             # if navsat topic is timeout, use position covariance for indoor/outdoor mode instead
             if now - self.gnss_navsat_time > Duration(seconds=self.gnss_params.gnss_navsat_timeout):
                 if self.gnss_params.gnss_position_covariance_indoor_threshold < fix.position_covariance[0]:
@@ -2083,6 +2089,7 @@ if __name__ == "__main__":
     broadcaster = tf2_ros.TransformBroadcaster(node)
     tfBuffer = BufferProxy(node)
 
+    # multi floor manager
     multi_floor_manager = MultiFloorManager(node)
     # load node parameters
     configuration_directory_raw = node.declare_parameter("configuration_directory", '').value
@@ -2149,6 +2156,18 @@ if __name__ == "__main__":
     cartographer_qos_overrides = map_config["cartographer_qos_overrides"] if "cartographer_qos_overrides" in map_config else cartographer_qos_overrides_default
 
     # current_publisher = CurrentPublisher(node, verbose=verbose)
+
+    # ublox converter
+    ublox_converter_config = {
+                                "min_cno": node.declare_parameter("ublox_converter.min_cno", 30).value,
+                                "min_elev": node.declare_parameter("ublox_converter.min_elev", 15).value,
+                                "num_sv_threshold_low": node.declare_parameter("ublox_converter.num_sv_threshold_low", 5).value,
+                                "num_sv_threshold_high": node.declare_parameter("ublox_converter.num_sv_threshold_high", 10).value,
+                            }
+    map_ublox_converter_config = map_config.get("ublox_converter", {})
+    ublox_converter_config.update(map_ublox_converter_config)  # update if defined in map_config
+    ublox_converter = UbloxConverterNode.from_dict(node, ublox_converter_config)
+    logger.info(F"ublox_converter = {ublox_converter}")
 
     # configuration file check
     configuration_directory = configuration_directory_raw  # resource_utils.get_filename(configuration_directory_raw)
