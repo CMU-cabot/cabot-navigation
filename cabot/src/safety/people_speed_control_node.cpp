@@ -76,6 +76,7 @@ public:
   double social_distance_x_;
   double social_distance_y_;
   double no_people_topic_max_speed_;
+  double collision_time_horizon_;
   bool no_people_flag_;
 
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
@@ -114,6 +115,7 @@ public:
     social_distance_x_(2.0),
     social_distance_y_(1.0),
     no_people_topic_max_speed_(0.5),
+    collision_time_horizon_(5.0),
     no_people_flag_(false)
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Constructor");
@@ -153,6 +155,7 @@ public:
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
+    collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -252,6 +255,9 @@ public:
       }
       if (param.get_name() == "social_distance_y") {
         social_distance_y_ = param.as_double();
+      }
+      if (param.get_name() == "collision_time_horizon") {
+        collision_time_horizon_ = param.as_double();
       }
     }
     results->successful = true;
@@ -563,11 +569,10 @@ private:
       return false;
     }
 
-    constexpr double time_horizon = 5.0;
     double collision_time = -y_rel / vy;
     double collision_x = x_rel + collision_time * vx;
     if (0.0 <= collision_x && collision_time <= max_speed_ * collision_time &&
-        0.0 <= collision_time && collision_time <= time_horizon) {
+        0.0 <= collision_time && collision_time <= collision_time_horizon_) {
       return true;
     }
     return false;
