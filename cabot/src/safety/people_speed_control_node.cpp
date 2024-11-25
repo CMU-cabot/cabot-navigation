@@ -598,7 +598,7 @@ private:
 
     double collision_time = -y_rel / vy;
     double collision_x = x_rel + collision_time * vx;
-    if (0.0 <= collision_x && collision_time <= max_speed_ * collision_time &&
+    if (0.0 <= collision_x && collision_x <= max_speed_ * collision_time &&
         0.0 <= collision_time && collision_time <= collision_time_horizon_) {
       return true;
     }
