@@ -81,6 +81,7 @@ public:
   double no_people_topic_max_speed_;
   double collision_time_horizon_;
   bool no_people_flag_;
+  bool enable_velocity_obstacle_;
 
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -122,7 +123,8 @@ public:
     social_distance_max_angle_(M_PI_2),
     no_people_topic_max_speed_(0.5),
     collision_time_horizon_(5.0),
-    no_people_flag_(false)
+    no_people_flag_(false),
+    enable_velocity_obstacle_(true)
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -165,6 +167,7 @@ public:
     social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
     collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
+    enable_velocity_obstacle_ = declare_parameter("enable_velocity_obstacle", enable_velocity_obstacle_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -276,6 +279,9 @@ public:
       }
       if (param.get_name() == "collision_time_horizon") {
         collision_time_horizon_ = param.as_double();
+      }
+      if (param.get_name() == "enable_velocity_obstacle") {
+        enable_velocity_obstacle_ = param.as_bool();
       }
     }
     results->successful = true;
@@ -396,64 +402,68 @@ private:
       }
     }
 
+    double people_speed_limit = social_speed_limit;
+
     // Velocity Obstacle
-    std::vector<std::pair<double, double>> vo_intervals;
-    for (size_t i = 0; i < input->people.size(); ++i) {
-      const auto & p_local = transformed_people[i].first;
-      const auto & v_local = transformed_people[i].second;
+    if (enable_velocity_obstacle_) {
+      std::vector<std::pair<double, double>> vo_intervals;
+      for (size_t i = 0; i < input->people.size(); ++i) {
+        const auto & p_local = transformed_people[i].first;
+        const auto & v_local = transformed_people[i].second;
 
-      double x = p_local.x();
-      double y = p_local.y();
-      double vx = v_local.x();
-      double vy = v_local.y();
+        double x = p_local.x();
+        double y = p_local.y();
+        double vx = v_local.x();
+        double vy = v_local.y();
 
-      double RPy = atan2(y, x);
-      double dist = hypot(x, y);
-      double s = asin(pr / dist);
-      double theta_right = normalizedAngle(RPy - s);
-      double theta_left = normalizedAngle(RPy + s);
+        double RPy = atan2(y, x);
+        double dist = hypot(x, y);
+        double s = asin(pr / dist);
+        double theta_right = normalizedAngle(RPy - s);
+        double theta_left = normalizedAngle(RPy + s);
 
-      if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
-        continue;
-      }
+        if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
+          continue;
+        }
 
-      if (!willCollideWithinTime(x, y, vx, vy)) {
-        continue;
-      }
+        if (!willCollideWithinTime(x, y, vx, vy)) {
+          continue;
+        }
 
-      auto compute_velocity = [&](double theta) -> std::optional<double> {
-          double t = -vy / sin(theta);
-          return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
-        };
+        auto compute_velocity = [&](double theta) -> std::optional<double> {
+            double t = -vy / sin(theta);
+            return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
+          };
 
-      bool is_limited = false;
-      if (std::abs(theta_right) < epsilon || std::abs(theta_right - M_PI) < epsilon) {
-        is_limited = addVOInterval(compute_velocity(theta_left), vo_intervals);
-      } else if (std::abs(theta_left) < epsilon || std::abs(theta_left - M_PI) < epsilon) {
-        is_limited = addVOInterval(compute_velocity(theta_right), vo_intervals);
-      } else {
-        auto v_right = compute_velocity(theta_right);
-        auto v_left = compute_velocity(theta_left);
-
-        if (v_right && v_left) {
-          double v_min = std::min(v_right.value(), v_left.value());
-          double v_max = std::max(v_right.value(), v_left.value());
-          if (0.0 < v_min && v_min < max_speed_) {
-            vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
-            is_limited = true;
-          }
+        bool is_limited = false;
+        if (std::abs(theta_right) < epsilon || std::abs(theta_right - M_PI) < epsilon) {
+          is_limited = addVOInterval(compute_velocity(theta_left), vo_intervals);
+        } else if (std::abs(theta_left) < epsilon || std::abs(theta_left - M_PI) < epsilon) {
+          is_limited = addVOInterval(compute_velocity(theta_right), vo_intervals);
         } else {
-          is_limited |= addVOInterval(v_right, vo_intervals);
-          is_limited |= addVOInterval(v_left, vo_intervals);
+          auto v_right = compute_velocity(theta_right);
+          auto v_left = compute_velocity(theta_left);
+
+          if (v_right && v_left) {
+            double v_min = std::min(v_right.value(), v_left.value());
+            double v_max = std::max(v_right.value(), v_left.value());
+            if (0.0 < v_min && v_min < max_speed_) {
+              vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
+              is_limited = true;
+            }
+          } else {
+            is_limited |= addVOInterval(v_right, vo_intervals);
+            is_limited |= addVOInterval(v_left, vo_intervals);
+          }
+        }
+
+        if (is_limited && logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+          addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
         }
       }
 
-      if (is_limited && logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
-        addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
-      }
+      people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
     }
-
-    double people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
 
     std_msgs::msg::Float32 msg;
     msg.data = people_speed_limit;
