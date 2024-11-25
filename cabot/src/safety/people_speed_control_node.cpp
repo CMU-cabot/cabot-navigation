@@ -79,6 +79,7 @@ public:
   double social_distance_min_angle_;  // [rad]
   double social_distance_max_angle_;  // [rad]
   double no_people_topic_max_speed_;
+  double collision_time_horizon_;
   bool no_people_flag_;
 
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
@@ -120,6 +121,7 @@ public:
     social_distance_min_angle_(-M_PI_2),
     social_distance_max_angle_(M_PI_2),
     no_people_topic_max_speed_(0.5),
+    collision_time_horizon_(5.0),
     no_people_flag_(false)
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Constructor");
@@ -162,6 +164,7 @@ public:
     social_distance_min_angle_ = declare_parameter("social_distance_min_angle", social_distance_min_angle_);
     social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
+    collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -270,6 +273,9 @@ public:
       }
       if (param.get_name() == "social_distance_max_angle") {
         social_distance_max_angle_ = param.as_double();
+      }
+      if (param.get_name() == "collision_time_horizon") {
+        collision_time_horizon_ = param.as_double();
       }
     }
     results->successful = true;
@@ -590,11 +596,10 @@ private:
       return false;
     }
 
-    constexpr double time_horizon = 5.0;
     double collision_time = -y_rel / vy;
     double collision_x = x_rel + collision_time * vx;
     if (0.0 <= collision_x && collision_time <= max_speed_ * collision_time &&
-        0.0 <= collision_time && collision_time <= time_horizon) {
+        0.0 <= collision_time && collision_time <= collision_time_horizon_) {
       return true;
     }
     return false;
