@@ -592,15 +592,13 @@ private:
 
   bool willCollideWithinTime(double x_rel, double y_rel, double vx, double vy)
   {
-    if (std::abs(vy) < epsilon) {
-      return false;
-    }
-
-    double collision_time = -y_rel / vy;
-    double collision_x = x_rel + collision_time * vx;
-    if (0.0 <= collision_x && collision_x <= max_speed_ * collision_time &&
-        0.0 <= collision_time && collision_time <= collision_time_horizon_) {
-      return true;
+    const double delta_time = 0.1;
+    for (double t = 0.0; t <= collision_time_horizon_; t += delta_time) {
+      double x = x_rel + t * vx;
+      double y = y_rel + t * vy;
+      if (-pr <= x && x <= pr + max_speed_ * t && -pr <= y && y <= pr) {
+        return true;
+      }
     }
     return false;
   }
