@@ -394,7 +394,8 @@ services:
     extends: localization-prod-base
     
 # server
-  map_base:
+  map_server:
+    image: cmucal/cabot-map_server
     build: 
       context: ./docker/server
       args:
@@ -418,9 +419,9 @@ services:
       - "./server"
       - "run"
       - "defaultServer"
-#    depends_on:
-#      mongodb:
-#        condition: service_healthy
+    depends_on:
+      mongodb:
+        condition: service_healthy
     ports:
       - 127.0.0.1:9090:9090  # only localhost can access this server
     networks:
@@ -431,24 +432,11 @@ services:
       timeout: 3s
       retries: 10  # increased from 5, needs more time to launch on Jetson
 
-  map_server-dev:
-    extends: map_base
-     
-  map_server-prod:
-    extends: map_base
-    image: cmucal/cabot-map_server
-
   map_data:
-    build: 
-      context: ./docker/server
-      args:
-        - USERNAME=runner_user
-    env_file:
-      - ${ENV_FILE:-.empty-env}
-      - .env
-#    depends_on:
-#      map_server:
-#        condition: service_healthy
+    image: cmucal/cabot-map_server      
+    depends_on:
+      map_server:
+        condition: service_healthy
     command:
       - "bash"
       - "-c"
@@ -475,7 +463,7 @@ services:
       retries: 5
 
 
-  location_tools-base:
+  location_tools:
     build:
       context: ./docker/server
       dockerfile: Dockerfile.location-tools
@@ -510,13 +498,6 @@ services:
       timeout: 3s
       retries: 10  # increased from 5, needs more time to launch on Jetson
       
-  location_tools-dev:
-    extends: location_tools-base
-  
-  location_tools-prod:
-    extends: location_tools-base
-    image: cmucal/cabot-location-tools
-
   mongodb_lt:
     image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
     environment:

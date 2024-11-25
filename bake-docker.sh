@@ -137,15 +137,11 @@ if [[ $build_server -eq 1 ]]; then
     server_com="docker buildx bake -f docker-compose-server.yaml $platform_option"
     echo $server_com
     eval $server_com
-fi
-
-if [[ $location_tools -eq 1 ]]; then
+elif [[ $location_tools -eq 1 ]]; then
     location_com="docker buildx bake -f docker-compose-location-tools.yaml  $platform_option"
     echo $location_com
     eval $location_com
-fi
-
-if [[ -n $base_name ]]; then
+elif [[ -n $base_name ]]; then
     base_com="docker buildx bake -f docker-compose.yaml $platform_option $@"
     export BASE_IMAGE=$base_name
     echo $base_com

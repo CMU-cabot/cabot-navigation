@@ -23,8 +23,8 @@ services:
   location_tools:
     extends:
       file: docker-compose-common.yaml
-      service: location_tools-dev
-          
+      service: location_tools
+
   mongodb_lt:
     extends:
       file: docker-compose-common.yaml

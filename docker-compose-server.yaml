@@ -22,19 +22,16 @@ services:
   map_server:
     extends:
       file: docker-compose-common.yaml
-      service: map_server-dev
-      
+      service: map_server
+
   map_data:
     extends:
       file: docker-compose-common.yaml
       service: map_data
-      depend_on:
-        map_server:
-          condition: service_healthy
-          
+
   mongodb:
     extends:
-      file: docker-compose-common-server.yaml
+      file: docker-compose-common.yaml
       service: mongodb                    
 
 networks:
