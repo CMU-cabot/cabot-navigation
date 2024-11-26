@@ -65,8 +65,7 @@ function help()
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
     echo "-X <port>    expose port to outside (set port like 80, 9090, ...)"
-    echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
-    echo "-P           prodcuct image "
+    echo "-E 1-10      separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
 }
 
 pwd=`pwd`
@@ -83,9 +82,9 @@ port_access=127.0.0.1
 environment=
 launch_prefix=
 MAP_SERVER_PORT=9090
-prodimg_server=0
+profile=map
 
-while getopts "hd:E:p:fvcClX:P" arg; do
+while getopts "hd:E:p:fvcClP:" arg; do
     case $arg in
         h)
             help
@@ -98,7 +97,7 @@ while getopts "hd:E:p:fvcClX:P" arg; do
 	    environment=$OPTARG
 	    ;;
 	p)
-	    cabot_site_dir=$(find $scriptdir/cabot_sites -name $OPTARG | head -1)
+	    cabot_site_dir=$(find $scriptdir/cabot_site* -name $OPTARG | head -1)
 	    data_dir=${cabot_site_dir}/server_data
 	    ;;
         f)
@@ -114,14 +113,12 @@ while getopts "hd:E:p:fvcClX:P" arg; do
             clean_server=2
             ;;
 	l)
+	    profile=tools
 	    location_tools=1
 	    ;;
-	X)
+	P)
 	    port_access=0.0.0.0
             export MAP_SERVER_PORT=$OPTARG
-	    ;;
-	P)
-	    prodimg_server=1
 	    ;;
     esac
 done
@@ -159,11 +156,7 @@ if [[ $clean_server -eq 2 ]]; then
 fi
 
 if [[ $location_tools -eq 1 ]]; then
-    if [ $prodimg -eq 1 ]; then
-        docker compose -p $launch_prefix -f docker-compose-location-tools-prodimg.yaml up -d
-    else
-        docker compose -p $launch_prefix -f docker-compose-location-tools.yaml up -d
-    fi
+    docker compose -p $launch_prefix --profile $profile up -d
     exit 0
 fi
 
@@ -255,31 +248,22 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
    exit 2
 fi
 
-dcfile=docker-compose
-if [[ $prodimg_server -eq 1 ]]; then
-    dcfile="${dcfile}-server-prodimg"
-    blue "map_server-prod"
-else 
-    dcfile="${dcfile}-server"
-    blue "map_server"
-fi
-dcfile="${dcfile}.yaml"
 
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 export PORT_ACCESS=$port_access
 if [ -e $data_dir/server.env ]; then
     export ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix -f $dcfile up -d
+        docker compose -p $launch_prefix --profile $profile up -d
         docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
     else
-        docker compose -p $launch_prefix -f $dcfile up -d
+        docker compose -p $launch_prefix --profile $profile up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix -f $dcfile up -d
+        docker compose -p $launch_prefix --profile $profile up -d
         docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
     else
-        docker compose -p $launch_prefix -f $dcfile up -d
+        docker compose -p $launch_prefix --profile $profile up -d
     fi
 fi

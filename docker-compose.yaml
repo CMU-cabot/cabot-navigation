@@ -22,32 +22,105 @@
 # services extend from docker-compose-common.yaml
 
 services:
-  navigation:
+  navigation-dev:
     extends:
       file: docker-compose-common.yaml
       service: navigation-dev
-    environment:
-      - CABOT_GAZEBO=1
-      - CABOT_USE_SIM_TIME=1
-      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
+    profiles:
+      - dev
 
-  gazebo:
+  gazebo-dev:
     extends:
       file: docker-compose-common.yaml
       service: gazebo-dev
+    profiles:
+      - dev
 
-  gui:
+  gui-dev:
     extends:
       file: docker-compose-common.yaml
       service: gui-dev
-    environment:
-      - CABOT_GAZEBO=1
-      - CABOT_USE_SIM_TIME=1
+    profiles:
+      - dev
+    deploy:
+      replicas: ${USE_GUI:-1}
 
-  localization:
+  localization-dev:
     extends:
       file: docker-compose-common.yaml
       service: localization-dev
-    environment:
-      - CABOT_GAZEBO=1
-      - CABOT_USE_SIM_TIME=1
+    profiles:
+      - dev
+
+  # prodimg
+  navigation-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: navigation-prod
+    profiles:
+      - prod
+
+  gazebo-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: gazebo-prod
+    profiles:
+      - prod
+
+  gui-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: gui-prod
+    profiles:
+      - prod
+    deploy:
+      replicas: ${USE_GUI:-1}
+
+  localization-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: localization-prod
+    profiles:
+      - prod
+
+  # map server
+  map_server:
+    extends:
+      file: docker-compose-common.yaml
+      service: map_server
+    profiles:
+      - map
+
+  map_data:
+    extends:
+      file: docker-compose-common.yaml
+      service: map_data
+    ports: !override []  # workaround, do not remove
+    profiles:
+      - map
+
+  mongodb:
+    extends:
+      file: docker-compose-common.yaml
+      service: mongodb
+    profiles:
+      - map
+
+  # location tools
+  location_tools:
+    extends:
+      file: docker-compose-common.yaml
+      service: location_tools
+    profiles:
+      - tools
+
+  mongodb_lt:
+    extends:
+      file: docker-compose-common.yaml
+      service: mongodb_lt
+    profiles:
+      - tools
+
+networks:
+  mongodb_network:
+    name: mongodb_network

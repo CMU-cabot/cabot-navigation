@@ -109,7 +109,7 @@ function help()
     echo "-H          headless"
     echo "-M          log dmesg output"
     echo "-n <name>   set log name prefix"
-    echo "-p          use production image"
+    echo "-d          development"
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
@@ -143,7 +143,7 @@ retryoption=
 list_modules=0
 list_functions=0
 environment=
-prodimg=0
+profile=prod
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -155,12 +155,15 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDE:f:HlLMn:prsS:ti:T:uvy" arg; do
+while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
     case $arg in
         h)
             help
             exit
             ;;
+	d)
+	    profile=dev
+	    ;;
         D)
             debug=1
             ;;
@@ -172,6 +175,7 @@ while getopts "hDE:f:HlLMn:prsS:ti:T:uvy" arg; do
             ;;
         H)
             export CABOT_HEADLESS=1
+	    export USE_GUI=0
             ;;
 	l)
 	    list_functions=1
@@ -311,9 +315,7 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
-if [[ $prodimg -eq 1 ]]; then dcfile="${dcfile}-prodimg"; fi
 if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
-if [[ $CABOT_HEADLESS -eq 1 ]]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
@@ -321,14 +323,13 @@ if [ ! -e $dcfile ]; then
     exit
 fi
 
-dccom="docker compose -f $dcfile -p $launch_prefix"
+dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
 
 ## launch server
-if [ $prodimg -eq 1 ]; then
- ./server-launch.sh -c -p $CABOT_SITE -P -E "$environment"
-else
- ./server-launch.sh -c -p $CABOT_SITE -E "$environment"
-fi
+com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+echo $com
+eval $com
+# ./server-launch.sh -c -p ${CABOT_SITE} -E "$environment"
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
