@@ -119,7 +119,8 @@ while getopts "hd:E:p:fvcClX:P" arg; do
 	X)
 	    port_access=0.0.0.0
             export MAP_SERVER_PORT=$OPTARG
-	P)  
+	    ;;
+	P)
 	    prodimg_server=1
 	    ;;
     esac
