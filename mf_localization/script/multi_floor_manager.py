@@ -2085,6 +2085,10 @@ if __name__ == "__main__":
 
     multi_floor_manager = MultiFloorManager(node)
     # load node parameters
+    if not node.has_parameter("use_sim_time"):
+        node.declare_parameter("use_sim_time", False)
+    use_sim_time = node.get_parameter("use_sim_time").get_parameter_value().bool_value
+
     configuration_directory_raw = node.declare_parameter("configuration_directory", '').value
     configuration_file_prefix = node.declare_parameter("configuration_file_prefix", '').value
     temporary_directory_name = node.declare_parameter("temporary_directory_name", "tmp").value
@@ -2363,6 +2367,7 @@ if __name__ == "__main__":
                         "--collect_metrics"
                     ],
                     parameters=[{
+                        'use_sim_time': use_sim_time,
                         'qos_overrides': cartographer_qos_overrides_resolved
                     }]
                 )

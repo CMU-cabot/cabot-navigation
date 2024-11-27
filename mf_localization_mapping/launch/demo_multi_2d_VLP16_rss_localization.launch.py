@@ -224,7 +224,12 @@ def generate_launch_description():
             package='mf_localization',
             executable='ublox_converter.py',
             name='ublox_converter',
-            parameters=[PathJoinSubstitution([mf_localization_dir, 'configuration_files', 'ublox/ublox_converter.yaml'])],
+            parameters=[
+                PathJoinSubstitution([mf_localization_dir, 'configuration_files', 'ublox/ublox_converter.yaml']),
+                {
+                    'use_sim_time': use_sim_time
+                }
+            ],
             remappings=[
                 ('navsat', 'ublox/navsat'),
                 ('num_active_sv', 'ublox_converter/num_active_sv'),
@@ -241,6 +246,7 @@ def generate_launch_description():
                 executable='multi_floor_topic_proxy',
                 name='multi_floor_topic_proxy',
                 parameters=[{
+                    'use_sim_time': use_sim_time,
                     'map_config_file': map_config_file,
                     'verbose': True,
                 }],
@@ -257,6 +263,7 @@ def generate_launch_description():
                 parameters=[
                     multi_floor_config_filename,
                     {
+                        'use_sim_time': use_sim_time,
                         'map_config_file': map_config_file,
                         'configuration_directory': PathJoinSubstitution([mf_localization_dir, 'configuration_files', 'cartographer']),
                         'configuration_file_prefix': 'cartographer_2d',
