@@ -131,6 +131,10 @@ if [[ -n $base_name ]]; then
     export BASE_IMAGE=$base_name
     echo $base_com
     eval $base_com
+    if [[ $? -ne 0 ]]; then
+        echo "failed to build image"
+        exit 1
+    fi
 fi
 
 # reset buildx builder to default
