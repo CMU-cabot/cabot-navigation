@@ -76,6 +76,7 @@ services:
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
       - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
       - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
+      - ./lidar_process_msgs:/home/developer/ros2_ws/src/lidar_process_msgs
 # network
     privileged: true
     network_mode: host
@@ -112,7 +113,7 @@ services:
     extends: ros2
     command:
       - "/launch.sh"
-      # - "-c"                  # core dump
+      - "-c"                  # core dump
       - "navigation"
 
   gazebo-base:
@@ -171,7 +172,10 @@ services:
       - CYCLONEDDS_URI
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-false}
       - ROS_DOMAIN_ID
+      - __NV_PRIME_RENDER_OFFLOAD
+      - __GLX_VENDOR_LIBRARY_NAME
       # ntrip client
       - NTRIP_CLIENT # rtklib, str2str_node, or ntrip_client
       - NTRIP_CLIENT_START_AT_LAUNCH=${NTRIP_CLIENT_START_AT_LAUNCH:-0}

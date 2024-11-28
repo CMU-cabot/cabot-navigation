@@ -18,6 +18,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(nav2_lifecycle_manager REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_core REQUIRED)
@@ -31,6 +32,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
+find_package(lidar_process_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
@@ -66,10 +68,12 @@ if(NOT DEBUG)
 
 set(dependencies
   geometry_msgs
+  visualization_msgs
   rclcpp
   nav2_lifecycle_manager
   nav2_costmap_2d
   nav2_core
+  nav2_util w
   angles
   nav_msgs
   pluginlib
@@ -79,6 +83,7 @@ set(dependencies
   tf2_ros
   people_msgs
   queue_msgs
+  lidar_process_msgs
   sensor_msgs
   diagnostic_updater
   visualization_msgs
@@ -118,6 +123,7 @@ add_library(cabot_layers SHARED
   plugins/navcog_path_layer.cpp
   plugins/people_obstacle_layer.cpp
   plugins/navcog_path_util.cpp
+  plugins/group_obstacle_layer.cpp
 )
 
 target_compile_definitions(cabot_layers PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -126,6 +132,7 @@ ament_target_dependencies(cabot_layers
   nav2_costmap_2d
   nav2_core
   people_msgs
+  lidar_process_msgs
   pluginlib
 )
 
@@ -136,6 +143,7 @@ add_library(cabot_planners SHARED
   plugins/cabot_planner_param.cpp
   plugins/cabot_planner_util.cpp
   plugins/navcog_path_util.cpp
+  plugins/cabot_path_forward_planner.cpp
 )
 
 target_compile_definitions(cabot_planners PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -146,6 +154,7 @@ ament_target_dependencies(cabot_planners
   people_msgs
   pluginlib
   queue_msgs
+  lidar_process_msgs
   rclcpp
   tf2
 )
@@ -215,6 +224,8 @@ ament_target_dependencies(cabot_lifecycle_manager
 add_library(cabot_controllers SHARED
   plugins/cabot_rotation_shim_controller.cpp
   plugins/cabot_dwb_local_planner.cpp
+  plugins/cabot_sampling_MPC_controller.cpp
+  plugins/util.cpp
 )
 ament_target_dependencies(cabot_controllers
   dwb_core
@@ -222,6 +233,7 @@ ament_target_dependencies(cabot_controllers
   nav2_rotation_shim_controller
   nav2_util
   pluginlib
+  lidar_process_msgs
 )
 
 install(TARGETS
@@ -308,9 +320,11 @@ if(DEBUG)
 set(dependencies_test
   diagnostic_updater
   geometry_msgs
+  visualization_msgs
   sensor_msgs
   people_msgs
   queue_msgs
+  lidar_process_msgs
   rclcpp
   nav2_lifecycle_manager
   nav2_navfn_planner
@@ -333,6 +347,7 @@ add_executable(cabot_planner_test
   plugins/cabot_planner_param.cpp
   plugins/cabot_planner_util.cpp
   plugins/navcog_path_util.cpp
+  plugins/cabot_path_forward_planner.cpp
 )
 ament_target_dependencies(cabot_planner_test
   ${dependencies_test}
