@@ -30,6 +30,7 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
+import cabot_ui.geojson
 from cabot_ui import visualizer, i18n
 from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
@@ -117,7 +118,7 @@ class UserInterface(object):
         self.lang = lang
         i18n.set_language(self.lang)
 
-    def speak(self, text, force=True, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
+    def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
         if text is None:
             return
 
@@ -292,22 +293,30 @@ class UserInterface(object):
             self.speak(i18n.localized_string("YOU_HAVE_ARRIVED"), priority=SpeechPriority.HIGH)
         self._activity_log("cabot/interface", "navigation", "arrived")
 
+    def get_speech_priority(self, poi):
+        if isinstance(poi, cabot_ui.geojson.Entrance):
+            return SpeechPriority.LOW
+        if isinstance(poi, cabot_ui.geojson.EntrancePOI):
+            return SpeechPriority.LOW
+        if isinstance(poi, cabot_ui.geojson.POI):
+            return SpeechPriority.REQUIRED
+
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
         if statement:
-            self.speak(statement, priority=poi.speech_priority)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approaching")
 
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
         if statement:
-            self.speak(statement, priority=poi.speech_priority)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
-            self.speak(statement, priority=poi.speech_priority)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "passed")
 
     def could_not_get_current_location(self):

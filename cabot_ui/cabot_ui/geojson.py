@@ -41,10 +41,9 @@ import angles
 import geometry_msgs.msg
 from cabot_ui import geoutil, i18n
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
-from cabot_ui.interface import SpeechPriority
 
 
-class RouteStruct(enum.Enum):
+class RouteStruct(enum.IntEnum):
     """ Route Struct Class """
     """ See p.14 of https://www.mlit.go.jp/common/001244374.pdf """
     Sidewalk = 1
@@ -629,10 +628,6 @@ class Entrance(geoutil.TargetPlace):
     def floor(self):
         return self.node.floor
 
-    @property
-    def speech_priority(self):
-        return SpeechPriority.LOW
-
     def update_anchor(self, anchor):
         self.anchor = anchor
 
@@ -804,10 +799,6 @@ class POI(Facility, geoutil.TargetPlace):
     def floor(self):
         return self._get_prop('hulop_height')
 
-    @property
-    def speech_priority(self):
-        return SpeechPriority.REQUIRED
-
     def approaching_statement(self):
         return None
 
@@ -899,10 +890,6 @@ class EntrancePOI(POI):
 
     def approached_statement(self):
         return self.name
-
-    @property
-    def speech_priority(self):
-        return SpeechPriority.LOW
 
 
 class SpeedPOI(POI):

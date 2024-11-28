@@ -969,7 +969,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
-                if turn.passed:
+                if turn.passed_vibrator and turn.passed_directional_indicator:
                     dist_to_end = numpy.sqrt((current_pose.x - turn.end.pose.position.x)**2 + (current_pose.y - turn.end.pose.position.y)**2)
                     self._logger.info(F"Distance to turn end: {dist_to_end}")
                     if dist_to_end < 0.75:
@@ -1309,10 +1309,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"go to floor {floor}")
         self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
 
-        class GotoFloorTaskResult():
-            def __init__(self):
-                pass
-
         class GotoFloorTask():
             def __init__(self, nav):
                 self._nav = nav
@@ -1320,10 +1316,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger = nav._logger
                 self.buffer = nav.buffer
                 self.delegate = nav.delegate
-                self.future = rclpy.task.Future()
+                self.future = self._node.executor.create_task(self.handler)
+                self.future.add_done_callback(lambda x: callback(True))
                 self.rate = self._nav._node.create_rate(2)
-                self.thread = threading.Thread(target=self.run)
-                self.thread.start()
                 self.cancelled = False
 
             def cancel_goal_async(self):
@@ -1336,10 +1331,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.cancelled = True
                 return self.cancel_future
 
-            def run(self):
+            def handler(self):
+                try:
+                    self._handle()
+                except:  # noqa: #722
+                    self._logger.error(traceback.format_exc())
+
+            def _handle(self):
                 first = True
                 while rclpy.ok():
-                    time.sleep(0.5)
+                    self.rate.sleep()
                     self._logger.info(F"GotoFloorTask loop cancelled={self.cancelled}")
                     if self.cancelled:
                         self._logger.info("GotoFloorTask cancelled")
@@ -1357,8 +1358,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
                             tf2_ros.ExtrapolationException):
                         self._logger.warn(F"Could not find tf from map to {self._nav.current_frame}")
-                self.future.set_result(GotoFloorTaskResult())
-                callback(self.future)
+                self.future.done()
 
         task = GotoFloorTask(self)
         gh_callback(task)

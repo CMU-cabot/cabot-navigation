@@ -217,7 +217,7 @@ class Menu(object):
     def _get_path(self, name):
         return ".".join(["persistent", name])
 
-    def _get_saved_config(self, name, callback, default=None):
+    def _get_saved_config(self, name, default=None):
         try:
             self.get_client.wait_for_service(timeout_sec=3.0)
             path = self._get_path(name)
@@ -226,21 +226,15 @@ class Menu(object):
             req.names.append(path)
 
             CaBotRclpyUtil.info(f"getting the param {path}")
-            future = self.get_client.call_async(req)
-
-            def done_callback(future):
-                result = future.result()
-                CaBotRclpyUtil.info(f"got the result {result}")
-                if len(result.values) == 1:
-                    callback(rclpy.parameter.parameter_value_to_python(result.values[0]))
-                else:
-                    CaBotRclpyUtil.error("cannot get the parameter")
-                    callback(default)
-            future.add_done_callback(done_callback)
+            result = self.get_client.call(req)
+            CaBotRclpyUtil.info(f"got the result {result}")
+            if len(result.values) == 1:
+                return rclpy.parameter.parameter_value_to_python(result.values[0])
+            CaBotRclpyUtil.error("cannot get the parameter")
         except:  # noqa: #722
             if default is not None:
                 self._save_config(name, default)
-            callback(default)
+            return default
 
     def _save_config(self, name, value):
         CaBotRclpyUtil.info("save config")
@@ -252,7 +246,7 @@ class Menu(object):
             req = SetParameters.Request()
             param = rclpy.parameter.Parameter(path, value=value).to_parameter_msg()
             req.parameters.append(param)
-            result = self.set_client.call_async(req)
+            result = self.set_client.call(req)
             CaBotRclpyUtil.info(f"{result}")
         except:  # noqa: #722
             CaBotRclpyUtil.error(traceback.format_exc())
@@ -271,16 +265,16 @@ class Menu(object):
         return default
 
     @staticmethod
-    def create_menu(menu_obj, config, callback=None, identifier=None, title=None, usage=None, parent=None):
-        CaBotRclpyUtil.info(F"create_menu {config=}")
+    def create_menu(menu_obj, config, identifier=None, title=None, usage=None, parent=None):
         if not config:
             return None
+
         """Create menu from config"""
         # refer menu
         menu = config["menu"] if "menu" in config else None
         if menu is not None:
             config2 = menu_obj[menu] if menu in menu_obj else []
-            return Menu.create_menu(menu_obj, config2, callback=callback, identifier=menu, title=title, usage=usage, parent=parent)
+            return Menu.create_menu(menu_obj, config2, identifier=menu, title=title, usage=usage, parent=parent)
 
         # otherwise
         _type = Menu.get_menu_config(config, "type", "item")
@@ -288,7 +282,7 @@ class Menu(object):
         if _type == "list":
             return MenuList(menu_obj, config, identifier=identifier, parent=parent)
         elif _type == "adjust":
-            return MenuAdjust(config, identifier=identifier, parent=parent, callback=callback)
+            return MenuAdjust(config, identifier=identifier, parent=parent)
         elif _type == "item":
             return MenuItem(config, identifier=identifier, parent=parent)
 
@@ -458,7 +452,7 @@ class MenuList(Menu):
 
 class MenuAdjust(Menu):
     """Adjustable menu"""
-    def __init__(self, config=None, identifier=None, parent=None, callback=None):
+    def __init__(self, config=None, identifier=None, parent=None):
         super(MenuAdjust, self).__init__(config=config, identifier=identifier, parent=parent)
         self._type = Menu.Adjust
         self._max = Menu.get_menu_config(config, "max", error=True)
@@ -478,14 +472,9 @@ class MenuAdjust(Menu):
 
         self._step = Menu.get_menu_config(config, "step", 1)
         self._name = Menu.get_menu_config(config, "name", error=True)
-
-        def current_value_callback(value):
-            self._current = value
-            self._check_action_once()
-            if callback:
-                callback()
-        self._get_saved_current(current_value_callback)
+        self._current = self._get_saved_current()
         self._actions = Actions.create_actions(config, self)
+        self._check_action_once()
 
     def _check_action(self):
         if self._actions is None:
@@ -499,13 +488,11 @@ class MenuAdjust(Menu):
     def _check_action_once(self):
         self._check_action()
 
-    def _get_saved_current(self, callback):
-        def config_callback(config):
-            temp = config
-            if hasattr(self, "_values") and self._values is not None and isinstance(temp, str):
-                temp = self._values.index(temp)
-            callback(temp if temp is not None else self._default)
-        self._get_saved_config(self._name, config_callback, default=self._default)
+    def _get_saved_current(self):
+        temp = self._get_saved_config(self._name, default=self._default)
+        if hasattr(self, "_values") and self._values is not None and isinstance(temp, str):
+            temp = self._values.index(temp)
+        return temp if temp is not None else self._default
 
     def _save_current(self):
         if self._actions is not None:
@@ -561,9 +548,7 @@ class MenuAdjust(Menu):
         # " " + i18n.localized_string(self._title))
 
     def reset(self):
-        def current_value_callback(value):
-            self._current = value
-        self._get_saved_current(current_value_callback)
+        self._current = self._get_saved_current()
 
 
 class MenuItem(Menu):
