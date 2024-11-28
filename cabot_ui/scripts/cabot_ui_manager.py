@@ -45,6 +45,7 @@ import rclpy
 import rclpy.client
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import std_msgs.msg
 import std_srvs.srv
@@ -116,13 +117,24 @@ class CabotUIManager(NavigationInterface, object):
                 stat.summary(DiagnosticStatus.ERROR, "Not ready")
             return stat
         self.updater.add(FunctionDiagnosticTask("UI Manager", manager_status))
-        self._logger.info("set timer for create_menu")
+
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
     def create_menu(self):
-        self._logger.info("create_menu is called")
         try:
-            def done_callback():
+            self.create_menu_timer.cancel()
+            menu_file = node.declare_parameter('menu_file', '').value
+            with open(menu_file, 'r') as stream:
+                menu_obj = yaml.safe_load(stream)
+                self.main_menu = Menu.create_menu(menu_obj, {"menu": "main_menu"})
+            self.speed_menu = None
+            if self.main_menu:
+                self.main_menu.delegate = self
+                self.speed_menu = self.main_menu.get_menu_by_identifier("max_velocity_menu")
+            else:
+                self._logger.error("menu is not initialized")
+
+            if self.speed_menu:
                 init_speed = self.speed_menu.value
                 try:
                     desc = ParameterDescriptor()
@@ -137,14 +149,8 @@ class CabotUIManager(NavigationInterface, object):
                 self._logger.info(f"Initial Speed = {init_speed}")
                 self.speed_menu.set_value(init_speed)
 
-                self.menu_stack = []
-                self._logger.info("create_menu completed")
-
-            self.create_menu_timer.cancel()
-            menu_file = node.declare_parameter('menu_file', '').value
-            with open(menu_file, 'r') as stream:
-                menu_obj = yaml.safe_load(stream)
-                self.speed_menu = Menu.create_menu(menu_obj, {"menu": "max_velocity_menu"}, done_callback)
+            self.menu_stack = []
+            self._logger.info("create_menu completed")
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
@@ -640,11 +646,11 @@ if __name__ == "__main__":
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
     desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
     nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
-    executors = [SingleThreadedExecutor(),
+    executors = [MultiThreadedExecutor(),
+                 MultiThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
-                 SingleThreadedExecutor(),
-                 SingleThreadedExecutor(),
+                 MultiThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  ]
