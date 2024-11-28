@@ -969,7 +969,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
-                if turn.passed:
+                if turn.passed_vibrator and turn.passed_directional_indicator:
                     dist_to_end = numpy.sqrt((current_pose.x - turn.end.pose.position.x)**2 + (current_pose.y - turn.end.pose.position.y)**2)
                     self._logger.info(F"Distance to turn end: {dist_to_end}")
                     if dist_to_end < 0.75:
