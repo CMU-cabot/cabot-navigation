@@ -496,7 +496,7 @@ double CaBotSamplingMPCController::calculateCost(
 
   current_dist = pointDist(current_pose.pose.position, local_goal.pose.position);
   // min is fastest way to goal
-  min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * prediction_horizon_);
+  // min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * prediction_horizon_);
 
   int idx = 0;
   for (const auto & pose : sampled_trajectory)
@@ -512,6 +512,7 @@ double CaBotSamplingMPCController::calculateCost(
 
     // calculate goal dist at the same time
     goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+    min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * (idx + 1));
     goal_cost += discount * ((goal_dist - min_goal_dist) / (current_dist - min_goal_dist));
 
     /*
