@@ -56,6 +56,8 @@ cabot:
       people_topic: /people
       visualize_topic: /visualize
       limit_topic: /cabot/people_speed
+      social_distance_limit_topic: /cabot/social_distance_speed
+      velocity_obstacle_limit_topic: /cabot/velocity_obstacle_speed
       odom_topic: /odom
       plan_topic: /plan
       # Social Distancing setting

@@ -60,6 +60,8 @@ public:
   std::string people_topic_;
   std::string vis_topic_;
   std::string limit_topic_;
+  std::string social_distance_limit_topic_;
+  std::string velocity_obstacle_limit_topic_;
   std::string odom_topic_;
   std::string plan_topic_;
   std::string event_topic_;
@@ -88,6 +90,8 @@ public:
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr social_distance_limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr velocity_obstacle_limit_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr event_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr set_social_distance_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr get_social_distance_pub_;
@@ -105,6 +109,8 @@ public:
     people_topic_("/people"),
     vis_topic_("/visualize"),
     limit_topic_("/people_limit"),
+    social_distance_limit_topic_("/social_distance_limit"),
+    velocity_obstacle_limit_topic_("/velocity_obstacle_limit"),
     odom_topic_("/odom"),
     plan_topic_("/plan"),
     event_topic_("/event"),
@@ -153,6 +159,11 @@ public:
 
     limit_topic_ = declare_parameter("limit_topic", limit_topic_);
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+
+    social_distance_limit_topic_ = declare_parameter("social_distance_limit_topic", social_distance_limit_topic_);
+    social_distance_limit_pub_ = create_publisher<std_msgs::msg::Float32>(social_distance_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+    velocity_obstacle_limit_topic_ = declare_parameter("velocity_obstacle_limit_topic", velocity_obstacle_limit_topic_);
+    velocity_obstacle_limit_pub_ = create_publisher<std_msgs::msg::Float32>(velocity_obstacle_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
     event_topic_ = declare_parameter("event_topic", event_topic_);
     event_pub_ = create_publisher<std_msgs::msg::String>(event_topic_, 100);
@@ -206,6 +217,8 @@ public:
     plan_sub_.reset();
     vis_pub_.reset();
     limit_pub_.reset();
+    social_distance_limit_pub_.reset();
+    velocity_obstacle_limit_pub_.reset();
     event_pub_.reset();
     set_social_distance_sub_.reset();
     get_social_distance_pub_.reset();
@@ -462,8 +475,13 @@ private:
         }
       }
 
+      double velocity_obstacle_speed_limit = computeSafeSpeedLimit(max_speed_, vo_intervals);
       people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
+
+      velocity_obstacle_limit_pub_->publish(std_msgs::msg::Float32().set__data(velocity_obstacle_speed_limit));
     }
+
+    social_distance_limit_pub_->publish(std_msgs::msg::Float32().set__data(social_speed_limit));
 
     std_msgs::msg::Float32 msg;
     msg.data = people_speed_limit;
