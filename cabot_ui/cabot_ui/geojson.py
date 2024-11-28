@@ -43,7 +43,7 @@ from cabot_ui import geoutil, i18n
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 
-class RouteStruct(enum.Enum):
+class RouteStruct(enum.IntEnum):
     """ Route Struct Class """
     """ See p.14 of https://www.mlit.go.jp/common/001244374.pdf """
     Sidewalk = 1
