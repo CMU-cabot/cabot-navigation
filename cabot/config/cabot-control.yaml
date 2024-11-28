@@ -66,6 +66,7 @@ cabot:
       # Consider an oval radius (x, y)
       social_distance_x: 2.0
       social_distance_y: 0.5
+      enable_velocity_obstacle: true
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
