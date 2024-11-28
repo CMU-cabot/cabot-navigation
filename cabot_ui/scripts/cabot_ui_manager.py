@@ -650,7 +650,7 @@ if __name__ == "__main__":
                  MultiThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
-                 MultiThreadedExecutor(),
+                 SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  ]
