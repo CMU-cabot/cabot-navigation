@@ -39,7 +39,6 @@ find_package(diagnostic_updater REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io)
-find_package(visualization_msgs REQUIRED)
 
 # find dependencies for test
 find_package(nav2_navfn_planner REQUIRED)
@@ -86,7 +85,6 @@ set(dependencies
   lidar_process_msgs
   sensor_msgs
   diagnostic_updater
-  visualization_msgs
   yaml_cpp_vendor
 #  OpenMP
 )
