@@ -98,8 +98,14 @@ class CabotUIManager(NavigationInterface, object):
         msg.data = str(e)
         self._eventPub.publish(msg)
 
-        # request language
+        # request handleside
         e = NavigationEvent("gethandleside", None)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
+        # request touchmode
+        e = NavigationEvent("touchmode", None)
         msg = std_msgs.msg.String()
         msg.data = str(e)
         self._eventPub.publish(msg)
@@ -358,6 +364,10 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "handleside":
             self._logger.info("calling set_handle_side")
             self._navigation.set_handle_side(event.param)
+
+        if event.subtype == "touchmode":
+            self._logger.info("calling set_touch_mode")
+            self._navigation.set_touch_mode(event.param)
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
