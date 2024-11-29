@@ -189,9 +189,6 @@ while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
         n)
             log_prefix=$OPTARG
             ;;
-        p)
-            prodimg=1
-            ;;
         r)
             retryoption="-r"
             ;;

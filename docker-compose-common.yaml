@@ -333,7 +333,6 @@ services:
           - type=registry
     env_file:
       - ${ENV_FILE:-.empty-env}
-      - .env
     environment:
       - HOST_TZ
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
@@ -359,7 +358,6 @@ services:
     extends: map_server
     env_file:
       - ${ENV_FILE:-.empty-env}
-      - .env
     ports: !override []  # this does not work if extended
     depends_on:
       map_server:
@@ -367,7 +365,7 @@ services:
     command:
       - "bash"
       - "-c"
-      - "/home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /server_data/MapData.geojson"
+      - "cp -r /server_data -r /home/runner_user/server_data && /home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /home/runner_user/server_data/MapData.geojson"
     volumes:
       - ${CABOT_SERVER_DATA_MOUNT:-./doc}:/server_data
     networks:

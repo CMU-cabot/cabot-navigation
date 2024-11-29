@@ -41,7 +41,7 @@ function snore()
 }
 
 HOST=http://map_server:9090/map
-data_dir=/server_data
+data_dir=/home/runner_user/server_data
 admin=hulopadmin
 pass=please+change+password
 editor=editor

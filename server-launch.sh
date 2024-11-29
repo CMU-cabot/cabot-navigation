@@ -251,6 +251,9 @@ fi
 
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 export PORT_ACCESS=$port_access
+if [ -e $scriptdir/.env ]; then
+    source $scriptdir/.env
+fi
 if [ -e $data_dir/server.env ]; then
     export ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
