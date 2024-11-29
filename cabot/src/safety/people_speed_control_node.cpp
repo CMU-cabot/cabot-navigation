@@ -161,12 +161,15 @@ public:
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
     social_distance_limit_topic_ = declare_parameter("social_distance_limit_topic", social_distance_limit_topic_);
-    social_distance_limit_pub_ = create_publisher<std_msgs::msg::Float32>(social_distance_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+    social_distance_limit_pub_ =
+      create_publisher<std_msgs::msg::Float32>(social_distance_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
     enable_velocity_obstacle_ = declare_parameter("enable_velocity_obstacle", enable_velocity_obstacle_);
     if (enable_velocity_obstacle_) {
       velocity_obstacle_limit_topic_ = declare_parameter("velocity_obstacle_limit_topic", velocity_obstacle_limit_topic_);
-      velocity_obstacle_limit_pub_ = create_publisher<std_msgs::msg::Float32>(velocity_obstacle_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+      velocity_obstacle_limit_pub_ = create_publisher<std_msgs::msg::Float32>(
+        velocity_obstacle_limit_topic_,
+        rclcpp::SystemDefaultsQoS().transient_local());
     }
 
     event_topic_ = declare_parameter("event_topic", event_topic_);
