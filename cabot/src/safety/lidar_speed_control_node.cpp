@@ -246,7 +246,7 @@ private:
           continue;
         }
 
-        if ((min_range - min_distance_) / limit_factor_ < max_speed_) {
+        if ((line.length() - min_distance_) / limit_factor_ < max_speed_) {
           CaBotSafety::add_point(get_clock()->now(), curr, 0.2, 1, 1, 0, 1);
         }
 
