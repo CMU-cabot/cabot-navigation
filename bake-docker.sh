@@ -124,10 +124,19 @@ if [[ -n $platform ]]; then
     platform_option="--set=*.platform=\"$platform\""
 fi
 
+# tag option
+tag_option=
+if [[ -z $tags ]]; then
+    tags="latest,$(git rev-parse --abbrev-ref HEAD)"
+fi
+for service in ${services}; do
+    tag_option+="--set=${service}.tags=${REGISTRY}/cabot-${service}:{${tags}} "
+done
+
 # bake
 base_com=
 if [[ -n $base_name ]]; then
-    base_com="docker buildx bake -f docker-compose.yaml $platform_option $services"
+    base_com="docker buildx bake -f docker-compose.yaml $platform_option $tag_option $services"
     export BASE_IMAGE=$base_name
     echo $base_com
     eval $base_com
