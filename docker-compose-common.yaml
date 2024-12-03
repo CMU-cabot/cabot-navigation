@@ -235,6 +235,15 @@ services:
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
 
+
+  gazebo-base:
+    extends: navigation-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gazebo"
+      #- "-g"                   # run with gdb
+
   gazebo-dev:
     extends: navigation-dev
     command:
@@ -251,6 +260,13 @@ services:
       - "gazebo"
       #- "-g"                   # run with gdb
 
+
+  gui-base:
+    extends: navigation-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gui"
 
   gui-dev:
     extends: navigation-dev
