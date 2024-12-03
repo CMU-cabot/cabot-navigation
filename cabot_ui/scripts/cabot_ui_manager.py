@@ -107,7 +107,7 @@ class CabotUIManager(NavigationInterface, object):
             self._eventPub.publish(msg)
         qos_profile = QoSProfile(depth=10)
         qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
-        self.handleside_sub = node.create_subscription(std_msgs.msg.String, "features/handleside", handleside_callback, qos_profile)
+        self.handleside_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/handleside", handleside_callback, qos_profile)
 
         def touchmode_callback(msg):
             # request touchmode
@@ -117,7 +117,7 @@ class CabotUIManager(NavigationInterface, object):
             self._eventPub.publish(msg)
         qos_profile = QoSProfile(depth=10)
         qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
-        self.touchmode_sub = node.create_subscription(std_msgs.msg.String, "features/touchmode", touchmode_callback, qos_profile)
+        self.touchmode_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/touchmode", touchmode_callback, qos_profile)
 
         self._touchModeProxy = self._node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -369,14 +369,25 @@ class CabotUIManager(NavigationInterface, object):
         # operations indepent from the navigation state
         if event.subtype == "language":
             self._interface.change_language(event.param)
+            return
 
         if event.subtype == "handleside":
             self._logger.info("calling set_handle_side")
             self._navigation.set_handle_side(event.param)
+            return
 
         if event.subtype == "touchmode":
             self._logger.info("calling set_touch_mode")
             self._navigation.set_touch_mode(event.param)
+            return
+
+        # ignore get event
+        if event.subtype == "getlanguage":
+            return
+        if event.subtype == "gethandleside":
+            return
+        if event.subtype == "gettouchmode":
+            return
 
         if event.subtype == "speedup":
             self.speed_menu.prev()

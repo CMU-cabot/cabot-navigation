@@ -32,6 +32,7 @@ from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
 from launch.actions import RegisterEventHandler
 from launch.actions import SetEnvironmentVariable
+from launch.actions import ExecuteProcess
 from launch.event_handlers import OnShutdown
 from launch.event_handlers import OnProcessExit
 from launch.conditions import IfCondition
@@ -304,36 +305,36 @@ def generate_launch_description():
             ),
 
             # cabot feature handleside (ad-hoc implementation)
-            Node(
-                package='rclpy',
-                executable='topic',
-                name='ros2_topic_pub',
-                arguments=[
+            ExecuteProcess(
+                cmd=[
+                    'ros2',
+                    'topic',
                     'pub',
                     '--qos-durability', 'transient_local',
                     '--qos-reliability', 'reliable',
+                    '-1',
+                    '--keep-alive', '9999999',
                     '/cabot/features/handleside',
                     'std_msgs/msg/String',
-                    '"data: left,right"',
-                    '-1',
-                    '--keep-alive', '9999999'
-                ]
+                    'data: left,right',
+                ],
+                output='screen',
             ),
             # cabot feature touchmode (ad-hoc implementation)
-            Node(
-                package='rclpy',
-                executable='topic',
-                name='ros2_topic_pub',
-                arguments=[
+            ExecuteProcess(
+                cmd=[
+                    'ros2',
+                    'topic',
                     'pub',
                     '--qos-durability', 'transient_local',
                     '--qos-reliability', 'reliable',
+                    '-1',
+                    '--keep-alive', '9999999',
                     '/cabot/features/touchmode',
                     'std_msgs/msg/String',
-                    '"data: cap,tof,dual"',
-                    '-1',
-                    '--keep-alive', '9999999'
-                ]
+                    'data: cap,tof,dual',
+                ],
+                output='screen',
             ),
 
             check_gazebo_ready,
