@@ -101,20 +101,16 @@ class CabotUIManager(NavigationInterface, object):
 
         def handleside_callback(msg):
             # request handleside
-            e = NavigationEvent("gethandleside", msg.data)
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
+            self.handleside = msg.data
+            self.send_handleside()
         qos_profile = QoSProfile(depth=10)
         qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
         self.handleside_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/handleside", handleside_callback, qos_profile)
 
         def touchmode_callback(msg):
             # request touchmode
-            e = NavigationEvent("gettouchmode", msg.data)
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
+            self.touchmode = msg.data
+            self.send_touchmode()
         qos_profile = QoSProfile(depth=10)
         qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
         self.touchmode_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/touchmode", touchmode_callback, qos_profile)
@@ -134,6 +130,18 @@ class CabotUIManager(NavigationInterface, object):
         self.updater.add(FunctionDiagnosticTask("UI Manager", manager_status))
 
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
+
+    def send_handleside(self):
+        e = NavigationEvent("gethandleside", self.handleside)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
+    def send_touchmode(self):
+        e = NavigationEvent("gettouchmode", self.touchmode)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
 
     def create_menu(self):
         try:
@@ -369,6 +377,11 @@ class CabotUIManager(NavigationInterface, object):
         # operations indepent from the navigation state
         if event.subtype == "language":
             self._interface.change_language(event.param)
+            return
+
+        if event.subtype == "reqfeatures":
+            self.send_handleside()
+            self.send_touchmode()
             return
 
         if event.subtype == "handleside":
