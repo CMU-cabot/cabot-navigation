@@ -381,7 +381,7 @@ services:
     command:
       - "bash"
       - "-c"
-      - "cp -r /server_data -r /home/runner_user/server_data && /home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /home/runner_user/server_data/MapData.geojson"
+      - "cp -r /server_data /home/runner_user/server_data && /home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /home/runner_user/server_data/MapData.geojson"
     volumes:
       - ${CABOT_SERVER_DATA_MOUNT:-./doc}:/server_data
     networks:
