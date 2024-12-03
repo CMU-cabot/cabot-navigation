@@ -236,8 +236,8 @@ services:
       - ./docker/home/.ros:/home/developer/.ros
 
 
-  gazebo-base:
-    extends: navigation-base
+  gazebo-dev-base:
+    extends: navigation-dev-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -245,7 +245,12 @@ services:
       #- "-g"                   # run with gdb
 
   gazebo-dev:
-    extends: navigation-dev
+    extends: gazebo-dev-base
+    volumes:
+      - ./docker/home/:/home/developer/
+
+  gazebo-prod-base:
+    extends: navigation-prod-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -253,34 +258,34 @@ services:
       #- "-g"                   # run with gdb
 
   gazebo-prod:
-    extends: navigation-prod
-    command:
-      - "/launch.sh"
-      # - "-c"                  # core dump
-      - "gazebo"
-      #- "-g"                   # run with gdb
+    extends: gazebo-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
 
 
-  gui-base:
-    extends: navigation-base
+  gui-dev-base:
+    extends: navigation-dev-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
 
   gui-dev:
-    extends: navigation-dev
+    extends: gui-dev-base
+    volumes:
+      - ./docker/home/:/home/developer/
+
+  gui-prod-base:
+    extends: navigation-prod-base
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
 
   gui-prod:
-    extends: navigation-prod
-    command:
-      - "/launch.sh"
-      # - "-c"                  # core dump
-      - "gui"
+    extends: gui-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
 
 
   localization-dev-base:
