@@ -47,6 +47,7 @@ from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import std_msgs.msg
 import std_srvs.srv
 
@@ -98,17 +99,25 @@ class CabotUIManager(NavigationInterface, object):
         msg.data = str(e)
         self._eventPub.publish(msg)
 
-        # request handleside
-        e = NavigationEvent("gethandleside", None)
-        msg = std_msgs.msg.String()
-        msg.data = str(e)
-        self._eventPub.publish(msg)
+        def handleside_callback(msg):
+            # request handleside
+            e = NavigationEvent("gethandleside", msg.data)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+        qos_profile = QoSProfile(depth=10)
+        qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.handleside_sub = node.create_subscription(std_msgs.msg.String, "features/handleside", handleside_callback, qos_profile)
 
-        # request touchmode
-        e = NavigationEvent("touchmode", None)
-        msg = std_msgs.msg.String()
-        msg.data = str(e)
-        self._eventPub.publish(msg)
+        def touchmode_callback(msg):
+            # request touchmode
+            e = NavigationEvent("gettouchmode", msg.data)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+        qos_profile = QoSProfile(depth=10)
+        qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.touchmode_sub = node.create_subscription(std_msgs.msg.String, "features/touchmode", touchmode_callback, qos_profile)
 
         self._touchModeProxy = self._node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
 

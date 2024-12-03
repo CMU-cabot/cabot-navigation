@@ -302,6 +302,40 @@ def generate_launch_description():
                 }.items(),
                 condition=LaunchConfigurationNotEquals('wireless_config_file', '')
             ),
+
+            # cabot feature handleside (ad-hoc implementation)
+            Node(
+                package='rclpy',
+                executable='topic',
+                name='ros2_topic_pub',
+                arguments=[
+                    'pub',
+                    '--qos-durability', 'transient_local',
+                    '--qos-reliability', 'reliable',
+                    '/cabot/features/handleside',
+                    'std_msgs/msg/String',
+                    '"data: left,right"',
+                    '-1',
+                    '--keep-alive', '9999999'
+                ]
+            ),
+            # cabot feature touchmode (ad-hoc implementation)
+            Node(
+                package='rclpy',
+                executable='topic',
+                name='ros2_topic_pub',
+                arguments=[
+                    'pub',
+                    '--qos-durability', 'transient_local',
+                    '--qos-reliability', 'reliable',
+                    '/cabot/features/touchmode',
+                    'std_msgs/msg/String',
+                    '"data: cap,tof,dual"',
+                    '-1',
+                    '--keep-alive', '9999999'
+                ]
+            ),
+
             check_gazebo_ready,
             RegisterEventHandler(
                 OnProcessExit(
