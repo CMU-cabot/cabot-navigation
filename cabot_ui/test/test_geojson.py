@@ -27,6 +27,9 @@ import time
 
 from ament_index_python.packages import get_package_share_directory
 from cabot_ui import geojson, geoutil
+import rclpy
+import rclpy.node
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 
 class TestGeojson(unittest.TestCase):
@@ -34,6 +37,11 @@ class TestGeojson(unittest.TestCase):
 
     def setUp(self):
         self.path = get_package_share_directory('cabot_ui')
+
+    def setUpClass():
+        rclpy.init()
+        TestGeojson.node = rclpy.node.Node("test_node")
+        CaBotRclpyUtil.initialize(TestGeojson.node)
 
     def test_geometry(self):
         """test geometry marshalling"""

@@ -33,9 +33,12 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 class TestNavgoal(unittest.TestCase):
     """Test class"""
     def setUp(self):
+        pass
+
+    def setUpClass():
         rclpy.init()
-        self.node = rclpy.node.Node("test_node")
-        CaBotRclpyUtil.initialize(self.node)
+        TestNavgoal.node = rclpy.node.Node("test_node")
+        CaBotRclpyUtil.initialize(TestNavgoal.node)
 
     def _prepare_data(self):
         import os
