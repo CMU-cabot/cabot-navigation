@@ -110,10 +110,6 @@ class Visualizer(object):
                     array.markers.append(make_marker(poi, b=1.0, x=1.0, s=0.5, _type=Marker.ARROW))
                     array.markers.append(make_marker(poi, text=poi.approached_statement(),
                                                      _type=Marker.TEXT_VIEW_FACING))
-                elif isinstance(poi, geojson.EntrancePOI):
-                    array.markers.append(make_marker(poi, b=1.0, x=1.0, s=0.5, _type=Marker.ARROW))
-                    array.markers.append(make_marker(poi, text=poi.approached_statement(),
-                                                     _type=Marker.TEXT_VIEW_FACING))
                 elif isinstance(poi, geojson.SpeedPOI):
                     array.markers.append(make_marker(poi, r=1.0, x=1.0, s=0.5, _type=Marker.ARROW))
                     array.markers.append(make_marker(poi, text="%.2f m/s" % (poi.limit),

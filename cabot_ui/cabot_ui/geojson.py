@@ -761,8 +761,6 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = DoorPOI
                 if category == '_nav_info_':
                     cls = InfoPOI
-                if category == '_nav_entrance_':
-                    cls = EntrancePOI
                 if category == '_cabot_speed_':
                     cls = SpeedPOI
                 if category == '_nav_elevator_cab_':
@@ -872,21 +870,11 @@ class InfoPOI(POI):
 
     def __init__(self, **dic):
         super(InfoPOI, self).__init__(**dic)
+        if self.minor_category not in ["_priority_low_", "_priority_high_", "_priority_normal_", "_priority_required_", "", None]:
+            CaBotRclpyUtil.error(f"Invalid value for hulop_minor_category: {self.minor_category}")
 
-    def approached_statement(self):
-        return self.name
-
-
-class EntrancePOI(POI):
-    """Nav Entrance POI class"""
-
-    @classmethod
-    def marshal(cls, dic):
-        """marshal Entrance POI object"""
-        return cls(**dic)
-
-    def __init__(self, **dic):
-        super(EntrancePOI, self).__init__(**dic)
+    def get_minor_category(self):
+        return self.minor_category
 
     def approached_statement(self):
         return self.name
