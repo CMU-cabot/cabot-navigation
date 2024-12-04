@@ -296,8 +296,16 @@ class UserInterface(object):
     def get_speech_priority(self, poi):
         if isinstance(poi, cabot_ui.geojson.Entrance):
             return SpeechPriority.LOW
-        if isinstance(poi, cabot_ui.geojson.EntrancePOI):
-            return SpeechPriority.LOW
+        if isinstance(poi, cabot_ui.geojson.InfoPOI):
+            nav_info_minor_category = poi.get_minor_category()
+            if nav_info_minor_category == "_priority_low_":
+                return SpeechPriority.LOW
+            elif nav_info_minor_category == "_priority_high_":
+                return SpeechPriority.HIGH
+            elif nav_info_minor_category == "_priority_normal_":
+                return SpeechPriority.NORMAL
+            else:
+                return SpeechPriority.REQUIRED
         if isinstance(poi, cabot_ui.geojson.POI):
             return SpeechPriority.REQUIRED
 
