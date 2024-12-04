@@ -870,6 +870,8 @@ class InfoPOI(POI):
 
     def __init__(self, **dic):
         super(InfoPOI, self).__init__(**dic)
+        if self.minor_category not in ["_priority_low_", "_priority_high_", "_priority_normal_", "_priority_required_", "", None]:
+            CaBotRclpyUtil.error(f"Invalid value for hulop_minor_category: {self.minor_category}")
 
     def get_minor_category(self):
         return self.minor_category
