@@ -399,12 +399,23 @@ class Tester:
 
     # shorthand functions
     def button_down(self, button, **kwargs):
+        # backward compatibility
         self.pub_topic(**dict(
             dict(
                 action_name=f'button_down({button})',
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
                 message=f"data: 'button_down_{button}'"
+            ),
+            **kwargs)
+        )
+        # changed since ee1b6e5 Daisukes/dic description dev (#99)
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'click_({button}_1)',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'click_{button}_1'"
             ),
             **kwargs)
         )
