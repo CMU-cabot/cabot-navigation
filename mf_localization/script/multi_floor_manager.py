@@ -1337,6 +1337,7 @@ class MultiFloorManager:
     #      NavSatFix gnss_fix
     #      TwistWithCovarianceStamped gnss_fix_velocity
     def gnss_fix_callback(self, fix: NavSatFix, fix_velocity: TwistWithCovarianceStamped):
+        # start converting gnss_fix message to global_map_frame and publish it for visualization
         # read message
         now = self.clock.now()
         stamp = fix.header.stamp
@@ -1390,6 +1391,10 @@ class MultiFloorManager:
 
         # publish gnss fix in local frame
         self.gnss_fix_local_pub.publish(pose_with_covariance_stamped)
+
+        # do not update internal states when the multi_floor_manager is not active
+        if not self.is_active:
+            return
 
         # set gnss_navsat_time for timeout detection
         if self.gnss_navsat_time is None:
