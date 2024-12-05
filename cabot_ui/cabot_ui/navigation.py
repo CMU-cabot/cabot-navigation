@@ -576,6 +576,23 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             }
         }, callback)
 
+    def set_touch_mode(self, mode):
+        self._logger.info("set_touch_mode is called")
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_touch_mode, mode))
+
+    def _set_touch_mode(self, mode):
+        self._logger.info("_set_touch_mode is called")
+
+        def callback(result):
+            self.delegate.activity_log("cabot/navigation", "set_touch_mode", "mode")
+            self._logger.info(f"set_touch_mode {mode=}, {result=}")
+        self.change_parameters({
+            "/cabot/cabot_can": {
+                "touch_mode": mode
+            }
+        }, callback)
+
     # wrap execution by a queue
     def set_destination(self, destination):
         self.destination = destination

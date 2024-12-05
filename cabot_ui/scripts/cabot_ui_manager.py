@@ -47,6 +47,7 @@ from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import std_msgs.msg
 import std_srvs.srv
 
@@ -98,11 +99,21 @@ class CabotUIManager(NavigationInterface, object):
         msg.data = str(e)
         self._eventPub.publish(msg)
 
-        # request language
-        e = NavigationEvent("gethandleside", None)
-        msg = std_msgs.msg.String()
-        msg.data = str(e)
-        self._eventPub.publish(msg)
+        def handleside_callback(msg):
+            # request handleside
+            self.handleside = msg.data
+            self.send_handleside()
+        qos_profile = QoSProfile(depth=10)
+        qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.handleside_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/handleside", handleside_callback, qos_profile)
+
+        def touchmode_callback(msg):
+            # request touchmode
+            self.touchmode = msg.data
+            self.send_touchmode()
+        qos_profile = QoSProfile(depth=10)
+        qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.touchmode_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/touchmode", touchmode_callback, qos_profile)
 
         self._touchModeProxy = self._node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -119,6 +130,18 @@ class CabotUIManager(NavigationInterface, object):
         self.updater.add(FunctionDiagnosticTask("UI Manager", manager_status))
 
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
+
+    def send_handleside(self):
+        e = NavigationEvent("gethandleside", self.handleside)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
+    def send_touchmode(self):
+        e = NavigationEvent("gettouchmode", self.touchmode)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
 
     def create_menu(self):
         try:
@@ -354,10 +377,30 @@ class CabotUIManager(NavigationInterface, object):
         # operations indepent from the navigation state
         if event.subtype == "language":
             self._interface.change_language(event.param)
+            return
+
+        if event.subtype == "reqfeatures":
+            self.send_handleside()
+            self.send_touchmode()
+            return
 
         if event.subtype == "handleside":
             self._logger.info("calling set_handle_side")
             self._navigation.set_handle_side(event.param)
+            return
+
+        if event.subtype == "touchmode":
+            self._logger.info("calling set_touch_mode")
+            self._navigation.set_touch_mode(event.param)
+            return
+
+        # ignore get event
+        if event.subtype == "getlanguage":
+            return
+        if event.subtype == "gethandleside":
+            return
+        if event.subtype == "gettouchmode":
+            return
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
