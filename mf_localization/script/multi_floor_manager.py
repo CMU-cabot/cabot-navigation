@@ -94,6 +94,7 @@ from diagnostic_msgs.msg import DiagnosticStatus
 
 import std_msgs.msg
 from cabot_msgs.srv import LookupTransform
+from std_srvs.srv import Trigger
 
 from ublox_converter import UbloxConverterNode
 
@@ -2008,13 +2009,23 @@ class BufferProxy():
         self._clock = node.get_clock()
         self._logger = node.get_logger()
         self.lookup_transform_service = node.create_client(LookupTransform, 'lookup_transform', callback_group=MutuallyExclusiveCallbackGroup())
+        self.clear_transform_buffer_service = node.create_client(Trigger, 'clear_transform_buffer', callback_group=MutuallyExclusiveCallbackGroup())
         self.countPub = node.create_publisher(std_msgs.msg.Int32, "transform_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.transformMap = {}
         self.min_interval = rclpy.duration.Duration(seconds=0.2)
         self.lookup_transform_service_timeout_sec = 5.0
 
     def clear(self):
+        # clear local transform cache
         self.transformMap = {}
+
+        # clear TF buffer in lookup transform node
+        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.lookup_transform_service_timeout_sec)
+        if not service_available:
+            self._logger.error("clear_transform_buffer_service timeout error")
+            return
+        req = Trigger.Request()
+        self.clear_transform_buffer_service.call(req)
 
     def debug(self):
         if not hasattr(self, "count"):
@@ -2048,7 +2059,10 @@ class BufferProxy():
         result = self.lookup_transform_service.call(req)
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
+
+        # cache valid transforms
         self.transformMap[key] = (result.transform, now)
+
         return result.transform
 
     def get_latest_common_time(self, target, source):
