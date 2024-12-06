@@ -36,7 +36,7 @@ public:
   explicit RansacGroundFilterNode(const rclcpp::NodeOptions & options);
 
 protected:
-  void filterGround(const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) override;
+  void filterGround(const rclcpp::Time & time, const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) override;
 
 private:
   int ransac_max_iteration_;
@@ -45,9 +45,6 @@ private:
   float ransac_input_min_height_;
   float ransac_input_max_height_;
   float ransac_inlier_threshold_;
-  float ground_distance_threshold_;
-  bool debug_;
-  std::string debug_output_plane_topic_;
 
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr debug_plane_pub_;
 };  // class RansacGroundFilterNode

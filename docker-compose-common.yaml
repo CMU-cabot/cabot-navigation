@@ -52,6 +52,7 @@ services:
       - CABOT_SITE
       - CABOT_LANG
       - CABOT_LOW_OBSTABLE_DETECT_VERSION
+      - CABOT_PUBLISH_LOW_OBSTABLE_GROUND
       - CABOT_OFFSET
       - CABOT_ANNOUNCE_NO_TOUCH
       - CABOT_INIT_SPEED
@@ -462,4 +463,3 @@ services:
 
 networks:
   mongodb_network:
-    name: mongodb_network
