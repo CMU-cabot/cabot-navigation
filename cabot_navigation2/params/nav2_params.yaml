@@ -46,6 +46,21 @@ people_vis:
     people_topic: "people"
     vis_topic: "people_vis"
 
+grid_map_visualization:
+  ros__parameters:
+    grid_map_topic: /ground_filter_ground
+    grid_map_visualizations: [ground_filter_is_free_grid, ground_filter_estimated_ground_z_points]
+    ground_filter_is_free_grid:
+      type: occupancy_grid
+      params:
+        layer: is_free
+        data_min: 0.0
+        data_max: 1.0
+    ground_filter_estimated_ground_z_points:
+      type: point_cloud
+      params:
+        layer: estimated_ground_z
+
 
 amcl:
   ros__parameters:

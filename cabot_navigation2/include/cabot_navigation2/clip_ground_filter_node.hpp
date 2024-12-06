@@ -21,6 +21,8 @@
 #ifndef CABOT_NAVIGATION2__CLIP_GROUND_FILTER_NODE_HPP_
 #define CABOT_NAVIGATION2__CLIP_GROUND_FILTER_NODE_HPP_
 
+#include <visualization_msgs/msg/marker.hpp>
+
 #include "cabot_navigation2/abstract_ground_filter_node.hpp"
 
 namespace cabot_navigation2
@@ -32,10 +34,10 @@ public:
   explicit ClipGroundFilterNode(const rclcpp::NodeOptions & options);
 
 protected:
-  void filterGround(const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) override;
+  void filterGround(const rclcpp::Time & time, const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) override;
 
 private:
-  float clip_height_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr debug_plane_pub_;
 };  // class ClipGroundFilterNode
 
 }  // namespace cabot_navigation2
