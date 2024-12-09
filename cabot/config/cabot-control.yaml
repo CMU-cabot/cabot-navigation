@@ -57,7 +57,8 @@ cabot:
       visualize_topic: /visualize
       limit_topic: /cabot/people_speed
       social_distance_limit_topic: /cabot/social_distance_speed
-      velocity_obstacle_limit_topic: /cabot/velocity_obstacle_speed
+      pure_velocity_obstacle_limit_topic: /cabot/pure_velocity_obstacle_speed
+      combined_speed_limit_topic: /cabot/combined_speed
       odom_topic: /odom
       plan_topic: /plan
       # Social Distancing setting
@@ -66,7 +67,7 @@ cabot:
       # Consider an oval radius (x, y)
       social_distance_x: 2.0
       social_distance_y: 0.5
-      enable_velocity_obstacle: true
+      use_velocity_obstacle: true
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
