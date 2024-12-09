@@ -575,7 +575,8 @@ private:
   }
 
   void publishLimits(
-    const double social_distance_speed_limit, const double pure_velocity_obstacle_speed_limit, const double combined_speed_limit, const double people_speed_limit)
+    const double social_distance_speed_limit, const double pure_velocity_obstacle_speed_limit, const double combined_speed_limit,
+    const double people_speed_limit)
   {
     social_distance_limit_pub_->publish(std_msgs::msg::Float32().set__data(social_distance_speed_limit));
     pure_velocity_obstacle_limit_pub_->publish(std_msgs::msg::Float32().set__data(pure_velocity_obstacle_speed_limit));
