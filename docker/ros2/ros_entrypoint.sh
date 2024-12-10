@@ -19,7 +19,6 @@ if [[ $CONT_UID -ne $HOST_UID ]] || [[ $CONT_GID -ne $HOST_GID ]]; then
     # Update user and group ID to match host
     sudo usermod -u $HOST_UID developer
     sudo groupmod -g $HOST_GID developer
-    chown -R "$HOST_UID:$HOST_GID" /home/developer
 fi
 
 # Source ROS setup script
