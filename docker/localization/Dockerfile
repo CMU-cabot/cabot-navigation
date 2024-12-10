@@ -280,19 +280,15 @@ RUN useradd -m $USERNAME && \
 
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN sed -i 's:custom_ws:cartographer_ws:' /ros_entrypoint.sh
-RUN chmod +x /ros_entrypoint.sh
-
-#USER $USERNAME
 
 ENV HOME /home/$USERNAME
+
 WORKDIR $HOME/loc_ws
+RUN chown $USERNAME:$USERNAME $HOME/loc_ws
 
-RUN mkdir -p $HOME/loc_ws/src && \
-    mkdir -p $HOME/loc_ws/script
-
-COPY --from=build $HOME/loc_ws/install $HOME/loc_ws/install
-COPY --from=build $HOME/loc_ws/script $HOME/loc_ws/script
-COPY --from=build $HOME/loc_ws/src/cabot_mf_localization/script $HOME/loc_ws/src/cabot_mf_localization/script
+COPY --chown=$USERNAME:$USERNAME --from=build $HOME/loc_ws/install $HOME/loc_ws/install
+COPY --chown=$USERNAME:$USERNAME --from=build $HOME/loc_ws/script $HOME/loc_ws/script
+COPY --chown=$USERNAME:$USERNAME --from=build $HOME/loc_ws/src/cabot_mf_localization/script $HOME/loc_ws/src/cabot_mf_localization/script
 #COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
 #COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_mf_localization/script src/cabot_mf_localization/script
 

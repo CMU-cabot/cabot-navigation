@@ -205,10 +205,6 @@ ENV ROS_DISTRO=humble
 ARG TZ=UTC
 ENV TZ=$TZ
 RUN sudo ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | sudo tee /etc/timezone
-#COPY ros_entrypoint.sh /ros_entrypoint.sh
-RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
-#RUN chmod +x /ros_entrypoint.sh
-#ENTRYPOINT ["/ros_entrypoint.sh"]
 
 ENV UNDERLAY_WS=/opt/underlay_ws
 
@@ -321,16 +317,14 @@ COPY launch.sh /
 # change location of ros base
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
-RUN chmod +x /ros_entrypoint.sh
-
-#USER $USERNAME
 
 ENV HOME /home/$USERNAME
 
 WORKDIR $HOME/ros2_ws
+RUN chown $USERNAME:$USERNAME $HOME/ros2_ws
 
-COPY --from=build $HOME/ros2_ws/install $HOME/ros2_ws/install
-COPY --from=build $HOME/ros2_ws/script $HOME/ros2_ws/script
+COPY --chown=$USERNAME:$USERNAME --from=build $HOME/ros2_ws/install $HOME/ros2_ws/install
+COPY --chown=$USERNAME:$USERNAME --from=build $HOME/ros2_ws/script $HOME/ros2_ws/script
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD [ "/launch.sh" ]
