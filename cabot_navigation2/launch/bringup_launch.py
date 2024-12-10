@@ -55,7 +55,9 @@ def generate_launch_description():
     offset = LaunchConfiguration('offset')
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
-    use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, ' > 0'])
+    publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
+
+    use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -74,8 +76,8 @@ def generate_launch_description():
         'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
         'inflation_radius': PythonExpression([footprint_radius, "+ 0.25"]),
-        'offset_normal': PythonExpression([offset, " if '", cabot_side, "'=='left' else -", offset]),
-        'offset_small': PythonExpression(["0.1 if '", cabot_side, "'=='left' else -0.1"])
+        'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
+        'offset_normal': offset
     }
 
     configured_params = RewrittenYaml(
@@ -90,8 +92,8 @@ def generate_launch_description():
         'default_bt_xml_filename': default_bt_xml_file2,
         'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
-        'offset_normal': PythonExpression([offset, " if '", cabot_side, "'=='left' else -", offset]),
-        'offset_small': PythonExpression(["0.1 if '", cabot_side, "'=='left' else -0.1"])
+        'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
+        'offset_normal': offset
     }
 
     configured_params2 = RewrittenYaml(
@@ -162,7 +164,11 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'low_obstacle_detect_version', default_value='0',
-            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC'),
+            description='0: do not detect, 1: remove ground by fixed height, 2: remove groud by RANSAC, 3: remove groud by grid map'),
+
+        DeclareLaunchArgument(
+            'publish_low_obstacle_ground', default_value='false',
+            description='publish ground to detect low obstacles only for debug purpose'),
 
         # default navigator
         Node(
@@ -332,8 +338,6 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
                 'transform_tolerance': 0.01,
-                'min_height': -2.0,  # origin is the ground right below the sensor
-                'max_height': 2.0,  # origin is the ground right below the sensor
                 'angle_min': -0.614,  # -35.2*M_PI/180
                 'angle_max': 0.614,  # 35.2*M_PI/180
                 'angle_increment': 0.00174,  # M_PI/180/10
@@ -364,16 +368,20 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
+                'min_range': 0.05,
+                'max_range': 5.0,
+                'min_height': -1.8,
+                'max_height': 1.8,
+                'publish_debug_ground': publish_low_obstacle_ground,
+                'output_debug_ground_topic': '/ground_filter_ground',
+                'ground_distance_threshold': 0.05,
                 'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
                 'ignore_noise': True,
                 'input_topic': '/livox/points',
                 'output_ground_topic': '/livox/points_ground',
-                'output_filtered_topic': '/livox/points_filtered',
-                'min_range': 0.05,
-                'max_range': 5.0,
-                'clip_height': 0.05
+                'output_filtered_topic': '/livox/points_filtered'
             }],
-            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 1']))
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 1"]))
         ),
 
         Node(
@@ -384,24 +392,81 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
+                'min_range': 0.05,
+                'max_range': 5.0,
+                'min_height': -1.8,
+                'max_height': 1.8,
+                'publish_debug_ground': publish_low_obstacle_ground,
+                'output_debug_ground_topic': '/ground_filter_ground',
+                'ground_distance_threshold': 0.05,
                 'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
                 'ignore_noise': True,
                 'input_topic': '/livox/points',
                 'output_ground_topic': '/livox/points_ground',
                 'output_filtered_topic': '/livox/points_filtered',
-                'min_range': 0.05,
-                'max_range': 5.0,
                 'ransac_max_iteration': 10000,
                 'ransac_probability': 0.999,
                 'ransac_eps_angle': 5.0,
                 'ransac_input_min_height': -0.50,
                 'ransac_input_max_height': 0.50,
-                'ransac_inlier_threshold': 0.01,
-                'ground_distance_threshold': 0.05,
-                'debug': False,
-                'debug_output_plane_topic': '/ground_filter/ransac_plane'
+                'ransac_inlier_threshold': 0.01
             }],
-            condition=IfCondition(PythonExpression([low_obstacle_detect_version, ' == 2']))
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 2"]))
+        ),
+
+        Node(
+            package='cabot_navigation2',
+            executable='grid_map_ground_filter_node',
+            namespace='',
+            name='grid_map_ground_filter_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'target_frame': 'livox_footprint',
+                'min_range': 0.05,
+                'max_range': 5.0,
+                'min_height': -1.8,
+                'max_height': 1.8,
+                'publish_debug_ground': publish_low_obstacle_ground,
+                'output_debug_ground_topic': '/ground_filter_ground',
+                'ground_distance_threshold': 0.05,
+                'xfer_format': PythonExpression(["2 if '", use_sim_time, "'=='true' else 0"]),
+                'ignore_noise': True,
+                'input_topic': '/livox/points',
+                'output_ground_topic': '/livox/points_ground',
+                'output_filtered_topic': '/livox/points_filtered',
+                'num_threads': 2,
+                'odom_topic': '/odom',
+                'grid_resolution': 0.05,
+                'grid_length': 10.0,
+                'grid_patch_sizes': [3, 5],
+                'grid_patch_change_distances': [1.0],
+                'grid_occupied_inflate_size': 3,
+                'grid_num_points_min_threshold': 5,
+                'grid_num_points_raio_threshold': 0.1,
+                'grid_var_threshold': 0.0005,
+                'grid_prob_prior': 0.5,
+                'grid_prob_free': 0.1,
+                'grid_prob_occupied': 0.9,
+                'grid_prob_forget_rate': 0.2,
+                'grid_prob_free_threshold': 0.15,
+                'grid_prob_occupied_threshold': 0.55,
+                'outlier_old_ground_threshold': 0.05,
+                'outlier_los_ground_threshold': 0.05,
+                'ground_estimate_angle_min': -0.614,  # -35.2*M_PI/180
+                'ground_estimate_angle_max': 0.614,  # 35.2*M_PI/180
+                'ground_slope_threshold': 0.262,  # 15.0*M_PI/180
+                'ground_confidence_interpolate_decay': 0.5
+            }],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 3"]))
+        ),
+
+        Node(
+            package='grid_map_visualization',
+            executable='grid_map_visualization',
+            namespace='',
+            name='grid_map_visualization',
+            parameters=[configured_params],
+            condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 3 and '", publish_low_obstacle_ground, "' == 'true'"]))
         ),
 
         # others

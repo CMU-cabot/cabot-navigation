@@ -114,3 +114,6 @@ IN_FRONT: "正面"
 RIGHT_SIDE: "右側"
 LEFT_SIDE: "左側"
 APPROACEHD_TO_FACILITY: "{1}に{0}があります"
+
+## Describe Surround
+REQUESTING_DESCRIBE_SURROUND: "周囲の状況を確認します。"

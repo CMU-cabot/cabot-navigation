@@ -110,6 +110,10 @@ def generate_launch_description():
             'current_mode:=current_mode_temp',
             'localize_status:=localize_status_temp',
             'map:=map_temp',
+            # ublox_converter
+            'mf_navsat:=mf_navsat_temp',
+            'ublox_converter/num_active_sv:=ublox_converter/num_active_sv_temp',
+            'ublox_converter/sv_status:=ublox_converter/sv_status_temp',
         ])
         if convert_points.perform(context) == 'true':
             cmd.append([points2, ':=', points2_temp])
@@ -219,18 +223,18 @@ def generate_launch_description():
             name="lookup_transform_service_node",
         ),
 
-        # run ublox_converter
-        Node(
-            package='mf_localization',
-            executable='ublox_converter.py',
-            name='ublox_converter',
-            parameters=[PathJoinSubstitution([mf_localization_dir, 'configuration_files', 'ublox/ublox_converter.yaml'])],
-            remappings=[
-                ('navsat', 'ublox/navsat'),
-                ('num_active_sv', 'ublox_converter/num_active_sv'),
-                ('sv_status', 'ublox_converter/sv_status')
-            ],
-        ),
+        # [deprecated] run ublox_converter
+        # Node(
+        #     package='mf_localization',
+        #     executable='ublox_converter.py',
+        #     name='ublox_converter',
+        #     parameters=[PathJoinSubstitution([mf_localization_dir, 'configuration_files', 'ublox/ublox_converter.yaml'])],
+        #     remappings=[
+        #         ('navsat', 'ublox/navsat'),
+        #         ('num_active_sv', 'ublox_converter/num_active_sv'),
+        #         ('sv_status', 'ublox_converter/sv_status')
+        #     ],
+        # ),
 
         # run multi_floor_manager
         GroupAction([
@@ -275,6 +279,10 @@ def generate_launch_description():
                     ('pressure', pressure_topic),
                     ('gnss_fix', gnss_fix),
                     ('gnss_fix_velocity', gnss_fix_velocity),
+                    # ublox_converter
+                    ('navsat', 'ublox/navsat'),
+                    ('num_active_sv', 'ublox_converter/num_active_sv'),
+                    ('sv_status', 'ublox_converter/sv_status')
                 ],
                 output="both",
                 arguments=['--ros-args', '--log-level', PythonExpression(['"multi_floor_manager:=" + "', log_level, '"'])]

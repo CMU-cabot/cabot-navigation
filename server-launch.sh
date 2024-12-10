@@ -65,6 +65,7 @@ function help()
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
     echo "-P <port>    expose port to outside (set port like 80, 9090, ...)"
+    echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
 }
 
 pwd=`pwd`
@@ -77,9 +78,12 @@ ignore_error=0
 verbose=0
 clean_server=0
 location_tools=0
-port_access=127.0.0.1:9090
+port_access=127.0.0.1
+environment=
+launch_prefix=
+MAP_SERVER_PORT=9090
 
-while getopts "hd:p:fvcClP:" arg; do
+while getopts "hd:E:p:fvcClP:" arg; do
     case $arg in
         h)
             help
@@ -88,6 +92,9 @@ while getopts "hd:p:fvcClP:" arg; do
         d)
             data_dir=$(realpath $OPTARG)
             ;;
+	E)
+	    environment=$OPTARG
+	    ;;
 	p)
 	    cabot_site_dir=$(find $scriptdir/cabot_sites -name $OPTARG | head -1)
 	    data_dir=${cabot_site_dir}/server_data
@@ -108,7 +115,8 @@ while getopts "hd:p:fvcClP:" arg; do
 	    location_tools=1
 	    ;;
 	P)
-	    port_access=0.0.0.0:$OPTARG
+	    port_access=0.0.0.0
+            export MAP_SERVER_PORT=$OPTARG
 	    ;;
     esac
 done
@@ -120,6 +128,12 @@ pids=()
 temp_dir=$scriptdir/.tmp
 mkdir -p $temp_dir
 
+launch_prefix=$(basename $scriptdir)
+if [[ -n $environment ]]; then
+    export MAP_SERVER_PORT=$(($MAP_SERVER_PORT+environment*10))
+    launch_prefix="${launch_prefix}-env${environment}"
+fi
+
 # forcely clean and extit
 if [[ $clean_server -eq 2 ]]; then
     blue "Clean servers"
@@ -129,27 +143,28 @@ if [[ $clean_server -eq 2 ]]; then
 	services="location_tools mongodb_lt"
     fi
     for service in $services; do
-        if [[ ! -z $(docker ps -f "name=$service-" -q -a) ]]; then
-	    blue "stopping $service"
-	    docker ps -f "name=$service-"
-	    docker ps -f "name=$service-" -q -a | xargs docker stop
-	    docker ps -f "name=$service-" -q -a | xargs docker container rm
+        if [[ ! -z $(docker ps -f "name=${launch_prefix}-$service" -q -a) ]]; then
+	    blue "stopping ${launch_prefix}-$service"
+	    docker ps -f "name=${launch_prefix}-$service-"
+	    docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker stop
+	    docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker container rm
         fi
     done
     exit 0
 fi
 
-	if [[ $location_tools -eq 1 ]]; then
-    docker compose -f docker-compose-location-tools.yaml up -d
+if [[ $location_tools -eq 1 ]]; then
+    docker compose -p $launch_prefix -f docker-compose-location-tools.yaml up -d
     exit 0
 fi
 
 
 function check_server() {
-    server=http://localhost:9090/map
+    server=http://localhost:${MAP_SERVER_PORT}/map
 
     # check if the server data is same with the specified data
-    curl $server/content-md5 --fail > ${temp_dir}/content-md5 2> /dev/null
+    echo "curl $server/content-md5 --fail > ${temp_dir}/${launch_prefix}-content-md5 2> /dev/null"
+    curl $server/content-md5 --fail > ${temp_dir}/${launch_prefix}-content-md5 2> /dev/null
     if [[ $? -ne 0 ]]; then
 	blue "There is no server or servers may be launched by the old script."
 	blue "Servers will be cleaned"
@@ -160,8 +175,8 @@ function check_server() {
 	md5sum=$(find . -type f ! -name 'content-md5' ! -name 'attachments.zip' -exec md5sum {} + | LC_COLLATE=C sort -k 2 | md5sum)
 	cd $scriptdir
 	blue "md5sum - $md5sum"
-	blue "server - $(cat ${temp_dir}/content-md5)"
-	if [[ $(cat ${temp_dir}/content-md5) == $md5sum ]]; then  ## match, so no clean
+	blue "server - $(cat ${temp_dir}/${launch_prefix}-content-md5)"
+	if [[ $(cat ${temp_dir}/${launch_prefix}-content-md5) == $md5sum ]]; then  ## match, so no clean
 	    blue "md5 matched, do not relaunch server"
 	    return 0
 	fi
@@ -187,9 +202,9 @@ if [[ $clean_server -eq 1 ]]; then
     else
 	blue "Clean servers"
 	for service in "map_server" "map_data" "mongodb"; do
-            if [[ ! -z $(docker ps -f "name=$service" -q -a) ]]; then
-		docker ps -f "name=$service" -q -a | xargs docker stop
-		docker ps -f "name=$service" -q -a | xargs docker container rm
+            if [[ ! -z $(docker ps -f "name=${launch_prefix}-$service" -q -a) ]]; then
+		docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker stop
+		docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker container rm
             fi
 	done
     fi
@@ -200,8 +215,8 @@ else
     fi
 
     for service in "map_server" "map_data" "mongodb"; do
-        if [[ $(docker ps -f "name=$service" -q | wc -l) -ne 0 ]]; then
-            err "There is $service server running"
+        if [[ $(docker ps -f "name=${launch_prefix}-$service" -q | wc -l) -ne 0 ]]; then
+            err "There is ${launch_prefix}-$service server running"
             flag=1
         fi
     done
@@ -232,18 +247,20 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
 fi
 
 export CABOT_SERVER_DATA_MOUNT=$data_dir
+export PORT_ACCESS=$port_access
 if [ -e $data_dir/server.env ]; then
+    export ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
-        PORT_ACCESS=$port_access ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
-        ENV_FILE=$data_dir/server.env docker compose --ansi never -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
     else
-        PORT_ACCESS=$port_access ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
-        docker compose -f docker-compose-server.yaml up -d
-        docker compose --ansi never -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
     else
-        docker compose -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
     fi
 fi

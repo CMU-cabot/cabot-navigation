@@ -32,12 +32,16 @@ function help {
     echo "-h                    show this help"
     echo "-c                    clean (rm -rf) dependency repositories"
     echo "-n <count>            max count for recursive check (default=2)"
+    echo "-r                    update depedency-release.repos"
+    echo "-s <sed cmd>          apply sed to dependency.repos file with the command"
 }
 
 clean=0
 count=3
+release=0
+sed_cmd=
 
-while getopts "hcn:" arg; do
+while getopts "hcn:rs:" arg; do
     case $arg in
 	h)
 	    help
@@ -49,8 +53,22 @@ while getopts "hcn:" arg; do
 	n)
 	    count=$OPTARG
 	    ;;
+	r)
+	    release=1
+	    ;;
+	s)
+	    sed_cmd=$OPTARG
+	    ;;
     esac
 done
+
+## export dependencies to dependency-release.repos
+if [[ $release -eq 1 ]]; then
+    mv .git .git-back  # work around to eliminate the current repository itself
+    vcs export -n --exact-with-tags > dependency-release.repos
+    mv .git-back .git  # restore the .git dir
+    exit
+fi
 
 
 if [[ $clean -eq 1 ]]; then
@@ -68,6 +86,16 @@ if [[ $clean -eq 1 ]]; then
     exit
 fi
 
+
+## for release
+if [[ -e dependency-release.repos ]]; then
+    echo "setup dependency from release"
+    vcs import < dependency-release.repos
+    exit
+fi
+
+
+## for dev
 declare -A visited
 
 for (( i=1; i<=count; i++ ))
@@ -80,9 +108,20 @@ do
 	    flag=1
 	    visited[$line]=1
 	    
+	    temp_file=$(mktemp)
+	    echo "Temporary file created: $temp_file"
+	    cat $line > $temp_file
+	    if [[ ! -z $sed_cmd ]]; then
+		com="sed -i '$sed_cmd' $temp_file"
+		echo $com
+		eval $com
+		if [[ $? -ne 0 ]]; then
+		    exit 1
+		fi
+	    fi
+	    blue "$(dirname $line)/ vcs import < $temp_file"
 	    pushd $(dirname $line)
-	    blue "$(dirname $line)/ vcs import < $(basename $line)"
-	    vcs import < $(basename $line)
+	    vcs import < $temp_file
 	    popd
 	fi
     done

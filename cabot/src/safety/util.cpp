@@ -1,4 +1,4 @@
-// Copyright 2020 Carnegie Mellon University
+// Copyright 2020, 2024 Carnegie Mellon University and Miraikan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -250,4 +250,23 @@ void add_text(
   array.markers.push_back(marker);
 }
 
+void add_triangle(
+  rclcpp::Time now, const std::array<Point, 3> & points,
+  float size, float r, float g, float b, float a)
+{
+  visualization_msgs::msg::Marker marker;
+  init_marker(now, marker, r, g, b, a);
+  marker.ns = "peole_speed_control_triangle";
+  marker.type = visualization_msgs::msg::Marker::TRIANGLE_LIST;
+  marker.scale.x = size;
+  marker.scale.y = size;
+  marker.scale.z = size;
+  for (const auto & point : points) {
+    geometry_msgs::msg::Point p;
+    p.x = point.x;
+    p.y = point.y;
+    marker.points.push_back(p);
+  }
+  array.markers.push_back(marker);
+}
 }  // namespace CaBotSafety

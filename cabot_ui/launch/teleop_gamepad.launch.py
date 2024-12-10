@@ -36,6 +36,7 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_ui')
 
     gamepad = LaunchConfiguration('gamepad')
+    cmd_vel = LaunchConfiguration('cmd_vel')
 
     param_files = [
         ParameterFile(PathJoinSubstitution([
@@ -53,6 +54,12 @@ def generate_launch_description():
             description='Gamepad name ps4 or pro (Switch Pro Con)'
         ),
 
+        DeclareLaunchArgument(
+            'cmd_vel',
+            default_value='/cmd_vel',
+            description='Command velocity topic published by teleop_twist_joy node'
+        ),
+
         Node(
             package='joy',
             executable='joy_node',
@@ -68,7 +75,7 @@ def generate_launch_description():
             name=PythonExpression(['"teleop_twist_joy_', gamepad, '"']),
             parameters=[*param_files],
             remappings=[
-                ("/cabot/cmd_vel", "/cmd_vel")
+                ("/cabot/cmd_vel", cmd_vel)
             ]
         ),
     ])
