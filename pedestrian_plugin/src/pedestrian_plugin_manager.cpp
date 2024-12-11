@@ -1,4 +1,4 @@
-// Copyright (c) 2024  Carnegie Mellon University
+// Copyright (c) 2024  Carnegie Mellon University and Miraikan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -169,7 +169,7 @@ PedestrianPluginManager::PedestrianPluginManager()
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
-  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision", 10);
+  collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision_person", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);
   human_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agents>("/human_states", 10);

@@ -55,8 +55,12 @@ class UbloxConverter:
         else:
             return MFNavSAT.STATUS_ACTIVE
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({vars(self)})"
+
 
 class UbloxConverterNode:
+
     def __init__(self, node, min_cno, min_elev, num_sv_threshold_low, num_sv_threshold_high):
         self.node = node
         self.ublox_converter = UbloxConverter(min_cno, min_elev, num_sv_threshold_low, num_sv_threshold_high)
@@ -64,6 +68,15 @@ class UbloxConverterNode:
         self.num_active_sv_pub = self.node.create_publisher(Int64, "num_active_sv", 10)
         self.status_pub = self.node.create_publisher(Int8, "sv_status", 10)
         self.mf_navsat_pub = self.node.create_publisher(MFNavSAT, "mf_navsat", 10)
+
+    @classmethod
+    def from_dict(cls, node, data):
+        min_cno = data.get("min_cno", 30)
+        min_elev = data.get("min_elev", 15)
+        num_sv_threshold_low = data.get("num_sv_threshold_low", 5)
+        num_sv_threshold_high = data.get("num_sv_threshold_high", 10)
+        node.get_logger().info(f"data = {data}")
+        return cls(node, min_cno, min_elev, num_sv_threshold_low, num_sv_threshold_high)
 
     def navsat_callback(self, msg: NavSAT):
         num_sv = msg.num_svs
@@ -84,6 +97,9 @@ class UbloxConverterNode:
         mf_navsat_msg.num_active_sv = num_active_sv
         mf_navsat_msg.sv_status = sv_status
         self.mf_navsat_pub.publish(mf_navsat_msg)
+
+    def __repr__(self):
+        return repr(self.ublox_converter)
 
 
 def main():

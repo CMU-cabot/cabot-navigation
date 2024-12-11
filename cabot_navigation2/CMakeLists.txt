@@ -18,6 +18,8 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(grid_map_msgs REQUIRED)
+find_package(grid_map_ros REQUIRED)
 find_package(nav2_lifecycle_manager REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_core REQUIRED)
@@ -49,23 +51,25 @@ find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_transport REQUIRED)
 find_package(rosbag2_storage REQUIRED)
 find_package(rosbag2_compression REQUIRED)
-#find_package(OpenMP REQUIRED)
+find_package(OpenMP REQUIRED)
 
 
 include_directories(
   include
-#  ${OPENMP_INCLUDES}
+  ${OPENMP_INCLUDES}
   ${OpenCV_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${grid_map_core_INCLUDE_DIRS}
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 if(NOT DEBUG)
 
 set(dependencies
   geometry_msgs
+  grid_map_msgs
+  grid_map_ros
   rclcpp
   nav2_lifecycle_manager
   nav2_costmap_2d
@@ -83,7 +87,7 @@ set(dependencies
   diagnostic_updater
   visualization_msgs
   yaml_cpp_vendor
-#  OpenMP
+  OpenMP
 )
 
 ### dwb critics
@@ -178,6 +182,7 @@ ament_target_dependencies(clip_ground_filter_node
   pcl_conversions
   pcl_ros
   tf2_ros
+  visualization_msgs
 )
 
 target_link_libraries(clip_ground_filter_node
@@ -201,6 +206,28 @@ ament_target_dependencies(ransac_ground_filter_node
 
 target_link_libraries(ransac_ground_filter_node
   ${PCL_LIBRARIES}
+)
+
+### grid map ground filter
+add_executable(grid_map_ground_filter_node
+  src/abstract_ground_filter_node.cpp
+  src/grid_map_ground_filter_node.cpp
+)
+
+ament_target_dependencies(grid_map_ground_filter_node
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+  pcl_ros
+  tf2_ros
+  visualization_msgs
+  grid_map_msgs
+  grid_map_ros
+)
+
+target_link_libraries(grid_map_ground_filter_node
+  ${PCL_LIBRARIES}
+  ${OPENMP_LIBRARIES}
 )
 
 ### cabot lifecycle manager
@@ -234,6 +261,7 @@ install(TARGETS
   cabot_lifecycle_manager
   clip_ground_filter_node
   ransac_ground_filter_node
+  grid_map_ground_filter_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

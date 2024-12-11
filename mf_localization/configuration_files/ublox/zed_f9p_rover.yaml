@@ -11,6 +11,8 @@ ublox:
     uart1:
       baudrate: 230400
 
+    rate: 10.0 # Hz
+
     # message publishers
     publish:
       all: false

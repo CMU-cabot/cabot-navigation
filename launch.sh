@@ -103,8 +103,9 @@ function snore()
 function help()
 {
     echo "Usage:"
-    echo "-A          find all test module under cabot_sites"
     echo "-h          show this help"
+    echo "-A          find all test module under cabot_sites"
+    echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
     echo "-H          headless"
     echo "-M          log dmesg output"
     echo "-n <name>   set log name prefix"
@@ -140,6 +141,7 @@ unittest=
 retryoption=
 list_modules=0
 list_functions=0
+environment=
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -151,7 +153,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDf:HlLMn:rsS:ti:T:uvy" arg; do
+while getopts "hDE:f:HlLMn:rsS:ti:T:uvy" arg; do
     case $arg in
         h)
             help
@@ -160,6 +162,9 @@ while getopts "hDf:HlLMn:rsS:ti:T:uvy" arg; do
         D)
             debug=1
             ;;
+	E)
+	    environment=$OPTARG
+	    ;;
         f)
             test_regex=$OPTARG
             ;;
@@ -251,6 +256,15 @@ if [[ $list_functions -eq 1 ]]; then
     exit
 fi
 
+launch_prefix=$(basename $scriptdir)
+if [[ -n $environment ]]; then
+    export ROS_DOMAIN_ID=$((20+environment))
+    export CABOT_MAP_SERVER_HOST="localhost:$((9090+environment*10))/map"
+    export CABOT_ROSBRIDGE_PORT=$((9090+environment*10+1))
+    export GAZEBO_MASTER_URI="http://127.0.0.1:$((11345+environment))"
+    launch_prefix="${launch_prefix}-env${environment}"
+    ./build-docker.sh -p -i -P $launch_prefix
+fi
 
 log_name=${log_prefix}_`date +%Y-%m-%d-%H-%M-%S`
 export ROS_LOG_DIR="/home/developer/.ros/log/${log_name}"
@@ -301,10 +315,10 @@ if [ ! -e $dcfile ]; then
     exit
 fi
 
-dccom="docker compose -f $dcfile"
+dccom="docker compose -f $dcfile -p $launch_prefix"
 
 ## launch server
-./server-launch.sh -c -p $CABOT_SITE
+./server-launch.sh -c -p $CABOT_SITE -E "$environment"
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
@@ -334,9 +348,9 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 if [[ $run_test -eq 1 ]]; then
     blue "Running test $module $test_regex"
     if [[ $debug -eq 1 ]]; then
-        docker compose -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
+        docker compose -p $launch_prefix -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
     else
-        docker compose exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
+        docker compose -p $launch_prefix exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
     fi
     ctrl_c $?
 fi

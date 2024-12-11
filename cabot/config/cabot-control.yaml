@@ -8,7 +8,7 @@ cabot:
   clearing_tf_node:
     ros__parameters:
       target_rate: 20
-      target_frame: velodyne
+      target_frame: velodyne_base_link
 
   odom_adapter_node:
     ros__parameters:
@@ -56,6 +56,9 @@ cabot:
       people_topic: /people
       visualize_topic: /visualize
       limit_topic: /cabot/people_speed
+      social_distance_limit_topic: /cabot/social_distance_speed
+      pure_velocity_obstacle_limit_topic: /cabot/pure_velocity_obstacle_speed
+      combined_speed_limit_topic: /cabot/combined_speed
       odom_topic: /odom
       plan_topic: /plan
       # Social Distancing setting
@@ -64,10 +67,14 @@ cabot:
       # Consider an oval radius (x, y)
       social_distance_x: 2.0
       social_distance_y: 0.5
+      use_velocity_obstacle: true
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
       limit_topic: /cabot/tf_speed
+      tf_decel_timeout: 0.3
+      tf_timeout: 0.5
+      min_speed: 0.001
 
   touch_speed_control_node:
     ros__parameters:
