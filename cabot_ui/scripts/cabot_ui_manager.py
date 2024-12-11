@@ -404,7 +404,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
-            self._interface.menu_changed(menu=self.speed_menu)
+            self._interface.speed_changed(speed=self.speed_menu.description)
             e = NavigationEvent("sound", "SpeedUp")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -412,7 +412,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speeddown":
             self.speed_menu.next()
-            self._interface.menu_changed(menu=self.speed_menu)
+            self._interface.speed_changed(speed=self.speed_menu.description)
             e = NavigationEvent("sound", "SpeedDown")
             msg = std_msgs.msg.String()
             msg.data = str(e)

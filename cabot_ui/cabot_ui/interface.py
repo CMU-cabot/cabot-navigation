@@ -177,6 +177,11 @@ class UserInterface(object):
 
     # menu interface
 
+    def speed_changed(self, speed=None):
+        if speed is None:
+            return
+        self.speak(speed, force=False, priority=SpeechPriority.REQUIRED)
+
     def menu_changed(self, menu=None, backed=False, usage=False):
         if menu is None:
             return
