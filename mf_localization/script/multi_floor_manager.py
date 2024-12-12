@@ -544,10 +544,26 @@ class MultiFloorManager:
 
     def initialpose_callback(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped):
         if self.verbose:
-            self.logger.info("multi_floor_manager.initialpose_callback")
+            self.logger.info(f"multi_floor_manager.initialpose_callback: initialpose = {pose_with_covariance_stamped_msg}")
 
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
+
+        # convert initialpose frame if needed and possible
+        frame_id = pose_with_covariance_stamped_msg.header.frame_id
+        if frame_id != self.global_map_frame:
+            if self.verbose:
+                self.logger.info(f"transform initialpose on {frame_id} frame to the global frame ({self.global_map_frame})")
+            pose_stamped_msg = PoseStamped()
+            pose_stamped_msg.header = pose_with_covariance_stamped_msg.header
+            pose_stamped_msg.pose = pose_with_covariance_stamped_msg.pose.pose
+            try:
+                converted_pose_stamped = tfBuffer.transform(pose_stamped_msg, self.global_map_frame, timeout=Duration(seconds=1.0))  # timeout 1.0 s
+                pose_with_covariance_stamped_msg.header.frame_id = self.global_map_frame
+                pose_with_covariance_stamped_msg.pose.pose = converted_pose_stamped.pose
+            except RuntimeError:
+                # do not update pose_with_covariance_stamped_msg
+                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. Assuming initialpose is published on the global frame({self.global_map_frame}).")
 
         status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
 
