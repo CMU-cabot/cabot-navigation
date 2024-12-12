@@ -706,6 +706,8 @@ class MultiFloorManager:
         return failure_detected
 
     def pressure_callback(self, message):
+        if self.verbose:
+            self.logger.info("multi_floor_manager.pressure_callback")
         self.altitude_manager.put_pressure(message)
 
         if not self.pressure_available:
@@ -1061,6 +1063,8 @@ class MultiFloorManager:
         if not self.floor:
             return
         averaging_interval = self.global_position_averaging_interval
+        if self.verbose:
+            self.logger.info("multi_floor_manager.global_position_callback")
         try:
             # convert global position on global_map_frame to lat lng
             end_time = tfBuffer.get_latest_common_time(self.global_map_frame, self.global_position_frame)  # latest available time
@@ -1353,6 +1357,8 @@ class MultiFloorManager:
     #      NavSatFix gnss_fix
     #      TwistWithCovarianceStamped gnss_fix_velocity
     def gnss_fix_callback(self, fix: NavSatFix, fix_velocity: TwistWithCovarianceStamped):
+        if self.verbose:
+            self.logger.info("multi_floor_manager.gnss_fix_callback")
         # start converting gnss_fix message to global_map_frame and publish it for visualization
         # read message
         now = self.clock.now()
@@ -2538,7 +2544,7 @@ if __name__ == "__main__":
     sensor_qos = qos_profile_sensor_data
     beacons_sub = node.create_subscription(String, "beacons", multi_floor_manager.beacons_callback, 1, callback_group=state_update_callback_group)
     wifi_sub = node.create_subscription(String, "wifi", multi_floor_manager.wifi_callback, 1, callback_group=state_update_callback_group)
-    initialpose_sub = node.create_subscription(PoseWithCovarianceStamped, "initialpose", multi_floor_manager.initialpose_callback, 10, callback_group=state_update_callback_group)
+    initialpose_sub = node.create_subscription(PoseWithCovarianceStamped, "initialpose", multi_floor_manager.initialpose_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
     pressure_sub = node.create_subscription(FluidPressure, "pressure", multi_floor_manager.pressure_callback, 10, callback_group=state_update_callback_group)
 
     # services
@@ -2595,6 +2601,9 @@ if __name__ == "__main__":
     multi_floor_manager.localize_status = MFLocalizeStatus.UNKNOWN
 
     def main_loop():
+        if multi_floor_manager.verbose:
+            logger.info("main_loop")
+
         # detect optimization
         if multi_floor_manager.is_optimized():
             tfBuffer.clear()  # clear outdated tf before optimization
