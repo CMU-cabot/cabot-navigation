@@ -94,6 +94,9 @@ from diagnostic_msgs.msg import DiagnosticStatus
 
 import std_msgs.msg
 from cabot_msgs.srv import LookupTransform
+from std_srvs.srv import Trigger
+
+from ublox_converter import UbloxConverterNode
 
 
 def json2anchor(jobj):
@@ -541,10 +544,26 @@ class MultiFloorManager:
 
     def initialpose_callback(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped):
         if self.verbose:
-            self.logger.info("multi_floor_manager.initialpose_callback")
+            self.logger.info(f"multi_floor_manager.initialpose_callback: initialpose = {pose_with_covariance_stamped_msg}")
 
         # substitute ROS time to prevent error when gazebo is running and the pose message is published by rviz
         pose_with_covariance_stamped_msg.header.stamp = self.clock.now().to_msg()
+
+        # convert initialpose frame if needed and possible
+        frame_id = pose_with_covariance_stamped_msg.header.frame_id
+        if frame_id != self.global_map_frame:
+            if self.verbose:
+                self.logger.info(f"transform initialpose on {frame_id} frame to the global frame ({self.global_map_frame})")
+            pose_stamped_msg = PoseStamped()
+            pose_stamped_msg.header = pose_with_covariance_stamped_msg.header
+            pose_stamped_msg.pose = pose_with_covariance_stamped_msg.pose.pose
+            try:
+                converted_pose_stamped = tfBuffer.transform(pose_stamped_msg, self.global_map_frame, timeout=Duration(seconds=1.0))  # timeout 1.0 s
+                pose_with_covariance_stamped_msg.header.frame_id = self.global_map_frame
+                pose_with_covariance_stamped_msg.pose.pose = converted_pose_stamped.pose
+            except RuntimeError:
+                # do not update pose_with_covariance_stamped_msg
+                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. Assuming initialpose is published on the global frame({self.global_map_frame}).")
 
         status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
 
@@ -1334,6 +1353,7 @@ class MultiFloorManager:
     #      NavSatFix gnss_fix
     #      TwistWithCovarianceStamped gnss_fix_velocity
     def gnss_fix_callback(self, fix: NavSatFix, fix_velocity: TwistWithCovarianceStamped):
+        # start converting gnss_fix message to global_map_frame and publish it for visualization
         # read message
         now = self.clock.now()
         stamp = fix.header.stamp
@@ -1388,6 +1408,10 @@ class MultiFloorManager:
         # publish gnss fix in local frame
         self.gnss_fix_local_pub.publish(pose_with_covariance_stamped)
 
+        # do not update internal states when the multi_floor_manager is not active
+        if not self.is_active:
+            return
+
         # set gnss_navsat_time for timeout detection
         if self.gnss_navsat_time is None:
             self.gnss_navsat_time = now
@@ -1418,9 +1442,9 @@ class MultiFloorManager:
         # disable gnss adjust in indoor invironments
         if self.indoor_outdoor_mode == IndoorOutdoorMode.INDOOR:
             # reset all gnss adjust
-            for floor in self.gnss_adjuster_dict.keys():
-                for area in self.gnss_adjuster_dict[floor].keys():
-                    self.gnss_adjuster_dict[floor][area].reset()
+            for _floor in self.gnss_adjuster_dict.keys():
+                for _area in self.gnss_adjuster_dict[_floor].keys():
+                    self.gnss_adjuster_dict[_floor][_area].reset()
 
         # use different covariance threshold for initial localization and tracking
         if (self.gnss_localization_time is None) and (self.mode is None):
@@ -1431,6 +1455,10 @@ class MultiFloorManager:
         # do not use unreliable gnss fix
         if fix.status.status == NavSatStatus.STATUS_NO_FIX \
                 or fix_rejection_position_covariance < fix.position_covariance[0]:
+            # log before gnss-based initial localization
+            if self.gnss_localization_time is None:
+                self.logger.info(F"gnss_fix_callback: waiting for position_covariance convergence (cov[0]={fix.position_covariance[0]}, covariance_threshold={fix_rejection_position_covariance})",
+                                 throttle_duration_sec=1.0)
             # if navsat topic is timeout, use position covariance for indoor/outdoor mode instead
             if now - self.gnss_navsat_time > Duration(seconds=self.gnss_params.gnss_navsat_timeout):
                 if self.gnss_params.gnss_position_covariance_indoor_threshold < fix.position_covariance[0]:
@@ -2002,13 +2030,23 @@ class BufferProxy():
         self._clock = node.get_clock()
         self._logger = node.get_logger()
         self.lookup_transform_service = node.create_client(LookupTransform, 'lookup_transform', callback_group=MutuallyExclusiveCallbackGroup())
+        self.clear_transform_buffer_service = node.create_client(Trigger, 'clear_transform_buffer', callback_group=MutuallyExclusiveCallbackGroup())
         self.countPub = node.create_publisher(std_msgs.msg.Int32, "transform_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.transformMap = {}
         self.min_interval = rclpy.duration.Duration(seconds=0.2)
         self.lookup_transform_service_timeout_sec = 5.0
 
     def clear(self):
+        # clear local transform cache
         self.transformMap = {}
+
+        # clear TF buffer in lookup transform node
+        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.lookup_transform_service_timeout_sec)
+        if not service_available:
+            self._logger.error("clear_transform_buffer_service timeout error")
+            return
+        req = Trigger.Request()
+        self.clear_transform_buffer_service.call(req)
 
     def debug(self):
         if not hasattr(self, "count"):
@@ -2042,7 +2080,10 @@ class BufferProxy():
         result = self.lookup_transform_service.call(req)
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
+
+        # cache valid transforms
         self.transformMap[key] = (result.transform, now)
+
         return result.transform
 
     def get_latest_common_time(self, target, source):
@@ -2083,6 +2124,7 @@ if __name__ == "__main__":
     broadcaster = tf2_ros.TransformBroadcaster(node)
     tfBuffer = BufferProxy(node)
 
+    # multi floor manager
     multi_floor_manager = MultiFloorManager(node)
     # load node parameters
     configuration_directory_raw = node.declare_parameter("configuration_directory", '').value
@@ -2149,6 +2191,18 @@ if __name__ == "__main__":
     cartographer_qos_overrides = map_config["cartographer_qos_overrides"] if "cartographer_qos_overrides" in map_config else cartographer_qos_overrides_default
 
     # current_publisher = CurrentPublisher(node, verbose=verbose)
+
+    # ublox converter
+    ublox_converter_config = {
+                                "min_cno": node.declare_parameter("ublox_converter.min_cno", 30).value,
+                                "min_elev": node.declare_parameter("ublox_converter.min_elev", 15).value,
+                                "num_sv_threshold_low": node.declare_parameter("ublox_converter.num_sv_threshold_low", 5).value,
+                                "num_sv_threshold_high": node.declare_parameter("ublox_converter.num_sv_threshold_high", 10).value,
+                            }
+    map_ublox_converter_config = map_config.get("ublox_converter", {})
+    ublox_converter_config.update(map_ublox_converter_config)  # update if defined in map_config
+    ublox_converter = UbloxConverterNode.from_dict(node, ublox_converter_config)
+    logger.info(F"ublox_converter = {ublox_converter}")
 
     # configuration file check
     configuration_directory = configuration_directory_raw  # resource_utils.get_filename(configuration_directory_raw)

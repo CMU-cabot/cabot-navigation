@@ -38,6 +38,7 @@ THE SOFTWARE. -->
     <httpEndpoint id="defaultHttpEndpoint" host="*" httpPort="9090" />
     
     <webApplication contextRoot="map" location="MapService-0.0.1-SNAPSHOT.war"/>
+    <webApplication contextRoot="query" location="QueryService-0.0.1-SNAPSHOT.war"/>
 
     <!-- Default SSL configuration enables trust for default certificates from the Java runtime -->
     <ssl id="defaultSSLConfig" trustDefaultCerts="true" />

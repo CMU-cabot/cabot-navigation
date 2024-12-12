@@ -29,19 +29,28 @@ namespace cabot_navigation2
 AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_name, const rclcpp::NodeOptions & options)
 : rclcpp::Node(filter_name, options),
   target_frame_("livox_footprint"),
+  min_range_(0.05),
+  max_range_(5.0),
+  min_height_(-1.8),
+  max_height_(1.8),
+  publish_debug_ground_(false),
+  output_debug_ground_topic_("/ground_filter_ground"),
+  ground_distance_threshold_(0.05),
   xfer_format_(POINTCLOUD2_XYZRTL),
   ignore_noise_(true),
   input_topic_("/livox/points"),
   output_ground_topic_("/livox/points_ground"),
-  output_filtered_topic_("/livox/points_filtered"),
-  min_range_(0.05),
-  max_range_(10.0)
+  output_filtered_topic_("/livox/points_filtered")
 {
   RCLCPP_INFO(get_logger(), "NodeClass Constructor");
   RCLCPP_INFO(get_logger(), "Livox Point Cloud Node - %s", __FUNCTION__);
 
   target_frame_ = declare_parameter("target_frame", target_frame_);
-
+  min_range_ = declare_parameter("min_range", min_range_);
+  max_range_ = declare_parameter("max_range", max_range_);
+  publish_debug_ground_ = declare_parameter("publish_debug_ground", publish_debug_ground_);
+  output_debug_ground_topic_ = declare_parameter("output_debug_ground_topic", output_debug_ground_topic_);
+  ground_distance_threshold_ = declare_parameter("ground_distance_threshold", ground_distance_threshold_);
   xfer_format_ = declare_parameter("xfer_format", xfer_format_);
   if (xfer_format_ != POINTCLOUD2_XYZRTL && xfer_format_ != POINTCLOUD2_XYZI) {
     RCLCPP_ERROR(get_logger(), "Invalid format, specify 0 (Livox pointcloud2 format, PointXYZRTL) or 2 (Standard pointcloud2 format, pcl :: PointXYZI).");
@@ -50,8 +59,6 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
   input_topic_ = declare_parameter("input_topic", input_topic_);
   output_ground_topic_ = declare_parameter("output_ground_topic", output_ground_topic_);
   output_filtered_topic_ = declare_parameter("output_filtered_topic", output_filtered_topic_);
-  min_range_ = declare_parameter("min_range", min_range_);
-  max_range_ = declare_parameter("max_range", max_range_);
 
   tf_buffer_ = new tf2_ros::Buffer(get_clock());
   tf_listener_ = new tf2_ros::TransformListener(*tf_buffer_, this);
@@ -114,11 +121,11 @@ void AbstractGroundFilterNode::pointCloudCallback(const sensor_msgs::msg::PointC
     return;
   }
 
-  // filter point cloud by range
+  // filter point cloud by range and height
   pcl::PointCloud<pcl::PointXYZ>::Ptr valid_transformed_normal_points(new pcl::PointCloud<pcl::PointXYZ>);
   for (const auto & p : transformed_normal_points->points) {
     float r = hypot(p.x, p.y);
-    if ((r >= min_range_) && (r <= max_range_)) {
+    if ((r >= min_range_) && (r <= max_range_) && (p.z >= min_height_) && (p.z <= max_height_)) {
       valid_transformed_normal_points->push_back(p);
     }
   }
@@ -126,7 +133,7 @@ void AbstractGroundFilterNode::pointCloudCallback(const sensor_msgs::msg::PointC
   // filter ground point cloud
   pcl::PointCloud<pcl::PointXYZ>::Ptr ground_points(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_points(new pcl::PointCloud<pcl::PointXYZ>);
-  filterGround(valid_transformed_normal_points, ground_points, filtered_points);
+  filterGround(input->header.stamp, valid_transformed_normal_points, ground_points, filtered_points);
 
   // publish ground point cloud
   sensor_msgs::msg::PointCloud2 ground_points_msg;

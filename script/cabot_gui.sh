@@ -79,8 +79,7 @@ function signal() {
 : ${CABOT_SHOW_ROS2_RVIZ:=0}
 : ${CABOT_SHOW_ROS2_LOCAL_RVIZ:=0}
 : ${CABOT_SHOW_ROBOT_MONITOR:=1}
-
-
+: ${CABOT_GUI_TELEOP_TWIST_TOPIC:=cmd_vel}  # variable to remap cmd_vel topic for simulator
 
 wait_sec=0
 
@@ -122,7 +121,7 @@ echo "CABOT_SHOW_ROS2_RVIZ      : $CABOT_SHOW_ROS2_RVIZ"
 echo "CABOT_SHOW_ROS2_LOCAL_RVIZ: $CABOT_SHOW_ROS2_LOCAL_RVIZ"
 echo "CABOT_SHOW_GAZEBO_CLIENT  : $CABOT_SHOW_GAZEBO_CLIENT"
 echo "CABOT_SHOW_ROBOT_MONITOR  : $CABOT_SHOW_ROBOT_MONITOR"
-
+echo "CABOT_GUI_TELEOP_TWIST_TOPIC  : $CABOT_GUI_TELEOP_TWIST_TOPIC"
 
 blue "launch gui"
 com="$command_prefix ros2 launch cabot_ui cabot_gui.launch.py $command_postfix"
@@ -148,7 +147,7 @@ fi
 
 # launch teleop keyboard for both gazebo and physical robot
 blue "launch teleop"
-com="setsid xterm -e ros2 run teleop_twist_keyboard teleop_twist_keyboard &"
+com="setsid xterm -e ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args --remap cmd_vel:=$CABOT_GUI_TELEOP_TWIST_TOPIC &"
 echo $com
 eval $com
 pids+=($!)

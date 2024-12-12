@@ -27,6 +27,9 @@ import time
 
 from cabot_ui import geoutil
 from tf_transformations import quaternion_from_euler
+import rclpy
+import rclpy.node
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 
 class TestGeoutil(unittest.TestCase):
@@ -34,6 +37,11 @@ class TestGeoutil(unittest.TestCase):
 
     def setUp(self):
         pass
+
+    def setUpClass():
+        rclpy.init()
+        TestGeoutil.node = rclpy.node.Node("test_node")
+        CaBotRclpyUtil.initialize(TestGeoutil.node)
 
     def test_conversion(self):
         """test local and global conversion"""

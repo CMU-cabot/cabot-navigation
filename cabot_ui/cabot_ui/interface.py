@@ -30,6 +30,7 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
+import cabot_ui.geojson
 from cabot_ui import visualizer, i18n
 from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
@@ -37,9 +38,20 @@ from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
 
 
+class SpeechPriority:
+    REQUIRED = 90
+    HIGH = 60
+    NORMAL = 30
+    LOW = 10
+
+
 class UserInterface(object):
     SOCIAL_ANNOUNCE_INTERVAL = Duration(seconds=15.0)
     NOTIFY_TURN_INTERVAL = Duration(seconds=5.0)
+    PRIORITY_REQUIRED = 90
+    PRIORITY_HIGH = 60
+    PRIORITY_NORMAL = 30
+    PRIORITY_LOW = 10
 
     def __init__(self, node: Node):
         self._node = node
@@ -74,7 +86,7 @@ class UserInterface(object):
         i18n.load_from_packages(packages)
 
         self.last_social_announce = None
-        self.last_notify_turn = None
+        self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
@@ -106,7 +118,7 @@ class UserInterface(object):
         self.lang = lang
         i18n.set_language(self.lang)
 
-    def speak(self, text, force=True, pitch=50, volume=50, rate=50):
+    def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
         if text is None:
             return
 
@@ -121,7 +133,7 @@ class UserInterface(object):
             if not speak_proxy.wait_for_service(timeout_sec=1):
                 CaBotRclpyUtil.error("Service cannot be found")
                 return
-            CaBotRclpyUtil.info(F"try to speak {text} (v={voice}, r={rate}, p={pitch}) {force}")
+            CaBotRclpyUtil.info(F"try to speak {text} (v={voice}, r={rate}, p={pitch}, priority={priority}) {force}")
             request = cabot_msgs.srv.Speak.Request()
             request.text = text
             request.rate = rate
@@ -130,7 +142,7 @@ class UserInterface(object):
             request.lang = self.lang
             request.voice = voice
             request.force = force
-            request.priority = 50
+            request.priority = priority
             request.timeout = 2.0
             request.channels = cabot_msgs.srv.Speak.Request.CHANNEL_BOTH
             speak_proxy.call_async(request)
@@ -165,6 +177,11 @@ class UserInterface(object):
 
     # menu interface
 
+    def speed_changed(self, speed=None):
+        if speed is None:
+            return
+        self.speak(speed, force=False, priority=SpeechPriority.REQUIRED)
+
     def menu_changed(self, menu=None, backed=False, usage=False):
         if menu is None:
             return
@@ -179,21 +196,21 @@ class UserInterface(object):
 
     def pause_navigation(self):
         self._activity_log("cabot/interface", "navigation", "pause")
-        self.speak(i18n.localized_string("PAUSE_NAVIGATION"))
+        self.speak(i18n.localized_string("PAUSE_NAVIGATION"), priority=SpeechPriority.REQUIRED)
 
     def cancel_navigation(self):
-        pass  # self.speak(i18n.localized_string("CANCEL_NAVIGATION"))
+        pass  # self.speak(i18n.localized_string("CANCEL_NAVIGATION"), priority=SpeechPriority.REQUIRED)
 
     def resume_navigation(self):
         self._activity_log("cabot/interface", "navigation", "resume")
-        self.speak(i18n.localized_string("RESUME_NAVIGATION"))
+        self.speak(i18n.localized_string("RESUME_NAVIGATION"), priority=SpeechPriority.REQUIRED)
 
     def pausing_navigation(self):
         self._activity_log("cabot/interface", "navigation", "pausing")
-        self.speak(i18n.localized_string("PLEASE_WAIT_FOR_A_SECOND"))
+        self.speak(i18n.localized_string("PLEASE_WAIT_FOR_A_SECOND"), priority=SpeechPriority.REQUIRED)
 
     def start_exploration(self):
-        pass  # self.speak(i18n.localized_string("START_EXPLORATION"))
+        pass  # self.speak(i18n.localized_string("START_EXPLORATION"), priority=SpeechPriority.REQUIRED)
 
     # navigate interface
 
@@ -202,11 +219,11 @@ class UserInterface(object):
 
     def in_preparation(self):
         self._activity_log("cabot/interface", "status", "prepare")
-        self.speak(i18n.localized_string("IN_PRERARATION"))
+        self.speak(i18n.localized_string("IN_PRERARATION"), priority=SpeechPriority.REQUIRED)
 
     def i_am_ready(self):
         self._activity_log("cabot/interface", "status", "ready")
-        self.speak(i18n.localized_string("I_AM_READY"))
+        self.speak(i18n.localized_string("I_AM_READY"), priority=SpeechPriority.REQUIRED)
 
     def start_navigation(self):
         self._activity_log("cabot/interface", "navigation", "start")
@@ -217,9 +234,9 @@ class UserInterface(object):
         self.last_pose = kwargs
         self._pose_log()
 
-    def notify_turn(self, turn=None, pose=None):
-        if self.last_notify_turn and \
-           self._node.get_clock().now() - self.last_notify_turn < UserInterface.NOTIFY_TURN_INTERVAL:
+    def notify_turn(self, device=None, turn=None):
+        if self.last_notify_turn[device] and \
+                self._node.get_clock().now() - self.last_notify_turn[device] < UserInterface.NOTIFY_TURN_INTERVAL:
             return
         pattern = vibration.UNKNOWN
         text = ""
@@ -249,13 +266,14 @@ class UserInterface(object):
             msgs[0].data = str(Turn.Type.Avoiding)
             self._activity_log("cabot/turn_type", "Type.Avoiding")
         msgs[1].data = turn.angle
-        self.turn_type_pub.publish(msgs[0])
-        self.turn_angle_pub.publish(msgs[1])
-        self.last_notify_turn = self._node.get_clock().now()
-        self._activity_log("cabot/interface", "turn angle", str(turn.angle))
-        self._activity_log("cabot/interface", "notify", text)
-        self.vibrate(pattern)
-        self.read_aloud_vibration(pattern)
+        self.last_notify_turn[device] = self._node.get_clock().now()
+        if device == "directional_indicator":
+            self.turn_angle_pub.publish(msgs[1])
+        elif device == "vibrator":
+            self._activity_log("cabot/interface", "turn angle", str(turn.angle))
+            self._activity_log("cabot/interface", "notify", text)
+            self.vibrate(pattern)
+            self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
         vib = vibration.RIGHT_DEV
@@ -264,7 +282,7 @@ class UserInterface(object):
 
         self._activity_log("cabot/interface", "human")
         self.vibrate(pattern=vib)
-        self.speak(i18n.localized_string("AVOIDING_A_PERSON"))
+        self.speak(i18n.localized_string("AVOIDING_A_PERSON"), priority=SpeechPriority.NORMAL)
 
     def have_arrived(self, goal):
         raise RuntimeError("Should no use this func")
@@ -273,33 +291,49 @@ class UserInterface(object):
 
         if name:
             if desc:
-                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME_AND_DESCRIPTION").format(name, desc))
+                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME_AND_DESCRIPTION").format(name, desc), priority=SpeechPriority.HIGH)
             else:
-                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME").format(name))
+                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME").format(name), priority=SpeechPriority.HIGH)
         else:
-            self.speak(i18n.localized_string("YOU_HAVE_ARRIVED"))
+            self.speak(i18n.localized_string("YOU_HAVE_ARRIVED"), priority=SpeechPriority.HIGH)
         self._activity_log("cabot/interface", "navigation", "arrived")
+
+    def get_speech_priority(self, poi):
+        if isinstance(poi, cabot_ui.geojson.Entrance):
+            return SpeechPriority.LOW
+        if isinstance(poi, cabot_ui.geojson.InfoPOI):
+            nav_info_minor_category = poi.get_minor_category()
+            if nav_info_minor_category == "_priority_low_":
+                return SpeechPriority.LOW
+            elif nav_info_minor_category == "_priority_high_":
+                return SpeechPriority.HIGH
+            elif nav_info_minor_category == "_priority_normal_":
+                return SpeechPriority.NORMAL
+            else:
+                return SpeechPriority.REQUIRED
+        if isinstance(poi, cabot_ui.geojson.POI):
+            return SpeechPriority.REQUIRED
 
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
         if statement:
-            self.speak(statement)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approaching")
 
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
         if statement:
-            self.speak(statement)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
-            self.speak(statement)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "passed")
 
     def could_not_get_current_location(self):
-        self.speak(i18n.localized_string("COULD_NOT_GET_CURRENT_LOCATION"))
+        self.speak(i18n.localized_string("COULD_NOT_GET_CURRENT_LOCATION"), priority=SpeechPriority.REQUIRED)
 
     def enter_goal(self, goal):
         pass
@@ -321,28 +355,28 @@ class UserInterface(object):
     def set_pause_control(self, flag):
         self._activity_log("cabot/interface", "pause_control", str(flag))
         if flag:
-            self.speak(i18n.localized_string("PAUSE_CONTROL"))
+            self.speak(i18n.localized_string("PAUSE_CONTROL"), priority=SpeechPriority.REQUIRED)
 
     def please_call_elevator(self, pos):
         self._activity_log("cabot/interface", "navigation", "elevator button")
         if pos:
             self.speak(i18n.localized_string("CALL_ELEVATOR_PLEASE_ON_YOUR",
-                                             i18n.localized_string(pos)))
+                                             i18n.localized_string(pos)), priority=SpeechPriority.REQUIRED)
         else:
-            self.speak(i18n.localized_string("CALL_ELEVATOR_PLEASE"))
+            self.speak(i18n.localized_string("CALL_ELEVATOR_PLEASE"), priority=SpeechPriority.REQUIRED)
 
     def elevator_opening(self):
         self._activity_log("cabot/interface", "navigation", "elevator opening")
         self.vibrate(vibration.FRONT)
-        self.speak(i18n.localized_string("ELEVATOR_IS_OPENING"))
+        self.speak(i18n.localized_string("ELEVATOR_IS_OPENING"), priority=SpeechPriority.REQUIRED)
 
     def floor_changed(self, floor):
         self._activity_log("cabot/interface", "navigation", "floor_changed")
-        self.speak(i18n.localized_string("GETTING_OFF_THE_ELEVATOR"))
+        self.speak(i18n.localized_string("GETTING_OFF_THE_ELEVATOR"), priority=SpeechPriority.REQUIRED)
 
     def queue_start_arrived(self):
         self._activity_log("cabot/interface", "queue", "start arrived")
-        self.speak(i18n.localized_string("GOING_TO_GET_IN_LINE"))
+        self.speak(i18n.localized_string("GOING_TO_GET_IN_LINE"), priority=SpeechPriority.REQUIRED)
 
     def queue_proceed(self):
         self._activity_log("cabot/interface", "queue", "proceed")
@@ -350,16 +384,24 @@ class UserInterface(object):
 
     def please_pass_door(self):
         self._activity_log("cabot/interface", "navigation", "manual door")
-        self.speak(i18n.localized_string("DOOR_POI_USER_ACTION"))
+        self.speak(i18n.localized_string("DOOR_POI_USER_ACTION"), priority=SpeechPriority.REQUIRED)
 
     def door_passed(self):
         self._activity_log("cabot/interface", "navigation", "door passed")
-        self.speak(i18n.localized_string("DOOR_POI_PASSED"))
+        self.speak(i18n.localized_string("DOOR_POI_PASSED"), priority=SpeechPriority.REQUIRED)
 
     def please_follow_behind(self):
         self._activity_log("cabot/interface", "navigation", "please_follow_behind")
-        self.speak(i18n.localized_string("FOLLOW_BEHIND_PLEASE_NARROW"))
+        self.speak(i18n.localized_string("FOLLOW_BEHIND_PLEASE_NARROW"), priority=SpeechPriority.REQUIRED)
 
     def please_return_position(self):
         self._activity_log("cabot/interface", "navigation", "please_return_position")
-        self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
+        self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"), priority=SpeechPriority.REQUIRED)
+
+    def requesting_describe_surround(self):
+        self._activity_log("cabot/interface", "requesting_describe_surround", "")
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.HIGH)
+
+    def describe_surround(self, description):
+        self._activity_log("cabot/interface", "describe_surround", description)
+        self.speak(description, priority=SpeechPriority.HIGH)

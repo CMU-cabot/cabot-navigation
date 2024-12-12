@@ -1,4 +1,5 @@
 # Copyright (c) 2020  Carnegie Mellon University
+# Copyright (c) 2024  ALPS ALPINE CO., LTD.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -71,7 +72,7 @@ class NavigationInterface(object):
     def update_pose(self, **kwargs):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def notify_turn(self, turn=None):
+    def notify_turn(self, device=None, turn=None):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def notify_human(self, angle=0):
@@ -357,7 +358,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.queue_wait_pois = []
         self.speed_pois = []
         self.turns = []
-        self.notified_turns = []
+        self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self.i_am_ready = False
         self._sub_goals = None
@@ -365,6 +366,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._current_goal = None
         self._last_estimated_goal_check = None
         self._last_estimated_goal = None
+
+        # speed = 0.50 m/sec
+        self._notify_vib_threshold = 0.85
+        self._notify_di_threshold = 0.25
 
         # self.client = None
         self._loop_handle = None
@@ -375,6 +380,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._max_speed = node.declare_parameter("max_speed", 1.1).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
+        self._speed_poi_params = node.declare_parameter("speed_poi_params", [0.5, 0.5, 0.5]).value
 
         self._global_map_name = node.declare_parameter("global_map_name", "map_global").value
         self.visualizer.global_map_name = self._global_map_name
@@ -431,12 +437,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
+        turn_end_output = node.declare_parameter("turn_end_topic", "/turn_end").value
+        self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
         self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
     def _localize_status_callback(self, msg):
+        self._logger.info(F"_localize_status_callback {msg}")
         self.localize_status = msg.status
 
     def process_event(self, event):
@@ -541,6 +551,47 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._current_goal.update_goal(msg)
 
     # public interfaces
+
+    def set_handle_side(self, side):
+        self._logger.info("set_handle_side is called")
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_handle_side, side))
+
+    def _set_handle_side(self, side):
+        self._logger.info("_set_handle_side is called")
+
+        def callback(result):
+            self.delegate.activity_log("cabot/navigation", "set_handle_side", "side")
+            self._logger.info(f"set_handle_side {side=}, {result=}")
+        if side == "left":
+            offset_sign = +1.0
+        elif side == "right":
+            offset_sign = -1.0
+        else:
+            self._logger.info(f"set_handle_side {side=} should be 'left' or 'right'")
+            return
+        self.change_parameters({
+            "/footprint_publisher": {
+                "offset_sign": offset_sign
+            }
+        }, callback)
+
+    def set_touch_mode(self, mode):
+        self._logger.info("set_touch_mode is called")
+        with self._process_queue_lock:
+            self._process_queue.append((self._set_touch_mode, mode))
+
+    def _set_touch_mode(self, mode):
+        self._logger.info("_set_touch_mode is called")
+
+        def callback(result):
+            self.delegate.activity_log("cabot/navigation", "set_touch_mode", "mode")
+            self._logger.info(f"set_touch_mode {mode=}, {result=}")
+        self.change_parameters({
+            "/cabot/cabot_can": {
+                "touch_mode": mode
+            }
+        }, callback)
 
     # wrap execution by a queue
     def set_destination(self, destination):
@@ -661,7 +712,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             callback()
 
         self.turns = []
-        self.notified_turns = []
+        self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         if self._current_goal:
             self._goal_index -= 1
@@ -741,7 +792,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.info_pois = []
             self.queue_wait_pois = []
         self.turns = []
-        self.notified_turns = []
+        self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self._logger.info(F"goal: {goal}")
         try:
@@ -791,6 +842,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         try:
             self.current_pose = self.current_local_pose()
             self.delegate.update_pose(ros_pose=self.current_ros_pose(),
+                                      current_pose=self.current_pose,
                                       global_position=self.current_global_pose(),
                                       current_floor=self.current_floor,
                                       global_frame=self._global_map_name
@@ -895,7 +947,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger.info(F"_check_nearby_facility passed {entrance._id}")
                 self.delegate.passed_poi(poi=entrance)
 
+    """
+     robot              target     POI
+     o->                     |--D--o
+     The robot will decrease the speed towards the target and keep speed until passing the POI
+     THe robot velocity is calculated based on expected deceleration and delay
+    """
     def _check_speed_limit(self, current_pose):
+        target_distance = self._speed_poi_params[0]  # meters
+        expected_deceleration = self._speed_poi_params[1]  # meters/seconds^2
+        expected_delay = self._speed_poi_params[2]  # seconds
+
         def max_v(D, A, d):
             return (-2 * A * d + math.sqrt(4 * A * A * d * d + 8 * A * D)) / 2
 
@@ -905,7 +967,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
-                    limit = min(limit, max(poi.limit, max_v(max(0, dist-0.5), 0.5, 0.5)))
+                    limit = min(limit, max(poi.limit, max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)))
+                    self._logger.debug(f"SpeedPOI {max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)=}")
+                    self._logger.debug(f"SpeedPOI {dist=}, {target_distance=}, {expected_deceleration=}, {expected_delay=}, {limit=}, {poi.limit=}")
                 if limit < self._max_speed:
                     self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
@@ -922,34 +986,46 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
-                if turn.passed:
+                if turn.passed_vibrator and turn.passed_directional_indicator:
+                    dist_to_end = numpy.sqrt((current_pose.x - turn.end.pose.position.x)**2 + (current_pose.y - turn.end.pose.position.y)**2)
+                    self._logger.info(F"Distance to turn end: {dist_to_end}")
+                    if dist_to_end < 0.75:
+                        msg = std_msgs.msg.Bool()
+                        msg.data = True
+                        self.turn_end_pub.publish(msg)
                     continue
                 try:
                     dist = turn.distance_to(current_pose)
-                    if dist < 0.25:
-                        turn.passed = True
-                        self._logger.info(F"notify turn {turn}")
+                    if dist < self._notify_vib_threshold and not turn.passed_vibrator:
+                        turn.passed_vibrator = True
+                        self._logger.info(F"notify turn by vibrator {turn}")
 
                         if turn.turn_type == Turn.Type.Avoiding:
                             # give avoiding announce
                             self._logger.info("social_navigation avoiding turn")
                             self.social_navigation.turn = turn
 
-                        if self._check_already_notified_turn_nearby(turn):
-                            self.delegate.notify_turn(turn=turn)
+                        if self._check_already_notified_turn_nearby(device="vibrator", turn=turn):
+                            self.delegate.notify_turn(device="vibrator", turn=turn)
+                    elif dist < self._notify_di_threshold and not turn.passed_directional_indicator:
+                        turn.passed_directional_indicator = True
+                        self._logger.info(F"notify turn by directional indicator {turn}")
+
+                        if self._check_already_notified_turn_nearby(device="directional_indicator", turn=turn):
+                            self.delegate.notify_turn(device="directional_indicator", turn=turn)
                 except:  # noqa: E722
                     import traceback
                     self._logger.error(traceback.format_exc())
                     self._logger.error("could not convert pose for checking turn POI",
                                        throttle_duration_sec=3)
 
-    def _check_already_notified_turn_nearby(self, turn: Turn):
+    def _check_already_notified_turn_nearby(self, device: str, turn: Turn):
         result = True
-        for other in self.notified_turns:
+        for other in self.notified_turns[device]:
             if other.distance_to(turn) < Navigation.TURN_NEARBY_THRESHOLD:
                 result = False
-        self.notified_turns.append(turn)
-        self._logger.info(f"_check_already_notified_turn_nearby, {result}, {turn}")
+        self.notified_turns[device].append(turn)
+        self._logger.info(f"_check_already_notified_turn_nearby, {device}, {result}, {turn}")
         return result
 
     def _check_queue_wait(self, current_pose):
@@ -1235,9 +1311,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         angle = turn_yaw * 180 / math.pi
         pose = self.current_pose.to_pose_stamped_msg(self._global_map_name)
         if abs(angle) >= 180/3:
-            self.delegate.notify_turn(turn=Turn(pose, angle, Turn.Type.Normal))
+            self.delegate.notify_turn(device="vibrator", turn=Turn(pose, angle, Turn.Type.Normal))
         elif abs(angle) >= 180/6:
-            self.delegate.notify_turn(turn=Turn(pose, angle, Turn.Type.Avoiding))
+            self.delegate.notify_turn(device="vibrator", turn=Turn(pose, angle, Turn.Type.Avoiding))
         self._logger.info(F"notify turn {turn_yaw}")
 
     def goto_floor(self, floor, gh_callback, callback):
