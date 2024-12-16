@@ -60,6 +60,9 @@ public:
   std::string people_topic_;
   std::string vis_topic_;
   std::string limit_topic_;
+  std::string social_distance_limit_topic_;
+  std::string pure_velocity_obstacle_limit_topic_;
+  std::string combined_speed_limit_topic_;
   std::string odom_topic_;
   std::string plan_topic_;
   std::string event_topic_;
@@ -81,13 +84,16 @@ public:
   double no_people_topic_max_speed_;
   double collision_time_horizon_;
   bool no_people_flag_;
-  bool enable_velocity_obstacle_;
+  bool use_velocity_obstacle_;
 
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr social_distance_limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pure_velocity_obstacle_limit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr combined_speed_limit_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr event_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr set_social_distance_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr get_social_distance_pub_;
@@ -105,6 +111,9 @@ public:
     people_topic_("/people"),
     vis_topic_("/visualize"),
     limit_topic_("/people_limit"),
+    social_distance_limit_topic_("/social_distance_limit"),
+    pure_velocity_obstacle_limit_topic_("/pure_velocity_obstacle_limit"),
+    combined_speed_limit_topic_("/combined_speed_limit"),
     odom_topic_("/odom"),
     plan_topic_("/plan"),
     event_topic_("/event"),
@@ -124,7 +133,7 @@ public:
     no_people_topic_max_speed_(0.5),
     collision_time_horizon_(5.0),
     no_people_flag_(false),
-    enable_velocity_obstacle_(true)
+    use_velocity_obstacle_(true)
   {
     RCLCPP_INFO(get_logger(), "PeopleSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -154,6 +163,20 @@ public:
     limit_topic_ = declare_parameter("limit_topic", limit_topic_);
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
+    social_distance_limit_topic_ = declare_parameter("social_distance_limit_topic", social_distance_limit_topic_);
+    social_distance_limit_pub_ =
+      create_publisher<std_msgs::msg::Float32>(social_distance_limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+
+    use_velocity_obstacle_ = declare_parameter("use_velocity_obstacle", use_velocity_obstacle_);
+    pure_velocity_obstacle_limit_topic_ = declare_parameter("pure_velocity_obstacle_limit_topic", pure_velocity_obstacle_limit_topic_);
+    pure_velocity_obstacle_limit_pub_ = create_publisher<std_msgs::msg::Float32>(
+      pure_velocity_obstacle_limit_topic_,
+      rclcpp::SystemDefaultsQoS().transient_local());
+    combined_speed_limit_topic_ = declare_parameter("combined_speed_limit_topic", combined_speed_limit_topic_);
+    combined_speed_limit_pub_ = create_publisher<std_msgs::msg::Float32>(
+      combined_speed_limit_topic_,
+      rclcpp::SystemDefaultsQoS().transient_local());
+
     event_topic_ = declare_parameter("event_topic", event_topic_);
     event_pub_ = create_publisher<std_msgs::msg::String>(event_topic_, 100);
 
@@ -167,7 +190,6 @@ public:
     social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
     collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
-    enable_velocity_obstacle_ = declare_parameter("enable_velocity_obstacle", enable_velocity_obstacle_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -206,6 +228,9 @@ public:
     plan_sub_.reset();
     vis_pub_.reset();
     limit_pub_.reset();
+    social_distance_limit_pub_.reset();
+    pure_velocity_obstacle_limit_pub_.reset();
+    combined_speed_limit_pub_.reset();
     event_pub_.reset();
     set_social_distance_sub_.reset();
     get_social_distance_pub_.reset();
@@ -253,6 +278,9 @@ public:
       }
       RCLCPP_DEBUG(get_logger(), "change param %s", param.get_name().c_str());
 
+      if (param.get_name() == "use_velocity_obstacle") {
+        use_velocity_obstacle_ = param.as_bool();
+      }
       if (param.get_name() == "max_speed_") {
         max_speed_ = param.as_double();
       }
@@ -279,9 +307,6 @@ public:
       }
       if (param.get_name() == "collision_time_horizon") {
         collision_time_horizon_ = param.as_double();
-      }
-      if (param.get_name() == "enable_velocity_obstacle") {
-        enable_velocity_obstacle_ = param.as_bool();
       }
     }
     results->successful = true;
@@ -328,8 +353,9 @@ private:
       transformed_people.emplace_back(p_local, v_local);
     }
 
+    double social_distance_speed_limit = max_speed_;
+
     // Social Distance
-    double social_speed_limit = max_speed_;
     for (size_t i = 0; i < input->people.size(); ++i) {
       const auto & person = input->people[i];
       const auto & p_local = transformed_people[i].first;
@@ -372,26 +398,26 @@ private:
         }
       }
       if (min_path_dist > social_distance_y_) {
-        social_speed_limit = std::min(social_speed_limit, max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
+        social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
       } else {
-        social_speed_limit = std::min(social_speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
+        social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
       }
 
-      if (social_speed_limit < min_speed_) {
-        social_speed_limit = 0;
+      if (social_distance_speed_limit < min_speed_) {
+        social_distance_speed_limit = 0;
       }
 
       RCLCPP_INFO(
         get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
-        person.name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, social_speed_limit,
+        person.name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, social_distance_speed_limit,
         max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
 
-      if (social_speed_limit < max_speed_) {
+      if (social_distance_speed_limit < max_speed_) {
         std_msgs::msg::String msg;
 
-        if (fabs(social_speed_limit) < 0.01) {
+        if (fabs(social_distance_speed_limit) < 0.01) {
           msg.data = "navigation;event;people_speed_stopped";
-        } else if (vx > 0.25 && social_speed_limit < max_speed_ * 0.75) {
+        } else if (vx > 0.25 && social_distance_speed_limit < max_speed_ * 0.75) {
           msg.data = "navigation;event;people_speed_following";
         }
 
@@ -402,73 +428,77 @@ private:
       }
     }
 
-    double people_speed_limit = social_speed_limit;
-
     // Velocity Obstacle
-    if (enable_velocity_obstacle_) {
-      std::vector<std::pair<double, double>> vo_intervals;
-      for (size_t i = 0; i < input->people.size(); ++i) {
-        const auto & p_local = transformed_people[i].first;
-        const auto & v_local = transformed_people[i].second;
+    std::vector<std::pair<double, double>> vo_intervals;
+    for (size_t i = 0; i < input->people.size(); ++i) {
+      const auto & p_local = transformed_people[i].first;
+      const auto & v_local = transformed_people[i].second;
 
-        double x = p_local.x();
-        double y = p_local.y();
-        double vx = v_local.x();
-        double vy = v_local.y();
+      double x = p_local.x();
+      double y = p_local.y();
+      double vx = v_local.x();
+      double vy = v_local.y();
 
-        double RPy = atan2(y, x);
-        double dist = hypot(x, y);
-        double s = asin(pr / dist);
-        double theta_right = normalizedAngle(RPy - s);
-        double theta_left = normalizedAngle(RPy + s);
+      double RPy = atan2(y, x);
+      double dist = hypot(x, y);
+      double s = asin(pr / dist);
+      double theta_right = normalizedAngle(RPy - s);
+      double theta_left = normalizedAngle(RPy + s);
 
-        if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
-          continue;
-        }
+      if (isWithinVelocityObstacle(vx, vy, theta_right, theta_left)) {
+        continue;
+      }
 
-        if (!willCollideWithinTime(x, y, vx, vy)) {
-          continue;
-        }
+      if (!willCollideWithinTime(x, y, vx, vy)) {
+        continue;
+      }
 
-        auto compute_velocity = [&](double theta) -> std::optional<double> {
-            double t = -vy / sin(theta);
-            return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
-          };
+      auto compute_velocity = [&](double theta) -> std::optional<double> {
+          double t = -vy / sin(theta);
+          return (t >= 0) ? std::make_optional(vx + t * cos(theta)) : std::nullopt;
+        };
 
-        bool is_limited = false;
-        if (std::abs(theta_right) < epsilon || std::abs(theta_right - M_PI) < epsilon) {
-          is_limited = addVOInterval(compute_velocity(theta_left), vo_intervals);
-        } else if (std::abs(theta_left) < epsilon || std::abs(theta_left - M_PI) < epsilon) {
-          is_limited = addVOInterval(compute_velocity(theta_right), vo_intervals);
-        } else {
-          auto v_right = compute_velocity(theta_right);
-          auto v_left = compute_velocity(theta_left);
-
-          if (v_right && v_left) {
-            double v_min = std::min(v_right.value(), v_left.value());
-            double v_max = std::max(v_right.value(), v_left.value());
-            if (0.0 < v_min && v_min < max_speed_) {
-              vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
-              is_limited = true;
-            }
-          } else {
-            is_limited |= addVOInterval(v_right, vo_intervals);
-            is_limited |= addVOInterval(v_left, vo_intervals);
+      bool is_limited = false;
+      if (std::fabs(theta_right) < epsilon || std::fabs(theta_right - M_PI) < epsilon) {
+        is_limited = addVOInterval(compute_velocity(theta_left), vo_intervals);
+      } else if (std::fabs(theta_left) < epsilon || std::fabs(theta_left - M_PI) < epsilon) {
+        is_limited = addVOInterval(compute_velocity(theta_right), vo_intervals);
+      } else {
+        auto v_right = compute_velocity(theta_right);
+        auto v_left = compute_velocity(theta_left);
+        if (v_right && v_left) {
+          double v_min = std::min(v_right.value(), v_left.value());
+          double v_max = std::max(v_right.value(), v_left.value());
+          if (0.0 < v_min && v_min < max_speed_) {
+            vo_intervals.emplace_back(v_min, std::min(v_max, max_speed_));
+            is_limited = true;
           }
-        }
-
-        if (is_limited && logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
-          addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+        } else {
+          is_limited |= addVOInterval(v_right, vo_intervals);
+          is_limited |= addVOInterval(v_left, vo_intervals);
         }
       }
 
-      people_speed_limit = computeSafeSpeedLimit(social_speed_limit, vo_intervals);
+      if (is_limited && logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+        addVOMarker(dist, vx, vy, theta_right, theta_left, map_to_robot_tf2);
+      }
     }
 
-    std_msgs::msg::Float32 msg;
-    msg.data = people_speed_limit;
-    // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
-    limit_pub_->publish(msg);
+    // velocity obstacle speed limit without considering social distance constraints
+    double pure_velocity_obstacle_speed_limit = computeSafeSpeedLimit(max_speed_, vo_intervals);
+
+    // velocity obstacle speed limit constrained by social distance restrictions
+    double combined_speed_limit = computeSafeSpeedLimit(social_distance_speed_limit, vo_intervals);
+
+    // final speed limit
+    double people_speed_limit;
+    if (use_velocity_obstacle_) {
+      people_speed_limit = combined_speed_limit;
+    } else {
+      people_speed_limit = social_distance_speed_limit;
+    }
+
+    publishLimits(social_distance_speed_limit, pure_velocity_obstacle_speed_limit, combined_speed_limit, people_speed_limit);
 
     if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
       addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit);
@@ -544,6 +574,17 @@ private:
     CaBotSafety::add_text(this->get_clock()->now(), buff, start_point);
   }
 
+  void publishLimits(
+    const double social_distance_speed_limit, const double pure_velocity_obstacle_speed_limit, const double combined_speed_limit,
+    const double people_speed_limit)
+  {
+    social_distance_limit_pub_->publish(std_msgs::msg::Float32().set__data(social_distance_speed_limit));
+    pure_velocity_obstacle_limit_pub_->publish(std_msgs::msg::Float32().set__data(pure_velocity_obstacle_speed_limit));
+    combined_speed_limit_pub_->publish(std_msgs::msg::Float32().set__data(combined_speed_limit));
+    limit_pub_->publish(std_msgs::msg::Float32().set__data(people_speed_limit));
+    // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
+  }
+
   std::vector<std::pair<double, double>> mergeIntervals(const std::vector<std::pair<double, double>> & intervals)
   {
     if (intervals.empty()) {
@@ -615,7 +656,7 @@ private:
 
   bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
   {
-    if (std::abs(vx) < epsilon && std::abs(vy) < epsilon) {
+    if (std::fabs(vx) < epsilon && std::fabs(vy) < epsilon) {
       return true;
     }
 
