@@ -27,6 +27,16 @@ services:
     build:
       context: ./docker/ros2
       dockerfile: Dockerfile.debug
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-cabot-base}
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-debug
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     environment:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1

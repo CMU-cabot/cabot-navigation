@@ -37,6 +37,13 @@ services:
     profiles:
       - build
 
+  debug:
+    extends:
+      file: docker-compose-debug.yaml
+      service: debug
+    profiles:
+      - build
+
   # dev
   navigation-dev:
     extends:
