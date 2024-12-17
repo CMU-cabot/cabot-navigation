@@ -240,6 +240,7 @@ RUN apt update && \
     qtbase5-dev \
     ros-$ROS_DISTRO-diagnostic-aggregator \
     ros-$ROS_DISTRO-gazebo-msgs \
+    ros-$ROS_DISTRO-grid-map \
     ros-$ROS_DISTRO-image-transport-plugins \
     ros-$ROS_DISTRO-joint-state-publisher \
     ros-$ROS_DISTRO-joint-state-publisher-gui \
