@@ -39,6 +39,12 @@
 
 namespace CaBotSafety
 {
+enum class FootprintMode : int {
+  NORMAL = 0,
+  SMALLEST = 1,
+  SMALL = 3
+};
+
 class LiDARSpeedControlNode : public rclcpp::Node
 {
 public:
@@ -56,9 +62,11 @@ public:
   double min_speed_;
   double max_acc_;
   double limit_factor_;
-  double min_distance_;
-  double front_angle_in_degree_;
-  double front_min_range_;
+  double front_region_offset_x_;
+  double normal_front_region_width_;
+  double smallest_front_region_width_;
+  double small_front_region_width_;
+  double front_region_width_;
   double blind_spot_min_range_;
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
@@ -66,6 +74,8 @@ public:
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
   tf2_ros::TransformListener * tfListener;
   tf2_ros::Buffer * tfBuffer;
+  rclcpp::AsyncParametersClient::SharedPtr param_client_;
+  rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr param_sub_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
   // message_filters::Subscriber<sensor_msgs::msg::LaserScan> laser_sub_;
   // tf::MessageFilter<sensor_msgs::msg::LaserScan> laser_notifier_;
@@ -83,9 +93,10 @@ public:
     min_speed_(0.1),
     max_acc_(0.6),
     limit_factor_(3.0),
-    min_distance_(0.5),
-    front_angle_in_degree_(60),
-    front_min_range_(0.25),
+    front_region_offset_x_(0.348),  // Default distance from the base_footprint to the front of the ACE robot
+    normal_front_region_width_(0.50),
+    smallest_front_region_width_(0.25),
+    small_front_region_width_(0.30),
     blind_spot_min_range_(0.25)
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Constructor");
@@ -121,9 +132,6 @@ private:
       if (param.get_name() == "check_blind_space") {
         check_blind_space_ = param.as_bool();
       }
-      if (param.get_name() == "min_distance") {
-        min_distance_ = param.as_double();
-      }
     }
     results->successful = true;
     return *results;
@@ -151,15 +159,21 @@ private:
     min_speed_ = declare_parameter("min_speed", min_speed_);
     max_acc_ = declare_parameter("max_acc", max_acc_);
     limit_factor_ = declare_parameter("limit_factor", limit_factor_);
-    min_distance_ = declare_parameter("min_distance", min_distance_);
-    front_angle_in_degree_ = declare_parameter("front_angle_in_degree", front_angle_in_degree_);
-    front_min_range_ = declare_parameter("front_min_range", front_min_range_);
+    front_region_offset_x_ = declare_parameter("front_region_offset_x", front_region_offset_x_);
+    normal_front_region_width_ = declare_parameter("front_region_width.normal", normal_front_region_width_);
+    smallest_front_region_width_ = declare_parameter("front_region_width.smallest", smallest_front_region_width_);
+    small_front_region_width_ = declare_parameter("front_region_width.small", small_front_region_width_);
     blind_spot_min_range_ = declare_parameter("blind_spot_min_range", blind_spot_min_range_);
+
+    front_region_width_ = normal_front_region_width_;
 
     RCLCPP_INFO(
       get_logger(), "LiDARSpeedControl with check_blind_space=%s, check_front_obstacle=%s, max_speed=%.2f",
       check_blind_space_ ? "true" : "false", check_front_obstacle_ ? "true" : "false", max_speed_);
 
+    param_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, "param_server");
+    param_sub_ =
+      param_client_->on_parameter_event(std::bind(&LiDARSpeedControlNode::parameterEventCallback, this, std::placeholders::_1));
 
     callback_handler_ =
       this->add_on_set_parameters_callback(std::bind(&LiDARSpeedControlNode::param_set_callback, this, std::placeholders::_1));
@@ -223,7 +237,24 @@ private:
 
     if (check_front_obstacle_) {  // Check front obstacle (mainly for avoinding from speeding up near the wall
                                   // get some points in front of the robot
-      double min_range = 100;
+      const double rect_height = max_speed_ * limit_factor_;
+      Point region_ur_point(front_region_offset_x_ + rect_height, front_region_width_ / 2.0);
+      Point region_ul_point(front_region_offset_x_ + rect_height, -front_region_width_ / 2.0);
+      Point region_lr_point(front_region_offset_x_, front_region_width_ / 2.0);
+      Point region_ll_point(front_region_offset_x_, -front_region_width_ / 2.0);
+
+      region_ur_point.transform(map_to_robot_tf2);
+      region_ul_point.transform(map_to_robot_tf2);
+      region_lr_point.transform(map_to_robot_tf2);
+      region_ll_point.transform(map_to_robot_tf2);
+
+      std::array<Point, 3> front_check_region_1 = {region_ur_point, region_ul_point, region_ll_point};
+      std::array<Point, 3> front_check_region_2 = {region_ll_point, region_lr_point, region_ur_point};
+
+      CaBotSafety::add_triangle(get_clock()->now(), front_check_region_1, 1.0, 0.0, 0.0, 0.0, 0.6);
+      CaBotSafety::add_triangle(get_clock()->now(), front_check_region_2, 1.0, 0.0, 0.0, 0.0, 0.6);
+
+      double min_x_distance = 100;
       for (uint64_t i = 0; i < input->ranges.size(); i++) {
         double angle = input->angle_min + input->angle_increment * i;
         double range = input->ranges[i];
@@ -231,33 +262,30 @@ private:
           range = input->range_max;
         }
 
-        Point robotp(robot_pose);
-        Point curr(range * cos(angle), range * sin(angle));
-        curr.transform(map_to_robot_tf2 * robot_to_lidar_tf2);
+        double x = range * cos(angle);
+        double y = range * sin(angle);
 
-        CaBotSafety::Line line(robotp, curr);
-        if (line.length() < front_min_range_) {
-          continue;
-        }
+        Point point_in_robot_frame(x, y);
+        Point point_in_map_frame(x, y);
+        point_in_robot_frame.transform(robot_to_lidar_tf2);
+        point_in_map_frame.transform(map_to_robot_tf2 * robot_to_lidar_tf2);
 
-        double dot = robot.dot(line) / robot.length() / line.length();
-        RCLCPP_DEBUG(get_logger(), "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f", line.s.x, line.s.y, line.e.x, line.e.y, dot, line.length());
-        if (dot < cos(front_angle_in_degree_ / 180.0 * M_PI_2)) {
-          continue;
-        }
+        // Check if the point is in the front region
+        if (point_in_robot_frame.x > front_region_offset_x_ && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
+          double local_speed_limit = (point_in_robot_frame.x - front_region_offset_x_) / limit_factor_;
+          if (min_speed_ < local_speed_limit && local_speed_limit < max_speed_) {
+            CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
+          }
 
-        if ((line.length() - min_distance_) / limit_factor_ < max_speed_) {
-          CaBotSafety::add_point(get_clock()->now(), curr, 0.2, 1, 1, 0, 1);
-        }
-
-        if (line.length() < min_range) {
-          min_range = line.length();
+          if (point_in_robot_frame.x < min_x_distance) {
+            min_x_distance = point_in_robot_frame.x;
+          }
         }
       }
       // calculate the speed
-      speed_limit = std::min(max_speed_, std::max(min_speed_, (min_range - min_distance_) / limit_factor_));
+      speed_limit = std::min(max_speed_, std::max(min_speed_, (min_x_distance - front_region_offset_x_) / limit_factor_));
       if (speed_limit < max_speed_) {
-        RCLCPP_INFO(get_logger(), "limit by front obstacle (%.2f), min_range=%.2f", speed_limit, min_range);
+        RCLCPP_INFO(get_logger(), "limit by front obstacle (%.2f), min_x_distance=%.2f", speed_limit, min_x_distance);
       }
     }
 
@@ -379,6 +407,31 @@ private:
     CaBotSafety::add_text(get_clock()->now(), buff, robot.s);
     limit_pub_->publish(msg);
     CaBotSafety::commit(vis_pub_);
+  }
+
+  void parameterEventCallback(const rcl_interfaces::msg::ParameterEvent::SharedPtr msg)
+  {
+    for (const auto & p : msg->changed_parameters) {
+      const auto & name = p.name;
+      const auto & value = p.value;
+      if (name == "footprint_mode" && value.type == rclcpp::ParameterType::PARAMETER_INTEGER) {
+        auto footprint_mode = static_cast<FootprintMode>(value.integer_value);
+        switch (footprint_mode) {
+          case FootprintMode::NORMAL:
+            front_region_width_ = normal_front_region_width_;
+            break;
+          case FootprintMode::SMALLEST:
+            front_region_width_ = smallest_front_region_width_;
+            break;
+          case FootprintMode::SMALL:
+            front_region_width_ = small_front_region_width_;
+            break;
+          default:
+            RCLCPP_ERROR(this->get_logger(), "Invalid footprint_mode: %ld", value.integer_value);
+            break;
+        }
+      }
+    }
   }
 };  // class LiDARSpeedControlNode
 

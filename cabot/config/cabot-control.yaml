@@ -49,7 +49,11 @@ cabot:
       min_speed: 0.0
       min_distance: 1.0
       limit_factor: 1.0
-      front_angle_in_degree: 28.95  # 1.0 * sin(x/2) * 2 = 0.8
+      front_region_offset_x: 0.348 # Distance from the base_footprint to the front of the ACE robot
+      front_region_width:
+        normal: 0.50
+        smallest: 0.25
+        small: 0.30
 
   people_speed_control_node: # old name cabot_e_people_speed:
     ros__parameters:
