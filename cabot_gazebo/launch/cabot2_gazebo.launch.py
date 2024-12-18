@@ -360,5 +360,21 @@ def generate_launch_description():
                 PythonExpression(['"', model_name, '"==""']),
                 PythonExpression(['"', world_file, '"==""'])
             ))
+        ),
+        ExecuteProcess(
+            cmd=[
+                'python3',
+                '/home/developer/ros2_ws/script/gps_converter.py',
+                '--ros-args',
+                '-r',
+                '/in:=/ublox/velocity',
+                '-r',
+                '/out:=/ublox/fix_velocity'
+            ]
+        ),
+        ExecuteProcess(
+            cmd=[
+                'source ~/loc_ws/install/setup.bash; ros2 topic pub -r 10 /mf_navsat mf_localization_msgs/msg/MFNavSAT "{num_sv: 20, num_active_sv: 10, sv_status: 1}"'
+            ]
         )
     ])
