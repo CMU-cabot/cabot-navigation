@@ -101,6 +101,8 @@ RUN apt update && \
     ros-$ROS_DISTRO-robot-localization \
     ros-$ROS_DISTRO-geographic-msgs \
     libgeographic-dev \
+# for using gps in gazebo
+    ros-$ROS_DISTRO-gazebo-plugins \
 # workaround end
     ros-$ROS_DISTRO-rosbridge-server \
     ros-$ROS_DISTRO-ros-testing \
