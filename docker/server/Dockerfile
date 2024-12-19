@@ -80,8 +80,7 @@ RUN cd MapService/MapService && \
 	mvn package && \
         cp target/MapService-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
 
-# RUN git clone https://github.com/CMU-cabot/QueryService -b hokoukukan-2018 && \
-RUN git clone https://github.com/CMU-cabot/QueryService -b kayukawa/search_by_category && \
+RUN git clone https://github.com/CMU-cabot/QueryService -b hokoukukan-2018 && \
 	cd QueryService && \
 	sh download-lib.sh
 
