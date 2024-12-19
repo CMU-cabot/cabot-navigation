@@ -68,6 +68,7 @@ cabot:
       social_distance_x: 2.0
       social_distance_y: 0.5
       use_velocity_obstacle: true
+      person_speed_threshold: 0.5
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
