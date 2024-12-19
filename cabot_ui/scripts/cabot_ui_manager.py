@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright (c) 2020, 2022  Carnegie Mellon University
+# Copyright (c) 2024  ALPS ALPINE CO., LTD.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -46,6 +47,7 @@ from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import std_msgs.msg
 import std_srvs.srv
 
@@ -57,13 +59,14 @@ from cabot_ui.status import State, StatusManager
 from cabot_ui.interface import UserInterface
 from cabot_ui.navigation import Navigation, NavigationInterface
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.description import Description
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 
 
 class CabotUIManager(NavigationInterface, object):
-    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node):
+    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
         self._node = node
         self._logger = self._node.get_logger()
         CaBotRclpyUtil.initialize(self._node)
@@ -81,6 +84,7 @@ class CabotUIManager(NavigationInterface, object):
         self._interface.delegate = self
         self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
+        self._description = Description(desc_node)
         # self._exploration = Exploration()
         # self._exploration.delegate = self
 
@@ -94,6 +98,22 @@ class CabotUIManager(NavigationInterface, object):
         msg = std_msgs.msg.String()
         msg.data = str(e)
         self._eventPub.publish(msg)
+
+        def handleside_callback(msg):
+            # request handleside
+            self.handleside = msg.data
+            self.send_handleside()
+        qos_profile = QoSProfile(depth=10)
+        qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.handleside_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/handleside", handleside_callback, qos_profile)
+
+        def touchmode_callback(msg):
+            # request touchmode
+            self.touchmode = msg.data
+            self.send_touchmode()
+        qos_profile = QoSProfile(depth=10)
+        qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.touchmode_sub = node.create_subscription(std_msgs.msg.String, "/cabot/features/touchmode", touchmode_callback, qos_profile)
 
         self._touchModeProxy = self._node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -110,6 +130,18 @@ class CabotUIManager(NavigationInterface, object):
         self.updater.add(FunctionDiagnosticTask("UI Manager", manager_status))
 
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
+
+    def send_handleside(self):
+        e = NavigationEvent("gethandleside", self.handleside)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
+    def send_touchmode(self):
+        e = NavigationEvent("gettouchmode", self.touchmode)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
 
     def create_menu(self):
         try:
@@ -160,8 +192,8 @@ class CabotUIManager(NavigationInterface, object):
     def update_pose(self, **kwargs):
         self._interface.update_pose(**kwargs)
 
-    def notify_turn(self, turn=None):
-        self._interface.notify_turn(turn=turn)
+    def notify_turn(self, device=None, turn=None):
+        self._interface.notify_turn(device=device, turn=turn)
 
     def notify_human(self, angle=0):
         self._interface.notify_human(angle=angle)
@@ -345,10 +377,34 @@ class CabotUIManager(NavigationInterface, object):
         # operations indepent from the navigation state
         if event.subtype == "language":
             self._interface.change_language(event.param)
+            return
+
+        if event.subtype == "reqfeatures":
+            self.send_handleside()
+            self.send_touchmode()
+            return
+
+        if event.subtype == "handleside":
+            self._logger.info("calling set_handle_side")
+            self._navigation.set_handle_side(event.param)
+            return
+
+        if event.subtype == "touchmode":
+            self._logger.info("calling set_touch_mode")
+            self._navigation.set_touch_mode(event.param)
+            return
+
+        # ignore get event
+        if event.subtype == "getlanguage":
+            return
+        if event.subtype == "gethandleside":
+            return
+        if event.subtype == "gettouchmode":
+            return
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
-            self._interface.menu_changed(menu=self.speed_menu)
+            self._interface.speed_changed(speed=self.speed_menu.description)
             e = NavigationEvent("sound", "SpeedUp")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -356,7 +412,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speeddown":
             self.speed_menu.next()
-            self._interface.menu_changed(menu=self.speed_menu)
+            self._interface.speed_changed(speed=self.speed_menu.description)
             e = NavigationEvent("sound", "SpeedDown")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -381,6 +437,17 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info("NavigationState: Pause control = True")
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
+
+        if event.subtype == "description" and self._description.enabled:
+            # TODO: needs to reset last_plan_distance when arrived/paused
+            self._logger.info(F"Request Description duration={event.param}")
+            if self._interface.last_pose:
+                self._interface.requesting_describe_surround()
+                gp = self._interface.last_pose['global_position']
+                length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
+                result = self._description.request_description_with_images(gp, length_index=length_index)
+                if result:
+                    self._interface.describe_surround(result['description'])
 
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
@@ -527,6 +594,7 @@ class CabotUIManager(NavigationInterface, object):
 class EventMapper(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
+        self.description_duration = 0
 
     def push(self, event):
         # state = self._manager.state
@@ -568,20 +636,26 @@ class EventMapper(object):
         return None
 
     def map_button_to_navigation(self, event):
-        if event.type == "button" and event.down:
-            if event.button == cabot_common.button.BUTTON_UP:
+        if event.type == "button" and not event.down and self.description_duration > 0:
+            navigation_event = NavigationEvent(subtype="description", param=self.description_duration)
+            self.description_duration = 0
+            return navigation_event
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
-            if event.button == cabot_common.button.BUTTON_DOWN:
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="speeddown")
-            if event.button == cabot_common.button.BUTTON_LEFT:
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="pause")
-            if event.button == cabot_common.button.BUTTON_RIGHT:
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
-            if event.button == cabot_common.button.BUTTON_CENTER:
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
-            if event.holddown == cabot_common.button.BUTTON_LEFT:
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                self.description_duration = event.duration
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
@@ -613,15 +687,18 @@ if __name__ == "__main__":
     srv_node = Node("cabot_ui_manager_navigation_service", start_parameter_services=False)
     act_node = Node("cabot_ui_manager_navigation_actions", start_parameter_services=False)
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
-    nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node]
+    desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
+    nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
     executors = [MultiThreadedExecutor(),
                  MultiThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
-                 MultiThreadedExecutor(),
-                 SingleThreadedExecutor()]
-    names = ["node", "tf", "nav", "srv", "act", "soc"]
-    manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node)
+                 SingleThreadedExecutor(),
+                 SingleThreadedExecutor(),
+                 SingleThreadedExecutor(),
+                 ]
+    names = ["node", "tf", "nav", "srv", "act", "soc", "desc"]
+    manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node)
 
     threads = []
     for tnode, executor, name in zip(nodes, executors, names):

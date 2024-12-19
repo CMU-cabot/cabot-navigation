@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef PEDESTRIAN_PLUGIN__PEDESTRIAN_PLUGIN_HPP_
-#define PEDESTRIAN_PLUGIN__PEDESTRIAN_PLUGIN_HPP_
+#ifndef PEDESTRIAN_PLUGIN__OBSTACLE_PLUGIN_HPP_
+#define PEDESTRIAN_PLUGIN__OBSTACLE_PLUGIN_HPP_
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -32,26 +32,26 @@
 #include "gazebo/common/Plugin.hh"
 #include "gazebo/physics/physics.hh"
 #include "gazebo/util/system.hh"
-#include "pedestrian_plugin/pedestrian_plugin_manager.hpp"
+#include "pedestrian_plugin/obstacle_plugin_manager.hpp"
 
 namespace gazebo
 {
 
-class GZ_PLUGIN_VISIBLE PedestrianPlugin : public ModelPlugin
+class GZ_PLUGIN_VISIBLE ObstaclePlugin : public ModelPlugin
 {
 public:
-  PedestrianPlugin();
-  ~PedestrianPlugin();
+  ObstaclePlugin();
+  ~ObstaclePlugin();
   virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
   virtual void Reset();
   void apply_parameters();
-  void update_parameters(PedestrianPluginParams params);
+  void update_parameters(ObstaclePluginParams params);
 
 private:
   void OnUpdate(const common::UpdateInfo & _info);
   void print_pyobject(PyObject * obj);
   sdf::ElementPtr sdf;
-  physics::ActorPtr actor;
+  // physics::ActorPtr actor;
   physics::ModelPtr model;
   physics::WorldPtr world;
   std::string name;
@@ -62,11 +62,9 @@ private:
   common::Time lastUpdate;
   physics::TrajectoryInfoPtr trajectoryInfo;
 
-  double * get_walking_pose(double distance);
+  ObstaclePluginManager & manager;
 
-  PedestrianPluginManager & manager;
-
-  // manage the actor location by the plugin
+  // manage the obstacle location by the plugin
   // because animation can change its position
   double x;
   double y;
@@ -75,9 +73,12 @@ private:
   double pitch;
   double yaw;
   double dist;
-  int actor_id;
+  double width;  // x axis length
+  double height;  // y axis length
+  double depth;  // z axis length
+  int obstacle_id;
 
-  PedestrianPluginParams plugin_params;
+  ObstaclePluginParams plugin_params;
   bool needs_to_apply_params;
 
   // Need to be separated
@@ -87,4 +88,4 @@ private:
 };
 }  // namespace gazebo
 
-#endif  // PEDESTRIAN_PLUGIN__PEDESTRIAN_PLUGIN_HPP_
+#endif  // PEDESTRIAN_PLUGIN__OBSTACLE_PLUGIN_HPP_

@@ -29,6 +29,8 @@ ENV UNDERLAY_WS=/opt/underlay_ws
 
 RUN mkdir -p $UNDERLAY_WS/src
 COPY ./tf2_web_republisher $UNDERLAY_WS/src/tf2_web_republisher
+COPY ./rosbridge_suite $UNDERLAY_WS/src/rosbridge_suite
+COPY ./bond_core $UNDERLAY_WS/src/bond_core
 
 WORKDIR $UNDERLAY_WS
 
@@ -84,6 +86,7 @@ RUN apt update && \
     qtbase5-dev \
     ros-$ROS_DISTRO-diagnostic-aggregator \
     ros-$ROS_DISTRO-gazebo-msgs \
+    ros-$ROS_DISTRO-grid-map \
     ros-$ROS_DISTRO-image-transport-plugins \
     ros-$ROS_DISTRO-joint-state-publisher \
     ros-$ROS_DISTRO-joint-state-publisher-gui \

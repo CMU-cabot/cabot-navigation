@@ -87,20 +87,6 @@ def generate_launch_description():
 
         DeclareLaunchArgument('publish_current_rate', default_value='0', description='Specify the rate of publishing current location'),
 
-        Node(
-            package='mf_localization',
-            executable='ublox_converter.py',
-            name='ublox_converter',
-            parameters=[
-                PathJoinSubstitution([pkg_dir, 'configuration_files', 'ublox', 'ublox_converter.yaml'])
-            ],
-            remappings=[
-                ('navsat', 'ublox/navsat'),
-                ('num_active_sv', 'ublox_converter/num_active_sv'),
-                ('sv_status', 'ublox_converter/sv_status'),
-            ],
-        ),
-
         GroupAction([
             SetParametersFromFile(
                 PathJoinSubstitution([pkg_dir, 'configuration_files', 'multi_floor', 'multi_floor_manager_with_odom.yaml']),
@@ -150,6 +136,10 @@ def generate_launch_description():
                     ('pressure', pressure_topic),
                     ('gnss_fix', gnss_fix_topic),
                     ('gnss_fix_velocity', gnss_fix_velocity_topic),
+                    # ublox_converter
+                    ('navsat', 'ublox/navsat'),
+                    ('num_active_sv', 'ublox_converter/num_active_sv'),
+                    ('sv_status', 'ublox_converter/sv_status'),
                 ],
                 # prefix='python3 -m cProfile -o multi_floor_manager.profile',
             ),

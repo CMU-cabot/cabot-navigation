@@ -87,6 +87,14 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   CABOT_SIDE           # left: user stands on the right, right: user stands on the left
   CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
   ```
+- Options for image description (hold down right button for 1-3 seconds)
+  ```
+  CABOT_IMAGE_DESCRIPTION_SERVER   # image description server (default=http://localhost:8000)
+  CABOT_IMAGE_DESCRIPTION_ENABLED  # enable image description (default=false)
+  CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT   # rotate left image (default=false)
+  CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT  # rotate front image (default=false)
+  CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT  # rotate right image (default=false)
+  ```
 - Options for debug/test
   ```
   CABOT_GAMEPAD              # (default=gamepad) gamepad type for remote controll (ex. PS4 controller)

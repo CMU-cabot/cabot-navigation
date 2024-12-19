@@ -1,4 +1,5 @@
 # Copyright (c) 2020, 2023  Carnegie Mellon University
+# Copyright (c) 2024  Miraikan - The National Museum of Emerging Science and Innovation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +29,8 @@ ENV UNDERLAY_WS=/opt/underlay_ws
 
 RUN mkdir -p $UNDERLAY_WS/src
 COPY ./tf2_web_republisher $UNDERLAY_WS/src/tf2_web_republisher
+COPY ./rosbridge_suite $UNDERLAY_WS/src/rosbridge_suite
+COPY ./bond_core $UNDERLAY_WS/src/bond_core
 
 WORKDIR $UNDERLAY_WS
 
@@ -83,6 +86,8 @@ RUN apt update && \
     qtbase5-dev \
     ros-$ROS_DISTRO-diagnostic-aggregator \
     ros-$ROS_DISTRO-gazebo-msgs \
+    ros-$ROS_DISTRO-grid-map \
+    ros-$ROS_DISTRO-image-transport-plugins \
     ros-$ROS_DISTRO-joint-state-publisher \
     ros-$ROS_DISTRO-joint-state-publisher-gui \
     ros-$ROS_DISTRO-navigation2 \
@@ -114,6 +119,7 @@ RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
     ipython==8.0.1 \
     odrive==0.6.5 \
+    numpy==1.24.4 \
     pyproj \
     pyserial \
     requests \
@@ -121,7 +127,9 @@ RUN pip3 install --no-cache-dir \
 
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
-    'pysocialforce[test,plot]'
+    'pysocialforce[test,plot]' \
+    # for test aggregation
+    pandas
 
 # for debug
 RUN apt update && \
@@ -153,6 +161,9 @@ RUN useradd -m $USERNAME && \
         chmod 0440 /etc/sudoers.d/$USERNAME && \
         usermod  --uid $UID $USERNAME && \
         groupmod --gid $UID $USERNAME
+# add user to video group to fix NvRmMemInitNvmap error on Jetson
+# https://forums.developer.nvidia.com/t/jetpack-5-0-dp-nvrmmeminitnvmap-failed-with-permission-denied/219804
+RUN usermod -aG video $USERNAME
 
 # install entrypoint
 COPY launch.sh /
