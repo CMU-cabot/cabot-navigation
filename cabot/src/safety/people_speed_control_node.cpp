@@ -83,6 +83,7 @@ public:
   double social_distance_max_angle_;  // [rad]
   double no_people_topic_max_speed_;
   double collision_time_horizon_;
+  double person_speed_threshold_;
   bool no_people_flag_;
   bool use_velocity_obstacle_;
 
@@ -132,6 +133,7 @@ public:
     social_distance_max_angle_(M_PI_2),
     no_people_topic_max_speed_(0.5),
     collision_time_horizon_(5.0),
+    person_speed_threshold_(0.5),
     no_people_flag_(false),
     use_velocity_obstacle_(true)
   {
@@ -190,6 +192,7 @@ public:
     social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
     collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
+    person_speed_threshold_ = declare_parameter("person_speed_threshold", person_speed_threshold_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -307,6 +310,9 @@ public:
       }
       if (param.get_name() == "collision_time_horizon") {
         collision_time_horizon_ = param.as_double();
+      }
+      if (param.get_name() == "person_speed_threshold") {
+        person_speed_threshold_ = param.as_double();
       }
     }
     results->successful = true;
@@ -438,6 +444,10 @@ private:
       double y = p_local.y();
       double vx = v_local.x();
       double vy = v_local.y();
+
+      if (hypot(vx, vy) < person_speed_threshold_) {
+        continue;
+      }
 
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
