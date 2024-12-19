@@ -76,7 +76,7 @@ services:
       - CYCLONEDDS_URI
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
-      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-false}
+      - ROS_LOCALHOST_ONLY
       - ROS_DOMAIN_ID
       - __NV_PRIME_RENDER_OFFLOAD
       - __GLX_VENDOR_LIBRARY_NAME
@@ -124,10 +124,12 @@ services:
       - CABOT_SITE
       - CABOT_SHOW_LOC_RVIZ=${CABOT_SHOW_LOC_RVIZ:-1}
       - CABOT_HEADLESS
+      # ROS2/DDS
       - RMW_IMPLEMENTATION
       - CYCLONEDDS_URI
       - CYCLONEDDS_NETWORK_INTERFACE_NAME
       - CYCLONEDDS_NETWORK_INTERFACE_AUTODETERMINE # set automatically by launch.sh
+      - ROS_LOCALHOST_ONLY
       - ROS_DOMAIN_ID
       # ntrip client
       - NTRIP_CLIENT # rtklib, str2str_node, or ntrip_client
@@ -288,7 +290,6 @@ services:
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
 
-
   localization-dev-base:
     extends: localization-base
     volumes:
@@ -359,6 +360,8 @@ services:
       - HOST_TZ
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
+      - 'SEARCH_BY_FLOOR_ENABLED=true'
+      - 'SEARCH_BY_CATEGORY_ENABLED=true'
     command:
       - "./server"
       - "run"
