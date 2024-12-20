@@ -71,6 +71,7 @@ RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtim
 #
 
 #RUN git clone https://github.com/daisukes/MapService -b hokoukukan_2018-docker && \
+ADD https://api.github.com/repos/CMU-cabot/MapService/git/refs/heads/cabot-hokoukukan_2018 MapService-version.json
 RUN git clone https://github.com/CMU-cabot/MapService -b cabot-hokoukukan_2018 && \
 	cd MapService && \
 	sh download-lib.sh
@@ -80,6 +81,7 @@ RUN cd MapService/MapService && \
 	mvn package && \
         cp target/MapService-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
 
+ADD https://api.github.com/repos/CMU-cabot/QueryService/git/refs/heads/hokoukukan-2018 QueryService-version.json
 RUN git clone https://github.com/CMU-cabot/QueryService -b hokoukukan-2018 && \
 	cd QueryService && \
 	sh download-lib.sh

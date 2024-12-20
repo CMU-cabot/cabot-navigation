@@ -80,6 +80,8 @@ private:
     RCLCPP_INFO(get_logger(), "tf speed control - %s", __FUNCTION__);
 
     limit_topic_ = declare_parameter("limit_topic", limit_topic_);
+    map_frame_ = declare_parameter("map_frame", map_frame_);
+    robot_base_frame_ = declare_parameter("robot_base_frame", robot_base_frame_);
     min_speed_ = declare_parameter("min_speed", min_speed_);  // [m/s]
     max_speed_ = declare_parameter("max_speed", max_speed_);  // [m/s]
     check_rate_ = declare_parameter("check_rate", check_rate_);  // [Hz]
@@ -88,7 +90,9 @@ private:
 
     limit_pub_ = create_publisher<std_msgs::msg::Float32>(limit_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
-    timer_ = create_wall_timer(
+    // create timer instance by rclcpp::create_timer to use ROS clock for simulation
+    timer_ = rclcpp::create_timer(
+      this, this->get_clock(),
       std::chrono::duration<double>(1.0 / check_rate_),
       std::bind(&TFSpeedControlNode::tfCheckLoop, this));
   }
