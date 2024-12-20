@@ -40,7 +40,7 @@ function help {
 }
 
 debug_build=0
-readarray -t dcfiles < <(ls docker-compose* | grep -v base | grep -v common | grep -v lint)
+dcfiles=("docker-compose.yaml")
 
 while getopts "hd" arg; do
     case $arg in
