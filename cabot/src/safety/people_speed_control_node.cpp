@@ -444,6 +444,7 @@ private:
       double y = p_local.y();
       double vx = v_local.x();
       double vy = v_local.y();
+      double vr = last_odom_.twist.twist.linear.x;
 
       if (hypot(vx, vy) < person_speed_threshold_) {
         continue;
@@ -459,7 +460,7 @@ private:
         continue;
       }
 
-      if (!willCollideWithinTime(x, y, vx, vy)) {
+      if (!willCollideWithinTime(x, y, vx - vr, vy)) {
         continue;
       }
 
@@ -651,17 +652,22 @@ private:
     return result;
   }
 
-  bool willCollideWithinTime(double x_rel, double y_rel, double vx, double vy)
+  bool willCollideWithinTime(double x_rel, double y_rel, double vx_rel, double vy_rel)
   {
-    const double delta_time = 0.1;
-    for (double t = 0.0; t <= collision_time_horizon_; t += delta_time) {
-      double x = x_rel + t * vx;
-      double y = y_rel + t * vy;
-      if (-pr <= x && x <= pr + max_speed_ * t && -pr <= y && y <= pr) {
-        return true;
-      }
+    double a = vx_rel * vx_rel + vy_rel * vy_rel;
+    double b = 2.0 * (x_rel * vx_rel + y_rel * vy_rel);
+    double c = x_rel * x_rel + y_rel * y_rel - pr * pr;
+
+    double discriminant = b * b - 4.0 * a * c;
+
+    if (discriminant < 0.0) {
+      return false;
     }
-    return false;
+
+    double t1 = (-b - std::sqrt(discriminant)) / (2.0 * a);
+    double t2 = (-b + std::sqrt(discriminant)) / (2.0 * a);
+
+    return (t1 >= 0.0 && t1 <= collision_time_horizon_) || (t2 >= 0.0 && t2 <= collision_time_horizon_);
   }
 
   bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
