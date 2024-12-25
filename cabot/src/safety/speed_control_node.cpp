@@ -25,6 +25,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 using namespace std::chrono_literals;
 
@@ -39,6 +40,7 @@ public:
     cmdVelOutput_("/cmd_vel_limit"),
     userSpeedInput_("/user_speed"),
     mapSpeedInput_("/map_speed"),
+    wheelieInput_("wheelie_state"),
     userSpeedLimit_(2.0),
     mapSpeedLimit_(2.0),
     targetRate_(40),
@@ -65,6 +67,7 @@ public:
     cmdVelSub.reset();
     userSpeedSub.reset();
     mapSpeedSub.reset();
+    wheelieStateSub.reset();
   }
 
 private:
@@ -76,9 +79,12 @@ private:
     cmdVelSub = create_subscription<geometry_msgs::msg::Twist>(
       cmdVelInput_, 10,
       std::bind(&SpeedControlNode::cmdVelCallback, this, std::placeholders::_1));
-
+    wheelieStateSub = create_subscription<std_msgs::msg::Bool>(
+      wheelieInput_, 10,
+      std::bind(&SpeedControlNode::wheelieStateCallback, this, std::placeholders::_1));
     cmdVelOutput_ = declare_parameter("cmd_vel_output", cmdVelOutput_);
     cmdVelPub = create_publisher<geometry_msgs::msg::Twist>(cmdVelOutput_, 10);
+    cmdVelPub = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel_wheelie", 10);
 
     speedInput_ = declare_parameter("speed_input", speedInput_);
     speedLimit_ = declare_parameter("speed_limit", speedLimit_);
@@ -242,11 +248,29 @@ private:
     lastCmdVelInput_ = get_clock()->now();
   }
 
+    void wheelieStateCallback(const std_msgs::msg::Bool::SharedPtr msg)
+    {
+        is_wheelie_ = msg->data;  // Update Wheelie status
+    }
+
+    void wheelieControlCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
+    {
+        geometry_msgs::msg::Twist cmd_vel = *msg;
+
+        if (is_wheelie_)  // If in wheelie state, set speed to zero
+        {
+            RCLCPP_WARN(this->get_logger(), "Wheelie detected! Stopping the robot.");
+            cmd_vel.linear.x = 0.0;
+            cmd_vel.angular.z = 0.0;
+        }
+        cmdVelPub->publish(cmd_vel);
+    }
 
   std::string cmdVelInput_;
   std::string cmdVelOutput_;
   std::string userSpeedInput_;
   std::string mapSpeedInput_;
+  std::string wheelieInput_;
 
   std::vector<std::string> speedInput_;
   std::vector<rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr> speedSubs_;
@@ -263,6 +287,7 @@ private:
   double userSpeedLimit_;
   double mapSpeedLimit_;
   int targetRate_;
+  bool is_wheelie_;
 
   double currentLinear_;
   double currentAngular_;
@@ -273,6 +298,8 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmdVelSub;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr userSpeedSub;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr mapSpeedSub;
+  // Willy State Subscriber
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr wheelieStateSub;
 };  // class SpeedControlNode
 
 }  // namespace CaBotSafety

@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) Launch ROS2 Node",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/install/wheelie_control/lib/wheelie_control/wheelie_control_node",  // ビルドされた実行ファイルのパス
+            "args": [],  
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",  
+            "environment": [
+                {
+                    "name": "ROS_DOMAIN_ID",
+                    "value": "0"
+                },
+                {
+                    "name": "RCLCPP_LOG_LEVEL",
+                    "value": "DEBUG"
+                }
+            ],
+            "externalConsole": true,  
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",  
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build",  
+            "miDebuggerArgs": "",
+            "serverStarted": "",
+            "filterStdout": true,
+            "filterStderr": false,
+            "serverLaunchTimeout": 10000
+        }
+    ]
+}
