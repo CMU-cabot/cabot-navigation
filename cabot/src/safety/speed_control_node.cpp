@@ -84,7 +84,6 @@ private:
       std::bind(&SpeedControlNode::wheelieStateCallback, this, std::placeholders::_1));
     cmdVelOutput_ = declare_parameter("cmd_vel_output", cmdVelOutput_);
     cmdVelPub = create_publisher<geometry_msgs::msg::Twist>(cmdVelOutput_, 10);
-    cmdVelPub = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel_wheelie", 10);
 
     speedInput_ = declare_parameter("speed_input", speedInput_);
     speedLimit_ = declare_parameter("speed_limit", speedLimit_);
