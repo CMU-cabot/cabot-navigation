@@ -83,6 +83,7 @@ public:
   double social_distance_max_angle_;  // [rad]
   double no_people_topic_max_speed_;
   double collision_time_horizon_;
+  double vx_range_offset_;
   double person_speed_threshold_;
   bool no_people_flag_;
   bool use_velocity_obstacle_;
@@ -133,6 +134,7 @@ public:
     social_distance_max_angle_(M_PI_2),
     no_people_topic_max_speed_(0.5),
     collision_time_horizon_(5.0),
+    vx_range_offset_(0.2),
     person_speed_threshold_(0.5),
     no_people_flag_(false),
     use_velocity_obstacle_(true)
@@ -192,6 +194,7 @@ public:
     social_distance_max_angle_ = declare_parameter("social_distance_max_angle", social_distance_max_angle_);
     no_people_topic_max_speed_ = declare_parameter("no_people_topic_max_speed", no_people_topic_max_speed_);
     collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
+    vx_range_offset_ = declare_parameter("vx_range_offset", vx_range_offset_);
     person_speed_threshold_ = declare_parameter("person_speed_threshold", person_speed_threshold_);
 
     RCLCPP_INFO(
@@ -310,6 +313,9 @@ public:
       }
       if (param.get_name() == "collision_time_horizon") {
         collision_time_horizon_ = param.as_double();
+      }
+      if (param.get_name() == "vx_range_offset") {
+        vx_range_offset_ = param.as_double();
       }
       if (param.get_name() == "person_speed_threshold") {
         person_speed_threshold_ = param.as_double();
@@ -444,7 +450,8 @@ private:
       double y = p_local.y();
       double vx = v_local.x();
       double vy = v_local.y();
-      double vr = last_odom_.twist.twist.linear.x;
+      double vx_r = last_odom_.twist.twist.linear.x;
+      double vy_r = 0.0; // The robot does not perform lateral movement
 
       if (hypot(vx, vy) < person_speed_threshold_) {
         continue;
@@ -460,7 +467,7 @@ private:
         continue;
       }
 
-      if (!willCollideWithinTime(x, y, vx - vr, vy)) {
+      if (!willCollideWithinTime(x, y, vx_r, vy_r, vx, vy)) {
         continue;
       }
 
@@ -652,22 +659,35 @@ private:
     return result;
   }
 
-  bool willCollideWithinTime(double x_rel, double y_rel, double vx_rel, double vy_rel)
+  bool willCollideWithinTime(double x_rel, double y_rel, double vx_r, double vy_r, double vx_p, double vy_p)
   {
-    double a = vx_rel * vx_rel + vy_rel * vy_rel;
-    double b = 2.0 * (x_rel * vx_rel + y_rel * vy_rel);
-    double c = x_rel * x_rel + y_rel * y_rel - pr * pr;
+    double vx_r_min = std::min(0.0, vx_r - vx_range_offset_); // backward motion is not considered
+    double vx_r_max = vx_r + vx_range_offset_;
+    constexpr double vx_step = 0.1;
 
-    double discriminant = b * b - 4.0 * a * c;
+    for (double vx_r_candidate = vx_r_min; vx_r_candidate <= vx_r_max; vx_r_candidate += vx_step) {
+      double vx_rel = vx_p - vx_r_candidate;
+      double vy_rel = vy_p - vy_r;
 
-    if (discriminant < 0.0) {
-      return false;
+      double a = vx_rel * vx_rel + vy_rel * vy_rel;
+      double b = 2.0 * (x_rel * vx_rel + y_rel * vy_rel);
+      double c = x_rel * x_rel + y_rel * y_rel - pr * pr;
+
+      double discriminant = b * b - 4.0 * a * c;
+
+      if (discriminant < 0.0) {
+        continue;
+      }
+
+      double t1 = (-b - std::sqrt(discriminant)) / (2.0 * a);
+      double t2 = (-b + std::sqrt(discriminant)) / (2.0 * a);
+
+      if ((t1 >= 0.0 && t1 <= collision_time_horizon_) || (t2 >= 0.0 && t2 <= collision_time_horizon_)) {
+        return true;
+      }
     }
 
-    double t1 = (-b - std::sqrt(discriminant)) / (2.0 * a);
-    double t2 = (-b + std::sqrt(discriminant)) / (2.0 * a);
-
-    return (t1 >= 0.0 && t1 <= collision_time_horizon_) || (t2 >= 0.0 && t2 <= collision_time_horizon_);
+    return false;
   }
 
   bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
