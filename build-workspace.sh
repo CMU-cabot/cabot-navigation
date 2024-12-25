@@ -56,9 +56,11 @@ done
 shift $((OPTIND-1))
 targets=$@
 
-scriptdir=$(dirname $0)
-cd $scriptdir
-scriptdir=$(pwd)
+arch=$(uname -m)
+if [ $arch != "x86_64" ] && [ $arch != "aarch64" ]; then
+    red "Unknown architecture: $arch"
+    exit 1
+fi
 
-build_workspace dcfiles targets debug_build
+build_workspace dcfiles targets arch debug_build
 if [ $? != 0 ]; then exit 1; fi
