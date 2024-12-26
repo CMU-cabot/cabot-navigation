@@ -30,6 +30,7 @@
 
 #include <cabot/util.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/polygon.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
@@ -49,6 +50,7 @@ class LiDARSpeedControlNode : public rclcpp::Node
 {
 public:
   std::string laser_topic_;
+  std::string footprint_topic_;
   std::string vis_topic_;
   std::string limit_topic_;
 
@@ -63,26 +65,22 @@ public:
   double max_acc_;
   double limit_factor_;
   double front_region_offset_x_;
-  double normal_front_region_width_;
-  double smallest_front_region_width_;
-  double small_front_region_width_;
   double front_region_width_;
   double blind_spot_min_range_;
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr footprint_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
   tf2_ros::TransformListener * tfListener;
   tf2_ros::Buffer * tfBuffer;
-  rclcpp::AsyncParametersClient::SharedPtr param_client_;
-  rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr param_sub_;
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
   // message_filters::Subscriber<sensor_msgs::msg::LaserScan> laser_sub_;
   // tf::MessageFilter<sensor_msgs::msg::LaserScan> laser_notifier_;
 
   explicit LiDARSpeedControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("lidar_speed_control_node", options),
     laser_topic_("/scan"),
+    footprint_topic_("/global_costmap/footprint"),
     vis_topic_("visualize"),
     limit_topic_("lidar_limit"),
     map_frame_("map"),
@@ -94,9 +92,7 @@ public:
     max_acc_(0.6),
     limit_factor_(3.0),
     front_region_offset_x_(0.348),  // Default distance from the base_footprint to the front of the ACE robot
-    normal_front_region_width_(0.50),
-    smallest_front_region_width_(0.25),
-    small_front_region_width_(0.30),
+    front_region_width_(0.50),
     blind_spot_min_range_(0.25)
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Constructor");
@@ -109,9 +105,9 @@ public:
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Destructor");
     scan_sub_.reset();
+    footprint_sub_.reset();
     vis_pub_.reset();
     limit_pub_.reset();
-    callback_handler_.reset();
     delete tfListener;
     delete tfBuffer;
   }
@@ -147,6 +143,11 @@ private:
       laser_topic_, rclcpp::SensorDataQoS(),
       std::bind(&LiDARSpeedControlNode::laserCallback, this, std::placeholders::_1));
 
+    footprint_sub_ =
+      create_subscription<geometry_msgs::msg::Polygon>(
+      footprint_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable().durability_volatile(),
+      std::bind(&LiDARSpeedControlNode::footprintCallback, this, std::placeholders::_1));
+
     vis_topic_ = declare_parameter("visualize_topic", vis_topic_);
     vis_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(vis_topic_, 100);
 
@@ -160,23 +161,11 @@ private:
     max_acc_ = declare_parameter("max_acc", max_acc_);
     limit_factor_ = declare_parameter("limit_factor", limit_factor_);
     front_region_offset_x_ = declare_parameter("front_region_offset_x", front_region_offset_x_);
-    normal_front_region_width_ = declare_parameter("front_region_width.normal", normal_front_region_width_);
-    smallest_front_region_width_ = declare_parameter("front_region_width.smallest", smallest_front_region_width_);
-    small_front_region_width_ = declare_parameter("front_region_width.small", small_front_region_width_);
     blind_spot_min_range_ = declare_parameter("blind_spot_min_range", blind_spot_min_range_);
-
-    front_region_width_ = normal_front_region_width_;
 
     RCLCPP_INFO(
       get_logger(), "LiDARSpeedControl with check_blind_space=%s, check_front_obstacle=%s, max_speed=%.2f",
       check_blind_space_ ? "true" : "false", check_front_obstacle_ ? "true" : "false", max_speed_);
-
-    param_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, "param_server");
-    param_sub_ =
-      param_client_->on_parameter_event(std::bind(&LiDARSpeedControlNode::parameterEventCallback, this, std::placeholders::_1));
-
-    callback_handler_ =
-      this->add_on_set_parameters_callback(std::bind(&LiDARSpeedControlNode::param_set_callback, this, std::placeholders::_1));
   }
 
   struct BlindSpot : CaBotSafety::Point
@@ -409,29 +398,15 @@ private:
     CaBotSafety::commit(vis_pub_);
   }
 
-  void parameterEventCallback(const rcl_interfaces::msg::ParameterEvent::SharedPtr msg)
+  void footprintCallback(const geometry_msgs::msg::Polygon::SharedPtr msg)
   {
-    for (const auto & p : msg->changed_parameters) {
-      const auto & name = p.name;
-      const auto & value = p.value;
-      if (name == "footprint_mode" && value.type == rclcpp::ParameterType::PARAMETER_INTEGER) {
-        auto footprint_mode = static_cast<FootprintMode>(value.integer_value);
-        switch (footprint_mode) {
-          case FootprintMode::NORMAL:
-            front_region_width_ = normal_front_region_width_;
-            break;
-          case FootprintMode::SMALLEST:
-            front_region_width_ = smallest_front_region_width_;
-            break;
-          case FootprintMode::SMALL:
-            front_region_width_ = small_front_region_width_;
-            break;
-          default:
-            RCLCPP_ERROR(this->get_logger(), "Invalid footprint_mode: %ld", value.integer_value);
-            break;
-        }
-      }
+    if (msg->points.empty()) {
+      return;
     }
+    const auto & p_x = msg->points[0].x;
+    const auto & p_y = msg->points[0].y;
+
+    front_region_width_ = 2.0 * std::hypot(p_x, p_y);
   }
 };  // class LiDARSpeedControlNode
 
