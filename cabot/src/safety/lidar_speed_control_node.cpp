@@ -40,12 +40,6 @@
 
 namespace CaBotSafety
 {
-enum class FootprintMode : int {
-  NORMAL = 0,
-  SMALLEST = 1,
-  SMALL = 3
-};
-
 class LiDARSpeedControlNode : public rclcpp::Node
 {
 public:
