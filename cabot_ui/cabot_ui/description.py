@@ -23,6 +23,7 @@ import rclpy.logging
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from nav_msgs.msg import Path
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 import cv2
 import base64
@@ -42,6 +43,7 @@ class DescriptionMode(Enum):
 class Description:
     DESCRIPTION_API = 'description'
     DESCRIPTION_WITH_IMAGES_API = 'description_with_live_image'
+    STOP_REASON_API = 'stop_reason'
 
     def __init__(self, node: Node):
         self.node = node
@@ -61,6 +63,7 @@ class Description:
             if self.stop_reason_data_collect_enabled:
                 self.stop_reason_enabled = False
                 self.surround_enabled = False
+                self.memo_pub = self.node.create_publisher(String, '/memo', 10)
         else:
             self.surround_enabled = False
             self.stop_reason_enabled = False
@@ -124,11 +127,11 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
-    def request_description(self, gp):
-        self._logger.info(F"Request Description at {gp}")
+    def request_description(self, global_position):
+        self._logger.info(F"Request Description at {global_position}")
         try:
             req = requests.get(
-                F"{self.host}/{Description.DESCRIPTION_API}?lat={gp.lat}&lng={gp.lng}&rotation={gp.r}&max_distance={self.max_distance}"
+                F"{self.host}/{Description.DESCRIPTION_API}?lat={global_position.lat}&lng={global_position.lng}&rotation={global_position.r}&max_distance={self.max_distance}"
             )
             data = json.loads(req.text)
             if req.status_code != requests.codes.ok:
@@ -138,10 +141,19 @@ class Description:
         except Exception as error:
             self._logger.error(F"Request Error {error=}")
 
-    def request_description_with_images(self, gp, length_index=0):
+    def request_description_with_images(self, global_position, length_index=0):
         if not self.enabled:
             return None
-        self._logger.info(F"Request Description with images at {gp}")
+        if not self.surround_enabled and not self.stop_reason_data_collect_enabled:
+            return None
+
+        API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+        if self.stop_reason_data_collect_enabled:
+            self.memo_pub.publish(String(data="stop_reason_data_collect"))
+            API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+
+
+        self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
         image_data_list = []
         distance_to_travel = 100
         if self.last_plan_distance:
@@ -184,12 +196,12 @@ class Description:
             headers = {'Content-Type': 'application/json'}
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
-            lat = gp.lat
-            lng = gp.lng
-            rotation = gp.r
+            lat = global_position.lat
+            lng = global_position.lng
+            rotation = global_position.r
             max_distance = self.max_distance
             response = requests.post(
-                F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
+                F"{API_URL}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
                 data=json_data
             )
