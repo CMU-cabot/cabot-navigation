@@ -29,6 +29,13 @@ import requests
 import json
 import os
 import math
+from enum import Enum
+
+
+class DescriptionMode(Enum):
+    SURROUND = 'surround'
+    STOP_REASON = 'stop-reason'
+    STOP_REASON_DATA_COLLECT = 'stop-reason-data-collect'
 
 
 class Description:
@@ -44,7 +51,24 @@ class Description:
         self.last_plan_distance = None
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
+        if self.enabled:
+            # handle modes (default=surround)
+            modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", DescriptionMode.SURROUND.value).split(",")
+            self.surround_enabled = DescriptionMode.SURROUND.value in modes
+            self.stop_reason_enabled = DescriptionMode.STOP_REASON.value in modes
+            self.stop_reason_data_collect_enabled = DescriptionMode.STOP_REASON_DATA_COLLECT.value in modes
+            if self.stop_reason_data_collect_enabled:
+                self.stop_reason_enabled = False
+                self.surround_enabled = False
+        else:
+            self.surround_enabled = False
+            self.stop_reason_enabled = False
+            self.stop_reason_data_collect_enabled = False
         self._logger = rclpy.logging.get_logger("cabot_ui_manager.description")
+        self._logger.info(F"Description enabled: {self.enabled}")
+        self._logger.info(F"Description surround: {self.surround_enabled}")
+        self._logger.info(F"Description stop reason: {self.stop_reason_enabled}")
+        self._logger.info(F"Description stop reason data collect: {self.stop_reason_data_collect_enabled}")
 
         self.subscriptions = {
             'left': self.node.create_subscription(
