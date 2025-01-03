@@ -626,16 +626,30 @@ void CaBotPlannerParam::findObstacles(std::vector<Node> nodes)
 {
   // check obstacles only from current position to N meters forward
   int max_obstacle_scan_distance_cell = options.max_obstacle_scan_distance / resolution;
+  float optimize_distance_from_start = options.optimize_distance_from_start;
   RCLCPP_INFO(logger, "nodes.size = %ld", nodes.size());
 
   groups.clear();
   obstacles.clear();
 
+  // find max index of nodes which does not exceed optimize_distance_from_start
+  uint64_t end_index = nodes.size();
+  float distance_from_start = 0;
+  for (uint64_t i = 0; i < nodes.size() - 1; i++) {
+    Node * n0 = &nodes[i];
+    Node * n1 = &nodes[i + 1];
+    distance_from_start += n0->distance(*n1);
+    if (distance_from_start > optimize_distance_from_start) {
+      end_index = i + 1;
+      break;
+    }
+  }
+
   // 1. find static obstacles near the path
   {
     memset(mark, 0, width * height * sizeof(uint16_t));
     std::vector<int> marks;
-    for (uint64_t i = 0; i < nodes.size(); i++) {
+    for (uint64_t i = 0; i < end_index; i++) {
       int index = getIndexByPoint(nodes[i]);
       if (index < 0) {
         continue;
@@ -693,7 +707,7 @@ void CaBotPlannerParam::findObstacles(std::vector<Node> nodes)
     std::vector<int> marks;
     uint64_t start_node_index = 0;
 
-    for (uint64_t i = 0; i < nodes.size(); i++) {
+    for (uint64_t i = 0; i < end_index; i++) {
       int index = getIndexByPoint(nodes[i]);
       if (index < 0) {
         continue;
