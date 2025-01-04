@@ -152,7 +152,6 @@ class Description:
             self.memo_pub.publish(String(data="stop_reason_data_collect"))
             API_URL = F"{self.host}/{Description.STOP_REASON_API}"
 
-
         self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
         image_data_list = []
         distance_to_travel = 100
