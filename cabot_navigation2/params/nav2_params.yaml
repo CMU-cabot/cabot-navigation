@@ -117,7 +117,8 @@ bt_navigator:
     use_sim_time: True
     global_frame: map
     robot_base_frame: base_footprint
-    bt_loop_duration: 10
+    bt_loop_duration: 20  # milliseconds, default 10
+    default_server_timeout: 100  # milliseconds, default 20
     odom_topic: /odom
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
