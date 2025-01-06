@@ -37,11 +37,17 @@
 ./setup-sample-site.sh
 ```
 
-- run the script to build image and workspaces
+- if you build docker image, run the script to build image
 
 ```
-./build-docker.sh -p -i -w              # run prebuild, image build, and workspace build
-./build-docker.sh -p -i -w -d           # run prebuild, image build, and workspace debug build (symlink-install)
+./bake-docker.sh -i         # run docker image build for your platform
+```
+
+- if you run in development mode, run the script to build workspaces
+
+```
+./build-workspace.sh        # run workspace build
+./build-workspace.sh -d     # run workspace debug build (symlink-install)
 ```
 
 ### Run simulator and run test cases
@@ -86,6 +92,9 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   CABOT_ANNOUNCE_NO_TOUCH # announce when the reason robot is stopped is NO_TOUCH(default=false)
   CABOT_SIDE           # left: user stands on the right, right: user stands on the left
   CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
+  HOST_UID             # host user UID (default=1000)
+  HOST_GID             # host user GID (default=1000)
+  HOST_TZ              # host timezone (default=UTC)
   ```
 - Options for image description (hold down right button for 1-3 seconds)
   ```
