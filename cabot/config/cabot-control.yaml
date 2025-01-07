@@ -49,7 +49,7 @@ cabot:
       min_speed: 0.0
       min_distance: 1.0
       limit_factor: 1.0
-      front_region_offset_x: 0.348 # Distance from the base_footprint to the front of the ACE robot
+      min_distance: 1.0
       front_region_width:
         normal: 0.50
         smallest: 0.25
