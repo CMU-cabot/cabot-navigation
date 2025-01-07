@@ -449,6 +449,13 @@ class CabotUIManager(NavigationInterface, object):
                 if result:
                     self._interface.describe_surround(result['description'])
 
+        if event.subtype == "conversation":
+            self._logger.info("Request Start Conversation")
+            e = NavigationEvent("conversation", None)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
             self.activity_log("cabot_ui/navigation", "in preparation")
@@ -641,22 +648,26 @@ class EventMapper(object):
             self.description_duration = 0
             return navigation_event
         if event.type == "button" and event.down:
-            if event.button == cabot_common.button.BUTTON_UP:
-                return NavigationEvent(subtype="speedup")
-            if event.button == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="speeddown")
+            # hook button down to triger pause whenever the left button is pushed
             if event.button == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="pause")
-            if event.button == cabot_common.button.BUTTON_CENTER:
-                return NavigationEvent(subtype="decision")
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="resume")
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="speedup")
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="speeddown")
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
+                return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                # image description is not triggered here, but when button is released
                 self.description_duration = event.duration
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="conversation")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
