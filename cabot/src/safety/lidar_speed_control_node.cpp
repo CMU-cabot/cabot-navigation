@@ -58,7 +58,7 @@ public:
   double min_speed_;
   double max_acc_;
   double limit_factor_;
-  double front_region_offset_x_;
+  double min_distance_;
   double front_region_width_;
   double blind_spot_min_range_;
 
@@ -68,6 +68,7 @@ public:
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
   tf2_ros::TransformListener * tfListener;
   tf2_ros::Buffer * tfBuffer;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
   // message_filters::Subscriber<sensor_msgs::msg::LaserScan> laser_sub_;
   // tf::MessageFilter<sensor_msgs::msg::LaserScan> laser_notifier_;
 
@@ -85,7 +86,7 @@ public:
     min_speed_(0.1),
     max_acc_(0.6),
     limit_factor_(3.0),
-    front_region_offset_x_(0.348),  // Default distance from the base_footprint to the front of the ACE robot
+    min_distance_(0.5),
     front_region_width_(0.50),
     blind_spot_min_range_(0.25)
   {
@@ -102,6 +103,7 @@ public:
     footprint_sub_.reset();
     vis_pub_.reset();
     limit_pub_.reset();
+    callback_handler_.reset();
     delete tfListener;
     delete tfBuffer;
   }
@@ -121,6 +123,9 @@ private:
       }
       if (param.get_name() == "check_blind_space") {
         check_blind_space_ = param.as_bool();
+      }
+      if (param.get_name() == "min_distance") {
+        min_distance_ = param.as_double();
       }
     }
     results->successful = true;
@@ -154,12 +159,15 @@ private:
     min_speed_ = declare_parameter("min_speed", min_speed_);
     max_acc_ = declare_parameter("max_acc", max_acc_);
     limit_factor_ = declare_parameter("limit_factor", limit_factor_);
-    front_region_offset_x_ = declare_parameter("front_region_offset_x", front_region_offset_x_);
+    min_distance_ = declare_parameter("min_distance", min_distance_);
     blind_spot_min_range_ = declare_parameter("blind_spot_min_range", blind_spot_min_range_);
 
     RCLCPP_INFO(
       get_logger(), "LiDARSpeedControl with check_blind_space=%s, check_front_obstacle=%s, max_speed=%.2f",
       check_blind_space_ ? "true" : "false", check_front_obstacle_ ? "true" : "false", max_speed_);
+
+    callback_handler_ =
+      this->add_on_set_parameters_callback(std::bind(&LiDARSpeedControlNode::param_set_callback, this, std::placeholders::_1));
   }
 
   struct BlindSpot : CaBotSafety::Point
@@ -221,10 +229,10 @@ private:
     if (check_front_obstacle_) {  // Check front obstacle (mainly for avoinding from speeding up near the wall
                                   // get some points in front of the robot
       const double rect_height = max_speed_ * limit_factor_;
-      Point region_ur_point(front_region_offset_x_ + rect_height, front_region_width_ / 2.0);
-      Point region_ul_point(front_region_offset_x_ + rect_height, -front_region_width_ / 2.0);
-      Point region_lr_point(front_region_offset_x_, front_region_width_ / 2.0);
-      Point region_ll_point(front_region_offset_x_, -front_region_width_ / 2.0);
+      Point region_ur_point(min_distance_ + rect_height, front_region_width_ / 2.0);
+      Point region_ul_point(min_distance_ + rect_height, -front_region_width_ / 2.0);
+      Point region_lr_point(min_distance_, front_region_width_ / 2.0);
+      Point region_ll_point(min_distance_, -front_region_width_ / 2.0);
 
       region_ur_point.transform(map_to_robot_tf2);
       region_ul_point.transform(map_to_robot_tf2);
@@ -254,8 +262,8 @@ private:
         point_in_map_frame.transform(map_to_robot_tf2 * robot_to_lidar_tf2);
 
         // Check if the point is in the front region
-        if (point_in_robot_frame.x > front_region_offset_x_ && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
-          double local_speed_limit = (point_in_robot_frame.x - front_region_offset_x_) / limit_factor_;
+        if (point_in_robot_frame.x > min_distance_ && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
+          double local_speed_limit = (point_in_robot_frame.x - min_distance_) / limit_factor_;
           if (min_speed_ < local_speed_limit && local_speed_limit < max_speed_) {
             CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
           }
@@ -266,7 +274,7 @@ private:
         }
       }
       // calculate the speed
-      speed_limit = std::min(max_speed_, std::max(min_speed_, (min_x_distance - front_region_offset_x_) / limit_factor_));
+      speed_limit = std::min(max_speed_, std::max(min_speed_, (min_x_distance - min_distance_) / limit_factor_));
       if (speed_limit < max_speed_) {
         RCLCPP_INFO(get_logger(), "limit by front obstacle (%.2f), min_x_distance=%.2f", speed_limit, min_x_distance);
       }
