@@ -50,10 +50,6 @@ cabot:
       min_distance: 1.0
       limit_factor: 1.0
       min_distance: 1.0
-      front_region_width:
-        normal: 0.50
-        smallest: 0.25
-        small: 0.30
 
   people_speed_control_node: # old name cabot_e_people_speed:
     ros__parameters:
