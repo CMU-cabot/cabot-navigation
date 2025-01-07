@@ -641,13 +641,13 @@ class EventMapper(object):
             self.description_duration = 0
             return navigation_event
         if event.type == "button" and event.down:
-            if event.buttons == cabot_common.button.BUTTON_UP:
+            if event.button == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
+            if event.button == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="speeddown")
-            if event.buttons == cabot_common.button.BUTTON_LEFT:
+            if event.button == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="pause")
-            if event.buttons == cabot_common.button.BUTTON_CENTER:
+            if event.button == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
