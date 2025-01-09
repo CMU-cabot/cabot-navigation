@@ -587,8 +587,11 @@ private:
     CaBotSafety::Line arrow_line(start_point, end_point);
     CaBotSafety::add_arrow(this->get_clock()->now(), arrow_line, 0.1, 1, 0, 0, 1);
 
+    CaBotSafety::add_circle(this->get_clock()->now(), 20, start_point, pr, 0.05, 1, 0, 0, 1);
+
     char buff[100];
     snprintf(buff, sizeof(buff), "limit - %.2fm/s", people_speed_limit);
+
     CaBotSafety::add_text(this->get_clock()->now(), buff, start_point);
   }
 
