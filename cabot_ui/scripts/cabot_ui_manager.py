@@ -442,9 +442,12 @@ class CabotUIManager(NavigationInterface, object):
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
             if self._interface.last_pose:
-                self._interface.requesting_describe_surround()
                 gp = self._interface.last_pose['global_position']
                 length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
+                if length_index <=1:
+                    self._interface.requesting_describe_surround_stop_reason()
+                else:
+                    self._interface.requesting_describe_surround()
                 result = self._description.request_description_with_images(gp, length_index=length_index)
                 if result:
                     self._interface.describe_surround(result['description'])
