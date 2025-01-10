@@ -147,8 +147,8 @@ class Description:
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
             return None
 
-        API_URL=None
-        ## TODO: needs to be organized...
+        API_URL = None
+        # TODO: needs to be organized...
         if self.stop_reason_data_collect_enabled:
             self.memo_pub.publish(String(data="stop_reason_data_collect"))
             API_URL = F"{self.host}/{Description.STOP_REASON_API}"
@@ -158,10 +158,12 @@ class Description:
                     # only stop-reason is enabled
                     API_URL = F"{self.host}/{Description.STOP_REASON_API}"
                 else:
+                    # TODO: fix (demo special)
                     # both surround and stop-reason is enabled
-                    if length_index == 0:
+                    if length_index <= 1:  # 1sec, 2sec
                         API_URL = F"{self.host}/{Description.STOP_REASON_API}"
-                    else:
+                    else:  # 3sec
+                        length_index = 1
                         API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
             else:
                 API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
