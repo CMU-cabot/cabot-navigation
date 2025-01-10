@@ -37,6 +37,13 @@
 ./setup-sample-site.sh
 ```
 
+- if you pull the latest docker images from docker hub, run the following command
+
+```
+docker compose --profile build pull
+docker compose --profile map pull
+```
+
 - if you build docker image, run the script to build image
 
 ```
