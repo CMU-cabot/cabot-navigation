@@ -315,6 +315,9 @@ class GNSSParameters:
     gnss_localization_interval: float = 10  # [s]
     gnss_navsat_timeout: float = 5.0  # [s]
     gnss_position_covariance_indoor_threshold: float = 3.0 * 3.0
+    # parameter for floor estimation
+    gnss_use_floor_estimation: bool = False
+    gnss_floor_search_radius: float = 5.0  # [m]
 
 
 class MultiFloorManager:
@@ -349,7 +352,7 @@ class MultiFloorManager:
         self.pressure_available = True
         self.altitude_manager = None
         self.altitude_floor_estimator = None
-        self.floor_height_mapper = None
+        self.floor_height_mapper: FloorHeightMapper = None
 
         # ble wifi localization
         self.use_ble = True
@@ -1374,10 +1377,6 @@ class MultiFloorManager:
         longitude = fix.longitude
         position_covariance = fix.position_covariance
 
-        floor_raw = 0.0  # outdoor
-        idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
-        floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
-
         # calculate moving direction from fix_velocity
         vel_e = fix_velocity.twist.twist.linear.x
         vel_n = fix_velocity.twist.twist.linear.y
@@ -1403,6 +1402,23 @@ class MultiFloorManager:
         covariance_matrix = np.zeros((6, 6))
         covariance_matrix[0:3, 0:3] = np.reshape(position_covariance, (3, 3))
         # TODO: orientation covariance
+
+        # estimate floor if enabled
+        if self.gnss_params.gnss_use_floor_estimation:
+            near_floor_list = self.floor_height_mapper.get_floor_list([gnss_xy.x, gnss_xy.y],
+                                                                      radius=self.gnss_params.gnss_floor_search_radius)
+            if len(near_floor_list) == 0:
+                floor = 0  # assume ground floor
+            else:
+                floor = np.max(near_floor_list)
+            if self.floor != floor:
+                self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}")
+        else:
+            floor_raw = 0  # assume ground floor
+            idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
+            floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
+            if self.floor != floor:
+                self.logger.info(f"gnss_fix_callback: floor_est={floor}, floor_raw={floor_raw}, floor_list={self.floor_list}")
 
         # x,y,yaw -> PoseWithCovarianceStamped message
         pose_with_covariance_stamped = PoseWithCovarianceStamped()
