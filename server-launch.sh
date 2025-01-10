@@ -29,7 +29,7 @@ function ctrl_c() {
     blue "data saved"
 
     cd $scriptdir
-    ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml down
+    ENV_FILE=$data_dir/server.env docker compose -p $launch_prefix --profile $profile down
     exit
 }
 

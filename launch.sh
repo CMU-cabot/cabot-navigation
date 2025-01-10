@@ -326,7 +326,6 @@ dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
 com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
 echo $com
 eval $com
-# ./server-launch.sh -c -p ${CABOT_SITE} -E "$environment"
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
