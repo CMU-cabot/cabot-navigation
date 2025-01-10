@@ -70,14 +70,15 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 - run simulator
 
 ```
-./launch.sh -s                 # simulation, yes to launch a map server
+./launch.sh -s            # simulation in production mode, yes to launch a map server
+./launch.sh -s -d         # simulation in development mode, yes to launch a map server
 ```
 
 - run test cases
 
 ```
-./launch.sh -s -t              # simulation, yes to launch a map server, run test
-./launch.sh -s -t -H           # simulation, yes to launch a map server, run test, headless
+./launch.sh -s -t         # simulation in production mode, yes to launch a map server, run test
+./launch.sh -s -t -H      # simulation in production mode, yes to launch a map server, run test, headless
 ```
 
 ### .env file
