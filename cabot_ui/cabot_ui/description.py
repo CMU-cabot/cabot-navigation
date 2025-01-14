@@ -49,7 +49,7 @@ class Description:
         self.node = node
         self.bridge = CvBridge()
         self.max_size = 512
-        self.max_distance = node.declare_parameter("description_max_distance", 100).value
+        self.max_distance = node.declare_parameter("description_max_distance", 20).value
         self.last_images = {'left': None, 'front': None, 'right': None}
         self.last_plan_distance = None
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
