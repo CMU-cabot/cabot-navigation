@@ -33,7 +33,7 @@ class WheelieControlNode : public rclcpp::Node
 {
 public:
   explicit WheelieControlNode(const rclcpp::NodeOptions & options)
-  : rclcpp:: Node("wheelie_control_node"),
+  : rclcpp::Node("wheelie_control_node"),
     pitch_threshold_(this->declare_parameter("pitch_threshold", -0.15)),
     latest_pitch_(0.0)
   {
@@ -97,6 +97,6 @@ private:
   double latest_pitch_;
 };
 
-}
+}  // namespace CaBotSafety
 #include <rclcpp_components/register_node_macro.hpp>
 RCLCPP_COMPONENTS_REGISTER_NODE(CaBotSafety::WheelieControlNode)
