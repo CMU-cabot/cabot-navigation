@@ -128,7 +128,7 @@ rclcpp_components_register_node(
   EXECUTABLE touch_speed_control_node
 )
 rclcpp_components_register_node(
-  wheelie_control_node
+  safety_nodes
   PLUGIN "CaBotSafety::WheelieControlNode"
   EXECUTABLE wheelie_control_node
 )
