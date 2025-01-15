@@ -27,11 +27,13 @@
 #include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+namespace CaBotSafety
+{
 class WheelieControlNode : public rclcpp::Node
 {
 public:
-  WheelieControlNode()
-  : Node("wheelie_control_node"),
+  explicit WheelieControlNode(const rclcpp::NodeOptions & options)
+  : rclcpp:: Node("wheelie_control_node"),
     pitch_threshold_(this->declare_parameter("pitch_threshold", -0.15)),
     latest_pitch_(0.0)
   {
@@ -77,6 +79,7 @@ private:
     geometry_msgs::msg::Twist cmd_msg;
     if (new_wheelie_state) {
       cmd_msg.linear.x = 0.0;
+      cmd_msg.angular.z = 0.0;
       RCLCPP_INFO(this->get_logger(), "Velocity set to 0 due to wheelie state.");
     } else {
       RCLCPP_INFO(this->get_logger(), "Restoring normal speed with velocity: %f", cmd_msg.linear.x);
@@ -94,11 +97,6 @@ private:
   double latest_pitch_;
 };
 
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<WheelieControlNode>();
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
 }
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE(CaBotSafety::WheelieControlNode)
