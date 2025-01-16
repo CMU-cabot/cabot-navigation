@@ -34,15 +34,26 @@ class WheelieControlNode : public rclcpp::Node
 public:
   explicit WheelieControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("wheelie_control_node", options),
-    pitch_threshold_(this->declare_parameter("pitch_threshold", -0.15)),
-    latest_pitch_(0.0)
+    latest_pitch_(0.0),
+    last_valid_speed_(0.0),
+    was_wheelie_active_(false)
   {
-    imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
-      "cabot/imu/data", 10,
+    imu_topic_ = this->declare_parameter("imu_topic", "/cabot/imu/data");
+    cmd_vel_topic_ = this->declare_parameter("cmd_vel_topic", "/cabot/cmd_vel");
+    wheelie_state_topic_ = this->declare_parameter("wheelie_state_topic", "/cabot/wheelie_state");
+
+    imu_sub_ =
+      create_subscription<sensor_msgs::msg::Imu>(
+      imu_topic_, 10,
       std::bind(&WheelieControlNode::imuCallback, this, std::placeholders::_1));
 
-    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cabot/cmd_vel", 10);
-    wheelie_state_pub_ = create_publisher<std_msgs::msg::Bool>("wheelie_state", 10);
+    cmd_vel_sub_ =
+      create_subscription<geometry_msgs::msg::Twist>(
+      cmd_vel_topic_, 10,
+      std::bind(&WheelieControlNode::cmdVelCallback, this, std::placeholders::_1));
+
+    cmd_vel_test_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cabot/cmd_vel_test", 10);
+    wheelie_state_pub_ = create_publisher<std_msgs::msg::Bool>(wheelie_state_topic_, 10);
 
     timer_ = create_wall_timer(
       std::chrono::milliseconds(100),  // 100ms check
@@ -66,6 +77,11 @@ private:
     latest_pitch_ = pitch;
   }
 
+  void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
+  {
+    latest_linear_x_ = msg->linear.x;
+  }
+
   void checkWheelieState()
   {
     bool new_wheelie_state = latest_pitch_ < pitch_threshold_;
@@ -79,22 +95,40 @@ private:
     geometry_msgs::msg::Twist cmd_msg;
     if (new_wheelie_state) {
       cmd_msg.linear.x = 0.0;
-      cmd_msg.angular.z = 0.0;
-      RCLCPP_INFO(this->get_logger(), "Velocity set to 0 : %f", cmd_msg.linear.x);
+      if (!was_wheelie_active_) {
+        was_wheelie_active_ = true;
+        last_valid_speed_ = latest_linear_x_;
+      }
+      RCLCPP_INFO(this->get_logger(), "Velocity set to 0");
     } else {
-      RCLCPP_INFO(this->get_logger(), "Speed : %f", cmd_msg.linear.x);
+      if (was_wheelie_active_) {
+        cmd_msg.linear.x = last_valid_speed_;
+        was_wheelie_active_ = false;
+        RCLCPP_INFO(this->get_logger(), "ReturnSpeed : %f", last_valid_speed_);
+      } else {
+        cmd_msg.linear.x = latest_linear_x_;
+        RCLCPP_INFO(this->get_logger(), "Speed : %f", latest_linear_x_);
+      }
     }
 
-    cmd_vel_pub_->publish(cmd_msg);
+    cmd_vel_test_pub_->publish(cmd_msg);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr wheelie_state_pub_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_test_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   double pitch_threshold_;
   double latest_pitch_;
+  double latest_linear_x_;
+  double last_valid_speed_;
+  bool was_wheelie_active_;
+
+  std::string imu_topic_;
+  std::string cmd_vel_topic_;
+  std::string wheelie_state_topic_;
 };  // WheelieControlNode
 
 }  // namespace CaBotSafety
