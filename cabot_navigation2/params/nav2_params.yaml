@@ -369,16 +369,18 @@ local_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: velodyne
+        observation_sources: "velodyne scan"   # marking with velodyne and clearing with scan
         scan:
           topic: /scan
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
+          obstacle_min_range: 0.4
           obstacle_max_range: 4.0
+          raytrace_min_range: 0.0
           raytrace_max_range: 5.0
           clearing: True
-          marking: True
-          inf_is_valid: False # default: False
+          marking: False
+          inf_is_valid: True # default: False
           data_type: "LaserScan"
         velodyne:
           topic: /velodyne_points_cropped
@@ -386,10 +388,11 @@ local_costmap:
           max_obstacle_height: 1.8
           obstacle_min_range: 0.4
           obstacle_max_range: 4.0
+          raytrace_min_range: 0.0
           raytrace_max_range: 5.0
-          clearing: True
+          clearing: False
           marking: True
-          inf_is_valid: True # default: False
+          inf_is_valid: True # default: False (inf_is_valid with PointCloud2 is not used)
           data_type: "PointCloud2"
       low_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -436,64 +439,34 @@ global_costmap:
         # robot_radius + safe_margin
         inflation_radius: 0.75
         cost_scaling_factor: 5.0
-      people_obstacle_layer:
-        plugin: "cabot_navigation2::PeopleObstacleLayer"
-        enabled: True
-        observation_sources: velodyne
-        scan:
-          topic: /scan
-          min_obstacle_height: -2.0
-          max_obstacle_height: 2.0
-          raytrace_min_range: 0.0
-          raytrace_max_range: 8.0
-          obstacle_min_range: 0.0
-          obstacle_max_range: 7.5
-          clearing: True
-          marking: True
-          inf_is_valid: True # default: False
-          data_type: "LaserScan"
-          observation_persistence: 0.5 # default: 0 (store only latest observation)
-        velodyne:
-          topic: /velodyne_points_cropped
-          min_obstacle_height: 0.3
-          max_obstacle_height: 1.8
-          obstacle_min_range: 0.4
-          obstacle_max_range: 7.5
-          raytrace_max_range: 8.0
-          clearing: True
-          marking: True
-          inf_is_valid: True # default: False
-          data_type: "PointCloud2"
-        mode: "ignore_move_people"
-        person_radius: 0.50
-        exclude_topic: /ignore
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: velodyne
+        observation_sources: "velodyne scan"   # marking with velodyne and clearing with scan
         scan:
           topic: /scan
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
-          raytrace_min_range: 0.0
-          raytrace_max_range: 8.0
           obstacle_min_range: 0.0
           obstacle_max_range: 7.5
+          raytrace_min_range: 0.0
+          raytrace_max_range: 8.0
           clearing: True
-          marking: True
+          marking: False
           inf_is_valid: True # default: False
           data_type: "LaserScan"
-          observation_persistence: 0.5 # default: 0 (store only latest observation)
+          # observation_persistence: 0.5 # default: 0 (store only latest observation)
         velodyne:
           topic: /velodyne_points_cropped
           min_obstacle_height: 0.3
           max_obstacle_height: 1.8
           obstacle_min_range: 0.4
           obstacle_max_range: 7.5
+          raytrace_min_range: 0.0
           raytrace_max_range: 8.0
-          clearing: True
+          clearing: False
           marking: True
-          inf_is_valid: True # default: False
+          inf_is_valid: True # default: False (inf_is_valid with PointCloud2 is not used)
           data_type: "PointCloud2"
       low_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -532,20 +505,6 @@ global_costmap:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       always_send_full_costmap: False
-      navcog_path_layer:
-        plugin: "cabot_navigation2::NavCogPathLayer"
-        path_width: 2.0
-        path_width_detect: true
-        path_topic: /path
-        # walk_weight value will be overwritten in navigate_w_replanning_and_recovery.xml
-        walk_weight: [0.0, 0.0, 0.0]
-        # path_adjusted_center value will be overwritten in navigate_w_replanning_and_recovery.xml
-        path_adjusted_center: 0.0
-        path_adjusted_minimum_path_width: 0.5
-        weight_grid: 0.25
-        robot_radius: 0.45
-        safe_margin: 0.05
-        max_cost: 127.0
   global_costmap_client:
     ros__parameters:
       use_sim_time: True
