@@ -46,7 +46,7 @@ local=0
 tags=
 services="navigation localization debug map_server location_tools"
 
-while getopts "hb:ilP:t" arg; do
+while getopts "hb:ilP:t:" arg; do
     case $arg in
     h)
         help
