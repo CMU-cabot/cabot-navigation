@@ -100,6 +100,13 @@ cabot:
       complete_stop: [false,false,false,true,true,false,true]
       configurable: [true,false,false,false,false,false,false]
 
+  wheelie_control_node:
+    ros__parameters:
+     pitch_threshold: -0.15
+     imu_topic: /cabot/imu/data
+     cmd_vel_topic: /cabot/cmd_vel
+     wheelie_state_topic: /cabot/wheelie_state
+
   ekf_node:
     ros__parameters:
       frequency: 100.0
