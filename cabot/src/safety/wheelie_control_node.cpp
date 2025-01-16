@@ -33,7 +33,7 @@ class WheelieControlNode : public rclcpp::Node
 {
 public:
   explicit WheelieControlNode(const rclcpp::NodeOptions & options)
-  : rclcpp::Node("wheelie_control_node"),
+  : rclcpp::Node("wheelie_control_node", options),
     pitch_threshold_(this->declare_parameter("pitch_threshold", -0.15)),
     latest_pitch_(0.0)
   {
@@ -80,9 +80,9 @@ private:
     if (new_wheelie_state) {
       cmd_msg.linear.x = 0.0;
       cmd_msg.angular.z = 0.0;
-      RCLCPP_INFO(this->get_logger(), "Velocity set to 0 due to wheelie state.");
+      RCLCPP_INFO(this->get_logger(), "Velocity set to 0 : %f", cmd_msg.linear.x);
     } else {
-      RCLCPP_INFO(this->get_logger(), "Restoring normal speed with velocity: %f", cmd_msg.linear.x);
+      RCLCPP_INFO(this->get_logger(), "Speed : %f", cmd_msg.linear.x);
     }
 
     cmd_vel_pub_->publish(cmd_msg);
@@ -95,7 +95,7 @@ private:
 
   double pitch_threshold_;
   double latest_pitch_;
-};
+};  // WheelieControlNode
 
 }  // namespace CaBotSafety
 #include <rclcpp_components/register_node_macro.hpp>
