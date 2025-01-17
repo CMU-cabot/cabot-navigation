@@ -343,7 +343,7 @@ def generate_launch_description():
                 'angle_increment': 0.00174,  # M_PI/180/10
                 'scan_time': 0.1,
                 'range_min': 0.05,
-                'range_max': 50.0,
+                'range_max': 5.0,  # must be greater than or equal to max_range parameters in low_obstacle_layer
                 'use_inf': True,
                 'inf_epsilon': 1.0,
                 # Concurrency level affects number of pointclouds queued for
