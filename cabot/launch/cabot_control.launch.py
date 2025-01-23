@@ -189,6 +189,15 @@ def generate_launch_description():
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
         ),
+        # Cabot Low Lidar Speed Control
+        Node(
+            package='cabot',
+            executable='lidar_speed_control_node',
+            namespace='/cabot',
+            name='low_lidar_speed_control_node',
+            output=output,
+            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+        ),
         # Cabot People Speed Control
         Node(
             package='cabot',
@@ -220,6 +229,7 @@ def generate_launch_description():
         # Cabot Speed Control
         # This node limit the speed from the move_base based on specified topics
         #   /cabot/lidar_speed           - control by lidar sensor
+        #   /cabot/low_lidar_speed       - control by low lidar sensor
         #   /cabot/map_speed             - control by map speed poi
         #   /cabot/people_speed          - control by surrounding people
         #   /cabot/queue_speed           - control by queue
