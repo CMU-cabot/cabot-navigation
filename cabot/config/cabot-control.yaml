@@ -107,7 +107,7 @@ cabot:
      cmd_vel_topic: /cabot/cmd_vel
      wheelie_state_topic: /cabot/wheelie_state
      min_speed: 0.0
-     max_speed: 0.0
+     max_speed: 1.0
 
   ekf_node:
     ros__parameters:
