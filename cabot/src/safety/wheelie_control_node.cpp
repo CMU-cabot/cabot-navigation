@@ -36,11 +36,16 @@ public:
   : rclcpp::Node("wheelie_control_node", options),
     latest_pitch_(0.0),
     last_valid_speed_(0.0),
-    was_wheelie_active_(false)
+    was_wheelie_active_(false),
+    max_speed_(1.0),
+    min_speed_(0.0)
   {
     imu_topic_ = this->declare_parameter("imu_topic", "/cabot/imu/data");
     cmd_vel_topic_ = this->declare_parameter("cmd_vel_topic", "/cabot/cmd_vel");
-    wheelie_state_topic_ = this->declare_parameter("wheelie_state_topic", "/cabot/wheelie_state");
+    wheelie_speed_topic_ = this->declare_parameter("wheelie_speed_topic", "/cabot/wheelie_speed");
+    pitch_threshold_ = this->declare_parameter("pitch_threshold", -0.15);
+    max_speed_ = declare_parameter("max_speed", max_speed_);
+    min_speed_ = declare_parameter("min_speed", min_speed_);
 
     imu_sub_ =
       create_subscription<sensor_msgs::msg::Imu>(
@@ -52,8 +57,8 @@ public:
       cmd_vel_topic_, 10,
       std::bind(&WheelieControlNode::cmdVelCallback, this, std::placeholders::_1));
 
-    cmd_vel_test_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cabot/cmd_vel_test", 10);
-    wheelie_state_pub_ = create_publisher<std_msgs::msg::Bool>(wheelie_state_topic_, 10);
+    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cabot/cmd_vel", 10);
+    wheelie_speed_pub_ = create_publisher<std_msgs::msg::Float32>(wheelie_speed_topic_, 10);
 
     timer_ = create_wall_timer(
       std::chrono::milliseconds(100),  // 100ms check
@@ -84,40 +89,44 @@ private:
 
   void checkWheelieState()
   {
-    bool new_wheelie_state = latest_pitch_ < pitch_threshold_;
+    bool wheelie_state = latest_pitch_ < pitch_threshold_;
 
-    std_msgs::msg::Bool wheelie_msg;
-    wheelie_msg.data = new_wheelie_state;
-    wheelie_state_pub_->publish(wheelie_msg);
-
-    RCLCPP_INFO(this->get_logger(), "Wheelie state: %s", new_wheelie_state ? "True" : "False");
-
+    std_msgs::msg::Float32 wheelie_msg;
     geometry_msgs::msg::Twist cmd_msg;
-    if (new_wheelie_state) {
-      cmd_msg.linear.x = 0.0;
+    wheelie_msg.data = wheelie_state ? min_speed_ : max_speed_;
+    wheelie_speed_pub_->publish(wheelie_msg);
+
+    RCLCPP_INFO(this->get_logger(), "current speed: %.3f (%.3f <=> %.3f)", latest_linear_x_, latest_pitch_, pitch_threshold_);
+
+    if (wheelie_state) {
+      cmd_msg.linear.x = min_speed_;
       if (!was_wheelie_active_) {
         was_wheelie_active_ = true;
         last_valid_speed_ = latest_linear_x_;
       }
-      RCLCPP_INFO(this->get_logger(), "Velocity set to 0");
+      RCLCPP_INFO(this->get_logger(), "Wheelie!! Velocity set to %.3f, cmd_msg.linear.x = %.3f", min_speed_, latest_linear_x_);
     } else {
       if (was_wheelie_active_) {
         cmd_msg.linear.x = last_valid_speed_;
         was_wheelie_active_ = false;
-        RCLCPP_INFO(this->get_logger(), "ReturnSpeed : %f", last_valid_speed_);
+        RCLCPP_INFO(this->get_logger(), "Not in Wheelie. ReturnSpeed : %f", last_valid_speed_);
       } else {
-        cmd_msg.linear.x = latest_linear_x_;
-        RCLCPP_INFO(this->get_logger(), "Speed : %f", latest_linear_x_);
+        if (latest_linear_x_ > max_speed_) {
+          cmd_msg.linear.x = max_speed_;
+        } else {
+          cmd_msg.linear.x = latest_linear_x_;
+        }
+        RCLCPP_INFO(this->get_logger(), "Not in Wheelie : %f", latest_linear_x_);
       }
     }
 
-    cmd_vel_test_pub_->publish(cmd_msg);
+    cmd_vel_pub_->publish(cmd_msg);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr wheelie_state_pub_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_test_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr wheelie_speed_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   double pitch_threshold_;
@@ -125,10 +134,12 @@ private:
   double latest_linear_x_;
   double last_valid_speed_;
   bool was_wheelie_active_;
+  double max_speed_;
+  double min_speed_;
 
   std::string imu_topic_;
   std::string cmd_vel_topic_;
-  std::string wheelie_state_topic_;
+  std::string wheelie_speed_topic_;
 };  // WheelieControlNode
 
 }  // namespace CaBotSafety
