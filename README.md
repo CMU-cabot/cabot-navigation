@@ -92,6 +92,7 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   ```
   CABOT_IMAGE_DESCRIPTION_SERVER   # image description server (default=http://localhost:8000)
   CABOT_IMAGE_DESCRIPTION_ENABLED  # enable image description (default=false)
+  CABOT_IMAGE_DESCRIPTION_MODE     # surround and/or stop-reason separated by comma (default=surround), or stop-reason-data-collect
   CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT   # rotate left image (default=false)
   CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT  # rotate front image (default=false)
   CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT  # rotate right image (default=false)

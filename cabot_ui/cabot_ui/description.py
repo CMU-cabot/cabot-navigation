@@ -18,10 +18,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import traceback
 import rclpy.logging
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from nav_msgs.msg import Path
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 import cv2
 import base64
@@ -29,39 +31,65 @@ import requests
 import json
 import os
 import math
+from enum import Enum
+
+
+class DescriptionMode(Enum):
+    SURROUND = 'surround'
+    STOP_REASON = 'stop-reason'
+    STOP_REASON_DATA_COLLECT = 'stop-reason-data-collect'
 
 
 class Description:
     DESCRIPTION_API = 'description'
     DESCRIPTION_WITH_IMAGES_API = 'description_with_live_image'
+    STOP_REASON_API = 'stop_reason'
 
     def __init__(self, node: Node):
         self.node = node
         self.bridge = CvBridge()
         self.max_size = 512
-        self.max_distance = node.declare_parameter("description_max_distance", 100).value
+        self.max_distance = node.declare_parameter("description_max_distance", 20).value
         self.last_images = {'left': None, 'front': None, 'right': None}
         self.last_plan_distance = None
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
+        if self.enabled:
+            # handle modes (default=surround)
+            modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", DescriptionMode.SURROUND.value).split(",")
+            self.surround_enabled = DescriptionMode.SURROUND.value in modes
+            self.stop_reason_enabled = DescriptionMode.STOP_REASON.value in modes
+            self.stop_reason_data_collect_enabled = DescriptionMode.STOP_REASON_DATA_COLLECT.value in modes
+            if self.stop_reason_data_collect_enabled:
+                self.stop_reason_enabled = False
+                self.surround_enabled = False
+                self.memo_pub = self.node.create_publisher(String, '/memo', 10)
+        else:
+            self.surround_enabled = False
+            self.stop_reason_enabled = False
+            self.stop_reason_data_collect_enabled = False
         self._logger = rclpy.logging.get_logger("cabot_ui_manager.description")
+        self._logger.info(F"Description enabled: {self.enabled}")
+        self._logger.info(F"Description surround: {self.surround_enabled}")
+        self._logger.info(F"Description stop reason: {self.stop_reason_enabled}")
+        self._logger.info(F"Description stop reason data collect: {self.stop_reason_data_collect_enabled}")
 
         self.subscriptions = {
             'left': self.node.create_subscription(
-                Image,
-                '/rs3/color/image_raw',  # Change this to your left image topic name
+                CompressedImage,
+                '/rs3/color/image_raw/compressed',  # Change this to your left image topic name
                 lambda msg: self.image_callback('left', msg),
                 10
             ),
             'front': self.node.create_subscription(
-                Image,
-                '/rs1/color/image_raw',  # Change this to your front image topic name
+                CompressedImage,
+                '/rs1/color/image_raw/compressed',  # Change this to your front image topic name
                 lambda msg: self.image_callback('front', msg),
                 10
             ),
             'right': self.node.create_subscription(
-                Image,
-                '/rs2/color/image_raw',  # Change this to your right image topic name
+                CompressedImage,
+                '/rs2/color/image_raw/compressed',  # Change this to your right image topic name
                 lambda msg: self.image_callback('right', msg),
                 10
             )
@@ -79,9 +107,9 @@ class Description:
 
         self.plan_sub = self.node.create_subscription(Path, '/plan', self.plan_callback, 10)
 
-    def image_callback(self, position: str, msg: Image):
+    def image_callback(self, position: str, msg: CompressedImage):
         try:
-            # Store the raw ROS Image message
+            # Store the raw ROS CompressedImage message
             self.last_images[position] = msg
         except Exception as e:
             self._logger.error(f'Error processing {position} image: {e}')
@@ -99,11 +127,11 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
-    def request_description(self, gp):
-        self._logger.info(F"Request Description at {gp}")
+    def request_description(self, global_position):
+        self._logger.info(F"Request Description at {global_position}")
         try:
             req = requests.get(
-                F"{self.host}/{Description.DESCRIPTION_API}?lat={gp.lat}&lng={gp.lng}&rotation={gp.r}&max_distance={self.max_distance}"
+                F"{self.host}/{Description.DESCRIPTION_API}?lat={global_position.lat}&lng={global_position.lng}&rotation={global_position.r}&max_distance={self.max_distance}"
             )
             data = json.loads(req.text)
             if req.status_code != requests.codes.ok:
@@ -113,10 +141,38 @@ class Description:
         except Exception as error:
             self._logger.error(F"Request Error {error=}")
 
-    def request_description_with_images(self, gp, length_index=0):
+    def request_description_with_images(self, global_position, length_index=0):
         if not self.enabled:
             return None
-        self._logger.info(F"Request Description with images at {gp}")
+        if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
+            return None
+
+        API_URL = None
+        # TODO: needs to be organized...
+        if self.stop_reason_data_collect_enabled:
+            self.memo_pub.publish(String(data="stop_reason_data_collect"))
+            API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+        else:
+            if self.stop_reason_enabled:
+                if not self.surround_enabled:
+                    # only stop-reason is enabled
+                    API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+                else:
+                    # TODO: fix (demo special)
+                    # both surround and stop-reason is enabled
+                    if length_index <= 1:  # 1sec, 2sec
+                        API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+                    else:  # 3sec
+                        length_index = 1
+                        API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+            else:
+                API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+
+        if not API_URL:
+            self._logger.error("API_URL is none")
+            return None
+
+        self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
         image_data_list = []
         distance_to_travel = 100
         if self.last_plan_distance:
@@ -124,32 +180,23 @@ class Description:
         for position, img_msg in self.last_images.items():
             if img_msg is not None:
                 try:
-                    # Convert ROS Image message to OpenCV image
-                    cv_image_raw = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
-
-                    # Rotate image if necessary
-                    rotate_mode = self.image_rotate_modes[position]
-                    if rotate_mode is not None:
-                        cv_image = cv2.rotate(cv_image_raw, rotate_mode)
-                        self._logger.info(f'Rotating {position} image: with {rotate_mode}')
+                    img = self.bridge.compressed_imgmsg_to_cv2(img_msg)
+                    # Rotate the image if necessary
+                    if self.image_rotate_modes[position] is not None:
+                        img = cv2.rotate(img, self.image_rotate_modes[position])
+                    # Resize the image while maintaining the aspect ratio
+                    height, width = img.shape[:2]
+                    if height > width:
+                        new_height = self.max_size
+                        new_width = int(width * new_height / height)
                     else:
-                        cv_image = cv_image_raw
+                        new_width = self.max_size
+                        new_height = int(height * new_width / width)
+                    img = cv2.resize(img, (new_width, new_height))
+                    img_msg = self.bridge.cv2_to_compressed_imgmsg(img)
 
-                    # Resize image while keeping the aspect ratio
-                    h, w = cv_image.shape[:2]
-                    if max(h, w) > self.max_size:
-                        scale = self.max_size / float(max(h, w))
-                        new_w = int(w * scale)
-                        new_h = int(h * scale)
-                        resized_image = cv2.resize(cv_image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                    else:
-                        resized_image = cv_image
-
-                    # Convert OpenCV image to JPEG
-                    _, buffer = cv2.imencode('.jpg', resized_image)
-
-                    # Encode JPEG to base64 and create image URI
-                    base64_image = base64.b64encode(buffer).decode('utf-8')
+                    # Use the raw JPEG data from the ROS CompressedImage message
+                    base64_image = base64.b64encode(img_msg.data).decode('utf-8')
                     image_uri = f'data:image/jpeg;base64,{base64_image}'
 
                     # Prepare JSON data
@@ -159,6 +206,7 @@ class Description:
                     })
                 except Exception as e:
                     self._logger.error(f'Error converting {position} image: {e}')
+                    self._logger.error(traceback.format_exc())
             else:
                 self._logger.warn(f'No {position} image available to process.')
 
@@ -167,12 +215,12 @@ class Description:
             headers = {'Content-Type': 'application/json'}
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
-            lat = gp.lat
-            lng = gp.lng
-            rotation = gp.r
+            lat = global_position.lat
+            lng = global_position.lng
+            rotation = global_position.r
             max_distance = self.max_distance
             response = requests.post(
-                F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
+                F"{API_URL}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
                 data=json_data
             )
