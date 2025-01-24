@@ -703,10 +703,6 @@ private:
     return true;
   }
 
-  bool isUpdatedSpeedLimitForCollisionTime()
-  {
-  }
-
   double computeSafeSpeedLimit(
     double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue, const tf2::Stamped<tf2::Transform> & map_to_robot_tf2, bool visualized_marker=false)
   {
