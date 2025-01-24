@@ -618,38 +618,34 @@ private:
 
   std::vector<double> computeVOIntersection(const double vx_p, const double vy_p, const double theta_right, const double theta_left)
   {
-    double t_right = -vy_p / sin(theta_right);
-    double t_left = -vy_p / sin(theta_left);
+    constexpr double pseudo_infinity = std::numeric_limits<double>::max();
 
-    bool is_found_right_intersection = false;
-    bool is_found_left_intersection = false;
+    auto computeParametricValue = [&](double theta) -> std::optional<double> {
+      if (std::fabs(theta) < epsilon) {
+        return std::nullopt;
+      }
+      return -vy_p / std::sin(theta);
+    };
+
+    auto getPseudoBoundary = [](double theta) -> double {
+      return (-M_PI_2 <= theta && theta < M_PI_2) ? pseudo_infinity : -pseudo_infinity;
+    };
+
+    std::optional<double> t_right = computeParametricValue(theta_right);
+    std::optional<double> t_left = computeParametricValue(theta_left);
 
     std::vector<double> intersection;
 
-    if (t_right >= 0.0) {
-      intersection.push_back(vx_p + t_right * cos(theta_right));
-      is_found_right_intersection = true;
+    if (t_right && t_right.value() >= 0.0) {
+      intersection.push_back(vx_p + t_right.value() * cos(theta_right));
+    } else {
+      intersection.push_back(getPseudoBoundary(theta_right));
     }
 
-    if (t_left >= 0.0) {
-      intersection.push_back(vx_p + t_left * cos(theta_left));
-      is_found_left_intersection = true;
-    }
-
-    if (!is_found_right_intersection && !is_found_left_intersection) {
-      return {};
-    } else if (!is_found_right_intersection) {
-      if (-M_PI_2 <= theta_right && theta_right < M_PI_2) {
-        intersection.push_back(std::numeric_limits<double>::max());
-      } else {
-        intersection.push_back(-std::numeric_limits<double>::max());
-      }
-    } else if (!is_found_left_intersection) {
-      if (-M_PI_2 <= theta_left && theta_left < M_PI_2) {
-        intersection.push_back(std::numeric_limits<double>::max());
-      } else {
-        intersection.push_back(-std::numeric_limits<double>::max());
-      }
+    if (t_left && t_left.value() >= 0.0) {
+      intersection.push_back(vx_p + t_left.value() * cos(theta_left));
+    } else {
+      intersection.push_back(getPseudoBoundary(theta_left));
     }
 
     return intersection;
