@@ -41,6 +41,7 @@
 
 ```
 ./build-docker.sh -p -i -w              # run prebuild, image build, and workspace build
+or
 ./build-docker.sh -p -i -w -d           # run prebuild, image build, and workspace debug build (symlink-install)
 ```
 
