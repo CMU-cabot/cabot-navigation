@@ -460,14 +460,14 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
-            e = NavigationEvent("toggleSpeakState", None)
+            e = NavigationEvent("togglespeakstate", None)
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)
 
         if event.subtype == "microphone":
             self._logger.info("Request Activate the Smartphone's microphone")
-            e = NavigationEvent("activateMicrophone", None)
+            e = NavigationEvent("activatemicrophone", None)
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)
