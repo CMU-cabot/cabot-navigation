@@ -60,6 +60,8 @@ def getchar():
 
 button = -1
 hold_duration = 0
+hold_start_time = None
+sent_duration = 0
 
 
 def reset_click_state(index):
@@ -70,7 +72,7 @@ def reset_click_state(index):
 
 @setInterval(0.01)
 def process():
-    global button, hold_duration
+    global button, hold_duration, hold_start_time, sent_duration
     now = node.get_clock().now()
     event = None
     temp = [False]*NKeys
@@ -91,25 +93,44 @@ def process():
                 lastUp[i] = now
 
         if lastUp[i] is not None and now - lastUp[i] > Duration(seconds=interval):
-            if not hold_active[1]:
+            if not hold_active[1] and upCount[i] > 0:
                 event = cabot_common.event.ClickEvent(buttons=i, count=upCount[i])
-            reset_click_state(i)
+                reset_click_state(i)
 
         # node.get_logger().info(upCount)
         # node.get_logger().info(temp)
         # node.get_logger().info(btnDwn)
 
     if button != -1 and hold_duration > 0:
-        hold_active[button] = True
-        event = cabot_common.event.HoldDownEvent(holddown=button, duration=hold_duration)
-        hold_duration = 0
+        if hold_start_time is None:
+            hold_start_time = now
+            sent_duration = 0
 
-    button = -1
+        elapsed_time = (now - hold_start_time).nanoseconds / 1e9
+
+        if elapsed_time > sent_duration + 1.0:
+            sent_duration += 1
+            hold_active[button] = True
+            event = cabot_common.event.HoldDownEvent(holddown=button, duration=int(sent_duration))
+            # node.get_logger().info(f"HoldDownEvent: button={}")
+            msg = std_msgs.msg.String()
+            msg.data = str(event)
+            eventPub.publish(msg)
+
+        if sent_duration >= hold_duration:
+            hold_duration = 0
+            button = -1
+            hold_start_time = None
+            sent_duration = 0
+
     if event is not None:
         node.get_logger().info(str(event)+"\r")
         msg = std_msgs.msg.String()
         msg.data = str(event)
         eventPub.publish(msg)
+
+    if hold_duration == 0 and button != -1:
+        button = -1
 
 
 if __name__ == '__main__':
