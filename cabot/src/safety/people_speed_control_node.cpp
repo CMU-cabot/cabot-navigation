@@ -495,7 +495,7 @@ private:
         double theta_right = normalizedAngle(RPy - s);
         double theta_left = normalizedAngle(RPy + s);
 
-        auto vo_intersection = computeVOIntersection(pvx, pvy, theta_right, theta_left);
+        auto vo_intersection = computeVOIntersection(pvx, pvy, RPy, theta_right, theta_left);
 
         if (vo_intersection.empty()) {
           continue;
@@ -616,15 +616,19 @@ private:
     // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
   }
 
-  std::vector<double> computeVOIntersection(const double vx_p, const double vy_p, const double theta_right, const double theta_left)
+  std::vector<double> computeVOIntersection(const double vx_p, const double vy_p, const double RPy, const double theta_right, const double theta_left)
   {
     constexpr double pseudo_infinity = std::numeric_limits<double>::max();
 
     auto computeParametricValue = [&](double theta) -> std::optional<double> {
-      if (std::fabs(theta) < epsilon) {
+      if (std::fabs(std::sin(theta)) < 1e-6) {
         return std::nullopt;
       }
-      return -vy_p / std::sin(theta);
+      double t = -vy_p / std::sin(theta);
+      if (t < 0.0) {
+        return std::nullopt;
+      }
+      return t;
     };
 
     auto getPseudoBoundary = [](double theta) -> double {
@@ -636,16 +640,28 @@ private:
 
     std::vector<double> intersection;
 
-    if (t_right && t_right.value() >= 0.0) {
-      intersection.push_back(vx_p + t_right.value() * cos(theta_right));
-    } else {
-      intersection.push_back(getPseudoBoundary(theta_right));
+    if (t_right && t_left) {
+      double vo_right = vx_p + t_right.value() * cos(theta_right);
+      double vo_left = vx_p + t_left.value() * cos(theta_left);
+      if (std::fabs(vo_right - vo_left) < epsilon) {
+        intersection.push_back(vo_right);
+        if (-M_PI_2 <= RPy && RPy < M_PI_2) {
+          intersection.push_back(pseudo_infinity);
+        } else {
+          intersection.push_back(-pseudo_infinity);
+        }
+      } else {
+        intersection.push_back(vo_right);
+        intersection.push_back(vo_left);
+      }
     }
-
-    if (t_left && t_left.value() >= 0.0) {
-      intersection.push_back(vx_p + t_left.value() * cos(theta_left));
-    } else {
+    if (t_right && !t_left) {
+      intersection.push_back(vx_p + t_right.value() * cos(theta_right));
       intersection.push_back(getPseudoBoundary(theta_left));
+    }
+    if (!t_right && t_left) {
+      intersection.push_back(getPseudoBoundary(theta_right));
+      intersection.push_back(vx_p + t_left.value() * cos(theta_left));
     }
 
     return intersection;
