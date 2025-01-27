@@ -87,7 +87,7 @@ from mf_localization_msgs.srv import RestartLocalization
 from mf_localization_msgs.srv import StartLocalization
 from mf_localization_msgs.srv import StopLocalization
 
-from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters
+from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters, FloorHeightMapper
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
@@ -349,6 +349,7 @@ class MultiFloorManager:
         self.pressure_available = True
         self.altitude_manager = None
         self.altitude_floor_estimator = None
+        self.floor_height_mapper = None
 
         # ble wifi localization
         self.use_ble = True
@@ -714,23 +715,34 @@ class MultiFloorManager:
         if not self.altitude_floor_estimator.enabled():
             return
 
+        # get robot pose for floor height mapper
+        if self.floor is not None and self.mode is not None:
+            # get robot pose
+            try:
+                robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+            except RuntimeError as e:
+                self.logger.warn(F"{e}")
+                return
+        else:
+            return
+
+        # update floor list and height list in altitude_floor_manager
+        x = [robot_pose.transform.translation.x, robot_pose.transform.translation.y]
+        floor_list, height_list = self.floor_height_mapper.get_floor_height_list(x)
+        self.altitude_floor_estimator.set_floor_height_list(floor_list, height_list)
+
+        # detect floor change event
         result = self.altitude_floor_estimator.put_pressure(message)
         target_floor = result.floor_est
         floor_change_event = result.floor_change_event
 
         # log floor change event
         if floor_change_event is not None:
-            self.logger.info(F"pressure_callback: floor_change_event (floor_est={target_floor}) detected. (current_floor={self.floor})")
+            self.logger.info(F"pressure_callback: floor_change_event (floor_est={target_floor}) detected. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
 
         if self.floor is not None:
             if self.floor != target_floor \
                     and (floor_change_event is not None):
-                # get robot pose
-                try:
-                    robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
-                    self.logger.warn(F"{e}")
-                    return
 
                 # detect area in target_floor
                 x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(target_floor) * self.area_floor_const]]  # [x,y,floor]
@@ -2292,6 +2304,7 @@ if __name__ == "__main__":
         floor_str = str(int(map_dict["floor"]))
         area = int(map_dict["area"]) if "area" in map_dict else 0
         area_str = str(area)
+        height = map_dict.get("height", np.nan)
         node_id = map_dict["node_id"]
         frame_id = map_dict["frame_id"]
         anchor = geoutil.Anchor(lat=map_dict["latitude"],
@@ -2323,6 +2336,7 @@ if __name__ == "__main__":
         # append additional information to the samples
         for s in samples:
             s["information"]["area"] = area
+            s["information"]["height"] = height
 
         # extract iBeacon, WiFi, and other samples
         samples_ble, samples_wifi, samples_other = extract_samples_ble_wifi_other(samples)
@@ -2517,6 +2531,17 @@ if __name__ == "__main__":
     else:
         altitude_floor_estimator_parameters = AltitudeFloorEstimatorParameters(**altitude_floor_estimator_config)
     multi_floor_manager.altitude_floor_estimator = AltitudeFloorEstimator(altitude_floor_estimator_parameters)
+
+    # floor height mapper for floor estimation
+    X_height_mapper = []
+    for s in samples_global_all:
+        x_a = float(s["information"]["x"])
+        y_a = float(s["information"]["y"])
+        f_a = float(s["information"]["floor"])
+        area = int(s["information"]["area"])
+        height = s["information"]["height"]
+        X_height_mapper.append([x_a, y_a, f_a, area, height])
+    multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper)
 
     # area localizer
     X_area = []

@@ -169,7 +169,7 @@ class Description:
                 API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
 
         if not API_URL:
-            self._logger.error(F"API_URL is none")
+            self._logger.error("API_URL is none")
             return None
 
         self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
