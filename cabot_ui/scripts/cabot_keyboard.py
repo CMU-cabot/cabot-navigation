@@ -39,6 +39,7 @@ NKeys = 12
 lastUp = [None]*NKeys
 upCount = [0]*NKeys
 btnDwn = [False]*NKeys
+hold_active = [False]*NKeys
 node = None
 eventPub = None
 
@@ -58,11 +59,18 @@ def getchar():
 
 
 button = -1
+hold_duration = 0
+
+
+def reset_click_state(index):
+    lastUp[index] = None
+    upCount[index] = 0
+    hold_active[index] = False
 
 
 @setInterval(0.01)
 def process():
-    global button
+    global button, hold_duration
     now = node.get_clock().now()
     event = None
     temp = [False]*NKeys
@@ -75,18 +83,26 @@ def process():
 
         if not temp[i] and btnDwn[i]:
             event = cabot_common.event.ButtonEvent(button=i, up=True)
-            upCount[i] += 1
-            lastUp[i] = now
             btnDwn[i] = False
+            if hold_active[i]:
+                reset_click_state(i)
+            else:
+                upCount[i] += 1
+                lastUp[i] = now
 
         if lastUp[i] is not None and now - lastUp[i] > Duration(seconds=interval):
-            event = cabot_common.event.ClickEvent(buttons=i, count=upCount[i])
-            lastUp[i] = None
-            upCount[i] = 0
+            if not hold_active[1]:
+                event = cabot_common.event.ClickEvent(buttons=i, count=upCount[i])
+            reset_click_state(i)
 
         # node.get_logger().info(upCount)
         # node.get_logger().info(temp)
         # node.get_logger().info(btnDwn)
+
+    if button != -1 and hold_duration > 0:
+        hold_active[button] = True
+        event = cabot_common.event.HoldDownEvent(holddown=button, duration=hold_duration)
+        hold_duration = 0
 
     button = -1
     if event is not None:
@@ -115,9 +131,13 @@ if __name__ == '__main__':
             button = cabot_common.button.BUTTON_PREV
     '''
     node.get_logger().info("type 'cursor keys' for 'up', 'down', 'left', and 'right' buttons")
+    node.get_logger().info("type '1-5' for hold duration (seconds), then type 'cursor keys'")
     while rclpy.ok:
         key = ord(getchar())
         button = -1
+        if key in range(49, 54):  # Numbers 1 to 5 for hold duration
+            hold_duration = key - 48
+            node.get_logger().info(F"Set hold duration to {hold_duration} seconds")
         if key == 65:    # arrow up
             button = cabot_common.button.BUTTON_UP
         elif key == 66:  # arrow down

@@ -442,12 +442,28 @@ class CabotUIManager(NavigationInterface, object):
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
             if self._interface.last_pose:
-                self._interface.requesting_describe_surround()
                 gp = self._interface.last_pose['global_position']
                 length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
+                if self._description.stop_reason_enabled and self._description.surround_enabled:
+                    if length_index <= 1:
+                        self._interface.requesting_describe_surround_stop_reason()
+                    else:
+                        self._interface.requesting_describe_surround()
+                elif self._description.stop_reason_enabled and not self._description.surround_enabled:
+                    self._interface.requesting_describe_surround_stop_reason()
+                elif not self._description.stop_reason_enabled and self._description.surround_enabled:
+                    self._interface.requesting_describe_surround()
+
                 result = self._description.request_description_with_images(gp, length_index=length_index)
                 if result:
                     self._interface.describe_surround(result['description'])
+
+        if event.subtype == "conversation":
+            self._logger.info("Request Start Conversation")
+            e = NavigationEvent("conversation", None)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
 
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
@@ -640,22 +656,27 @@ class EventMapper(object):
             navigation_event = NavigationEvent(subtype="description", param=self.description_duration)
             self.description_duration = 0
             return navigation_event
+        if event.type == "button" and event.down:
+            # hook button down to triger pause whenever the left button is pushed
+            if event.button == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="pause")
         if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="resume")
             if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
             if event.buttons == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="speeddown")
-            if event.buttons == cabot_common.button.BUTTON_LEFT:
-                return NavigationEvent(subtype="pause")
-            if event.buttons == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="resume")
             if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                # image description is not triggered here, but when button is released
                 self.description_duration = event.duration
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="conversation")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")

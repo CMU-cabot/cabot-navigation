@@ -22,6 +22,7 @@
 # SOFTWARE.
 
 from dataclasses import dataclass
+import bisect
 import math
 import numpy
 from rclpy.time import Time
@@ -124,6 +125,10 @@ class AltitudeFloorEstimator:
         self._CW = parameters.current_window
         self._HW = parameters.history_window
         self.height_per_floor = parameters.height_per_floor
+        self.floor_threshold_height_coeff = parameters.floor_threshold_height_coeff
+        self.height_diff_threshold_coeff = parameters.height_diff_threshold_coeff
+
+        # calculate parameters
         self.floor_threshold_height = parameters.floor_threshold_height_coeff * self.height_per_floor
         self.height_diff_threshold = parameters.height_diff_threshold_coeff * self.height_per_floor
 
@@ -141,12 +146,44 @@ class AltitudeFloorEstimator:
 
         self.last_state = 0  # no motion
 
+        self.floor_array = None
+        self.height_array = None
+
         return
+
+    def set_floor_height_list(self, floor_list, height_list):
+        self.floor_array = numpy.array(floor_list)
+        self.height_array = numpy.array(height_list)
+
+    def use_floor_height_list(self):
+        if self.floor_array is None or self.height_array is None:
+            return False
+        if len(self.floor_array) == 0 or len(self.height_array) == 0:
+            return False
+        if numpy.isnan(self.floor_array).any() or numpy.isnan(self.height_array).any():
+            return False
+        if self.floor_est_memory not in self.floor_array:
+            return False
+        return True
+
+    def calculate_height_difference(self, height_array):
+        height_difference_array = numpy.zeros(height_array.shape)
+        for i in range(len(height_array)):
+            if height_array[i] < 0:
+                height_difference_array[i] = height_array[i] - height_array[i+1]
+            elif height_array[i] > 0:
+                height_difference_array[i] = height_array[i] - height_array[i-1]
+            else:  # ==0
+                height_difference_array[i] = 0.0
+        return height_difference_array
 
     def put_pressure(self, pressure_msg) -> AltitudeFloorEstimatorResult:
         # convert pressure to reference height
         pressure = pressure_msg.fluid_pressure
         timestamp = pressure_msg.header.stamp.sec + pressure_msg.header.stamp.nanosec * 1e-9  # [seconds]
+        return self._put_pressure(timestamp, pressure)
+
+    def _put_pressure(self, timestamp, pressure) -> AltitudeFloorEstimatorResult:
         ref_height = self._c0 * (1.0 - (pressure / self._p0)**(1.0 / self._c1))
 
         # temporal estimated values
@@ -175,11 +212,11 @@ class AltitudeFloorEstimator:
 
         diff_CW_HW = height_CW - height_HW
         if diff_CW_HW > self.height_diff_threshold:
-            current_state = 1
+            current_state = 1  # up
         elif diff_CW_HW < -self.height_diff_threshold:
-            current_state = -1
+            current_state = -1  # down
         else:
-            current_state = 0
+            current_state = 0  # stable
 
         # velocity estimation
         time_CW_window = numpy.array(time_CW_window)
@@ -197,10 +234,22 @@ class AltitudeFloorEstimator:
             height_est = self.height_est_memory + (ref_height - self.last_stable_height)
 
             # estimate floor change by thresholding
-            floor_diff_float, floor_diff_int = math.modf((ref_height - self.last_stable_height) / self.height_per_floor)
-            height_diff_float = floor_diff_float * self.height_per_floor
-            floor_diff_final = floor_diff_int + numpy.sign(height_diff_float) * (self.floor_threshold_height < numpy.abs(height_diff_float))
-            floor_est = self.floor_est_memory + floor_diff_final
+            if self.use_floor_height_list():
+                height_diff = ref_height - self.last_stable_height
+                index = self.floor_array == floor_est
+                relative_height_array = self.height_array - self.height_array[index]
+                height_difference_array = self.calculate_height_difference(relative_height_array)
+                threshold_height_array = relative_height_array - height_difference_array * self.floor_threshold_height_coeff
+                if self.last_state == 1:  # up
+                    idx_new_floor = bisect.bisect_right(threshold_height_array, height_diff) - 1
+                elif self.last_state == -1:  # down
+                    idx_new_floor = bisect.bisect_left(threshold_height_array, height_diff)
+                floor_est = self.floor_array[idx_new_floor]
+            else:
+                floor_diff_float, floor_diff_int = math.modf((ref_height - self.last_stable_height) / self.height_per_floor)
+                height_diff_float = floor_diff_float * self.height_per_floor
+                floor_diff_final = floor_diff_int + numpy.sign(height_diff_float) * (self.floor_threshold_height < numpy.abs(height_diff_float))
+                floor_est = self.floor_est_memory + floor_diff_final
 
             # emit floor up/down change event
             if self.last_floor_est != floor_est:
@@ -227,6 +276,51 @@ class AltitudeFloorEstimator:
 
     def enabled(self):
         return self._enabled
+
+
+class FloorHeightMapper:
+    def __init__(self, X, radius=5.0, logger=None):
+        # X [x, y, floor, area, height]
+        _X = numpy.array(X)
+        self._floors = numpy.unique(_X[:, 2])
+
+        self.X_dict = {}
+        self.nbrs_dict = {}
+        self._radius = radius
+        self._logger = logger
+
+        from sklearn.neighbors import NearestNeighbors
+        for _floor in self._floors:
+            _X_floor = _X[_X[:, 2] == _floor]
+            self.X_dict[_floor] = _X_floor
+            self.nbrs_dict[_floor] = NearestNeighbors(n_neighbors=1).fit(_X_floor[:, :2])
+
+    def get_floor_list(self, x, radius=None):
+        floor_list, _ = self.get_floor_height_list(x, radius)
+        return floor_list
+
+    def get_height_list(self, x, radius=None):
+        _, height_list = self.get_floor_height_list(x, radius)
+        return height_list
+
+    def get_floor_height_list(self, x, radius=None):
+        _x = numpy.array(x).reshape(1, -1)
+        _radius = self._radius if radius is None else radius
+
+        floor_list = []
+        height_list = []
+
+        for _floor in self._floors:
+            nbrs = self.nbrs_dict[_floor]
+            distances, indices = nbrs.kneighbors(_x)
+            dist = distances[0]
+            idx = indices[0]
+            if dist < _radius:
+                floor_list.append(_floor)
+                X_floor = self.X_dict[_floor]
+                height = X_floor[idx, 4].item()
+                height_list.append(height)
+        return floor_list, height_list
 
 
 def main():
