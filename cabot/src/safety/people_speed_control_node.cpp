@@ -702,6 +702,18 @@ private:
     return theta_right <= inv_person_vel_angle && inv_person_vel_angle <= theta_left;
   }
 
+  bool checkCollisionInRange(double vo_min, double vo_max, double rel_x, double rel_y, double pvx, double pvy)
+  {
+    constexpr double v_step = 0.1;
+    for (double rvx_curr = vo_min; rvx_curr <= vo_max; rvx_curr += v_step) {
+      double rel_vx = pvx - rvx_curr;
+      if (willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool lookupTransform(
     const std::string & target_frame, const std::string & source_frame,
     geometry_msgs::msg::TransformStamped & transform_msg,
@@ -739,25 +751,15 @@ private:
       bool vo_applied = true;
       if (0.0 < vo_intersection_min) {
         if (vo_intersection_min < rvx && rvx < vo_intersection_max) {
-          double rel_vx1 = pvx - vo_intersection_min;
-          double rel_vx2;
-          if (vo_intersection_max == std::numeric_limits<double>::max()) {
-            rel_vx2 = pvx - rvx;
-          } else {
-            rel_vx2 = pvx - vo_intersection_max;
-          }
-          if (willCollideWithinTime(rel_x, rel_y, rel_vx1, pvy) ||
-              willCollideWithinTime(rel_x, rel_y, rel_vx2, pvy)) {
+          double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx : vo_intersection_max;
+          if (checkCollisionInRange(vo_intersection_min, max_rvx, rel_x, rel_y, pvx, pvy)) {
             speed_limit = std::min(speed_limit, vo_intersection_min);
           } else {
             vo_applied = false;
           }
         } else if (vo_intersection_min < speed_limit && speed_limit < vo_intersection_max) {
-          double rel_vx1 = pvx - vo_intersection_min;
-          double rel_vx2 = pvx - speed_limit;
-          if (willCollideWithinTime(rel_x, rel_y, rel_vx1, pvy) ||
-              willCollideWithinTime(rel_x, rel_y, rel_vx2, pvy)) {
-            speed_limit = vo_intersection_min;
+          if (checkCollisionInRange(vo_intersection_min, speed_limit, rel_x, rel_y, pvx, pvy)) {
+            speed_limit = std::min(speed_limit, vo_intersection_min);
           } else {
             vo_applied = false;
           }
