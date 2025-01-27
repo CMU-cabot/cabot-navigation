@@ -694,14 +694,14 @@ class EventMapper(object):
                 return NavigationEvent(subtype="idle")
             if event.holddown == cabot_common.button.BUTTON_DOWN:
                 self.button_hold_down_duration = event.duration
-                if self.button_hold_down_duration - self.button_hold_down_duration_prev > 1:
+                if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
                     self.button_hold_down_duration_prev = self.button_hold_down_duration
                     return NavigationEvent(subtype="speeddown")
                 else:
                     return None
             if event.holddown == cabot_common.button.BUTTON_UP:
                 self.button_hold_down_duration = event.duration
-                if self.button_hold_down_duration - self.button_hold_down_duration_prev > 1:
+                if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
                     self.button_hold_down_duration_prev = self.button_hold_down_duration
                     return NavigationEvent(subtype="speedup")
                 else:
