@@ -465,9 +465,9 @@ class CabotUIManager(NavigationInterface, object):
             msg.data = str(e)
             self._eventPub.publish(msg)
 
-        if event.subtype == "microphone":
-            self._logger.info("Request Activate the Smartphone's microphone")
-            e = NavigationEvent("activatemicrophone", None)
+        if event.subtype == "toggle_conversation":
+            self._logger.info("Request Start/Stop Conversation Interface")
+            e = NavigationEvent("toggleconversation", None)
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)
@@ -679,7 +679,7 @@ class EventMapper(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="description_surround", param=event.count)
             if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="microphone")
+                return NavigationEvent(subtype="toggle_conversation")
             if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="decision")
         if event.type == "click" and event.count > 1:
