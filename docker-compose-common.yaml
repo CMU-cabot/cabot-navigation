@@ -393,6 +393,8 @@ services:
       - ${ENV_FILE:-.empty-env}
     environment:
       - HOST_TZ
+      - 'HULOP_MAP_SERVICE=localhost:9090/map'
+      - 'HULOP_MAP_SERVICE_USE_HTTP=true'
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
