@@ -19,8 +19,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ARG PREFIX=cabot
-ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
+ARG BASE_IMAGE=cabot-base
+ARG FROM_IMAGE=cmucal/${BASE_IMAGE}:humble-base-custom-mesa
 
 # build underlay
 FROM ${FROM_IMAGE} as cache

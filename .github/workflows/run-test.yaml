@@ -13,8 +13,19 @@ on:
 jobs:
   run_unittest:
     runs-on: ubuntu-20.04
-    steps:
+    steps:  
+    - name: Maximize build space
+      run:  |
+            sudo rm -rf /usr/local/lib/android # will release about 10 GB if you don't need Android
+            sudo rm -rf /usr/share/dotnet # will release about 20GB if you don't need .NET
+            sudo rm -rf /opt/ghc
+            echo "Available storage:"
+            df -h
+            docker system prune -a --volumes -f # delete unnecessary preinstalled docker images
+            
     - uses: actions/checkout@v4
+    
+    - uses: docker/setup-qemu-action@v3
 
     - name: Install vcs
       run: pip3 install vcstool
@@ -22,10 +33,26 @@ jobs:
     - name: Prepare thirdparty repos
       run: ./setup-dependency.sh
 
-    - name: Pull images and build workspace
+    - name: Pull images 
       shell: bash
-      run: ./manage-docker-image.sh -a pull -i "ros2 localization" -o cmucal -t ros2-dev-latest
+      run:  |
+             docker pull cmucal/cabot-navigation:latest
+             docker tag cmucal/cabot-navigation:latest cabot-navigation-ros2
+             docker tag cabot-navigation-ros2:latest cabot-navigation-bag:latest
+             docker tag cabot-navigation-ros2:latest cabot-navigation-gazebo:latest
+             docker tag cabot-navigation-ros2:latest cabot-navigation-gui:latest
+             docker tag cabot-navigation-ros2:latest cabot-navigation-navigation:latest
+             docker tag cabot-navigation-ros2:latest cabot-navigation-diagnostic:latest
+
+             docker pull cmucal/cabot-localization:latest
+             docker tag cmucal/cabot-localization:latest cabot-navigation-localization
+             docker tag cabot-navigation-localization:latest cabot-navigation-mapping:latest
+             docker tag cabot-navigation-localization:latest cabot-navigation-post-process:latest
+             docker tag cabot-navigation-localization:latest cabot-navigation-rtk-gnss:latest
 
     - name: Run unittest
       shell: bash
-      run: ./launch.sh -u -- -b -a
+      run:  |
+             export HOST_UID=$(id -u)
+             export HOST_GID=$(id -g)
+             ./launch.sh -p -u -- -b -a

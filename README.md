@@ -37,12 +37,24 @@
 ./setup-sample-site.sh
 ```
 
-- run the script to build image and workspaces
+- if you pull the latest docker images from docker hub, run the following command
 
 ```
-./build-docker.sh -p -i -w              # run prebuild, image build, and workspace build
-or
-./build-docker.sh -p -i -w -d           # run prebuild, image build, and workspace debug build (symlink-install)
+docker compose --profile build pull
+docker compose --profile map pull
+```
+
+- if you build docker image, run the script to build image
+
+```
+./bake-docker.sh -i         # run docker image build for your platform
+```
+
+- if you run in development mode, run the script to build workspaces
+
+```
+./build-workspace.sh        # run workspace build
+./build-workspace.sh -d     # run workspace debug build (symlink-install)
 ```
 
 ### Run simulator and run test cases
@@ -58,14 +70,15 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 - run simulator
 
 ```
-./launch.sh -s                 # simulation, yes to launch a map server
+./launch.sh -s            # simulation in production mode, yes to launch a map server
+./launch.sh -s -d         # simulation in development mode, yes to launch a map server
 ```
 
 - run test cases
 
 ```
-./launch.sh -s -t              # simulation, yes to launch a map server, run test
-./launch.sh -s -t -H           # simulation, yes to launch a map server, run test, headless
+./launch.sh -s -t         # simulation in production mode, yes to launch a map server, run test
+./launch.sh -s -t -H      # simulation in production mode, yes to launch a map server, run test, headless
 ```
 
 ### .env file
@@ -87,6 +100,9 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   CABOT_ANNOUNCE_NO_TOUCH # announce when the reason robot is stopped is NO_TOUCH(default=false)
   CABOT_SIDE           # left: user stands on the right, right: user stands on the left
   CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
+  HOST_UID             # host user UID (default=1000)
+  HOST_GID             # host user GID (default=1000)
+  HOST_TZ              # host timezone (default=UTC)
   ```
 - Options for image description (hold down right button for 1-3 seconds)
   ```

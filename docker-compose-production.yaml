@@ -23,28 +23,69 @@
 # services environments are overrideed
 
 services:
-  navigation:
-    extends:
-      file: docker-compose.yaml
-      service: navigation
-    environment:
-      - CABOT_GAZEBO=0
-      - CABOT_USE_SIM_TIME=0
-      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
-
-  gui:
+  navigation-dev:
     extends:
       file: docker-compose-common.yaml
-      service: gui
+      service: navigation-dev
     environment:
       - CABOT_GAZEBO=0
       - CABOT_USE_SIM_TIME=0
+    profiles:
+      - dev
 
-  localization:
+  gui-dev:
     extends:
-      file: docker-compose.yaml
-      service: localization
+      file: docker-compose-common.yaml
+      service: gui-dev
     environment:
       - CABOT_GAZEBO=0
-      - CABOT_PRESSURE_AVAILABLE=0
+      - CABOT_USE_SIM_TIME=0
+    profiles:
+      - dev
+    deploy:
+      replicas: ${USE_GUI:-1}
 
+  localization-dev:
+    extends:
+      file: docker-compose-common.yaml
+      service: localization-dev
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
+      - CABOT_PRESSURE_AVAILABLE=0
+    profiles:
+      - dev
+
+  # prodimg
+  navigation-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: navigation-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
+    profiles:
+      - prod
+
+  gui-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: gui-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
+    profiles:
+      - prod
+    deploy:
+      replicas: ${USE_GUI:-1}
+
+  localization-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: localization-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
+      - CABOT_PRESSURE_AVAILABLE=0
+    profiles:
+      - prod

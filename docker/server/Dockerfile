@@ -1,4 +1,4 @@
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2022, 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,9 @@
 
 FROM ubuntu:focal
 
-ARG TZ="Etc/UTC"
+ARG TZ=UTC
+ARG UID=1001
+ARG GID=1001
 
 ENV TZ=$TZ \
 	DEBIAN_FRONTEND="noninteractive"
@@ -37,21 +39,20 @@ RUN apt update && \
 	maven \
 	git \
 	curl \
-	jq
+	jq \
+	gosu
 
 
 ENV USERNAME runner_user
 
 ARG UID=1001
-RUN useradd -m $USERNAME && \
+RUN groupadd -g $GID $USERNAME && \
+        useradd -m -u $UID -g $GID -s /bin/bash $USERNAME && \
         echo "$USERNAME:$USERNAME" | chpasswd && \
-        usermod --shell /bin/bash $USERNAME && \
         usermod -aG sudo $USERNAME && \
         mkdir -p /etc/sudoers.d/ && \
         echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && \
-        chmod 0440 /etc/sudoers.d/$USERNAME && \
-        usermod  --uid $UID $USERNAME && \
-        groupmod --gid $UID $USERNAME
+        chmod 0440 /etc/sudoers.d/$USERNAME 
 
 USER $USERNAME
 
@@ -91,9 +92,14 @@ RUN cd QueryService/QueryService && \
 	mvn package && \
         cp target/QueryService-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
 
-COPY server.xml /home/$USERNAME/wlp/usr/servers/defaultServer/
-COPY server-data.sh /home/$USERNAME
-COPY server-init.sh /home/$USERNAME
+COPY --chown=$USERNAME:$USERNAME server.xml /home/$USERNAME/wlp/usr/servers/defaultServer/
+COPY --chown=$USERNAME:$USERNAME server-data.sh /home/$USERNAME
+COPY --chown=$USERNAME:$USERNAME server-init.sh /home/$USERNAME
 
 WORKDIR /home/$USERNAME/wlp/bin
 
+USER root
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

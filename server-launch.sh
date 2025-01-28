@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2022, 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@ function ctrl_c() {
     blue "data saved"
 
     cd $scriptdir
-    ENV_FILE=$data_dir/server.env docker compose -f docker-compose-server.yaml down
+    ENV_FILE=$data_dir/server.env docker compose -p $launch_prefix --profile $profile down
     exit
 }
 
@@ -64,8 +64,8 @@ function help()
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
-    echo "-P <port>    expose port to outside (set port like 80, 9090, ...)"
-    echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
+    echo "-X <port>    expose port to outside (set port like 80, 9090, ...)"
+    echo "-E 1-10      separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
 }
 
 pwd=`pwd`
@@ -82,6 +82,7 @@ port_access=127.0.0.1
 environment=
 launch_prefix=
 MAP_SERVER_PORT=9090
+profile=map
 
 while getopts "hd:E:p:fvcClP:" arg; do
     case $arg in
@@ -96,7 +97,7 @@ while getopts "hd:E:p:fvcClP:" arg; do
 	    environment=$OPTARG
 	    ;;
 	p)
-	    cabot_site_dir=$(find $scriptdir/cabot_sites -name $OPTARG | head -1)
+	    cabot_site_dir=$(find $scriptdir/cabot_site* -name $OPTARG | head -1)
 	    data_dir=${cabot_site_dir}/server_data
 	    ;;
         f)
@@ -112,6 +113,7 @@ while getopts "hd:E:p:fvcClP:" arg; do
             clean_server=2
             ;;
 	l)
+	    profile=tools
 	    location_tools=1
 	    ;;
 	P)
@@ -154,7 +156,7 @@ if [[ $clean_server -eq 2 ]]; then
 fi
 
 if [[ $location_tools -eq 1 ]]; then
-    docker compose -p $launch_prefix -f docker-compose-location-tools.yaml up -d
+    docker compose -p $launch_prefix --profile $profile up -d
     exit 0
 fi
 
@@ -246,21 +248,25 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
    exit 2
 fi
 
+
 export CABOT_SERVER_DATA_MOUNT=$data_dir
 export PORT_ACCESS=$port_access
+if [ -e $scriptdir/.env ]; then
+    source $scriptdir/.env
+fi
 if [ -e $data_dir/server.env ]; then
     export ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
-        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix --profile $profile up -d
+        docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
     else
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix --profile $profile up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
-        docker compose --ansi never -p $launch_prefix -f docker-compose-server.yaml logs -f
+        docker compose -p $launch_prefix --profile $profile up -d
+        docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
     else
-        docker compose -p $launch_prefix -f docker-compose-server.yaml up -d
+        docker compose -p $launch_prefix --profile $profile up -d
     fi
 fi
