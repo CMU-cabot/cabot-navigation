@@ -141,32 +141,29 @@ class Description:
         except Exception as error:
             self._logger.error(F"Request Error {error=}")
 
-    def request_description_with_images(self, global_position, length_index=0):
+    def request_description_with_images(self, global_position, mode, length_index=0):
         if not self.enabled:
             return None
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
             return None
 
         API_URL = None
-        # TODO: needs to be organized...
-        if self.stop_reason_data_collect_enabled:
-            self.memo_pub.publish(String(data="stop_reason_data_collect"))
-            API_URL = F"{self.host}/{Description.STOP_REASON_API}"
-        else:
-            if self.stop_reason_enabled:
-                if not self.surround_enabled:
-                    # only stop-reason is enabled
-                    API_URL = F"{self.host}/{Description.STOP_REASON_API}"
-                else:
-                    # TODO: fix (demo special)
-                    # both surround and stop-reason is enabled
-                    if length_index <= 1:  # 1sec, 2sec
-                        API_URL = F"{self.host}/{Description.STOP_REASON_API}"
-                    else:  # 3sec
-                        length_index = 1
-                        API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+        if mode == "stop_reason":
+            if self.stop_reason_data_collect_enabled:
+                self.memo_pub.publish(String(data="stop_reason_data_collect"))
+                API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+            elif self.stop_reason_enabled:
+                API_URL = F"{self.host}/{Description.STOP_REASON_API}"
             else:
+                return None
+        elif mode == "surround":
+            if self.surround_enabled:
                 API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+            else:
+                return None
+        else:
+            self._logger.error(F"Undefined mode: {mode}")
+            return None
 
         if not API_URL:
             self._logger.error("API_URL is none")
