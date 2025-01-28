@@ -55,8 +55,8 @@ def generate_launch_description():
     save_state_filename = LaunchConfiguration('save_state_filename')
     load_state_filename = LaunchConfiguration('load_state_filename')
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
-    grid_resolution = LaunchConfiguration('grid_resolution', default=0.05)
-    grid_publish_period_sec = LaunchConfiguration('grid_publish_period_sec', default=1.0)
+    grid_resolution = LaunchConfiguration('grid_resolution', default=0.1)
+    grid_publish_period_sec = LaunchConfiguration('grid_publish_period_sec', default=5.0)
     # config for post processing
     convert_pbstream = LaunchConfiguration('convert_pbstream')
     save_state_directory = LaunchConfiguration('save_state_directory')
@@ -149,8 +149,8 @@ def generate_launch_description():
         DeclareLaunchArgument('load_state_filename', default_value=''),
         DeclareLaunchArgument('start_trajectory_with_default_topics', default_value='true'),
         # config for occupancy grid node
-        DeclareLaunchArgument('grid_resolution', default_value='0.05'),
-        DeclareLaunchArgument('grid_publish_period_sec', default_value='1.0'),
+        DeclareLaunchArgument('grid_resolution', default_value='0.1'),
+        DeclareLaunchArgument('grid_publish_period_sec', default_value='5.0'),
         # config for post processing
         DeclareLaunchArgument('convert_pbstream', default_value='false'),
         DeclareLaunchArgument('save_state_directory', default_value=''),
