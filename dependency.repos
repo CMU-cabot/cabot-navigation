@@ -34,12 +34,12 @@ repositories:
     type: git
     url: https://github.com/CMU-cabot/rosbridge_suite
     version: ros2-dev
-  # temporal fix until PR is merged and released
-  # https://github.com/ros/bond_core/pull/97
+  # temporal fix until the latest apt deb is updated
+  # https://github.com/ros2-gbp/bond_core-release
   docker/ros2/bond_core:
     type: git
-    url: https://github.com/CMU-cabot/bond_core.git
-    version: galactic-fix
+    url: https://github.com/ros/bond_core.git
+    version: ros2
 
   cabot-common:
     type: git
