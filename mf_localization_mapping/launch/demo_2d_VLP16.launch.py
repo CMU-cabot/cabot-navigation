@@ -163,7 +163,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', PathJoinSubstitution([get_package_share_directory('cartographer_ros'), 'configuration_files', 'demo_2d.rviz'])]
+            arguments=['-d', PathJoinSubstitution([pkg_dir, 'configuration_files', 'rviz', 'demo_2d.rviz'])]
         ),
 
         IncludeLaunchDescription(
