@@ -151,6 +151,9 @@ cd $scriptdir
 scriptdir=`pwd`
 source $scriptdir/.env
 
+if [ "$CABOT_LAUNCH_DEV_PROFILE" == "1" ]; then
+    profile=dev
+fi
 if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
@@ -253,12 +256,12 @@ if [ $error -eq 1 ]; then
 fi
 
 if [[ $list_modules -eq 1 ]]; then
-    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -L
+    docker compose run --rm navigation-$profile /home/developer/ros2_ws/script/run_test.sh -L
     exit
 fi
 
 if [[ $list_functions -eq 1 ]]; then
-    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -l $module
+    docker compose run --rm navigation-$profile /home/developer/ros2_ws/script/run_test.sh -l $module
     exit
 fi
 
@@ -354,7 +357,7 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test $module $test_regex"
-    nav_service="navigation"
+    nav_service="navigation-$profile"
     if [[ $debug -eq 1 ]]; then
         docker compose -p $launch_prefix -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
     else
