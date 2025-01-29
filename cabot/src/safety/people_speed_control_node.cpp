@@ -765,12 +765,15 @@ private:
           }
         }
       } else if (vo_intersection_max >= 0.0) {
-        double pth = atan2(rel_y, rel_x);
-        if (std::fabs(pth) < forward_approach_angle_threshold_) {
-          if (rel_x > pr) {
-            speed_limit = std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr))));
-          } else {
-            speed_limit = 0.0;
+        vo_applied = false;
+        double rel_vx = pvx - rvx;
+        if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
+          if (vo_intersection_max >= std::min(speed_limit, rvx)) {
+            if (rel_x > pr) {
+              speed_limit = std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr))));
+            } else {
+              speed_limit = 0.0;
+            }
           }
         } else {
           vo_applied = false;
