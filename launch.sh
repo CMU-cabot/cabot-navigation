@@ -254,7 +254,7 @@ else
     if [[ $profile == "dev" ]]; then
         base=cabot_sites
     fi
-    if [ -e $scriptdir/$base/$CABOT_SITE ]; then
+    if find $scriptdir/$base -name $CABOT_SITE; then
         blue "CABOT_SITE: $CABOT_SITE exists in $base"
     else
         err "CABOT_SITE: $CABOT_SITE does not exist in $base"
@@ -337,7 +337,11 @@ fi
 dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
 
 ## launch server
-com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+if [[ $profile == "dev" ]]; then
+    com="./server-launch.sh -d -c -p ${CABOT_SITE} -E \"$environment\""
+else
+    com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+fi
 echo $com
 eval $com
 

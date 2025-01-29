@@ -57,7 +57,7 @@ function help()
 {
     echo "Usage:"
     echo "-h           show this help"
-    echo "-d <dir>     data directory"
+    echo "-d           use cabot_sites instead of cabot_site_pkg"
     echo "-p <package> cabot site package name"
     echo "-f           ignore errors"
     echo "-v           verbose"
@@ -73,6 +73,7 @@ cd $scriptdir
 scriptdir=`pwd`
 
 data_dir=
+development=0
 ignore_error=0
 verbose=0
 clean_server=0
@@ -89,13 +90,13 @@ while getopts "hd:E:p:fvcCl" arg; do
             exit
         ;;
         d)
-            data_dir=$(realpath $OPTARG)
+            development=1
         ;;
         E)
             environment=$OPTARG
         ;;
         p)
-            data_dir=$(find $scriptdir -wholename */$OPTARG/server_data | head -1)
+            CABOT_SITE=$OPTARG
         ;;
         f)
             ignore_error=1
@@ -116,6 +117,12 @@ while getopts "hd:E:p:fvcCl" arg; do
     esac
 done
 shift $((OPTIND-1))
+
+if [[ $development -eq 1 ]]; then
+    data_dir=$(find $scriptdir/cabot_sites -wholename */$CABOT_SITE/server_data | head -1)
+else
+    data_dir=$(find $scriptdir/cabot_site_pkg -wholename */$CABOT_SITE/server_data | head -1)
+fi
 
 ## private variables
 pids=()
@@ -184,6 +191,7 @@ if [ ! -e $data_dir ]; then
     help
     exit 1
 fi
+blue "using $data_dir for map_server data"
 
 if [[ $clean_server -eq 1 ]]; then
     if [ -z $data_dir ]; then
