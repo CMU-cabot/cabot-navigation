@@ -249,6 +249,17 @@ fi
 if [ -z $CABOT_SITE ]; then
     err "CABOT_SITE : environment variable should be specified (ex. cabot_site_cmu_3d"
     error=1
+else
+    base=cabot_site_pkg
+    if [[ $profile == "dev" ]]; then
+        base=cabot_sites
+    fi
+    if [ -e $scriptdir/$base/$CABOT_SITE ]; then
+        blue "CABOT_SITE: $CABOT_SITE exists in $base"
+    else
+        err "CABOT_SITE: $CABOT_SITE does not exist in $base"
+        error=1
+    fi
 fi
 
 if [ $error -eq 1 ]; then
