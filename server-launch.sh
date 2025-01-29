@@ -64,7 +64,6 @@ function help()
     echo "-c           clean the map_server before launch if the server is for different map"
     echo "-C           forcely clean the map_server"
     echo "-l           location tools server"
-    echo "-X <port>    expose port to outside (set port like 80, 9090, ...)"
     echo "-E 1-10      separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
 }
 
@@ -78,13 +77,12 @@ ignore_error=0
 verbose=0
 clean_server=0
 location_tools=0
-port_access=127.0.0.1
 environment=
 launch_prefix=
-MAP_SERVER_PORT=9090
+: ${MAP_SERVER_PORT:=9090}
 profile=map
 
-while getopts "hd:E:p:fvcClP:" arg; do
+while getopts "hd:E:p:fvcCl" arg; do
     case $arg in
         h)
             help
@@ -97,8 +95,7 @@ while getopts "hd:E:p:fvcClP:" arg; do
             environment=$OPTARG
         ;;
         p)
-            cabot_site_dir=$(find $scriptdir/cabot_site* -name $OPTARG | head -1)
-            data_dir=${cabot_site_dir}/server_data
+            data_dir=$(find $scriptdir -wholename */$OPTARG/server_data | head -1)
         ;;
         f)
             ignore_error=1
@@ -116,10 +113,6 @@ while getopts "hd:E:p:fvcClP:" arg; do
             profile=tools
             location_tools=1
         ;;
-        P)
-            port_access=0.0.0.0
-            export MAP_SERVER_PORT=$OPTARG
-        ;;
     esac
 done
 shift $((OPTIND-1))
@@ -132,7 +125,7 @@ mkdir -p $temp_dir
 
 launch_prefix=$(basename $scriptdir)
 if [[ -n $environment ]]; then
-    export MAP_SERVER_PORT=$(($MAP_SERVER_PORT+environment*10))
+    MAP_SERVER_PORT=$(($MAP_SERVER_PORT+environment*10))
     launch_prefix="${launch_prefix}-env${environment}"
 fi
 
@@ -250,7 +243,7 @@ fi
 
 
 export CABOT_SERVER_DATA_MOUNT=$data_dir
-export PORT_ACCESS=$port_access
+export MAP_SERVER_PORT=${MAP_SERVER_PORT}
 if [ -e $scriptdir/.env ]; then
     source $scriptdir/.env
 fi
