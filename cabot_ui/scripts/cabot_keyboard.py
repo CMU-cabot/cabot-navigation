@@ -112,25 +112,20 @@ def process():
             sent_duration += 1
             hold_active[button] = True
             event = cabot_common.event.HoldDownEvent(holddown=button, duration=int(sent_duration))
-            # node.get_logger().info(f"HoldDownEvent: button={}")
-            msg = std_msgs.msg.String()
-            msg.data = str(event)
-            eventPub.publish(msg)
 
         if sent_duration >= hold_duration:
             hold_duration = 0
             button = -1
             hold_start_time = None
             sent_duration = 0
+    else:
+        button = -1
 
     if event is not None:
         node.get_logger().info(str(event)+"\r")
         msg = std_msgs.msg.String()
         msg.data = str(event)
         eventPub.publish(msg)
-
-    if hold_duration == 0 and button != -1:
-        button = -1
 
 
 if __name__ == '__main__':
