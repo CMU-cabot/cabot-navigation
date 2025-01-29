@@ -164,28 +164,28 @@ while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
             help
             exit
             ;;
-	d)
-	    profile=dev
-	    ;;
+        d)
+            profile=dev
+            ;;
         D)
             debug=1
             ;;
-	E)
-	    environment=$OPTARG
-	    ;;
+        E)
+            environment=$OPTARG
+            ;;
         f)
             test_regex=$OPTARG
             ;;
         H)
             export CABOT_HEADLESS=1
-	    export USE_GUI=0
+            export USE_GUI=0
             ;;
-	l)
-	    list_functions=1
-	    ;;
-	L)
-	    list_modules=1
-	    ;;
+        l)
+            list_functions=1
+            ;;
+        L)
+            list_modules=1
+            ;;
         M)
             log_dmesg=1
             ;;
@@ -231,11 +231,11 @@ if [[ $unittest -eq 1 ]]; then
     code=0
     docker compose run --rm navigation ./script/unittest.sh $@
     if [[ $? -ne 0 ]]; then
-	code=1
+        code=1
     fi
     docker compose run --rm localization ./script/unittest.sh $@
     if [[ $? -ne 0 ]]; then
-	code=1
+        code=1
     fi
     exit $code
 fi
