@@ -71,7 +71,7 @@ while getopts "hb:ilP:t:" arg; do
         ;;
     t)
         tags=${OPTARG}
-	;;
+        ;;
     esac
 done
 shift $((OPTIND-1))
@@ -93,7 +93,7 @@ if [[ $local -eq 1 ]]; then
     # setup local docker registry for multiplatform support
     if [[ -z $(docker ps -f "name=registry" -q) ]]; then
         docker run -d \
-        --rm \
+            --rm \
             --name registry \
             --network registry-network \
             -p 127.0.0.1:9092:5000 \
@@ -131,9 +131,9 @@ if [[ -z $tags ]]; then
 fi
 for service in ${services}; do
     if [[ "$tags" == *,* ]]; then
-	tag_option="--set=${service}.tags=${REGISTRY}/cabot-${service}:{$tags}"
+        tag_option="--set=${service}.tags=${REGISTRY}/cabot-${service}:{$tags}"
     else
-	tag_option="--set=${service}.tags=${REGISTRY}/cabot-${service}:$tags"
+        tag_option="--set=${service}.tags=${REGISTRY}/cabot-${service}:$tags"
     fi
 done
 
