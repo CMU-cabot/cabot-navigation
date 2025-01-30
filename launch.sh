@@ -254,7 +254,7 @@ else
     if [[ $profile == "dev" ]]; then
         base=cabot_sites
     fi
-    if find $scriptdir/$base -name $CABOT_SITE; then
+    if find $scriptdir/$base -name $CABOT_SITE > /dev/null; then
         blue "CABOT_SITE: $CABOT_SITE exists in $base"
     else
         err "CABOT_SITE: $CABOT_SITE does not exist in $base"
