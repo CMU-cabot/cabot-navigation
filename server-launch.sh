@@ -83,7 +83,7 @@ launch_prefix=
 : ${MAP_SERVER_PORT:=9090}
 profile=map
 
-while getopts "hd:E:p:fvcCl" arg; do
+while getopts "hdE:p:fvcCl" arg; do
     case $arg in
         h)
             help
