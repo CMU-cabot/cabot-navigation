@@ -721,7 +721,8 @@ class EventMapper2(EventMapperBase):
                 return NavigationEvent(subtype="decision")
         if event.type == "click" and event.count > 1:
             if event.buttons == cabot_common.button.BUTTON_UP:
-                return NavigationEvent(subtype="description_surround", param=event.count)
+                description_length = min(event.count, 3)
+                return NavigationEvent(subtype="description_surround", param=description_length)
             if event.buttons == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="description_stop_reason")
         if event.type == HoldDownEvent.TYPE:
