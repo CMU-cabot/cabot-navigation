@@ -396,6 +396,8 @@ if [ $cart_mapping -eq 1 ]; then
             echo $cmd
             eval $cmd
             pids+=($!)
+        elif [ "${LIDAR_MODEL}" = "NA" ]; then
+            echo "LIDAR_MODEL is set to N/A. Skip starting lidar driver"
         else
             echo "Please specify a known lidar model (LIDAR_MODEL=$LIDAR_MODEL)"
             exit
