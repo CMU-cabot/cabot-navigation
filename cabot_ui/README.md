@@ -85,10 +85,10 @@
 - `button_hold_<Button>`: button hold
 
 
-#### Button Mapping
+#### Handle Button Mapping
 - specify button mapping in .env
   ```
-  CABOT_HUNDLE_BUTTON_MAPPING=2
+  CABOT_HANDLE_BUTTON_MAPPING=2
   ```
 ##### 1 (default)
 - Right Click: Start navigation

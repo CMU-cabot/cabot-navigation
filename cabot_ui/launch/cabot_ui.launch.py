@@ -114,7 +114,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'handle_button_mapping',
-            default_value=EnvironmentVariable('CABOT_HUNDLE_BUTTON_MAPPING', default_value='1'),
+            default_value=EnvironmentVariable('CABOT_HANDLE_BUTTON_MAPPING', default_value='1'),
             description="Set the handle button mapping"
         ),
         Node(

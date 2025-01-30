@@ -76,8 +76,8 @@ class CabotUIManager(NavigationInterface, object):
 
         self.reset()
 
-        self._hundle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
-        if self._hundle_button_mapping == 2:
+        self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
+        if self._handle_button_mapping == 2:
             self._event_mapper = EventMapper2()
         else:
             self._event_mapper = EventMapper1()
