@@ -76,7 +76,11 @@ class CabotUIManager(NavigationInterface, object):
 
         self.reset()
 
-        self._event_mapper = EventMapper()
+        self._hundle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
+        if self._hundle_button_mapping == 2:
+            self._event_mapper = EventMapper2()
+        else:
+            self._event_mapper = EventMapper1()
         self._event_mapper.delegate = self
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
@@ -667,7 +671,7 @@ class EventMapperBase(object):
         raise NotImpementedError
 
 
-class EventMapper(EventMapperBase):
+class EventMapper1(EventMapperBase):
     def map_button_to_navigation(self, event):
         if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
             navigation_event = NavigationEvent(subtype="description", param=self.button_hold_down_duration)
