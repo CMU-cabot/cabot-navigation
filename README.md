@@ -87,7 +87,8 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   CABOT_ANNOUNCE_NO_TOUCH # announce when the reason robot is stopped is NO_TOUCH(default=false)
   CABOT_SIDE           # left: user stands on the right, right: user stands on the left
   CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
-  ```
+  CABOT_HUNDLE_BUTTON_MAPPING # specify button mapping of hundle
+                              # (default=1, see detail: https://github.com/CMU-cabot/cabot-navigation/blob/main/cabot_ui/README.md)
 - Options for image description (hold down right button for 1-3 seconds)
   ```
   CABOT_IMAGE_DESCRIPTION_SERVER   # image description server (default=http://localhost:8000)
