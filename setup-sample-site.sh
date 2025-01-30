@@ -1,5 +1,10 @@
 #!/bin/bash
 
+pwd=`pwd`
+scriptdir=`dirname $0`
+cd $scriptdir
+scriptdir=`pwd`
+
 git clone \
     https://github.com/CMU-cabot/cabot_sites_cmu \
     -b ros2 \
