@@ -628,8 +628,7 @@ class EventMapperBase(object):
         self.button_hold_down_duration_prev = 0
 
     def push(self, event):
-        if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
-           event.type != HoldDownEvent.TYPE:
+        if event.type not in {ButtonEvent.TYPE, ClickEvent.TYPE, HoldDownEvent.TYPE}:
             return
 
         mevent = None
@@ -725,20 +724,11 @@ class EventMapper2(EventMapperBase):
                 return NavigationEvent(subtype="pause")
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
+            if event.holddown in {cabot_common.button.BUTTON_DOWN, cabot_common.button.BUTTON_UP}:
                 self.button_hold_down_duration = event.duration
                 if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
                     self.button_hold_down_duration_prev = self.button_hold_down_duration
-                    return NavigationEvent(subtype="speeddown")
-                else:
-                    return None
-            if event.holddown == cabot_common.button.BUTTON_UP:
-                self.button_hold_down_duration = event.duration
-                if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
-                    self.button_hold_down_duration_prev = self.button_hold_down_duration
-                    return NavigationEvent(subtype="speedup")
-                else:
-                    return None
+                    return NavigationEvent(subtype="speeddown" if event.holddown == cabot_common.button.BUTTON_DOWN else "speedup")
         return None
 
 
