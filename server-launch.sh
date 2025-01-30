@@ -83,7 +83,7 @@ launch_prefix=
 : ${MAP_SERVER_PORT:=9090}
 profile=map
 
-while getopts "hd:E:p:fvcCl" arg; do
+while getopts "hdE:p:fvcCl" arg; do
     case $arg in
         h)
             help
@@ -119,9 +119,9 @@ done
 shift $((OPTIND-1))
 
 if [[ $development -eq 1 ]]; then
-    data_dir=$(find $scriptdir/cabot_sites -wholename */$CABOT_SITE/server_data | head -1)
+    data_dir=$(find $scriptdir/cabot_sites -wholename "*/$CABOT_SITE/server_data" | head -1)
 else
-    data_dir=$(find $scriptdir/cabot_site_pkg -wholename */$CABOT_SITE/server_data | head -1)
+    data_dir=$(find $scriptdir/cabot_site_pkg -wholename "*/$CABOT_SITE/server_data" | head -1)
 fi
 
 ## private variables
