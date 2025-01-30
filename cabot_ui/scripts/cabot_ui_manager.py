@@ -668,7 +668,8 @@ class EventMapperBase(object):
         return None
 
     def map_button_to_navigation(self, event):
-        raise NotImpementedError
+        self._logger.error("EventMapper class must implement map_button_to_navigation(). Returning None.")
+        return None
 
 
 class EventMapper1(EventMapperBase):
