@@ -109,6 +109,7 @@ function help()
     echo "-H          headless"
     echo "-M          log dmesg output"
     echo "-n <name>   set log name prefix"
+    echo "-d          development"
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
     echo "-t          run test"
@@ -142,6 +143,7 @@ retryoption=
 list_modules=0
 list_functions=0
 environment=
+profile=prod
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -149,16 +151,22 @@ cd $scriptdir
 scriptdir=`pwd`
 source $scriptdir/.env
 
+if [ "$CABOT_LAUNCH_DEV_PROFILE" == "1" ]; then
+    profile=dev
+fi
 if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDE:f:HlLMn:rsS:ti:T:uvy" arg; do
+while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
     case $arg in
         h)
             help
             exit
             ;;
+	d)
+	    profile=dev
+	    ;;
         D)
             debug=1
             ;;
@@ -170,6 +178,7 @@ while getopts "hDE:f:HlLMn:rsS:ti:T:uvy" arg; do
             ;;
         H)
             export CABOT_HEADLESS=1
+	    export USE_GUI=0
             ;;
 	l)
 	    list_functions=1
@@ -247,12 +256,12 @@ if [ $error -eq 1 ]; then
 fi
 
 if [[ $list_modules -eq 1 ]]; then
-    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -L
+    docker compose run --rm navigation-$profile /home/developer/ros2_ws/script/run_test.sh -L
     exit
 fi
 
 if [[ $list_functions -eq 1 ]]; then
-    docker compose run --rm navigation /home/developer/ros2_ws/script/run_test.sh -l $module
+    docker compose run --rm navigation-$profile /home/developer/ros2_ws/script/run_test.sh -l $module
     exit
 fi
 
@@ -307,7 +316,6 @@ dcfile=
 
 dcfile=docker-compose
 if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
-if [[ $CABOT_HEADLESS -eq 1 ]]; then dcfile="${dcfile}-headless"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
@@ -315,10 +323,12 @@ if [ ! -e $dcfile ]; then
     exit
 fi
 
-dccom="docker compose -f $dcfile -p $launch_prefix"
+dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
 
 ## launch server
-./server-launch.sh -c -p $CABOT_SITE -E "$environment"
+com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+echo $com
+eval $com
 
 if [ $verbose -eq 0 ]; then
     com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
@@ -347,10 +357,11 @@ blue "All launched: $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 if [[ $run_test -eq 1 ]]; then
     blue "Running test $module $test_regex"
+    nav_service="navigation-$profile"
     if [[ $debug -eq 1 ]]; then
         docker compose -p $launch_prefix -f docker-compose-debug.yaml run debug /home/developer/ros2_ws/script/run_test.sh -w -d $module $test_regex $retryoption # debug
     else
-        docker compose -p $launch_prefix exec navigation /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
+        docker compose -p $launch_prefix -f $dcfile exec $nav_service /home/developer/ros2_ws/script/run_test.sh -w $module $test_regex $retryoption
     fi
     ctrl_c $?
 fi

@@ -62,6 +62,7 @@ button = -1
 hold_duration = 0
 hold_start_time = None
 sent_duration = 0
+is_holding = False
 
 
 def reset_click_state(index):
@@ -72,7 +73,7 @@ def reset_click_state(index):
 
 @setInterval(0.01)
 def process():
-    global button, hold_duration, hold_start_time, sent_duration
+    global button, hold_duration, hold_start_time, sent_duration, is_holding
     now = node.get_clock().now()
     event = None
     temp = [False]*NKeys
@@ -105,6 +106,7 @@ def process():
         if hold_start_time is None:
             hold_start_time = now
             sent_duration = 0
+            is_holding = True
 
         elapsed_time = (now - hold_start_time).nanoseconds / 1e9
 
@@ -112,25 +114,21 @@ def process():
             sent_duration += 1
             hold_active[button] = True
             event = cabot_common.event.HoldDownEvent(holddown=button, duration=int(sent_duration))
-            # node.get_logger().info(f"HoldDownEvent: button={}")
-            msg = std_msgs.msg.String()
-            msg.data = str(event)
-            eventPub.publish(msg)
 
         if sent_duration >= hold_duration:
             hold_duration = 0
             button = -1
             hold_start_time = None
             sent_duration = 0
+            is_holding = False
+    else:
+        button = -1
 
     if event is not None:
         node.get_logger().info(str(event)+"\r")
         msg = std_msgs.msg.String()
         msg.data = str(event)
         eventPub.publish(msg)
-
-    if hold_duration == 0 and button != -1:
-        button = -1
 
 
 if __name__ == '__main__':
@@ -155,22 +153,23 @@ if __name__ == '__main__':
     node.get_logger().info("type '1-5' for hold duration (seconds), then type 'cursor keys'")
     while rclpy.ok:
         key = ord(getchar())
-        button = -1
-        if key in range(49, 54):  # Numbers 1 to 5 for hold duration
-            hold_duration = key - 48
-            node.get_logger().info(F"Set hold duration to {hold_duration} seconds")
-        if key == 65:    # arrow up
-            button = cabot_common.button.BUTTON_UP
-        elif key == 66:  # arrow down
-            button = cabot_common.button.BUTTON_DOWN
-        elif key == 67:  # arrow right
-            button = cabot_common.button.BUTTON_RIGHT
-        elif key == 68:  # arrow left
-            button = cabot_common.button.BUTTON_LEFT
+        if not is_holding:
+            button = -1
+            if key in range(49, 54):  # Numbers 1 to 5 for hold duration
+                hold_duration = key - 48
+                node.get_logger().info(F"Set hold duration to {hold_duration} seconds")
+            if key == 65:    # arrow up
+                button = cabot_common.button.BUTTON_UP
+            elif key == 66:  # arrow down
+                button = cabot_common.button.BUTTON_DOWN
+            elif key == 67:  # arrow right
+                button = cabot_common.button.BUTTON_RIGHT
+            elif key == 68:  # arrow left
+                button = cabot_common.button.BUTTON_LEFT
 
-        if button > 0:
-            node.get_logger().info(F"button {button}")
-        else:
-            node.get_logger().info(F"key {key}")
+            if button > 0:
+                node.get_logger().info(F"button {button}")
+            else:
+                node.get_logger().info(F"key {key}")
 
     rclpy.spin(node)

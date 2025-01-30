@@ -21,9 +21,25 @@
 
 services:
   ros2-base:
+    image: cmucal/cabot-navigation
     build:
       context: ./docker/ros2
+      additional_contexts:
+        cabot_src: ./
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-cabot-base}
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-navigation
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
 # required for gazebo rendering
       - DISPLAY
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
@@ -69,25 +85,6 @@ services:
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
-# code
-      - ./cabot:/home/developer/ros2_ws/src/cabot
-      - ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
-      - ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
-      - ./cabot_diagnostics:/home/developer/ros2_ws/src/cabot_diagnostics
-      - ./cabot_gazebo:/home/developer/ros2_ws/src/cabot_gazebo
-      - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
-      - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
-      - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
-      - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
-      - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
-      - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
-      - ./pedestrian_plugin_msgs:/home/developer/ros2_ws/src/pedestrian_plugin_msgs
-      - ./script:/home/developer/ros2_ws/script
-      - ./cabot-common/cabot_common:/home/developer/ros2_ws/src/cabot_common
-      - ./cabot-common/cabot_msgs:/home/developer/ros2_ws/src/cabot_msgs
-      - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
-      - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
-      - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
 # network
     privileged: true
     network_mode: host
@@ -95,84 +92,34 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 30s
 
-  
-  ros2:
-    extends: ros2-base
-    environment:
-# CaBot
-      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
-      - CABOT_TOUCH_PARAMS
-      - CABOT_USE_HANDLE_SIMULATOR=${CABOT_USE_HANDLE_SIMULATOR:-0}
-      - CABOT_ODRIVER_SERIAL_0
-      - CABOT_ODRIVER_SERIAL_1
-      - CABOT_REMOTE_USE_KEYBOARD
-      - CABOT_REMOTE_USE_IMU
-      - CABOT_FOOTPRINT_RADIUS
-    volumes:
-# device, bluetooth
-      - /dev:/dev
-      - /sys/devices:/sys/devices
-      - /var/lib/bluetooth:/var/lib/bluetooth
-      - /run/dbus:/run/dbus
-      - /var/run/dbus:/var/run/dbus
-    devices:
-      - /dev/dri
-    stop_signal: SIGINT
-    stop_grace_period: 30s
-
-  navigation-base:
-    extends: ros2
-    command:
-      - "/launch.sh"
-      # - "-c"                  # core dump
-      - "navigation"
-
-  gazebo-base:
-    extends: ros2-base
-    command:
-      - "/launch.sh"
-      # - "-c"                  # core dump
-      - "gazebo"
-      #- "-g"                   # run with gdb
-
-  gui-base:
-    extends: ros2-base
-    command:
-      - "/launch.sh"
-      # - "-c"                  # core dump
-      - "gui"
-    environment:
-# CaBot
-      - CABOT_SHOW_GAZEBO_CLIENT
-      - CABOT_SHOW_ROBOT_MONITOR
-      - CABOT_SHOW_ROS2_RVIZ=${CABOT_SHOW_ROS2_RVIZ:-1}
-      - CABOT_SHOW_ROS2_LOCAL_RVIZ
-
-  navigation:
-    extends: navigation-base
-    volumes:
-      - ./docker/home:/home/developer/
-
-  gazebo:
-    extends: gazebo-base
-    volumes:
-      - ./docker/home:/home/developer/
-
-  gui:
-    extends: gui-base
-    volumes:
-      - ./docker/home:/home/developer/
 
   localization-base:
+    image: cmucal/cabot-localization
     build:
       context: ./docker/localization
+      additional_contexts:
+        cabot_src: ./
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-cabot-base}
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-localization
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
     environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
       - ROS_LOG_DIR
 # CaBot
-      - CABOT_GAZEBO=${CABOT_GAZEBO:-1}
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
       - CABOT_PRESSURE_AVAILABLE=${CABOT_PRESSURE_AVAILABLE:-0}
       - CABOT_USE_GNSS=${CABOT_USE_GNSS:-0}
       - CABOT_MODEL
@@ -198,11 +145,161 @@ services:
       - NTRIP_PASSWORD
       - NTRIP_STR2STR_RELAY_BACK=${NTRIP_STR2STR_RELAY_BACK:-0}
     volumes:
+# bridge - if DDS use shared memory
+      - /dev/shm:/dev/shm
+# network
+    privileged: true
+    network_mode: host
+# shutdown
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    command:
+      - "/launch.sh"
+      - "localization"
+      - "-M"                                # start multifloor map server
+      - "-R 1"                              # set publish_current_rate to 1hz
+      # - "-C"                                # launch cvi client
+      # - "-N"                                # start ROS1 navigation for development
+
+
+  navigation-base:
+    extends: ros2-base
+    environment:
+# CaBot
+      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-true}
+      - CABOT_TOUCH_PARAMS
+      - CABOT_USE_HANDLE_SIMULATOR=${CABOT_USE_HANDLE_SIMULATOR:-0}
+      - CABOT_ODRIVER_SERIAL_0
+      - CABOT_ODRIVER_SERIAL_1
+      - CABOT_REMOTE_USE_KEYBOARD
+      - CABOT_REMOTE_USE_IMU
+      - CABOT_FOOTPRINT_RADIUS
+      - CABOT_SHOW_GAZEBO_CLIENT
+      - CABOT_SHOW_ROBOT_MONITOR
+      - CABOT_SHOW_ROS2_RVIZ=${CABOT_SHOW_ROS2_RVIZ:-1}
+      - CABOT_SHOW_ROS2_LOCAL_RVIZ
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
+      - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
+    volumes:
+# device, bluetooth
+      - /dev:/dev
+      - /sys/devices:/sys/devices
+      - /var/lib/bluetooth:/var/lib/bluetooth
+      - /run/dbus:/run/dbus
+      - /var/run/dbus:/var/run/dbus
+    devices:
+      - /dev/dri
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "navigation"
+
+
+  navigation-dev-base:
+    extends: navigation-base
+    volumes:
+# code
+      - ./config:/home/developer/config
+      - ./cabot:/home/developer/ros2_ws/src/cabot
+      - ./cabot_bt:/home/developer/ros2_ws/src/cabot_bt
+      - ./cabot-description/cabot_description:/home/developer/ros2_ws/src/cabot_description
+      - ./cabot_diagnostics:/home/developer/ros2_ws/src/cabot_diagnostics
+      - ./cabot_gazebo:/home/developer/ros2_ws/src/cabot_gazebo
+      - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
+      - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
+      - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
+      - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
+      - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
+      - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
+      - ./pedestrian_plugin_msgs:/home/developer/ros2_ws/src/pedestrian_plugin_msgs
+      - ./script:/home/developer/ros2_ws/script
+      - ./cabot-common/cabot_common:/home/developer/ros2_ws/src/cabot_common
+      - ./cabot-common/cabot_msgs:/home/developer/ros2_ws/src/cabot_msgs
+      - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
+      - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
+      - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
+
+  navigation-dev:
+    extends: navigation-dev-base
+    volumes:
+      - ./docker/home/:/home/developer/
+
+  navigation-prod-base:
+    extends: navigation-base
+    volumes:
+# code
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/ros2_ws/install/${CABOT_SITE}
+
+  navigation-prod:
+    extends: navigation-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+
+
+  gazebo-dev-base:
+    extends: navigation-dev-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gazebo"
+      #- "-g"                   # run with gdb
+
+  gazebo-dev:
+    extends: gazebo-dev-base
+    volumes:
+      - ./docker/home/:/home/developer/
+
+  gazebo-prod-base:
+    extends: navigation-prod-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gazebo"
+      #- "-g"                   # run with gdb
+
+  gazebo-prod:
+    extends: gazebo-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+
+
+  gui-dev-base:
+    extends: navigation-dev-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gui"
+
+  gui-dev:
+    extends: gui-dev-base
+    volumes:
+      - ./docker/home/:/home/developer/
+
+  gui-prod-base:
+    extends: navigation-prod-base
+    command:
+      - "/launch.sh"
+      # - "-c"                  # core dump
+      - "gui"
+
+  gui-prod:
+    extends: gui-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+
+  localization-dev-base:
+    extends: localization-base
+    volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
       - /var/lib/bluetooth:/var/lib/bluetooth
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
+      - ./config:/home/developer/config
       - ./cabot-description/cabot_description:/home/developer/loc_ws/src/cabot_description
       - ./cabot-common/cabot_common:/home/developer/loc_ws/src/cabot_common
       - ./cabot-common/cabot_msgs:/home/developer/loc_ws/src/cabot_msgs
@@ -216,25 +313,194 @@ services:
       - ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
-    privileged: true
-    devices:
-      - /dev/dri
-    cap_add:
-      - SYS_ADMIN
-      - NET_ADMIN
-    network_mode: host
-    command:
-      - "/launch.sh"
-      - "localization"
-      - "-M"                                # start multifloor map server
-      - "-R 1"                              # set publish_current_rate to 1hz
-      # - "-C"                                # launch cvi client
-      # - "-N"                                # start ROS1 navigation for development
-    stop_signal: SIGINT
-    stop_grace_period: 30s
 
-  localization:
-    extends: localization-base
+  localization-dev:
+    extends: localization-dev-base
     volumes:
       - ./docker/home:/home/developer/
 
+  localization-prod-base:
+    extends: localization-base
+    volumes:
+      - /dev:/dev
+      - /sys/devices:/sys/devices
+      - /var/lib/bluetooth:/var/lib/bluetooth
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/.docker.xauth:/tmp/.docker.xauth
+      - ./config:/home/developer/config
+      - ./cabot_site_pkg/${CABOT_SITE}:/home/developer/loc_ws/install/${CABOT_SITE}
+# bridge - if DDS use shared memory
+      - /dev/shm:/dev/shm
+
+  localization-prod:
+    extends: localization-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+
+
+  rtk_gnss-dev-base:
+    extends:
+      service: localization-dev-base
+    environment:
+      # rtklib
+      - RTK_STR_IN
+      - CABOT_SITE # if RTK_STR_IN is not specified, RTK_STR_IN will be loaded from CABOT_SITE
+      - BAUD_UBLOX=${BAUD_UBLOX:-230400}
+    tty: true
+    stdin_open: true
+    command: /launch_rtklib.sh
+
+  rtk_gnss-dev:
+    extends:
+      service: rtk_gnss-dev-base
+    volumes:
+      - ./docker/home:/home/developer
+
+  rtk_gnss-prod-base:
+    extends:
+      service: localization-prod-base
+    environment:
+      # rtklib
+      - RTK_STR_IN
+      - CABOT_SITE # if RTK_STR_IN is not specified, RTK_STR_IN will be loaded from CABOT_SITE
+      - BAUD_UBLOX=${BAUD_UBLOX:-230400}
+    tty: true
+    stdin_open: true
+    command: /launch_rtklib.sh
+
+  rtk_gnss-prod:
+    extends:
+      service: rtk_gnss-prod-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+
+
+# server
+  map_server:
+    image: cmucal/cabot-map_server
+    build: 
+      context: ./docker/server
+      args:
+        - USERNAME=runner_user
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-map_server
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
+    env_file:
+      - ${ENV_FILE:-.empty-env}
+    environment:
+      - HOST_TZ
+      - 'HULOP_MAP_SERVICE=localhost:9090/map'
+      - 'HULOP_MAP_SERVICE_USE_HTTP=true'
+      - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
+      - 'EDITOR_API_KEY=local-server-editor-api-key'
+      - 'SEARCH_BY_FLOOR_ENABLED=true'
+      - 'SEARCH_BY_CATEGORY_ENABLED=true'
+    command:
+      - "./server"
+      - "run"
+      - "defaultServer"
+#    depends_on:
+#      mongodb:
+#        condition: service_healthy
+    ports:
+      - ${PORT_ACCESS:-127.0.0.1}:${MAP_SERVER_PORT:-9090}:9090
+    networks:
+      - mongodb_network
+    healthcheck:
+      test: curl -f localhost:9090/map/login.jsp || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 10  # increased from 5, needs more time to launch on Jetson
+
+  map_data:
+    extends: map_server
+    env_file:
+      - ${ENV_FILE:-.empty-env}
+    ports: !override []  # this does not work if extended
+    depends_on:
+      map_server:
+        condition: service_healthy
+    command:
+      - "bash"
+      - "-c"
+      - "cp -r /server_data /home/runner_user/server_data && /home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /home/runner_user/server_data/MapData.geojson"
+    volumes:
+      - ${CABOT_SERVER_DATA_MOUNT:-./doc}:/server_data
+    networks:
+      - mongodb_network
+
+  mongodb:
+#    image : mongo:3.4.3  # there is no aarch64 image for this version
+    image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
+    environment:
+      - PUID=1000
+      - PGID=1000
+#    volumes:                # do not make persistent db
+#      - ./mongodb/database:/data/db
+    networks:
+      - mongodb_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo mongodb:27017/test --quiet
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+
+  location_tools:
+    image: cmucal/cabot-location_tools
+    build:
+      context: ./docker/server
+      dockerfile: Dockerfile.location-tools
+      args:
+        - USERNAME=runner_user
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-location_tools
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
+    env_file:
+      - ${ENV_FILE:-.empty-env}
+    environment:
+      - MONGO_HOST=mongodb://mongodb_lt:27017/navi_db
+    command:
+      - "./server"
+      - "run"
+      - "defaultServer"
+    depends_on:
+      mongodb_lt:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:9091:9090  # only localhost can access this server
+    networks:
+      - mongodb_network
+    healthcheck:
+      test: curl -f localhost:9091/map/login.jsp || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 10  # increased from 5, needs more time to launch on Jetson
+
+  mongodb_lt:
+    image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:                # do not make persistent db
+      - ./docker/mongodb/location_tools_db:/data/db
+    networks:
+      - mongodb_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo mongodb_lt:27017/test --quiet
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+networks:
+  mongodb_network:
