@@ -21,7 +21,7 @@
 
 services:
   ros2-base:
-    image: cmucal/cabot-navigation
+    image: cmucal/cabot-navigation:${CABOT_LAUNCH_IMAGE_TAG:-latest}
     build:
       context: ./docker/ros2
       additional_contexts:
@@ -93,7 +93,7 @@ services:
 
 
   localization-base:
-    image: cmucal/cabot-localization
+    image: cmucal/cabot-localization:${CABOT_LAUNCH_IMAGE_TAG:-latest}
     build:
       context: ./docker/localization
       additional_contexts:
@@ -380,7 +380,7 @@ services:
 
 # server
   map_server:
-    image: cmucal/cabot-map_server
+    image: cmucal/cabot-map_server:${CABOT_LAUNCH_IMAGE_TAG:-latest}
     build: 
       context: ./docker/server
       args:
@@ -455,7 +455,7 @@ services:
 
 
   location_tools:
-    image: cmucal/cabot-location_tools
+    image: cmucal/cabot-location_tools:${CABOT_LAUNCH_IMAGE_TAG:-latest}
     build:
       context: ./docker/server
       dockerfile: Dockerfile.location-tools
