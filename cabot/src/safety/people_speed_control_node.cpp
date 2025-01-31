@@ -496,6 +496,10 @@ private:
         double theta_right = normalizedAngle(RPy - s);
         double theta_left = normalizedAngle(RPy + s);
 
+        if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+          addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
+        }
+
         auto vo_intersection = computeVOIntersection(pvx, pvy, RPy, theta_right, theta_left);
 
         if (vo_intersection.empty()) {
@@ -513,10 +517,10 @@ private:
     }
 
     // velocity obstacle speed limit without considering social distance constraints
-    double pure_velocity_obstacle_speed_limit = computeSafeSpeedLimit(max_speed_, vo_data_queue, map_to_robot_tf2, false);
+    double pure_velocity_obstacle_speed_limit = computeSafeSpeedLimit(max_speed_, vo_data_queue, map_to_robot_tf2);
 
     // velocity obstacle speed limit constrained by social distance restrictions
-    double combined_speed_limit = computeSafeSpeedLimit(social_distance_speed_limit, vo_data_queue, map_to_robot_tf2, true);
+    double combined_speed_limit = computeSafeSpeedLimit(social_distance_speed_limit, vo_data_queue, map_to_robot_tf2);
 
     // final speed limit
     double people_speed_limit;
@@ -721,7 +725,7 @@ private:
 
   double computeSafeSpeedLimit(
     double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue,
-    const tf2::Stamped<tf2::Transform> & map_to_robot_tf2, bool visualized_marker=false)
+    const tf2::Stamped<tf2::Transform> & map_to_robot_tf2)
   {
     auto vo_data_queue_copy = vo_data_queue;
     double rvx = last_odom_.twist.twist.linear.x;
@@ -736,24 +740,18 @@ private:
         continue;
       }
 
-      bool vo_applied = true;
       if (0.0 < vo_intersection_min) {
         if (vo_intersection_min < rvx && rvx < vo_intersection_max) {
           double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx : vo_intersection_max;
           if (checkCollisionInRange(vo_intersection_min, max_rvx, rel_x, rel_y, pvx, pvy)) {
             speed_limit = std::min(speed_limit, vo_intersection_min);
-          } else {
-            vo_applied = false;
           }
         } else if (vo_intersection_min < speed_limit && speed_limit < vo_intersection_max) {
           if (checkCollisionInRange(vo_intersection_min, speed_limit, rel_x, rel_y, pvx, pvy)) {
             speed_limit = std::min(speed_limit, vo_intersection_min);
-          } else {
-            vo_applied = false;
           }
         }
       } else if (vo_intersection_max >= 0.0) {
-        vo_applied = false;
         double rel_vx = pvx - rvx;
         if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
@@ -763,15 +761,6 @@ private:
               speed_limit = 0.0;
             }
           }
-        } else {
-          vo_applied = false;
-        }
-      }
-
-      if (visualized_marker && vo_applied) {
-        int logger_level = rcutils_logging_get_logger_level(this->get_logger().get_name());
-        if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
-          addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
         }
       }
 
