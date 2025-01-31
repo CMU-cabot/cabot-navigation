@@ -722,7 +722,6 @@ private:
     double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue, const tf2::Stamped<tf2::Transform> & map_to_robot_tf2, bool visualized_marker=false)
   {
     auto vo_data_queue_copy = vo_data_queue;
-    int logger_level = rcutils_logging_get_logger_level(this->get_logger().get_name());
     double rvx = last_odom_.twist.twist.linear.x;
 
     while (!vo_data_queue_copy.empty()) {
@@ -767,8 +766,11 @@ private:
         }
       }
 
-      if (visualized_marker && vo_applied && logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
-        addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
+      if (visualized_marker && vo_applied) {
+        int logger_level = rcutils_logging_get_logger_level(this->get_logger().get_name());
+        if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+          addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
+        }
       }
 
       vo_data_queue_copy.pop();
