@@ -36,7 +36,7 @@ function help {
     echo "-l                    build using local registry"
     echo "-P <platform>         specify platform"
     echo "                      build linux/arm64 and linux/amd64 if not specified"
-    echo "-t <tags>             additional tags"
+    echo "-t <tag>[,<tag>]      tag or tags"
     echo "<services>            target services (default=\"$services\")"
 }
 
@@ -71,7 +71,7 @@ while getopts "hb:ilP:t:" arg; do
         ;;
     t)
         tags=${OPTARG}
-	;;
+        ;;
     esac
 done
 shift $((OPTIND-1))
@@ -93,7 +93,7 @@ if [[ $local -eq 1 ]]; then
     # setup local docker registry for multiplatform support
     if [[ -z $(docker ps -f "name=registry" -q) ]]; then
         docker run -d \
-        --rm \
+            --rm \
             --name registry \
             --network registry-network \
             -p 127.0.0.1:9092:5000 \
@@ -127,10 +127,14 @@ fi
 # tag option
 tag_option=
 if [[ -z $tags ]]; then
-    tags="latest,$(git rev-parse --abbrev-ref HEAD)"
+    tags="latest,$(git rev-parse --abbrev-ref HEAD | tr '/' '-')"
 fi
 for service in ${services}; do
-    tag_option+="--set=${service}.tags=${REGISTRY}/cabot-${service}:{${tags}} "
+    if [[ "$tags" == *,* ]]; then
+        tag_option+=" --set=${service}.tags=${REGISTRY}/cabot-${service}:{$tags}"
+    else
+        tag_option+=" --set=${service}.tags=${REGISTRY}/cabot-${service}:$tags"
+    fi
 done
 
 # bake

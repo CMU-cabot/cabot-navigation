@@ -2,7 +2,3 @@
 *
 # Except this file
 !.gitignore
-!.ros
-!catkin_ws
-!ros2_ws
-!bridge_ws
