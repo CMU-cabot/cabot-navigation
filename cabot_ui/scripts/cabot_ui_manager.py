@@ -442,6 +442,26 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        if event.subtype == "description" and self._description.enabled:
+            # TODO: needs to reset last_plan_distance when arrived/paused
+            self._logger.info(F"Request Description duration={event.param}")
+            if self._interface.last_pose:
+                gp = self._interface.last_pose['global_position']
+                length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
+                if self._description.stop_reason_enabled and self._description.surround_enabled:
+                    if length_index <= 1:
+                        self._interface.requesting_describe_surround_stop_reason()
+                    else:
+                        self._interface.requesting_describe_surround()
+                elif self._description.stop_reason_enabled and not self._description.surround_enabled:
+                    self._interface.requesting_describe_surround_stop_reason()
+                elif not self._description.stop_reason_enabled and self._description.surround_enabled:
+                    self._interface.requesting_describe_surround()
+
+                result = self._description.request_description_with_images(gp, length_index=length_index)
+                if result:
+                    self._interface.describe_surround(result['description'])
+
         if event.subtype == "description_stop_reason" and self._description.enabled:
             self._logger.info("Request Stop Reason Description")
             if self._interface.last_pose:
@@ -625,7 +645,89 @@ class CabotUIManager(NavigationInterface, object):
             self._exploration.start_exploration()
 
 
-class EventMapperBase(object):
+class EventMapper1(object):
+    def __init__(self):
+        self._manager = StatusManager.get_instance()
+        self.description_duration = 0
+
+    def push(self, event):
+        # state = self._manager.state
+
+        if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
+           event.type != HoldDownEvent.TYPE:
+            return
+
+        mevent = None
+
+        # simplify the control
+        mevent = self.map_button_to_navigation(event)
+
+        '''
+        if state == State.idle:
+            mevent = self.map_button_to_menu(event)
+
+        elif state == State.in_action or state == State.waiting_action:
+            mevent = self.map_button_to_navigation(event)
+
+        elif state == State.in_pause or state == State.waiting_pause:
+            mevent = self.map_button_to_navigation(event)
+        '''
+
+        if mevent:
+            self.delegate.process_event(mevent)
+
+    def map_button_to_menu(self, event):
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_NEXT:
+                return MenuEvent(subtype="next")
+            if event.buttons == cabot_common.button.BUTTON_PREV:
+                return MenuEvent(subtype="prev")
+            if event.buttons == cabot_common.button.BUTTON_SELECT:
+                return MenuEvent(subtype="select")
+        elif event.type == "click" and event.count == 2:
+            if event.buttons == cabot_common.button.BUTTON_SELECT:
+                return MenuEvent(subtype="back")
+        return None
+
+    def map_button_to_navigation(self, event):
+        if event.type == "button" and not event.down and self.description_duration > 0:
+            navigation_event = NavigationEvent(subtype="description", param=self.description_duration)
+            self.description_duration = 0
+            return navigation_event
+        if event.type == "button" and event.down:
+            # hook button down to triger pause whenever the left button is pushed
+            if event.button == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="pause")
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="resume")
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="speedup")
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="speeddown")
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
+                return NavigationEvent(subtype="decision")
+        if event.type == HoldDownEvent.TYPE:
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
+                return NavigationEvent(subtype="idle")
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                # image description is not triggered here, but when button is released
+                self.description_duration = event.duration
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="conversation")
+        '''
+        if event.button == cabot_common.button.BUTTON_SELECT:
+                return NavigationEvent(subtype="pause")
+        if event.type == "click":
+            if event.buttons == cabot_common.button.BUTTON_SELECT and event.count == 2:
+                return NavigationEvent(subtype="cancel")
+            if event.buttons == cabot_common.button.BUTTON_NEXT and event.count == 2:
+                return NavigationEvent(subtype="resume")
+        '''
+        return None
+
+
+class EventMapper2(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
         self.button_hold_down_duration = 0
@@ -667,42 +769,6 @@ class EventMapperBase(object):
                 return MenuEvent(subtype="back")
         return None
 
-    def map_button_to_navigation(self, event):
-        self._logger.error("EventMapper class must implement map_button_to_navigation(). Returning None.")
-        return None
-
-
-class EventMapper1(EventMapperBase):
-    def map_button_to_navigation(self, event):
-        if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
-            navigation_event = NavigationEvent(subtype="description", param=self.button_hold_down_duration)
-            self.button_hold_down_duration = 0
-            return navigation_event
-        if event.type == "button" and event.down:
-            # hook button down to triger pause whenever the left button is pushed
-            if event.button == cabot_common.button.BUTTON_LEFT:
-                return NavigationEvent(subtype="pause")
-        if event.type == "click" and event.count == 1:
-            if event.buttons == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="resume")
-            if event.buttons == cabot_common.button.BUTTON_UP:
-                return NavigationEvent(subtype="speedup")
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="speeddown")
-            if event.buttons == cabot_common.button.BUTTON_CENTER:
-                return NavigationEvent(subtype="decision")
-        if event.type == HoldDownEvent.TYPE:
-            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
-                return NavigationEvent(subtype="idle")
-            if event.holddown == cabot_common.button.BUTTON_RIGHT:
-                # image description is not triggered here, but when button is released
-                self.button_hold_down_duration = event.duration
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="conversation")
-        return None
-
-
-class EventMapper2(EventMapperBase):
     def map_button_to_navigation(self, event):
         if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
             self.button_hold_down_duration = 0
