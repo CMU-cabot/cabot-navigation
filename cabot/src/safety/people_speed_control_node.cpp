@@ -689,19 +689,6 @@ private:
     return false;
   }
 
-  bool isWithinVelocityObstacle(double vx, double vy, double theta_right, double theta_left)
-  {
-    if (std::fabs(vx) < epsilon && std::fabs(vy) < epsilon) {
-      return true;
-    }
-
-    double inv_person_vel_angle = normalizedAngle(atan2(-vy, -vx));
-    if (theta_left < theta_right) {
-      return inv_person_vel_angle <= theta_left || inv_person_vel_angle >= theta_right;
-    }
-    return theta_right <= inv_person_vel_angle && inv_person_vel_angle <= theta_left;
-  }
-
   bool checkCollisionInRange(double vo_min, double vo_max, double rel_x, double rel_y, double pvx, double pvy)
   {
     constexpr double v_step = 0.1;
