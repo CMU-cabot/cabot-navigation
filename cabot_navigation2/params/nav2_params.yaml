@@ -584,7 +584,7 @@ cabot_scan:
     use_sim_time: True
     scan_topic: scan
     scan_out_topic: /local/scan
-    scan_out_frame: local/velodyne
+    scan_out_frame: local/lidar_base_link
 
 cabot_livox_scan:
   ros__parameters:
