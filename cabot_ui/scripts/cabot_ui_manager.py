@@ -496,13 +496,6 @@ class CabotUIManager(NavigationInterface, object):
             msg.data = str(e)
             self._eventPub.publish(msg)
 
-        if event.subtype == "conversation":
-            self._logger.info("Request Start Conversation")
-            e = NavigationEvent("conversation", None)
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
-
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
             self.activity_log("cabot_ui/navigation", "in preparation")
