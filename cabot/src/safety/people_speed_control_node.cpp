@@ -481,11 +481,6 @@ private:
       double rel_y = p_local.y();
       double pvx = v_local.x();
       double pvy = v_local.y();
-
-      if (hypot(pvx, pvy) < person_speed_threshold_) {
-        continue;
-      }
-
       double RPy = atan2(rel_y, rel_x);
       double dist = hypot(rel_x, rel_y);
 
@@ -498,6 +493,10 @@ private:
 
         if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
           addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
+        }
+
+        if (hypot(pvx, pvy) < person_speed_threshold_) {
+          continue;
         }
 
         auto vo_intersection = computeVOIntersection(pvx, pvy, RPy, theta_right, theta_left);
