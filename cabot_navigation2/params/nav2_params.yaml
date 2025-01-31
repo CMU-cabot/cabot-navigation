@@ -579,12 +579,13 @@ behavior_server:
     min_rotational_vel: 0.01
     rotational_acc_lim: 0.2
 
+# repeat scan topic for local/ namespace (elevator out navigation)
 cabot_scan:
   ros__parameters:
     use_sim_time: True
     scan_topic: scan
     scan_out_topic: /local/scan
-    scan_out_frame: local/lidar_base_link
+    scan_out_frame_prefix: local/        # add local/ to the frame_id
 
 cabot_livox_scan:
   ros__parameters:
