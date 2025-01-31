@@ -141,7 +141,102 @@ class Description:
         except Exception as error:
             self._logger.error(F"Request Error {error=}")
 
-    def request_description_with_images(self, global_position, mode, length_index=0):
+    # for EventMapper1()
+    def request_description_with_images1(self, global_position, length_index=0):
+        if not self.enabled:
+            return None
+        if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
+            return None
+
+        API_URL = None
+        # TODO: needs to be organized...
+        if self.stop_reason_data_collect_enabled:
+            self.memo_pub.publish(String(data="stop_reason_data_collect"))
+            API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+        else:
+            if self.stop_reason_enabled:
+                if not self.surround_enabled:
+                    # only stop-reason is enabled
+                    API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+                else:
+                    # TODO: fix (demo special)
+                    # both surround and stop-reason is enabled
+                    if length_index <= 1:  # 1sec, 2sec
+                        API_URL = F"{self.host}/{Description.STOP_REASON_API}"
+                    else:  # 3sec
+                        length_index = 1
+                        API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+            else:
+                API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
+
+        if not API_URL:
+            self._logger.error("API_URL is none")
+            return None
+
+        self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
+        image_data_list = []
+        distance_to_travel = 100
+        if self.last_plan_distance:
+            distance_to_travel = self.last_plan_distance
+        for position, img_msg in self.last_images.items():
+            if img_msg is not None:
+                try:
+                    img = self.bridge.compressed_imgmsg_to_cv2(img_msg)
+                    # Rotate the image if necessary
+                    if self.image_rotate_modes[position] is not None:
+                        img = cv2.rotate(img, self.image_rotate_modes[position])
+                    # Resize the image while maintaining the aspect ratio
+                    height, width = img.shape[:2]
+                    if height > width:
+                        new_height = self.max_size
+                        new_width = int(width * new_height / height)
+                    else:
+                        new_width = self.max_size
+                        new_height = int(height * new_width / width)
+                    img = cv2.resize(img, (new_width, new_height))
+                    img_msg = self.bridge.cv2_to_compressed_imgmsg(img)
+
+                    # Use the raw JPEG data from the ROS CompressedImage message
+                    base64_image = base64.b64encode(img_msg.data).decode('utf-8')
+                    image_uri = f'data:image/jpeg;base64,{base64_image}'
+
+                    # Prepare JSON data
+                    image_data_list.append({
+                        'position': position,
+                        'image_uri': image_uri
+                    })
+                except Exception as e:
+                    self._logger.error(f'Error converting {position} image: {e}')
+                    self._logger.error(traceback.format_exc())
+            else:
+                self._logger.warn(f'No {position} image available to process.')
+
+        # Send HTTP request with the image data
+        try:
+            headers = {'Content-Type': 'application/json'}
+            json_data = json.dumps(image_data_list)
+            self._logger.debug(F"Request data: {image_data_list}")
+            lat = global_position.lat
+            lng = global_position.lng
+            rotation = global_position.r
+            max_distance = self.max_distance
+            response = requests.post(
+                F"{API_URL}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
+                headers=headers,
+                data=json_data
+            )
+            if response.status_code == 200:
+                response_json = response.json()
+                self._logger.info('Successfully sent images to server.')
+                return response_json
+            else:
+                self._logger.error(f'Failed to send images to server. Status code: {response.status_code}')
+        except Exception as e:
+            self._logger.error(f'Error sending HTTP request: {e}')
+        return None
+
+    # for EventMapper2()
+    def request_description_with_images2(self, global_position, mode, length_index=0):
         if not self.enabled:
             return None
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:

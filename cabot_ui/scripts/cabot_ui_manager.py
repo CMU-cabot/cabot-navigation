@@ -458,7 +458,7 @@ class CabotUIManager(NavigationInterface, object):
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
 
-                result = self._description.request_description_with_images(gp, length_index=length_index)
+                result = self._description.request_description_with_images1(gp, length_index=length_index)
                 if result:
                     self._interface.describe_surround(result['description'])
 
@@ -467,7 +467,7 @@ class CabotUIManager(NavigationInterface, object):
             if self._interface.last_pose:
                 gp = self._interface.last_pose['global_position']
                 self._interface.requesting_describe_surround_stop_reason()
-                result = self._description.request_description_with_images(gp, "stop_reason", length_index=0)
+                result = self._description.request_description_with_images2(gp, "stop_reason", length_index=0)
                 if result:
                     self._interface.describe_surround(result['description'])
 
@@ -478,7 +478,7 @@ class CabotUIManager(NavigationInterface, object):
                 length_index = event.param
                 gp = self._interface.last_pose['global_position']
                 self._interface.requesting_describe_surround()
-                result = self._description.request_description_with_images(gp, "surround", length_index=length_index)
+                result = self._description.request_description_with_images2(gp, "surround", length_index=length_index)
                 if result:
                     self._interface.describe_surround(result['description'])
 
