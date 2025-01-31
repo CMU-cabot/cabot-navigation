@@ -164,28 +164,28 @@ while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
             help
             exit
             ;;
-	d)
-	    profile=dev
-	    ;;
+        d)
+            profile=dev
+            ;;
         D)
             debug=1
             ;;
-	E)
-	    environment=$OPTARG
-	    ;;
+        E)
+            environment=$OPTARG
+            ;;
         f)
             test_regex=$OPTARG
             ;;
         H)
             export CABOT_HEADLESS=1
-	    export USE_GUI=0
+            export USE_GUI=0
             ;;
-	l)
-	    list_functions=1
-	    ;;
-	L)
-	    list_modules=1
-	    ;;
+        l)
+            list_functions=1
+            ;;
+        L)
+            list_modules=1
+            ;;
         M)
             log_dmesg=1
             ;;
@@ -231,11 +231,11 @@ if [[ $unittest -eq 1 ]]; then
     code=0
     docker compose run --rm navigation ./script/unittest.sh $@
     if [[ $? -ne 0 ]]; then
-	code=1
+        code=1
     fi
     docker compose run --rm localization ./script/unittest.sh $@
     if [[ $? -ne 0 ]]; then
-	code=1
+        code=1
     fi
     exit $code
 fi
@@ -249,6 +249,17 @@ fi
 if [ -z $CABOT_SITE ]; then
     err "CABOT_SITE : environment variable should be specified (ex. cabot_site_cmu_3d"
     error=1
+else
+    base=cabot_site_pkg
+    if [[ $profile == "dev" ]]; then
+        base=cabot_sites
+    fi
+    if find $scriptdir/$base -name $CABOT_SITE > /dev/null; then
+        blue "CABOT_SITE: $CABOT_SITE exists in $base"
+    else
+        err "CABOT_SITE: $CABOT_SITE does not exist in $base"
+        error=1
+    fi
 fi
 
 if [ $error -eq 1 ]; then
@@ -326,7 +337,11 @@ fi
 dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
 
 ## launch server
-com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+if [[ $profile == "dev" ]]; then
+    com="./server-launch.sh -d -c -p ${CABOT_SITE} -E \"$environment\""
+else
+    com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+fi
 echo $com
 eval $com
 

@@ -713,8 +713,6 @@ class EventMapper1(object):
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 # image description is not triggered here, but when button is released
                 self.description_duration = event.duration
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="conversation")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
