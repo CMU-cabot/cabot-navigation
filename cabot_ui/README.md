@@ -83,3 +83,37 @@
 - `button_down_<Button>`: button down
 - `button_up_<Button>`: button up
 - `button_hold_<Button>`: button hold
+
+
+#### Handle Button Mapping
+- specify button mapping in .env
+  ```
+  CABOT_HANDLE_BUTTON_MAPPING=2
+  ```
+##### 1 (default)
+- Right Click: Start navigation
+- Left Click: Pause navigation
+- Down Click: decrease speed
+- Up Click: increase speed
+- Left Hold (3 seconds): Stop motor control
+- Down Hold: Describe the surroundings or stop reason
+  ```
+  #CABOT_IMAGE_DESCRIPTION_MODE=surround  # describe surroundings（holding 1 second: short length, 2 seconds: medium, 3 seconds: long）
+  #CABOT_IMAGE_DESCRIPTION_MODE=stop-reason  # only stop reason (holding 1 second)
+  CABOT_IMAGE_DESCRIPTION_MODE=surround,stop-reason  # holding 1~2 seconds: stop reason, 3 seconds: surrounding (medium length)
+  ```
+
+
+##### 2 (New button mapping)
+- Left Hold (1 second): Pause navigation
+- Left Hold (3 seconds): Stop motor control
+- Down Hold: Gradually decrease speed (speed drops every second)
+- Up Hold: Gradually increase speed (speed rises every second)
+- Left Click: Pause/Resume speech output
+- Right Click: Start navigation
+- Down Click (1 time): Start conversation interface
+- Down Click (2 times): Describe stop reason
+- Up Click: Describe the surroundings
+  - Single click: Short analysis
+  - Double click: Medium-length analysis
+  - Triple click: Detailed analysis

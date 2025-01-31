@@ -100,6 +100,8 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   CABOT_ANNOUNCE_NO_TOUCH # announce when the reason robot is stopped is NO_TOUCH(default=false)
   CABOT_SIDE           # left: user stands on the right, right: user stands on the left
   CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
+  CABOT_HANDLE_BUTTON_MAPPING # specify button mapping of handle
+                              # (default=1, see [detail](./cabot_ui/README.md))
   HOST_UID             # host user UID (default=1000)
   HOST_GID             # host user GID (default=1000)
   HOST_TZ              # host timezone (default=UTC)

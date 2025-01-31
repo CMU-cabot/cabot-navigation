@@ -76,7 +76,11 @@ class CabotUIManager(NavigationInterface, object):
 
         self.reset()
 
-        self._event_mapper = EventMapper()
+        self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
+        if self._handle_button_mapping == 2:
+            self._event_mapper = EventMapper2()
+        else:
+            self._event_mapper = EventMapper1()
         self._event_mapper.delegate = self
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
@@ -454,9 +458,50 @@ class CabotUIManager(NavigationInterface, object):
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
 
-                result = self._description.request_description_with_images(gp, length_index=length_index)
+                result = self._description.request_description_with_images1(gp, length_index=length_index)
                 if result:
                     self._interface.describe_surround(result['description'])
+
+        if event.subtype == "description_stop_reason" and self._description.enabled:
+            self._logger.info("Request Stop Reason Description")
+            if self._interface.last_pose:
+                gp = self._interface.last_pose['global_position']
+                self._interface.requesting_describe_surround_stop_reason()
+                result = self._description.request_description_with_images2(gp, "stop_reason", length_index=0)
+                if result:
+                    self._interface.describe_surround(result['description'])
+
+        if event.subtype == "description_surround" and self._description.enabled:
+            # TODO: needs to reset last_plan_distance when arrived/paused
+            self._logger.info(F"Request Surround Description (Duration: {event.param})")
+            if self._interface.last_pose:
+                length_index = event.param
+                gp = self._interface.last_pose['global_position']
+                self._interface.requesting_describe_surround()
+                result = self._description.request_description_with_images2(gp, "surround", length_index=length_index)
+                if result:
+                    self._interface.describe_surround(result['description'])
+
+        if event.subtype == "toggle_speak_state":
+            self._logger.info("Request Toggle TTS State")
+            e = NavigationEvent("togglespeakstate", None)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+
+        if event.subtype == "toggle_conversation":
+            self._logger.info("Request Start/Stop Conversation Interface")
+            e = NavigationEvent("toggleconversation", None)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+
+        if event.subtype == "conversation":
+            self._logger.info("Request Start Conversation")
+            e = NavigationEvent("conversation", None)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
 
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
@@ -600,7 +645,7 @@ class CabotUIManager(NavigationInterface, object):
             self._exploration.start_exploration()
 
 
-class EventMapper(object):
+class EventMapper1(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
         self.description_duration = 0
@@ -677,6 +722,83 @@ class EventMapper(object):
             if event.buttons == cabot_common.button.BUTTON_NEXT and event.count == 2:
                 return NavigationEvent(subtype="resume")
         '''
+        return None
+
+
+class EventMapper2(object):
+    def __init__(self):
+        self._manager = StatusManager.get_instance()
+        self.button_hold_down_duration = 0
+        self.button_hold_down_duration_prev = 0
+
+    def push(self, event):
+        if event.type not in {ButtonEvent.TYPE, ClickEvent.TYPE, HoldDownEvent.TYPE}:
+            return
+
+        mevent = None
+
+        # simplify the control
+        mevent = self.map_button_to_navigation(event)
+
+        '''
+        if state == State.idle:
+            mevent = self.map_button_to_menu(event)
+
+        elif state == State.in_action or state == State.waiting_action:
+            mevent = self.map_button_to_navigation(event)
+
+        elif state == State.in_pause or state == State.waiting_pause:
+            mevent = self.map_button_to_navigation(event)
+        '''
+
+        if mevent:
+            self.delegate.process_event(mevent)
+
+    def map_button_to_menu(self, event):
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_NEXT:
+                return MenuEvent(subtype="next")
+            if event.buttons == cabot_common.button.BUTTON_PREV:
+                return MenuEvent(subtype="prev")
+            if event.buttons == cabot_common.button.BUTTON_SELECT:
+                return MenuEvent(subtype="select")
+        elif event.type == "click" and event.count == 2:
+            if event.buttons == cabot_common.button.BUTTON_SELECT:
+                return MenuEvent(subtype="back")
+        return None
+
+    def map_button_to_navigation(self, event):
+        if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
+            self.button_hold_down_duration = 0
+            self.button_hold_down_duration_prev = 0
+            return None
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="resume")
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="toggle_speak_state")
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="description_surround", param=event.count)
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="toggle_conversation")
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
+                return NavigationEvent(subtype="decision")
+        if event.type == "click" and event.count > 1:
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                description_length = min(event.count, 3)
+                return NavigationEvent(subtype="description_surround", param=description_length)
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="description_stop_reason")
+        if event.type == HoldDownEvent.TYPE:
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
+                return NavigationEvent(subtype="pause")
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
+                return NavigationEvent(subtype="idle")
+            if event.holddown in {cabot_common.button.BUTTON_DOWN, cabot_common.button.BUTTON_UP}:
+                self.button_hold_down_duration = event.duration
+                if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
+                    self.button_hold_down_duration_prev = self.button_hold_down_duration
+                    return NavigationEvent(subtype="speeddown" if event.holddown == cabot_common.button.BUTTON_DOWN else "speedup")
         return None
 
 
