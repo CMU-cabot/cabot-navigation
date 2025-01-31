@@ -458,13 +458,6 @@ class CabotUIManager(NavigationInterface, object):
                 if result:
                     self._interface.describe_surround(result['description'])
 
-        if event.subtype == "conversation":
-            self._logger.info("Request Start Conversation")
-            e = NavigationEvent("conversation", None)
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
-
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
             self.activity_log("cabot_ui/navigation", "in preparation")
@@ -675,8 +668,6 @@ class EventMapper(object):
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 # image description is not triggered here, but when button is released
                 self.description_duration = event.duration
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="conversation")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
