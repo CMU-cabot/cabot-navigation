@@ -39,8 +39,10 @@ public:
     cmdVelOutput_("/cmd_vel_limit"),
     userSpeedInput_("/user_speed"),
     mapSpeedInput_("/map_speed"),
+    wheelieSpeedInput_("/wheelie_speed"),
     userSpeedLimit_(2.0),
     mapSpeedLimit_(2.0),
+    wheelie_speed_(0.0),
     targetRate_(40),
     currentLinear_(0.0),
     currentAngular_(0.0),
@@ -73,9 +75,14 @@ private:
     RCLCPP_INFO(get_logger(), "Speed Control Adapter Node - %s", __FUNCTION__);
 
     cmdVelInput_ = declare_parameter("cmd_vel_input", cmdVelInput_);
+    wheelieSpeedInput_ = declare_parameter("wheelie_speed_input", "/cabot/wheelie_speed");
     cmdVelSub = create_subscription<geometry_msgs::msg::Twist>(
       cmdVelInput_, 10,
       std::bind(&SpeedControlNode::cmdVelCallback, this, std::placeholders::_1));
+
+    wheelieSpeedSub_ = create_subscription<std_msgs::msg::Float32>(
+      wheelieSpeedInput_, 10,
+      std::bind(&SpeedControlNode::wheelieSpeedCallback, this, std::placeholders::_1));
 
     cmdVelOutput_ = declare_parameter("cmd_vel_output", cmdVelOutput_);
     cmdVelPub = create_publisher<geometry_msgs::msg::Twist>(cmdVelOutput_, 10);
@@ -187,7 +194,9 @@ private:
         if (l < -limit) {
           l = -limit;
         }
-
+        if (wheelie_speed_ < l) {
+          l = wheelie_speed_;
+        }
         // if limit equals zero and complete stop is true then angular is also zero
         if (limit == 0 && completeStop_[index]) {
           r = 0;
@@ -234,6 +243,11 @@ private:
     mapSpeedLimit_ = input->data;
   }
 
+  void wheelieSpeedCallback(const std_msgs::msg::Float32::SharedPtr input)
+  {
+    wheelie_speed_ = input->data;
+  }
+
   void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr input)
   {
     currentLinear_ = input->linear.x;
@@ -247,6 +261,7 @@ private:
   std::string cmdVelOutput_;
   std::string userSpeedInput_;
   std::string mapSpeedInput_;
+  std::string wheelieSpeedInput_;
 
   std::vector<std::string> speedInput_;
   std::vector<rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr> speedSubs_;
@@ -260,6 +275,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
 
+  double wheelie_speed_;
   double userSpeedLimit_;
   double mapSpeedLimit_;
   int targetRate_;
@@ -273,6 +289,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmdVelSub;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr userSpeedSub;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr mapSpeedSub;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr wheelieSpeedSub_;
 };  // class SpeedControlNode
 
 }  // namespace CaBotSafety
