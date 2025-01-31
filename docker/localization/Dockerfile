@@ -280,6 +280,9 @@ RUN useradd -m $USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME && \
     usermod  --uid $UID $USERNAME && \
     groupmod --gid $UID $USERNAME
+# add user to video group to fix NvRmMemInitNvmap error on Jetson
+# https://forums.developer.nvidia.com/t/jetpack-5-0-dp-nvrmmeminitnvmap-failed-with-permission-denied/219804
+RUN usermod -aG video $USERNAME
 
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN sed -i 's:custom_ws:cartographer_ws:' /ros_entrypoint.sh
