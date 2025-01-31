@@ -71,7 +71,8 @@ struct VOData
 
 struct CompareVOIntersectionMax
 {
-  bool operator()(const VOData & a, const VOData & b) {
+  bool operator()(const VOData & a, const VOData & b)
+  {
     return a.vo_intersection_max < b.vo_intersection_max;
   }
 };
@@ -621,19 +622,19 @@ private:
     constexpr double pseudo_infinity = std::numeric_limits<double>::max();
 
     auto computeParametricValue = [&](double theta) -> std::optional<double> {
-      if (std::fabs(std::sin(theta)) < 1e-6) {
-        return std::nullopt;
-      }
-      double t = -vy_p / std::sin(theta);
-      if (t < 0.0) {
-        return std::nullopt;
-      }
-      return t;
-    };
+        if (std::fabs(std::sin(theta)) < 1e-6) {
+          return std::nullopt;
+        }
+        double t = -vy_p / std::sin(theta);
+        if (t < 0.0) {
+          return std::nullopt;
+        }
+        return t;
+      };
 
     auto getPseudoBoundary = [](double theta) -> double {
-      return (-M_PI_2 <= theta && theta < M_PI_2) ? pseudo_infinity : -pseudo_infinity;
-    };
+        return (-M_PI_2 <= theta && theta < M_PI_2) ? pseudo_infinity : -pseudo_infinity;
+      };
 
     std::optional<double> t_right = computeParametricValue(theta_right);
     std::optional<double> t_left = computeParametricValue(theta_left);
@@ -719,7 +720,8 @@ private:
   }
 
   double computeSafeSpeedLimit(
-    double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue, const tf2::Stamped<tf2::Transform> & map_to_robot_tf2, bool visualized_marker=false)
+    double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue,
+    const tf2::Stamped<tf2::Transform> & map_to_robot_tf2, bool visualized_marker=false)
   {
     auto vo_data_queue_copy = vo_data_queue;
     double rvx = last_odom_.twist.twist.linear.x;
