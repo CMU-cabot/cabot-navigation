@@ -481,24 +481,30 @@ private:
       double rel_y = p_local.y();
       double pvx = v_local.x();
       double pvy = v_local.y();
+
       double RPy = atan2(rel_y, rel_x);
       double dist = hypot(rel_x, rel_y);
 
       if (dist < pr) {
         vo_data_queue.push({dist, rel_x, rel_y, pvx, pvy, 0.0, 0.0, 0.0, max_speed_});
-      } else {
-        double s = asin(pr / dist);
-        double theta_right = normalizedAngle(RPy - s);
-        double theta_left = normalizedAngle(RPy + s);
+        continue;
+      }
 
-        if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
-          addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
-        }
+      double s = asin(pr / dist);
+      double theta_right = normalizedAngle(RPy - s);
+      double theta_left = normalizedAngle(RPy + s);
 
-        if (hypot(pvx, pvy) < person_speed_threshold_) {
-          continue;
-        }
+      if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+        addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
+      }
 
+      // people walking below the speed threshold are not subject to velocity obstacle speed limits
+      if (hypot(pvx, pvy) < person_speed_threshold_) {
+        continue;
+      }
+
+      // compute the intersection points between the x-axis and the velocity obstacle cone
+      {
         auto vo_intersection = computeVOIntersection(pvx, pvy, RPy, theta_right, theta_left);
 
         if (vo_intersection.empty()) {
@@ -523,7 +529,6 @@ private:
 
     // final speed limit
     double people_speed_limit;
-    //people_speed_limit = vo_speed_limit;
     if (use_velocity_obstacle_) {
       people_speed_limit = combined_speed_limit;
     } else {
@@ -733,13 +738,13 @@ private:
       const auto & vo_data = vo_data_queue_copy.top();
       const auto & [dist, rel_x, rel_y, pvx, pvy, theta_right, theta_left, vo_intersection_min, vo_intersection_max] = vo_data;
 
+      vo_data_queue_copy.pop();
+
       if (dist < pr) {
-        speed_limit = 0.0;
-        vo_data_queue_copy.pop();
-        continue;
+        return 0.0;
       }
 
-      if (0.0 < vo_intersection_min) {
+      if (vo_intersection_min > 0.0) {
         if (vo_intersection_min < rvx && rvx < vo_intersection_max) {
           double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx : vo_intersection_max;
           if (checkCollisionInRange(vo_intersection_min, max_rvx, rel_x, rel_y, pvx, pvy)) {
@@ -754,16 +759,12 @@ private:
         double rel_vx = pvx - rvx;
         if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
-            if (rel_x > pr) {
-              speed_limit = std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr))));
-            } else {
-              speed_limit = 0.0;
-            }
+            speed_limit = (rel_x > pr)
+                          ? std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr))))
+                          : 0.0;
           }
         }
       }
-
-      vo_data_queue_copy.pop();
     }
 
     return speed_limit;
