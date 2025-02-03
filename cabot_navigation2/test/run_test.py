@@ -77,7 +77,7 @@ logger = None
 
 
 # decorator of test actions
-def wait_test(timeout=60):
+def wait_test(timeout=120):
     def outer_wrap(function):
         def wrap(*args, **kwargs):
             tester = args[0]
@@ -472,7 +472,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -500,7 +500,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -543,7 +543,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition=f"msg.category=='cabot/navigation' and msg.text=='goal_completed' and msg.memo=='{goalName}'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -555,7 +555,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition=f"msg.category=='cabot/navigation' and msg.text=='change_mode' and msg.memo=='{modeName}'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -567,7 +567,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='completed'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -580,7 +580,7 @@ class Tester:
                 topic_type='mf_localization_msgs/msg/MFLocalizeStatus',
                 qos=QoSProfile(depth=10, durability=DurabilityPolicy.TRANSIENT_LOCAL),
                 condition='msg.status==1 or msg.status==2',
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -592,7 +592,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='navigation' and msg.memo=='arrived'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -604,7 +604,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/interface' and msg.text=='status' and msg.memo=='ready'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )
@@ -616,7 +616,7 @@ class Tester:
                 topic='/cabot/activity_log',
                 topic_type='cabot_msgs/msg/Log',
                 condition="msg.category=='cabot/navigation' and msg.text=='turn_towards'",
-                timeout=60
+                timeout=180
             ),
             **kwargs)
         )

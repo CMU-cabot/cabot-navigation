@@ -51,6 +51,10 @@ services:
       service: navigation-dev
     profiles:
       - dev
+    deploy:
+      resources:
+        limits:
+          cpus: '5'
 
   gazebo-dev:
     extends:
@@ -58,6 +62,10 @@ services:
       service: gazebo-dev
     profiles:
       - dev
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
 
   gui-dev:
     extends:
@@ -67,6 +75,9 @@ services:
       - dev
     deploy:
       replicas: ${USE_GUI:-1}
+      resources:
+        limits:
+          cpus: '1'
 
   localization-dev:
     extends:
@@ -74,6 +85,11 @@ services:
       service: localization-dev
     profiles:
       - dev
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+
 
   # prodimg
   navigation-prod:

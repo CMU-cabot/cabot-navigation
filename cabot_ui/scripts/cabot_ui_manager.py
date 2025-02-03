@@ -168,6 +168,7 @@ class CabotUIManager(NavigationInterface, object):
                     except:  # noqa: #722
                         self._logger.error(traceback.format_exc())
                         pass
+                self._logger.info("create_menu started")
                 self.main_menu = Menu.create_menu(menu_obj, {"menu": "main_menu"})
             self.speed_menu = None
             if self.main_menu:
@@ -554,16 +555,18 @@ class CabotUIManager(NavigationInterface, object):
             request = std_srvs.srv.SetBool.Request()
             request.data = False
             if self._touchModeProxy.wait_for_service(timeout_sec=1):
-                response: std_srvs.srv.SetBool.Response = self._touchModeProxy.call(request)
-                if not response.success:
-                    self._logger.info("Could not set touch mode to False")
+                self._touchModeProxy.call_async(request)
+                # response: std_srvs.srv.SetBool.Response = self._touchModeProxy.call(request)
+                # if not response.success:
+                #     self._logger.info("Could not set touch mode to False")
             else:
                 self._logger.error("Could not find set touch mode service")
 
             if self._userSpeedEnabledProxy.wait_for_service(timeout_sec=1):
-                response = self._userSpeedEnabledProxy.call(request)
-                if not response.success:
-                    self._logger.info("Could not set user speed enabled to False")
+                self._userSpeedEnabledProxy.call_async(request)
+                # response = self._userSpeedEnabledProxy.call(request)
+                # if not response.success:
+                #     self._logger.info("Could not set user speed enabled to True")
             else:
                 self._logger.error("Could not find set user speed enabled service")
 
@@ -815,8 +818,8 @@ if __name__ == "__main__":
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
     desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
     nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
-    executors = [MultiThreadedExecutor(),
-                 MultiThreadedExecutor(),
+    executors = [SingleThreadedExecutor(),
+                 SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),

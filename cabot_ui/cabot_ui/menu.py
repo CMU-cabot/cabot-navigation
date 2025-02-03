@@ -469,6 +469,7 @@ class MenuAdjust(Menu):
     """Adjustable menu"""
     def __init__(self, config=None, identifier=None, parent=None):
         super(MenuAdjust, self).__init__(config=config, identifier=identifier, parent=parent)
+        self._check_action_timer = None
         self._type = Menu.Adjust
         self._max = Menu.get_menu_config(config, "max", error=True)
         self._min = Menu.get_menu_config(config, "min", error=True)
@@ -503,7 +504,7 @@ class MenuAdjust(Menu):
             self._current = self._default
             self._check_action_once()
             self._get_saved_current_count = 0
-            self._get_saved_current(callback=callback)
+            self._get_saved_current_timer = CaBotRclpyUtil.instance().node.create_timer(1.0, self._get_saved_current(callback))
 
     def _check_action(self):
         if self._actions is None:
@@ -511,19 +512,24 @@ class MenuAdjust(Menu):
         if self._actions.do_action():
             return
         CaBotRclpyUtil.info("retry do_action with %s", str(self))
-        self._check_action_once()
 
-    @cabot_common.util.setInterval(0.001, 1)
     def _check_action_once(self):
-        self._check_action()
+        def inner_callback():
+            self._check_action_timer.cancel()
+            self._check_action_timer = None
+            self._check_action()
+        if not self._check_action_timer:
+            self._check_action_timer = CaBotRclpyUtil.instance().node.create_timer(0.1, inner_callback)
 
-    @cabot_common.util.setInterval(1, 1)
     def _get_saved_current(self, callback=None):
-        self._get_saved_current_count += 1
-        if self._get_saved_current_count < 10 and \
-           not self._get_saved_config(self._name, default=self._default, callback=callback):
-            CaBotRclpyUtil.info(f"retry get_saved_current {self._name=}, {self._get_saved_current_count=}")
-            self._get_saved_current(callback=callback)
+        def inner_callback():
+            self._get_saved_current_timer.cancel()
+            self._get_saved_current_count += 1
+            if self._get_saved_current_count < 10 and \
+               not self._get_saved_config(self._name, default=self._default, callback=callback):
+                CaBotRclpyUtil.info(f"retry get_saved_current {self._name=}, {self._get_saved_current_count=}")
+                self._get_saved_current(callback=callback)
+        return inner_callback
 
     def _save_current(self):
         if self._actions is not None:

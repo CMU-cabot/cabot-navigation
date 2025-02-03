@@ -57,6 +57,8 @@ def generate_launch_description():
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
 
+    bond_timeout = 60.0
+
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
 
     remappings = [('/tf', 'tf'),
@@ -224,7 +226,7 @@ def generate_launch_description():
                     output='log',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
-                                {'bond_timeout': 15.0},
+                                {'bond_timeout': bond_timeout},
                                 {'node_names': ['controller_server',
                                                 'planner_server',
                                                 'behavior_server',
@@ -297,7 +299,7 @@ def generate_launch_description():
                     namespace='local',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
-                                {'bond_timeout': 15.0},
+                                {'bond_timeout': bond_timeout},
                                 {'node_names': ['controller_server',
                                                 'planner_server',
                                                 'behavior_server',
@@ -323,7 +325,7 @@ def generate_launch_description():
             output='log',
             parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': autostart},
-                        {'bond_timeout': 15.0},
+                        {'bond_timeout': bond_timeout},
                         {'node_names': ['map_server']},
                         ]
         ),
@@ -454,7 +456,7 @@ def generate_launch_description():
                 'outlier_los_ground_threshold': 0.05,
                 'ground_estimate_angle_min': -0.614,  # -35.2*M_PI/180
                 'ground_estimate_angle_max': 0.614,  # 35.2*M_PI/180
-                'ground_slope_threshold': 0.262,  # 15.0*M_PI/180
+                'ground_slope_threshold': 0.262,  # bond_timeout*M_PI/180
                 'ground_confidence_interpolate_decay': 0.5
             }],
             condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 3"]))

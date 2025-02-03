@@ -22,6 +22,7 @@
 
 import tty
 import termios
+import threading
 import sys
 
 import rclpy
@@ -32,7 +33,6 @@ import std_msgs.msg
 
 import cabot_common.event
 import cabot_common.button
-from cabot_common.util import setInterval
 
 interval = 0.25
 NKeys = 12
@@ -71,7 +71,6 @@ def reset_click_state(index):
     hold_active[index] = False
 
 
-@setInterval(0.01)
 def process():
     global button, hold_duration, hold_start_time, sent_duration, is_holding
     now = node.get_clock().now()
@@ -135,7 +134,8 @@ if __name__ == '__main__':
     rclpy.init()
     node = Node("cabot_keyboard_node")
     eventPub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 1)
-    process()
+
+    node.create_timer(0.01, process)
 
     '''
     node.get_logger().info("type 'j', 'k', or 'l' for 'up', 'center', 'down' buttons")
@@ -151,6 +151,7 @@ if __name__ == '__main__':
     '''
     node.get_logger().info("type 'cursor keys' for 'up', 'down', 'left', and 'right' buttons")
     node.get_logger().info("type '1-5' for hold duration (seconds), then type 'cursor keys'")
+    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
     while rclpy.ok:
         key = ord(getchar())
         if not is_holding:
@@ -171,5 +172,3 @@ if __name__ == '__main__':
                 node.get_logger().info(F"button {button}")
             else:
                 node.get_logger().info(F"key {key}")
-
-    rclpy.spin(node)

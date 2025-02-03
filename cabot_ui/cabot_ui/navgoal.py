@@ -453,7 +453,7 @@ class Goal(geoutil.TargetPlace):
         pass
 
     def _save_params(self, callback):
-        CaBotRclpyUtil.info(F"{util.callee_name()} is called")
+        CaBotRclpyUtil.info(F"_save_params is called")
 
         def done_request_parameters_callback(result):
             CaBotRclpyUtil.info("done_request_parameters_callback is called")
@@ -839,9 +839,11 @@ class NavGoal(Goal):
                 temp.extend(item.pois)
         return temp
 
-    @util.setInterval(5, times=1)
     def call_delay(self, func):
-        func()
+        def inner_callback():
+            self.call_delay_timer.cancel()
+            func()
+        self.call_delay_timer = CaBotRclpyUtil.instance().node.create_timer(5.0, inner_callback)
 
     def nav_params_keys(self):
         return Nav2Params.all_keys()
@@ -888,22 +890,25 @@ class NavGoal(Goal):
             return
 
         if future:
-            CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
+            CaBotRclpyUtil.info(F"NavGoal done_callback result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
         else:
             CaBotRclpyUtil.info("Could not send goal")
         status = future.result().status if future is not None else None
 
         # TODO(daisuke): needs to change test case conditions
         if status == GoalStatus.STATUS_SUCCEEDED:
+            CaBotRclpyUtil.info("NavGoal STATUS_SCCEEDED")
             if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
                 self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
             if self.mode == geojson.NavigationMode.Crosswalk:
                 self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
 
         if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
+            CaBotRclpyUtil.info(f"NavGoal has more route {self.route_index}/{len(self.navcog_routes)}, so go next")
             self.route_index += 1
             self.enter()
         else:
+            CaBotRclpyUtil.info(f"NavGoal actually completed {self.mode=}")
             if self.mode == geojson.NavigationMode.Tight:
                 self.delegate.please_return_position()
             self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)

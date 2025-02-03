@@ -260,8 +260,13 @@ class ControlBase(object):
         else:
             self._datautil = datautil.getInstance(node)
             self._datautil.set_anchor(self._anchor)
-            self._datautil.init_by_server()
-            self._datautil.set_anchor(self._anchor)
+
+            def target(du):
+                self._logger.info(f"init_by_server {du._hostname=} started {du}")
+                du.init_by_server()
+                du.set_anchor(self._anchor)
+            self._logger.info(f"init_by_server {self._datautil._hostname=} will start {self._datautil=}")
+            threading.Thread(target=target, args=(self._datautil,), daemon=True).start()
 
     # current location
     def current_ros_pose(self, frame=None):
@@ -614,7 +619,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
           - cannot use NavCog topology
           - NavCog topology needs to be fixed
         """
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._set_destination called")
         try:
             from_id = self.current_location_id()
         except RuntimeError:
@@ -690,7 +695,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._process_queue.append((self._retry_navigation,))
 
     def _retry_navigation(self):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._retry_navigation called")
         self.delegate.activity_log("cabot/navigation", "retry")
         self.turns = []
 
@@ -703,7 +708,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._process_queue.append((self._pause_navigation, callback))
 
     def _pause_navigation(self, callback):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._pause_navigation called")
         self.delegate.activity_log("cabot/navigation", "pause")
 
         if self._current_goal:
@@ -723,12 +728,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._process_queue.append((self._resume_navigation, callback))
 
     def _resume_navigation(self, callback):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._resume_navigation called")
         self.delegate.activity_log("cabot/navigation", "resume")
 
         current_pose = self.current_local_pose()
         goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
-        self._logger.info(F"navigation.{util.callee_name()} estimated next goal index={index}: {goal}")
+        self._logger.info(F"navigation._resume_navigation_resume_navigation estimated next goal index={index}: {goal}")
         if goal:
             goal.estimate_inner_goal(current_pose, self.current_floor)
             self._goal_index = index-1
@@ -745,7 +750,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def _cancel_navigation(self, callback):
         """callback for cancel topic"""
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._cancel_navigation called")
         self.delegate.activity_log("cabot/navigation", "cancel")
         self._sub_goals = None
         self._goal_index = -1
@@ -758,7 +763,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # private methods for navigation
     def _navigate_next_sub_goal(self):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._navigate_next_sub_goal called")
         if self._sub_goals is None:
             self._logger.info("navigation is canceled")
             return
@@ -777,7 +782,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.social_navigation.set_active(False)
 
     def _navigate_sub_goal(self, goal):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"navigation._navigate_sub_goal called")
         self.delegate.activity_log("cabot/navigation", "sub_goal")
 
         if isinstance(goal, navgoal.NavGoal):
@@ -800,23 +805,22 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except:  # noqa: E722
             import traceback
             self._logger.error(traceback.format_exc())
-        self._start_loop()
+        # self._start_loop()
 
     def _start_loop(self):
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        if self.lock.acquire():
+        self._logger.info(F"navigation._start_loop called")
+        with self.lock:
             if self._loop_handle is None:
-                self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
-            self.lock.release()
+                #self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
+                self._loop_handle = self._node.create_timer(1.5, self._check_loop, callback_group=self._main_callback_group)
 
     def _stop_loop(self):
         return
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        if self.lock.acquire():
+        self._logger.info(F"navigation._stop_loop called")
+        with self.lock:
             if self._loop_handle is not None:
                 self._loop_handle.cancel()
                 self._loop_handle = None
-            self.lock.release()
 
     def _process_queue_func(self):
         process = None
@@ -833,6 +837,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     GOAL_POSITION_TORELANCE = 1
 
     def _check_loop(self):
+        try:
+            self.__check_loop()
+        except:
+            self._logger.error(traceback.format_exc())
+
+    def __check_loop(self):
         self._logger.info("_check_loop", throttle_duration_sec=1.0)
         if not rclpy.ok():
             self._stop_loop()
@@ -1105,7 +1115,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _check_social(self, current_pose):
         if self.social_navigation is None:
             return
-        self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
+        self._logger.info(F"navigation._check_social called", throttle_duration_sec=1)
 
         # do not provide social navigation messages while queue navigation
         if self._current_goal and not self._current_goal.is_social_navigation_enabled:
@@ -1121,7 +1131,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.request_sound(sound)
 
     def _check_goal(self, current_pose):
-        self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
+        self._logger.info(F"navigation._check_goal called", throttle_duration_sec=1)
         goal = self._current_goal
         if not goal:
             return
@@ -1224,7 +1234,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     return
                 time.sleep(0.1)
 
-        timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
+        timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 15))
         timeout_tread.start()
         return future
 
@@ -1434,6 +1444,7 @@ class NavigationParamManager:
         self.node = node
         self.clients = {}
         self.callback_group = MutuallyExclusiveCallbackGroup()
+        self.timeout_timer = None
 
     def get_client(self, node_name, service_type, service_name):
         key = f'{node_name}/{service_name}'
@@ -1446,6 +1457,7 @@ class NavigationParamManager:
 
     def change_parameter(self, node_name, param_dict, callback):
         def done_callback(future):
+            self.timeout_timer.cancel()
             callback(node_name, future)
         request = SetParameters.Request()
         for param_name, param_value in param_dict.items():
@@ -1454,15 +1466,31 @@ class NavigationParamManager:
         client = self.get_client(node_name, SetParameters, "set_parameters")
         if client:
             future = client.call_async(request)
+            if self.timeout_timer is None:
+                self.timeout_timer = self.node.create_timer(2.0, self.timeout_change_parameter(callback, node_name, future))
+            else:
+                self.node.get_logger().info("change_parameter reset timer")
+                self.timeout_timer.reset()
             future.add_done_callback(done_callback)
         else:
             done_callback(None)
 
     def change_parameters(self, params, callback):
         def sub_callback(node_name, future):
-            del params[node_name]
-            self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")
+            if future and future.cancelled():
+                self.node.get_logger().info("change_parameter sub_callback future cancelled")
+                self.node.get_logger().info(f"change_parameter sub_callback {node_name=} {len(params)=} {future.result() if future else None}")
+                self.change_parameters(params, callback)
+                return
+            if node_name in params:
+                self.node.get_logger().info(f"delete {node_name=}")
+                del params[node_name]
+            else:
+                self.node.get_logger().info(f"already deleted {node_name=}")
+
+            self.node.get_logger().info(f"change_parameter sub_callback {node_name=} {len(params)=} {future.result() if future else None}")
             if len(params) == 0:
+                self.node.get_logger().info("change_parameter completed")
                 if future:
                     callback(future.result())
                 else:
@@ -1470,12 +1498,23 @@ class NavigationParamManager:
             else:
                 self.change_parameters(params, callback)
         for node_name, param_dict in params.items():
-            self.node.get_logger().info(f"call change_parameter {node_name}, {param_dict}")
+            self.node.get_logger().info(f"call change_parameter {node_name=}, {param_dict=}, {len(params)=}")
             try:
                 self.change_parameter(node_name, param_dict, sub_callback)
             except:  # noqa: 722
                 self.node.get_logger().error(traceback.format_exc())
             break
+
+    def timeout_change_parameter(self, callback, node_name, future):
+        def inner_callback():
+            self.node.get_logger().info("change_parameter timeout_change_parameter")
+            try:
+                self.timeout_timer.cancel()
+                future.cancel()
+                # callback(node_name, future)
+            except:
+                self.node.get_logger().error(traceback.format_exc())
+        return inner_callback
 
     def request_parameter(self, node_name, param_list, callback):
         def done_callback(future):
