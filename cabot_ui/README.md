@@ -91,6 +91,14 @@
   CABOT_HANDLE_BUTTON_MAPPING=2
   ```
 ##### 1 (default)
+example .env file
+```
+CABOT_IMAGE_DESCRIPTION_ENABLED=true
+CABOT_IMAGE_DESCRIPTION_SERVER=http://localhost:8000
+CABOT_HANDLE_BUTTON_MAPPING=1
+CABOT_IMAGE_DESCRIPTION_MODE=surround,stop-reason
+```
+Key Mapping
 - Right Click: Start navigation
 - Left Click: Pause navigation
 - Down Click: decrease speed
@@ -105,6 +113,14 @@
 
 
 ##### 2 (New button mapping)
+example .env file
+```
+CABOT_IMAGE_DESCRIPTION_ENABLED=true
+CABOT_IMAGE_DESCRIPTION_SERVER=http://localhost:8000
+CABOT_HANDLE_BUTTON_MAPPING=2
+CABOT_IMAGE_DESCRIPTION_MODE=surround,stop-reason
+```
+Key Mapping
 - Left Hold (1 second): Pause navigation
 - Left Hold (3 seconds): Stop motor control
 - Down Hold: Gradually decrease speed (speed drops every second)
