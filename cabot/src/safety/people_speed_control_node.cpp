@@ -482,7 +482,7 @@ private:
       double pvx = v_local.x();
       double pvy = v_local.y();
 
-      double RPy = atan2(rel_y, rel_x);
+      double rel_th = atan2(rel_y, rel_x);
       double dist = hypot(rel_x, rel_y);
 
       if (dist < pr) {
@@ -491,8 +491,8 @@ private:
       }
 
       double s = asin(pr / dist);
-      double theta_right = normalizedAngle(RPy - s);
-      double theta_left = normalizedAngle(RPy + s);
+      double theta_right = normalizedAngle(rel_th - s);
+      double theta_left = normalizedAngle(rel_th + s);
 
       if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
         addVOMarker(dist, pvx, pvy, theta_right, theta_left, map_to_robot_tf2);
@@ -505,12 +505,13 @@ private:
 
       // compute the intersection points between the x-axis and the velocity obstacle cone
       {
-        auto vo_intersection = computeVOIntersection(pvx, pvy, RPy, theta_right, theta_left);
+        auto vo_intersection = computeVOIntersection(pvx, pvy, rel_th, theta_right, theta_left);
 
         if (vo_intersection.empty()) {
           continue;
-        } else if (vo_intersection.size() != 2) {
-          RCLCPP_ERROR(get_logger(), "There is an error in the number of intersection points.");
+        }
+        if (vo_intersection.size() != 2) {
+          RCLCPP_ERROR(get_logger(), "Invalid number of intersection points in velocity obstacle calculation.");
           continue;
         }
 
@@ -522,10 +523,10 @@ private:
     }
 
     // velocity obstacle speed limit without considering social distance constraints
-    double pure_velocity_obstacle_speed_limit = computeSafeSpeedLimit(max_speed_, vo_data_queue, map_to_robot_tf2);
+    double pure_velocity_obstacle_speed_limit = computeSafeSpeedLimit(max_speed_, vo_data_queue);
 
     // velocity obstacle speed limit constrained by social distance restrictions
-    double combined_speed_limit = computeSafeSpeedLimit(social_distance_speed_limit, vo_data_queue, map_to_robot_tf2);
+    double combined_speed_limit = computeSafeSpeedLimit(social_distance_speed_limit, vo_data_queue);
 
     // final speed limit
     double people_speed_limit;
@@ -625,10 +626,11 @@ private:
     // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
   }
 
-  std::vector<double> computeVOIntersection(const double vx_p, const double vy_p, const double RPy, const double theta_right, const double theta_left)
+  std::vector<double> computeVOIntersection(const double vx_p, const double vy_p, const double rel_th, const double theta_right, const double theta_left)
   {
     constexpr double pseudo_infinity = std::numeric_limits<double>::max();
 
+    // compute the parametric value (t) where the velocity obstacle cone intersects the x-axis
     auto computeParametricValue = [&](double theta) -> std::optional<double> {
         if (std::fabs(std::sin(theta)) < 1e-6) {
           return std::nullopt;
@@ -640,9 +642,15 @@ private:
         return t;
       };
 
+    // determine the pseudo boundary based on the angle range
     auto getPseudoBoundary = [](double theta) -> double {
         return (-M_PI_2 <= theta && theta < M_PI_2) ? pseudo_infinity : -pseudo_infinity;
       };
+
+    // compute the velocity at the intersection point
+    auto computeVelocityAtIntersection = [&](double t, double theta) -> double {
+        return vx_p + t * std::cos(theta);
+    };
 
     std::optional<double> t_right = computeParametricValue(theta_right);
     std::optional<double> t_left = computeParametricValue(theta_left);
@@ -650,11 +658,12 @@ private:
     std::vector<double> intersection;
 
     if (t_right && t_left) {
-      double vo_right = vx_p + t_right.value() * cos(theta_right);
-      double vo_left = vx_p + t_left.value() * cos(theta_left);
+      double vo_right = computeVelocityAtIntersection(t_right.value(), theta_right);
+      double vo_left = computeVelocityAtIntersection(t_left.value(), theta_left);
+
       if (std::fabs(vo_right - vo_left) < epsilon) {
         intersection.push_back(vo_right);
-        if (-M_PI_2 <= RPy && RPy < M_PI_2) {
+        if (-M_PI_2 <= rel_th && rel_th < M_PI_2) {
           intersection.push_back(pseudo_infinity);
         } else {
           intersection.push_back(-pseudo_infinity);
@@ -663,14 +672,12 @@ private:
         intersection.push_back(vo_right);
         intersection.push_back(vo_left);
       }
-    }
-    if (t_right && !t_left) {
-      intersection.push_back(vx_p + t_right.value() * cos(theta_right));
+    } else if (t_right) {
+      intersection.push_back(computeVelocityAtIntersection(t_right.value(), theta_right));
       intersection.push_back(getPseudoBoundary(theta_left));
-    }
-    if (!t_right && t_left) {
+    } else if (t_left) {
       intersection.push_back(getPseudoBoundary(theta_right));
-      intersection.push_back(vx_p + t_left.value() * cos(theta_left));
+      intersection.push_back(computeVelocityAtIntersection(t_left.value(), theta_left));
     }
 
     return intersection;
@@ -700,7 +707,7 @@ private:
 
   bool checkCollisionInRange(double vo_min, double vo_max, double rel_x, double rel_y, double pvx, double pvy)
   {
-    constexpr double v_step = 0.1;
+    constexpr double v_step = 0.1; // step size for velocity iteration
     for (double rvx_curr = vo_min; rvx_curr <= vo_max; rvx_curr += v_step) {
       double rel_vx = pvx - rvx_curr;
       if (willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
@@ -728,11 +735,10 @@ private:
   }
 
   double computeSafeSpeedLimit(
-    double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue,
-    const tf2::Stamped<tf2::Transform> & map_to_robot_tf2)
+    double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue)
   {
     auto vo_data_queue_copy = vo_data_queue;
-    double rvx = last_odom_.twist.twist.linear.x;
+    const double rvx = last_odom_.twist.twist.linear.x;
 
     while (!vo_data_queue_copy.empty()) {
       const auto & vo_data = vo_data_queue_copy.top();
@@ -740,10 +746,17 @@ private:
 
       vo_data_queue_copy.pop();
 
+      // People walking below the speed threshold are not subject to velocity obstacle speed limits
       if (dist < pr) {
         return 0.0;
       }
 
+      // Case 1: The velocity obstacle intersection range is positive
+      //
+      //                  VO Range
+      //         --+-----+-------+---->
+      //           0   vo_min  vo_max
+      //
       if (vo_intersection_min > 0.0) {
         if (vo_intersection_min < rvx && rvx < vo_intersection_max) {
           double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx : vo_intersection_max;
@@ -755,13 +768,20 @@ private:
             speed_limit = std::min(speed_limit, vo_intersection_min);
           }
         }
-      } else if (vo_intersection_max >= 0.0) {
+      }
+      // Case 2: The velocity obstacle intersection range includes zero or negative values
+      //
+      //               VO Range
+      //         ----+-----+----+---->
+      //           vo_min  0  vo_max
+      //
+      else if (vo_intersection_max >= 0.0) {
         double rel_vx = pvx - rvx;
         if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
-            speed_limit = (rel_x > pr)
-                          ? std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr))))
-                          : 0.0;
+            speed_limit = (rel_x > pr) ?
+              std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr)))) :
+              0.0;
           }
         }
       }
