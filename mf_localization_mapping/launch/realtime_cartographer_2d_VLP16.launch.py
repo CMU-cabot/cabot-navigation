@@ -87,9 +87,9 @@ def generate_launch_description():
             cmd.extend(['--use-sim-time'])
         if record_required.perform(context) == 'true':
             if record_points.perform(context) == 'true':
-                cmd.extend(['-a', '-x', "'/map|(.*)/image_raw|(.*)/image_raw/(.*)'"])
+                cmd.extend(['-a', '-x', "'/map|(.*)points_cropped|/pandar_packets|(.*)/image_raw|(.*)/image_raw/(.*)'"])
             else:
-                cmd.extend(['-a', '-x', "'/map|/velodyne_points|(.*)/image_raw|(.*)/image_raw/(.*)'"])
+                cmd.extend(['-a', '-x', "'/map|/velodyne_points|(.*)points_cropped|/pandar_packets|(.*)/image_raw|(.*)/image_raw/(.*)'"])
         else:
             cmd.append('-a')
         saved_location_temp = []
