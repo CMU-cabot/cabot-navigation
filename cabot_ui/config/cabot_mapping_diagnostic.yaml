@@ -11,6 +11,7 @@ diagnostic_aggregator:
         - "cabot_serial: Pressure"
         - "cabot_serial: Temperature"
         - "cabot_serial: Touch"
+        - "cabot_can: Pressure"
         - "Rosserial Connection"
         - "cabot_serial: Serial Connection"
         - "rosserial_esp32: Serial Connection"
@@ -25,13 +26,16 @@ diagnostic_aggregator:
         - "dbus_ibeacon_scanner: "
         - "ble_scan_converter: "
 
-    hard_micon:
+    # IMU (cabot_serial or cabot_can)
+    hard_imu:
       type: diagnostic_aggregator/GenericAnalyzer
       path: "Hard: IMU"
       contains:
         - "cabot_serial: IMU"
+        - "cabot_can: IMU"
       remove_prefix:
         - "cabot_serial: "
+        - "cabot_can: "
 
     hard_wifi:
       type: diagnostic_aggregator/GenericAnalyzer
@@ -43,13 +47,36 @@ diagnostic_aggregator:
         - "esp32_wifi_scan_converter: "
         - "rosserial_esp32: "
         
-
-    hard_velodyne:
+    # LiDAR (velodyne or hesai)
+    hard_lidar:
       type: diagnostic_aggregator/GenericAnalyzer
-      path: "Hard: Velodyne"
+      path: "Hard: LiDAR"
       contains:
         - "velodyne_driver_node: "
         - "velodyne_transform_node: "
+        - "hesai"
       remove_prefix:
         - "velodyne_driver_node: "
         - "velodyne_transform_node: "
+        - "hesai_lidar: "
+
+    # ublox
+    discard_ublox:
+      type: diagnostic_aggregator/DiscardAnalyzer
+      path: discard
+      contains:
+        - "ublox: TMODE3"
+
+    hard_ublox:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: ublox GNSS"
+      contains:
+        - "ublox: fix"
+
+    soft_ntrip:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Soft: NTRIP client"
+      contains:
+        - "ntrip_client:"
+      remove_prefix:
+        - "ntrip_client:"
