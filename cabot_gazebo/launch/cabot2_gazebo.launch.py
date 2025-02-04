@@ -99,6 +99,7 @@ def generate_launch_description():
     use_gnss = LaunchConfiguration('use_gnss')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
     gdb = LaunchConfiguration('gdb')
+    use_low_obstacle_detect = LaunchConfiguration('use_low_obstacle_detect')
 
     gazebo_params = os.path.join(
         pkg_dir,
@@ -109,8 +110,6 @@ def generate_launch_description():
         executable='check_gazebo_ready.py',
         name='check_gazebo_ready_node',
     )
-
-    use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
 
     # these models have lidar attached side way
     lidar_target_frame = PythonExpression([
@@ -185,6 +184,11 @@ def generate_launch_description():
             'gdb',
             default_value='false',
             description='use gdb'
+        ),
+        DeclareLaunchArgument(
+            'use_low_obstacle_detect',
+            default_value='false',
+            description='use low obstacle detection'
         ),
 
         LogInfo(
@@ -296,7 +300,7 @@ def generate_launch_description():
                         ]
                     ),
                 ],
-                condition=IfCondition(use_livox)
+                condition=IfCondition(use_low_obstacle_detect)
             ),
 
             IncludeLaunchDescription(
