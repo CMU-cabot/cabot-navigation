@@ -24,6 +24,4 @@ fi
 # Source ROS setup script
 source "/opt/custom_ws/install/setup.bash"
 
-WORKDIR=$(pwd)
-
-exec gosu developer bash -c "cd $WORKDIR && exec $*"
+exec gosu developer "$@"
