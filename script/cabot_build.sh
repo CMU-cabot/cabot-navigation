@@ -46,9 +46,30 @@ while getopts "d" arg; do
 done
 shift $((OPTIND-1))
 
+if [[ -e DEBUG_BUILD ]] && [[ $debug -eq 0 ]]; then
+    echo "WORKSPACE IS BUILT WITH DEBUG -d"
+    echo "You are tring to build the workspace without debug flag, where you have built with the debug flag before"
+    echo "Your options are"
+    echo "  ./bild-workspace.sh -d"
+    echo "  ./docker/clean_ws.sh"
+    echo "  rm docker/home/ros2_ws/DEBUG_BUILD"
+    exit 1
+fi
+if [[ -e RELEASE_BUILD ]] && [[ $debug -eq 1 ]]; then
+    echo "WORKSPACE IS BUILT WITHOUT DEBUG"
+    echo "You are tring to build the workspace with debug flag, where you have built without the debug flag before"
+    echo "Your options are"
+    echo "  ./bild-workspace.sh"
+    echo "  ./docker/clean_ws.sh"
+    echo "  rm docker/home/ros2_ws/RELEASE_BUILD"
+    exit 1
+fi
+
 if [[ $debug -eq 1 ]]; then
+    touch DEBUG_BUILD
     colcon build --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install --executor sequential $@
 else
+    touch RELEASE_BUILD
     colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --executor sequential $@
 fi
 
