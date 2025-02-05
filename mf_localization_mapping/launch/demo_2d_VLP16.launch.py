@@ -48,6 +48,7 @@ def generate_launch_description():
     bag_filename = LaunchConfiguration('bag_filename')
     save_samples = LaunchConfiguration('save_samples')
     save_state = LaunchConfiguration('save_state')
+    save_trajectory = LaunchConfiguration('save_trajectory')
     save_pose = LaunchConfiguration('save_pose')
     convert_points = LaunchConfiguration('convert_points')
     convert_imu = LaunchConfiguration('convert_imu')
@@ -115,6 +116,7 @@ def generate_launch_description():
         DeclareLaunchArgument('bag_filename'),
         DeclareLaunchArgument('save_samples', default_value='false'),
         DeclareLaunchArgument('save_state', default_value='false'),
+        DeclareLaunchArgument('save_trajectory', default_value='false'),
         DeclareLaunchArgument('save_pose', default_value='false'),
         DeclareLaunchArgument('convert_points', default_value='false'),
         DeclareLaunchArgument('convert_imu', default_value='false'),
@@ -224,7 +226,7 @@ def generate_launch_description():
                 'output': [bag_filename, '.loc.samples.json'],
                 'topics': wireless_topics,
                 'save_empty_beacon_sample': save_empty_beacon_sample,
-                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_pose, '"=="true" else ""']),
+                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
                 'interpolate_by_trajectory': interpolate_samples_by_trajectory,
             }],
             condition=IfCondition(save_samples),
