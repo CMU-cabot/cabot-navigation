@@ -72,6 +72,7 @@ def generate_launch_description():
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
 
+    fix_status_threshold = LaunchConfiguration('fix_status_threshold')
     interpolate_samples_by_trajectory = LaunchConfiguration('interpolate_samples_by_trajectory')
 
     def configure_ros2_bag_play(context, node):
@@ -139,6 +140,7 @@ def generate_launch_description():
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
         DeclareLaunchArgument('quit_when_rosbag_finish', default_value='false'),
 
+        DeclareLaunchArgument('fix_status_threshold', default_value='2'),
         DeclareLaunchArgument('interpolate_samples_by_trajectory', default_value='false'),
 
         SetParameter('use_sim_time', ParameterValue(True)),
@@ -199,6 +201,9 @@ def generate_launch_description():
             package='mf_localization',
             executable='fix_filter.py',
             name='ublox_fix_filter',
+            parameters=[{
+                'status_threshold': fix_status_threshold,
+            }],
             remappings=[
                 ('fix', 'ublox/fix'),
                 ('fix_filtered', 'ublox/fix_filtered')
