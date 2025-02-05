@@ -96,7 +96,8 @@ public:
   std::string robot_base_frame_;
 
   double max_speed_;
-  double min_speed_;
+  double sd_min_speed_;
+  double vo_min_speed_;
   double max_acc_;
   double max_dec_;
   double delay_;
@@ -149,7 +150,8 @@ public:
     map_frame_("map"),
     robot_base_frame_("base_footprint"),
     max_speed_(1.0),
-    min_speed_(0.1),
+    sd_min_speed_(0.1),
+    vo_min_speed_(0.1),
     max_acc_(0.5),
     max_dec_(-1.0),
     delay_(0.5),
@@ -212,7 +214,8 @@ public:
     event_pub_ = create_publisher<std_msgs::msg::String>(event_topic_, 100);
 
     max_speed_ = declare_parameter("max_speed_", max_speed_);
-    min_speed_ = declare_parameter("min_speed_", min_speed_);
+    sd_min_speed_ = declare_parameter("sosial_distance_min_speed_", sd_min_speed_);
+    vo_min_speed_ = declare_parameter("velocity_obstacle_min_speed_", vo_min_speed_);
     max_acc_ = declare_parameter("max_acc_", max_acc_);
     max_dec_ = declare_parameter("max_dec_", max_dec_);
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
@@ -318,8 +321,11 @@ public:
       if (param.get_name() == "max_speed_") {
         max_speed_ = param.as_double();
       }
-      if (param.get_name() == "min_speed_") {
-        min_speed_ = param.as_double();
+      if (param.get_name() == "sd_min_speed_") {
+        sd_min_speed_ = param.as_double();
+      }
+      if (param.get_name() == "vo_min_speed_") {
+        vo_min_speed_ = param.as_double();
       }
       if (param.get_name() == "max_acc_") {
         max_acc_ = param.as_double();
@@ -446,7 +452,7 @@ private:
         social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
       }
 
-      if (social_distance_speed_limit < min_speed_) {
+      if (social_distance_speed_limit < sd_min_speed_) {
         social_distance_speed_limit = 0;
       }
 
@@ -748,7 +754,7 @@ private:
 
       // People walking below the speed threshold are not subject to velocity obstacle speed limits
       if (dist < pr) {
-        return 0.0;
+        return vo_min_speed_;
       }
 
       // Case 1: The velocity obstacle intersection range is positive
@@ -781,7 +787,7 @@ private:
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
             speed_limit = (rel_x > pr) ?
               std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr)))) :
-              0.0;
+              vo_min_speed_;
           }
         }
       }
