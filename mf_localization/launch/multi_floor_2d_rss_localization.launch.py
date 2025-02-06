@@ -108,6 +108,7 @@ def generate_launch_description():
                 package='mf_localization',
                 executable='multi_floor_topic_proxy',
                 name='multi_floor_topic_proxy',
+                output={},
                 parameters=[{
                     'map_config_file': map_config_file,
                     'verbose': True,
@@ -123,6 +124,7 @@ def generate_launch_description():
                 package='mf_localization',
                 executable='multi_floor_manager.py',
                 name='multi_floor_manager',
+                output={},
                 parameters=[{
                     'map_config_file': map_config_file,
                     'tags': tags,

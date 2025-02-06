@@ -211,6 +211,9 @@ services:
 
   navigation-dev-base:
     extends: navigation-base
+    environment: &dev-environment
+      - OVERRIDE_LAUNCH_PROCESS_OUTPUT=screen
+      - RCUTILS_CONSOLE_OUTPUT_FORMAT={time}	[{severity}]	[{file_name}#L{line_number}][{name}]	{message}
     volumes:
 # code
       - ./cabot:/home/developer/ros2_ws/src/cabot
@@ -255,6 +258,7 @@ services:
 
   gazebo-dev-base:
     extends: navigation-dev-base
+    environment: *dev-environment
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -282,6 +286,7 @@ services:
 
   gui-dev-base:
     extends: navigation-dev-base
+    environment: *dev-environment
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -306,6 +311,7 @@ services:
 
   localization-dev-base:
     extends: localization-base
+    environment: *dev-environment
     volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
@@ -357,6 +363,7 @@ services:
     extends:
       service: localization-dev-base
     environment:
+      - <*dev-environment
       # rtklib
       - RTK_STR_IN
       - CABOT_SITE # if RTK_STR_IN is not specified, RTK_STR_IN will be loaded from CABOT_SITE
