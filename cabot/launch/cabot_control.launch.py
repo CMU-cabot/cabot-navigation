@@ -40,7 +40,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
-    output = 'both'
+    output = {}
     pkg_dir = get_package_share_directory('cabot')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
