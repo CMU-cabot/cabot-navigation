@@ -91,7 +91,7 @@ class AddStatePlugin(Substitution):
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_gazebo')
-    output = 'both'
+    output = {}
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_name = LaunchConfiguration('model')
@@ -193,7 +193,7 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time,
                     'publish_frequency': 100.0,
                     'robot_description': robot_description
-                }]
+                }],
             ),
             # publish **local** robot state for local map navigation (getting off elevators)
             Node(
@@ -206,7 +206,7 @@ def generate_launch_description():
                     'publish_frequency': 100.0,
                     'frame_prefix': 'local/',
                     'robot_description': robot_description
-                }]
+                }],
             ),
 
             # launch velodyne lider related nodes
@@ -216,6 +216,7 @@ def generate_launch_description():
                 package='rclcpp_components',
                 executable='component_container',
                 composable_node_descriptions=[],
+                output=output,
             ),
 
             LoadComposableNodes(
@@ -229,7 +230,7 @@ def generate_launch_description():
                         parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
                         remappings=[
                             ('/cloud_in', '/velodyne_points')
-                        ]
+                        ],
                     ),
                     ComposableNode(
                         package='pcl_ros',
@@ -240,7 +241,7 @@ def generate_launch_description():
                         remappings=[
                             ('/input',  '/velodyne_points'),
                             ('/output', '/velodyne_points_cropped')
-                        ]
+                        ],
                     ),
                 ]
             ),
@@ -252,6 +253,7 @@ def generate_launch_description():
                 package='rclcpp_components',
                 executable='component_container',
                 composable_node_descriptions=[],
+                output=output,
             ),
             LoadComposableNodes(
                 target_container='/livox_container',
@@ -318,7 +320,7 @@ def generate_launch_description():
                     'std_msgs/msg/String',
                     'data: left,right',
                 ],
-                output='screen',
+                output=output,
             ),
             # cabot feature touchmode (ad-hoc implementation)
             ExecuteProcess(
@@ -334,7 +336,7 @@ def generate_launch_description():
                     'std_msgs/msg/String',
                     'data: cap,tof,dual',
                 ],
-                output='screen',
+                output=output,
             ),
 
             check_gazebo_ready,
