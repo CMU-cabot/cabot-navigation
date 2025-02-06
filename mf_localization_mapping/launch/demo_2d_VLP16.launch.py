@@ -48,6 +48,7 @@ def generate_launch_description():
     bag_filename = LaunchConfiguration('bag_filename')
     save_samples = LaunchConfiguration('save_samples')
     save_state = LaunchConfiguration('save_state')
+    save_trajectory = LaunchConfiguration('save_trajectory')
     save_pose = LaunchConfiguration('save_pose')
     convert_points = LaunchConfiguration('convert_points')
     convert_imu = LaunchConfiguration('convert_imu')
@@ -72,6 +73,8 @@ def generate_launch_description():
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
 
+    fix_status_threshold = LaunchConfiguration('fix_status_threshold')
+    fix_overwrite_time = LaunchConfiguration('fix_overwrite_time')
     interpolate_samples_by_trajectory = LaunchConfiguration('interpolate_samples_by_trajectory')
 
     def configure_ros2_bag_play(context, node):
@@ -114,6 +117,7 @@ def generate_launch_description():
         DeclareLaunchArgument('bag_filename'),
         DeclareLaunchArgument('save_samples', default_value='false'),
         DeclareLaunchArgument('save_state', default_value='false'),
+        DeclareLaunchArgument('save_trajectory', default_value='false'),
         DeclareLaunchArgument('save_pose', default_value='false'),
         DeclareLaunchArgument('convert_points', default_value='false'),
         DeclareLaunchArgument('convert_imu', default_value='false'),
@@ -139,6 +143,8 @@ def generate_launch_description():
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
         DeclareLaunchArgument('quit_when_rosbag_finish', default_value='false'),
 
+        DeclareLaunchArgument('fix_status_threshold', default_value='2'),
+        DeclareLaunchArgument('fix_overwrite_time', default_value='false'),
         DeclareLaunchArgument('interpolate_samples_by_trajectory', default_value='false'),
 
         SetParameter('use_sim_time', ParameterValue(True)),
@@ -163,7 +169,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', PathJoinSubstitution([get_package_share_directory('cartographer_ros'), 'configuration_files', 'demo_2d.rviz'])]
+            arguments=['-d', PathJoinSubstitution([pkg_dir, 'configuration_files', 'rviz', 'demo_2d.rviz'])]
         ),
 
         IncludeLaunchDescription(
@@ -199,6 +205,10 @@ def generate_launch_description():
             package='mf_localization',
             executable='fix_filter.py',
             name='ublox_fix_filter',
+            parameters=[{
+                'status_threshold': fix_status_threshold,
+                'overwrite_time': fix_overwrite_time,
+            }],
             remappings=[
                 ('fix', 'ublox/fix'),
                 ('fix_filtered', 'ublox/fix_filtered')
@@ -219,7 +229,7 @@ def generate_launch_description():
                 'output': [bag_filename, '.loc.samples.json'],
                 'topics': wireless_topics,
                 'save_empty_beacon_sample': save_empty_beacon_sample,
-                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_pose, '"=="true" else ""']),
+                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
                 'interpolate_by_trajectory': interpolate_samples_by_trajectory,
             }],
             condition=IfCondition(save_samples),

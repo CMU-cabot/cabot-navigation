@@ -28,11 +28,12 @@ from sensor_msgs.msg import NavSatFix
 
 
 class FixFilterNode:
-    def __init__(self, node, status_threshold, stdev_threshold):
+    def __init__(self, node, status_threshold, stdev_threshold, overwrite_time=True):
         self._node = node
         self._clock = node.get_clock()
         self._status_threshold = status_threshold
         self._stdev_threshold = stdev_threshold
+        self._overwrite_time = overwrite_time
         self._fix_sub = self._node.create_subscription(NavSatFix, "fix", self.fix_callback, 10)
         self._fix_pub = self._node.create_publisher(NavSatFix, "fix_filtered", 10)
 
@@ -43,7 +44,8 @@ class FixFilterNode:
         stdev = np.sqrt(position_covariance[0, 0])
 
         if self._status_threshold <= status and stdev <= self._stdev_threshold:
-            msg.header.stamp = self._clock.now().to_msg()
+            if self._overwrite_time:
+                msg.header.stamp = self._clock.now().to_msg()
             msg.altitude = 0.0
             self._fix_pub.publish(msg)
 
@@ -53,8 +55,9 @@ def main():
     node = rclpy.create_node("fix_filter")
     status_threshold = node.declare_parameter("status_threshold", 2).value
     stdev_threshold = node.declare_parameter("stdev_threshold", 0.1).value
+    overwrite_time = node.declare_parameter("overwrite_time", False).value
 
-    FixFilterNode(node, status_threshold, stdev_threshold)
+    FixFilterNode(node, status_threshold, stdev_threshold, overwrite_time)
 
     rclpy.spin(node)
 
