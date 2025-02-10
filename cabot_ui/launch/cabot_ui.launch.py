@@ -46,6 +46,7 @@ def generate_launch_description():
     announce_no_touch = LaunchConfiguration('announce_no_touch')
     speed_poi_params = LaunchConfiguration('speed_poi_params')
     handle_button_mapping = LaunchConfiguration('handle_button_mapping')
+    max_speed = LaunchConfiguration('max_speed')
 
     def hoge(text):
         return text
@@ -117,10 +118,15 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_HANDLE_BUTTON_MAPPING', default_value='1'),
             description="Set the handle button mapping"
         ),
+        DeclareLaunchArgument(
+            'max_speed',
+            default_value=EnvironmentVariable('CABOT_MAX_SPEED', default_value='1.0'),
+            description='Set maximum speed of the robot'
+        ),
         Node(
             package="cabot_ui",
             executable="cabot_ui_manager.py",
-            name="cabot_ui_manager",
+            # name="cabot_ui_manager",  # must not set name because it makes multiple nodes with different names
             parameters=[{
                 'init_speed': init_speed,
                 'anchor_file': anchor_file,
@@ -130,7 +136,8 @@ def generate_launch_description():
                 'menu_file': menu_file,
                 'speed_poi_params': speed_poi_params,
                 'handle_button_mapping': handle_button_mapping,
-            }, NamespaceParameterFile('cabot_ui_manager', config_path)],
+                'max_speed': max_speed,
+            }, NamespaceParameterFile('cabot_ui_manager_navigation', config_path)],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
             ],
