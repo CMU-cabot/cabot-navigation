@@ -26,16 +26,16 @@ main_menu:
 #      menu: destination_menu
 #    -
 #      menu: exploration_menu
-    -
-      menu: speech_speed_menu
-    -
-      menu: speech_voice_menu
-    -
-      menu: volume_menu
+#    -
+#      menu: speech_speed_menu
+#    -
+#      menu: speech_voice_menu
+#    -
+#      menu: volume_menu
     -
       menu: max_velocity_menu
-    -
-      menu: developer_menu
+#    -
+#      menu: developer_menu
 
 exploration_menu:
   type: item
