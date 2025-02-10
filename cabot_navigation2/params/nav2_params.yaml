@@ -592,4 +592,4 @@ cabot_livox_scan:
     use_sim_time: True
     scan_topic: livox_scan
     scan_out_topic: /local/livox_scan
-    scan_out_frame: local/livox_footprint
+    scan_out_frame_prefix: local/
