@@ -798,6 +798,7 @@ class POI(Facility, geoutil.TargetPlace):
         self.distance_mode = POI.DistanceMode.Line if self.sub_category == "_cabot_speed_" else POI.DistanceMode.Point
         self.distance_mode = POI.DistanceMode.Line if "_line_" in self.minor_category else self.distance_mode
         self.distance_mode = POI.DistanceMode.Point if "_point_" in self.minor_category else self.distance_mode
+        CaBotRclpyUtil.info(f"{self._id}, {self.sub_category=}, {self.distance_mode=}")
 
         # backward compatibility
         self.local_pose = self
@@ -884,8 +885,14 @@ class InfoPOI(POI):
 
     def __init__(self, **dic):
         super(InfoPOI, self).__init__(**dic)
-        if self.minor_category not in ["_priority_low_", "_priority_high_", "_priority_normal_", "_priority_required_", "", None]:
-            CaBotRclpyUtil.error(f"Invalid value for hulop_minor_category: {self.minor_category}")
+        temp = self.minor_category
+        for known_key in ["_priority_low_", "_priority_high_", "_priority_normal_", "_priority_required_", "_line_", "_point_"]:
+            if known_key in temp:
+                temp = temp.replace(known_key, "")
+        temp = temp.replace(" ", "")
+        temp = temp.replace(",", "")
+        if temp:
+            CaBotRclpyUtil.error(f"Invalid value for {self._id=} hulop_minor_category: ({temp}) {self.minor_category}")
 
     def get_minor_category(self):
         return self.minor_category
