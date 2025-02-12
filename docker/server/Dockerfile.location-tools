@@ -1,4 +1,4 @@
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2022, 2025  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,31 +18,30 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-FROM ubuntu:focal
+FROM ubuntu:jammy AS base
 
 ARG TZ="Etc/UTC"
+ARG UID=1001
+ARG GID=1001
 
 ENV TZ=$TZ \
-	DEBIAN_FRONTEND="noninteractive"
+        DEBIAN_FRONTEND="noninteractive"
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ | tee /etc/timezone
 
 RUN apt update && \
-	apt install -y \
-	wget \
-	curl \
-	openjdk-11-jre \
-	openjdk-11-jdk \
-	zip \
-	maven \
-	git \
-	curl \
-	jq
-
+        apt install -y --no-install-recommends \
+        curl \
+        gosu \
+        jq \
+        openjdk-11-jre \
+        zip \
+        && \
+        apt clean && \
+        rm -rf /var/lib/apt/lists/*
 
 ENV USERNAME runner_user
 
-ARG UID=1001
 RUN useradd -m $USERNAME && \
         echo "$USERNAME:$USERNAME" | chpasswd && \
         usermod --shell /bin/bash $USERNAME && \
@@ -53,32 +52,47 @@ RUN useradd -m $USERNAME && \
         usermod  --uid $UID $USERNAME && \
         groupmod --gid $UID $USERNAME
 
+FROM base AS build
+
+USER root
+RUN apt update && \
+        apt install -y --no-install-recommends \
+        git \
+        maven \
+        openjdk-11-jdk \
+        unzip \
+        wget
+
 USER $USERNAME
-
 WORKDIR /home/$USERNAME
-
 # this often does not work due to server issue
 RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtime/release/23.0.0.8/openliberty-javaee8-23.0.0.8.zip && \
-	unzip openliberty-javaee8-23.0.0.8.zip && \
-	cd wlp/bin && \
-	./server create defaultServer
-#
-# use this if the server is not reachable, sometimes you can download the file from the browser, but not with the build script
-# COPY openliberty-javaee8-19.0.0.12.zip openliberty-javaee8-19.0.0.12.zip
-# RUN    unzip openliberty-javaee8-19.0.0.12.zip && \
-#        cd wlp/bin && \
-#        ./server create defaultServer
-#
+        unzip openliberty-javaee8-23.0.0.8.zip
 
+ADD https://api.github.com/repos/CMU-cabot/BLELocalization/git/refs/heads/cabot-mapping BLELocalization-version.json
 RUN git clone https://github.com/cmu-cabot/BLELocalization -b cabot-mapping && \
-	cd BLELocalization/LocationTools && \
-	sh download-lib.sh
+        cd BLELocalization/LocationTools && \
+        sh download-lib.sh
 
 RUN cd BLELocalization/LocationTools && \
-	mvn initialize && \
-	mvn package && \
-        cp target/LocationTools-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
+        mvn initialize && \
+        mvn package
 
-COPY server-location-tools.xml /home/$USERNAME/wlp/usr/servers/defaultServer/server.xml
 
+FROM base AS final
+
+USER $USERNAME
+COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/wlp /home/$USERNAME/wlp
 WORKDIR /home/$USERNAME/wlp/bin
+RUN ./server create defaultServer
+
+COPY --from=build /home/$USERNAME/BLELocalization/LocationTools/target/LocationTools-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
+
+COPY --chown=$USERNAME:$USERNAME server-location-tools.xml /home/$USERNAME/wlp/usr/servers/defaultServer/server.xml
+
+USER root
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["./server", "run", "defaultServer"]
