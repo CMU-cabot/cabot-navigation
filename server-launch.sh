@@ -259,14 +259,14 @@ if [ -e $data_dir/server.env ]; then
     export ENV_FILE=$data_dir/server.env
     if [[ $verbose -eq 1 ]]; then
         docker compose -p $launch_prefix --profile $profile up -d
-        docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
+        docker compose --ansi never -p $launch_prefix logs -f
     else
         docker compose -p $launch_prefix --profile $profile up -d
     fi
 else
     if [[ $verbose -eq 1 ]]; then
         docker compose -p $launch_prefix --profile $profile up -d
-        docker compose --ansi never -p $launch_prefix -f $dcfile logs -f
+        docker compose --ansi never -p $launch_prefix logs -f
     else
         docker compose -p $launch_prefix --profile $profile up -d
     fi
