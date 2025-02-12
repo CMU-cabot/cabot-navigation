@@ -83,6 +83,8 @@ def generate_launch_description():
 
     def configure_ros2_bag_arguments(context, node):
         cmd = node.cmd.copy()
+        if use_sim_time.perform(context) == 'true':
+            cmd.extend(['--use-sim-time'])
         if record_required.perform(context) == 'true':
             if record_points.perform(context) == 'true':
                 cmd.extend(['-a', '-x', "'/map|(.*)/image_raw|(.*)/image_raw/(.*)'"])
