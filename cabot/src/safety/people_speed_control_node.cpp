@@ -47,7 +47,6 @@
 
 namespace
 {
-constexpr double pr = 1.0;  // robot radius + person radius + margin
 constexpr double epsilon = std::numeric_limits<double>::epsilon();  // machine epsilon
 }  // namespace
 
@@ -110,6 +109,12 @@ public:
   double collision_time_horizon_;
   double person_speed_threshold_;
   double forward_approach_angle_threshold_;
+  double robot_radius_;
+  double person_radius_;
+  double min_margin_radius_;
+  double max_margin_radius_;
+  double min_radius_;
+  double max_radius_;
   bool no_people_flag_;
   bool use_velocity_obstacle_;
   int not_collision_count_;
@@ -164,6 +169,10 @@ public:
     collision_time_horizon_(5.0),
     person_speed_threshold_(0.5),
     forward_approach_angle_threshold_(M_PI / 6.0),
+    robot_radius_(0.5),
+    person_radius_(0.2),
+    min_margin_radius_(0.0),
+    max_margin_radius_(0.3),
     no_people_flag_(false),
     use_velocity_obstacle_(true),
     not_collision_count_(0)
@@ -227,6 +236,13 @@ public:
     collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
     person_speed_threshold_ = declare_parameter("person_speed_threshold", person_speed_threshold_);
     forward_approach_angle_threshold_ = declare_parameter("forward_approach_angle_threshold", forward_approach_angle_threshold_);
+
+    robot_radius_ = declare_parameter("robot_radius", robot_radius_);
+    person_radius_ = declare_parameter("person_radius", person_radius_);
+    min_margin_radius_ = declare_parameter("min_margin_radius", min_margin_radius_);
+    max_margin_radius_ = declare_parameter("max_margin_radius", max_margin_radius_);
+    min_radius_ = robot_radius_ + person_radius_ + min_margin_radius_;
+    max_radius_ = robot_radius_ + person_radius_ + max_margin_radius_;
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -356,6 +372,26 @@ public:
       }
       if (param.get_name() == "forward_approach_angle_threshold") {
         forward_approach_angle_threshold_ = param.as_double();
+      }
+      if (param.get_name() == "robot_radius") {
+        robot_radius_ = param.as_double();
+        min_radius_ = robot_radius_ + person_radius_ + min_margin_radius_;
+        max_radius_ = robot_radius_ + person_radius_ + max_margin_radius_;
+      }
+      if (param.get_name() == "person_radius") {
+        person_radius_ = param.as_double();
+        min_radius_ = robot_radius_ + person_radius_ + min_margin_radius_;
+        max_radius_ = robot_radius_ + person_radius_ + max_margin_radius_;
+      }
+      if (param.get_name() == "min_margin_radius") {
+        min_margin_radius_ = param.as_double();
+        min_radius_ = robot_radius_ + person_radius_ + min_margin_radius_;
+        max_radius_ = robot_radius_ + person_radius_ + max_margin_radius_;
+      }
+      if (param.get_name() == "max_margin_radius") {
+        max_margin_radius_ = param.as_double();
+        min_radius_ = robot_radius_ + person_radius_ + min_margin_radius_;
+        max_radius_ = robot_radius_ + person_radius_ + max_margin_radius_;
       }
     }
     results->successful = true;
@@ -491,12 +527,12 @@ private:
       double rel_th = atan2(rel_y, rel_x);
       double dist = hypot(rel_x, rel_y);
 
-      if (dist < pr) {
+      if (dist < max_radius_) {
         vo_data_queue.push({dist, rel_x, rel_y, pvx, pvy, 0.0, 0.0, 0.0, max_speed_});
         continue;
       }
 
-      double s = asin(pr / dist);
+      double s = asin(max_radius_ / dist);
       double theta_right = normalizedAngle(rel_th - s);
       double theta_left = normalizedAngle(rel_th + s);
 
@@ -583,7 +619,7 @@ private:
     double dist, double vx, double vy, double theta_right, double theta_left,
     const tf2::Stamped<tf2::Transform> & map_to_robot_tf2)
   {
-    double visualized_dist = dist + pr;
+    double visualized_dist = dist + max_radius_;
 
     CaBotSafety::Point origin_point(vx, vy);
     CaBotSafety::Point right_point(vx + cos(theta_right) * visualized_dist, vy + sin(theta_right) * visualized_dist);
@@ -613,7 +649,8 @@ private:
     CaBotSafety::Line arrow_line(start_point, end_point);
     CaBotSafety::add_arrow(this->get_clock()->now(), arrow_line, 0.1, 1, 0, 0, 1);
 
-    CaBotSafety::add_circle(this->get_clock()->now(), 20, start_point, pr, 0.05, 1, 0, 0, 1);
+    CaBotSafety::add_circle(this->get_clock()->now(), 20, start_point, min_radius_, 0.05, 0.5, 0.5, 0, 1);
+    CaBotSafety::add_circle(this->get_clock()->now(), 20, start_point, max_radius_, 0.05, 1, 0, 0, 1);
 
     char buff[100];
     snprintf(buff, sizeof(buff), "limit - %.2fm/s", people_speed_limit);
@@ -693,7 +730,7 @@ private:
   {
     double a = vx_rel * vx_rel + vy_rel * vy_rel;
     double b = 2.0 * (x_rel * vx_rel + y_rel * vy_rel);
-    double c = x_rel * x_rel + y_rel * y_rel - pr * pr;
+    double c = x_rel * x_rel + y_rel * y_rel - max_radius_ * max_radius_;
 
     double discriminant = b * b - 4.0 * a * c;
 
@@ -753,8 +790,8 @@ private:
       vo_data_queue_copy.pop();
 
       // People walking below the speed threshold are not subject to velocity obstacle speed limits
-      if (dist < pr) {
-        return vo_min_speed_;
+      if (dist < max_radius_) {
+        return (rel_x > min_radius_) ? vo_min_speed_ : 0.0;
       }
 
       // Case 1: The velocity obstacle intersection range is positive
@@ -785,8 +822,8 @@ private:
         double rel_vx = pvx - rvx;
         if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
-            speed_limit = (rel_x > pr) ?
-              std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - pr)))) :
+            speed_limit = (rel_x > max_radius_) ?
+              std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - min_radius_)))) :
               vo_min_speed_;
           }
         }
