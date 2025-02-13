@@ -88,7 +88,7 @@ pwd=`pwd`
 scriptdir=`dirname $0`
 cd $scriptdir
 scriptdir=`pwd`
-temp_dir=$scriptdir/../.tmp
+temp_dir=$scriptdir/.tmp
 mkdir -p $temp_dir
 
 HOST=http://map_server:8080/map
