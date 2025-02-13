@@ -111,6 +111,13 @@ def generate_launch_description():
 
     use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
 
+    # these models have lidar attached side way
+    lidar_target_frame = PythonExpression([
+        '"lidar_base_link" if "', model_name,
+        '" in ["cabot3-k1", "cabot3-k2", "cabot3-k4"]',
+        'else "velodyne"']
+    )
+
     xacro_for_cabot_model = PathJoinSubstitution([
         get_package_share_directory('cabot_description'),
         'robots',
@@ -226,7 +233,10 @@ def generate_launch_description():
                         plugin='pointcloud_to_laserscan::PointCloudToLaserScanNode',
                         namespace='',
                         name='pointcloud_to_laserscan_node',
-                        parameters=[gazebo_params, {'use_sim_time': use_sim_time}],
+                        parameters=[gazebo_params, {
+                            'use_sim_time': use_sim_time,
+                            'target_frame': lidar_target_frame
+                        }],
                         remappings=[
                             ('/cloud_in', '/velodyne_points')
                         ]

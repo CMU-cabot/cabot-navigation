@@ -111,6 +111,7 @@ class PublishTopicAction(Action):
             self._pub = CaBotRclpyUtil.instance().node.create_publisher(self._msg_type, self._topic, qos_profile=latching_qos)
 
     def do_action(self):
+        CaBotRclpyUtil.info(f"do_action for publish topic top {self._topic}")
         curr = self._menu.value
         if curr is not None:
             if isinstance(curr, Menu):
@@ -163,8 +164,11 @@ class ReconfigureAction(Action):
                         param.value = ParameterValue(value)
                         req.parameters.append(param)
 
-                    result = client.call(req)
-                    CaBotRclpyUtil.info(f"{result}")
+                    def result_callback(future):
+                        result = future.result()
+                        CaBotRclpyUtil.info(f"{result}")
+                    future = client.call_async(req)
+                    future.add_done_callback(result_callback)
                     return True
         self._error_count += 1
         if self._error_count > 10:
@@ -217,24 +221,31 @@ class Menu(object):
     def _get_path(self, name):
         return ".".join(["persistent", name])
 
-    def _get_saved_config(self, name, default=None):
+    def _get_saved_config(self, name, default=None, callback=None):
         try:
-            self.get_client.wait_for_service(timeout_sec=3.0)
+            if not self.get_client.wait_for_service(timeout_sec=0.1):
+                return False
             path = self._get_path(name)
 
             req = GetParameters.Request()
             req.names.append(path)
 
             CaBotRclpyUtil.info(f"getting the param {path}")
-            result = self.get_client.call(req)
-            CaBotRclpyUtil.info(f"got the result {result}")
-            if len(result.values) == 1:
-                return rclpy.parameter.parameter_value_to_python(result.values[0])
-            CaBotRclpyUtil.error("cannot get the parameter")
+            future = self.get_client.call_async(req)
+
+            def result_callback(future):
+                result = future.result()
+                CaBotRclpyUtil.info(f"got the result {result}")
+                if len(result.values) == 1:
+                    if callback:
+                        callback(rclpy.parameter.parameter_value_to_python(result.values[0]))
+                else:
+                    CaBotRclpyUtil.error("cannot get the parameter")
+            future.add_done_callback(result_callback)
+            return True
         except:  # noqa: #722
-            if default is not None:
-                self._save_config(name, default)
-            return default
+            CaBotRclpyUtil.info(traceback.format_exc())
+            return False
 
     def _save_config(self, name, value):
         CaBotRclpyUtil.info("save config")
@@ -246,8 +257,12 @@ class Menu(object):
             req = SetParameters.Request()
             param = rclpy.parameter.Parameter(path, value=value).to_parameter_msg()
             req.parameters.append(param)
-            result = self.set_client.call(req)
-            CaBotRclpyUtil.info(f"{result}")
+
+            def result_callback(future):
+                result = future.result()
+                CaBotRclpyUtil.info(f"got the result {result}")
+            future = self.set_client.call_async(req)
+            future.add_done_callback(result_callback)
         except:  # noqa: #722
             CaBotRclpyUtil.error(traceback.format_exc())
             CaBotRclpyUtil.error("cannot save the parameter")
@@ -472,9 +487,23 @@ class MenuAdjust(Menu):
 
         self._step = Menu.get_menu_config(config, "step", 1)
         self._name = Menu.get_menu_config(config, "name", error=True)
-        self._current = self._get_saved_current()
+
         self._actions = Actions.create_actions(config, self)
-        self._check_action_once()
+        value = Menu.get_menu_config(config, "value", None)
+        if value:
+            CaBotRclpyUtil.info(f"set {value=} without getting saved value")
+            self._current = value
+            self._save_current()
+        else:
+            def callback(value):
+                CaBotRclpyUtil.info(f"got saved {value=}")
+                self._current = value
+                self._check_action_once()
+            # use default value if value cannot be retrieved
+            self._current = self._default
+            self._check_action_once()
+            self._get_saved_current_count = 0
+            self._get_saved_current(callback=callback)
 
     def _check_action(self):
         if self._actions is None:
@@ -484,15 +513,17 @@ class MenuAdjust(Menu):
         CaBotRclpyUtil.info("retry do_action with %s", str(self))
         self._check_action_once()
 
-    @cabot_common.util.setInterval(3, 1)
+    @cabot_common.util.setInterval(0.001, 1)
     def _check_action_once(self):
         self._check_action()
 
-    def _get_saved_current(self):
-        temp = self._get_saved_config(self._name, default=self._default)
-        if hasattr(self, "_values") and self._values is not None and isinstance(temp, str):
-            temp = self._values.index(temp)
-        return temp if temp is not None else self._default
+    @cabot_common.util.setInterval(1, 1)
+    def _get_saved_current(self, callback=None):
+        self._get_saved_current_count += 1
+        if self._get_saved_current_count < 10 and \
+           not self._get_saved_config(self._name, default=self._default, callback=callback):
+            CaBotRclpyUtil.info(f"retry get_saved_current {self._name=}, {self._get_saved_current_count=}")
+            self._get_saved_current(callback=callback)
 
     def _save_current(self):
         if self._actions is not None:

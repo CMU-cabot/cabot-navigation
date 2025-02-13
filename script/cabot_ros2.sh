@@ -99,7 +99,7 @@ export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
 
 # optional variables
 # TODO
-: ${CABOT_INIT_SPEED:=1.0}
+: ${CABOT_INIT_SPEED:=}
 ## if 1, use IBM Watson tts service for '/speak_robot' service (PC speaker)
 : ${CABOT_USE_ROBOT_TTS:=0}
 : ${TEXT_TO_SPEECH_APIKEY:=}
@@ -219,10 +219,16 @@ if [[ ! -z $CABOT_GAMEPAD ]]; then
 fi
 
 # launch ui_manager
+
+init_speed_option=""
+if [[ -n $CABOT_INIT_SPEED ]]; then
+    init_speed_option="init_speed:='$CABOT_INIT_SPEED'"
+fi
+
 blue "launch cabot handle menu"
 com="$command_prefix ros2 launch cabot_ui cabot_ui.launch.py \
         anchor_file:='$map' \
-        init_speed:='$CABOT_INIT_SPEED' \
+        $init_speed_option \
         language:='$CABOT_LANG' \
         site:='$CABOT_SITE' \
         show_topology:=true \

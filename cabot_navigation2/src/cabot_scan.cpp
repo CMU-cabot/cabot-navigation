@@ -37,7 +37,7 @@ class CabotScan : public rclcpp::Node
 {
 public:
   CabotScan()
-  : Node("cabot_scan"), scan_out_frame_("scan_out")
+  : Node("cabot_scan"), scan_out_frame_prefix_("scan_out")
   {
     this->declare_parameter("scan_topic", rclcpp::ParameterValue(std::string("scan")));
     std::string scan_topic = "scan";
@@ -51,9 +51,9 @@ public:
       RCLCPP_INFO(this->get_logger(), "scan_out_topic=%s", scan_out_topic.c_str());
     }
 
-    this->declare_parameter("scan_out_frame", rclcpp::ParameterValue(std::string("scan_out")));
-    if (this->get_parameter<std::string>("scan_out_frame", scan_out_frame_)) {
-      RCLCPP_INFO(this->get_logger(), "scan_out_frame=%s", scan_out_frame_.c_str());
+    this->declare_parameter("scan_out_frame_prefix", rclcpp::ParameterValue(std::string("local/")));
+    if (this->get_parameter<std::string>("scan_out_frame_prefix", scan_out_frame_prefix_)) {
+      RCLCPP_INFO(this->get_logger(), "scan_out_frame_prefix=%s", scan_out_frame_prefix_.c_str());
     }
 
     rclcpp::SensorDataQoS sensor_qos;
@@ -71,7 +71,7 @@ private:
   void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
   {
     scan_msg_ = *msg;
-    scan_msg_.header.frame_id = scan_out_frame_;
+    scan_msg_.header.frame_id = scan_out_frame_prefix_ + msg->header.frame_id;
     pub_->publish(scan_msg_);
   }
 
@@ -85,7 +85,7 @@ private:
   }
 
   sensor_msgs::msg::LaserScan scan_msg_;
-  std::string scan_out_frame_;
+  std::string scan_out_frame_prefix_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_;
   std::shared_ptr<diagnostic_updater::Updater> updater_;

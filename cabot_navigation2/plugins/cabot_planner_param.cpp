@@ -626,7 +626,7 @@ void CaBotPlannerParam::findObstacles(std::vector<Node> nodes)
 {
   // check obstacles only from current position to N meters forward
   int max_obstacle_scan_distance_cell = options.max_obstacle_scan_distance / resolution;
-  float optimize_distance_from_start = options.optimize_distance_from_start;
+  float optimize_distance_from_start = options.optimize_distance_from_start / resolution;
   RCLCPP_INFO(logger, "nodes.size = %ld", nodes.size());
 
   groups.clear();

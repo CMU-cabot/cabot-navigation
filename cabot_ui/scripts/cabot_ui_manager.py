@@ -153,6 +153,21 @@ class CabotUIManager(NavigationInterface, object):
             menu_file = node.declare_parameter('menu_file', '').value
             with open(menu_file, 'r') as stream:
                 menu_obj = yaml.safe_load(stream)
+                # overwrite init_speed if it is set
+                if "max_velocity_menu" in menu_obj:
+                    try:
+                        desc = ParameterDescriptor()
+                        desc.type = ParameterType.PARAMETER_NOT_SET
+                        desc.dynamic_typing = True
+                        self._node.declare_parameter('init_speed', None, descriptor=desc)
+                        init_speed = self._node.get_parameter("init_speed").value
+                        # check if init_speed is not empty and is float num
+                        if init_speed is not None and isinstance(init_speed, float):
+                            self._logger.error(f"init_speed is {init_speed}")
+                            menu_obj["max_velocity_menu"]["value"] = init_speed
+                    except:  # noqa: #722
+                        self._logger.error(traceback.format_exc())
+                        pass
                 self.main_menu = Menu.create_menu(menu_obj, {"menu": "main_menu"})
             self.speed_menu = None
             if self.main_menu:
@@ -160,22 +175,6 @@ class CabotUIManager(NavigationInterface, object):
                 self.speed_menu = self.main_menu.get_menu_by_identifier("max_velocity_menu")
             else:
                 self._logger.error("menu is not initialized")
-
-            if self.speed_menu:
-                init_speed = self.speed_menu.value
-                try:
-                    desc = ParameterDescriptor()
-                    desc.type = ParameterType.PARAMETER_DOUBLE
-                    self._node.declare_parameter('init_speed', None, descriptor=desc)
-                    temp = self._node.get_parameter("init_speed").value
-                    if temp is not None:
-                        init_speed = temp
-                except:  # noqa: #722
-                    self._logger.error(traceback.format_exc())
-                    pass
-                self._logger.info(f"Initial Speed = {init_speed}")
-                self.speed_menu.set_value(init_speed)
-
             self.menu_stack = []
             self._logger.info("create_menu completed")
         except:  # noqa: #722

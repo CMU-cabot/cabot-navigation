@@ -32,6 +32,7 @@ import std_msgs.msg
 
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from mf_localization_msgs.msg import MFLocalizeStatus
+from cabot_msgs.msg import Anchor
 
 data_ready = False
 navigate_menu = None
@@ -185,6 +186,7 @@ if __name__ == "__main__":
     cf_sub = node.create_subscription(std_msgs.msg.Int64, "/current_floor", cf_callback, qos)
     transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
     ls_sub = node.create_subscription(MFLocalizeStatus, "/localize_status", ls_callback, transient_local_qos)
+    anchor_pub = node.create_publisher(Anchor, "/anchor", transient_local_qos)
 
     node.declare_parameters(
         namespace="",
@@ -203,6 +205,11 @@ if __name__ == "__main__":
     anchor_tmp = geoutil.get_anchor(anchor_file=anchor_file)
     if anchor_tmp is not None:
         anchor = anchor_tmp
+        anchor_msg = Anchor()
+        anchor_msg.lat = anchor.lat
+        anchor_msg.lng = anchor.lng
+        anchor_msg.rotate = anchor.rotate
+        anchor_pub.publish(anchor_msg)
     else:
         node.get_logger().info(F"Could not load anchor_file {anchor_file}")
 
