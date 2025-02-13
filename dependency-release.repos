@@ -1,0 +1,41 @@
+repositories:
+  cabot-common:
+    type: git
+    url: https://github.com/CMU-cabot/cabot-common
+    version: 1d784dce364ad6e7e4b9f1da54baa4c51a8a8254
+  cabot-description:
+    type: git
+    url: https://github.com/CMU-cabot/cabot-description
+    version: 5374b9b5d3a252e8cd174b4b83baca891a671a22
+  docker/localization/RTKLIB:
+    type: git
+    url: https://github.com/tomojitakasu/RTKLIB.git
+    version: v2.4.3-b34
+  docker/localization/bluespace_ai_xsens_ros_mti_driver:
+    type: git
+    url: https://github.com/pshved/bluespace_ai_xsens_ros_mti_driver.git
+    version: 706ea91f4a91f7fa7a9b87ff6c9f7eb79407fdf4
+  docker/localization/cartographer:
+    type: git
+    url: https://github.com/CMU-cabot/cartographer.git
+    version: ed9c582787051180150d3bf751bedb97d18e6718
+  docker/localization/cartographer_ros:
+    type: git
+    url: https://github.com/CMU-cabot/cartographer_ros.git
+    version: aabd1d6e708cf04e15ff4f2a4dbe18b948de8ae9
+  docker/localization/ntrip_client:
+    type: git
+    url: https://github.com/cmu-cabot/ntrip_client.git
+    version: 666e0e8dd50f8690812542aac45bfb06095a4668
+  docker/localization/ublox:
+    type: git
+    url: https://github.com/CMU-cabot/ublox.git
+    version: 18b425a3f9a581a71d22567541dcbb06fc4750e0
+  docker/ros2/rosbridge_suite:
+    type: git
+    url: https://github.com/CMU-cabot/rosbridge_suite
+    version: 1b698a76aee904adb370e7b7d77b8355325f3747
+  docker/ros2/tf2_web_republisher:
+    type: git
+    url: https://github.com/CMU-cabot/tf2_web_republisher
+    version: 2398595fa46569737bb58c93f4451c08460c41d8
