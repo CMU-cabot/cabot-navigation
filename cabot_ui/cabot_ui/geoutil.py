@@ -376,6 +376,99 @@ class Anchor(Latlng):
         return F"[{self.lat:.7f}, {self.lng:.7f}]({self.rotate:.2f})"
 
 
+local_crs = {}
+to_local_transformer = {}
+to_wgs84_transformer = {}
+
+
+def global2local(latlng, anchor):
+    """
+    Forward transformation:
+      Defines a local coordinate system (x, y) with the anchor's latitude and longitude
+      as the origin. The axis is rotated clockwise by the anchor's rotation angle.
+
+    Args:
+        latlng (Latlng): Target latitude/longitude (WGS84)
+        anchor (Anchor): Anchor point with latitude, longitude, and rotation angle
+
+    Returns:
+        Point: Local coordinates (x, y) in meters
+    """
+    global local_crs, to_local_transformer
+    key = f"{anchor.lat:.7f}-{anchor.lng:.7f}"
+
+    # Define an Azimuthal Equidistant projection centered on the anchor
+    if key not in local_crs:
+        local_crs[key] = CRS.from_proj4(
+            f"+proj=aeqd +lat_0={anchor.lat} +lon_0={anchor.lng} +ellps=WGS84 +units=m +no_defs"
+        )
+
+    # Create a transformer for WGS84 -> local_crs
+    if key not in to_local_transformer:
+        to_local_transformer[key] = Transformer.from_crs(crs_4326, local_crs[key], always_xy=True)
+
+    # Project the anchor
+    anchor_x, anchor_y = to_local_transformer[key].transform(anchor.lng, anchor.lat)
+
+    # Project the target
+    target_x, target_y = to_local_transformer[key].transform(latlng.lng, latlng.lat)
+
+    # Compute the difference relative to the anchor
+    dx = target_x - anchor_x
+    dy = target_y - anchor_y
+
+    # Apply clockwise rotation by anchor's rotation angle
+    theta = math.radians(anchor.rotate)
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+
+    local_x = dx * cos_t - dy * sin_t
+    local_y = dx * sin_t + dy * cos_t
+
+    return Point(x=local_x, y=local_y)
+
+
+def local2global(local, anchor):
+    """
+    Inverse transformation:
+      Transforms local coordinates (x, y) back to latitude/longitude (WGS84)
+      using the same anchor and clockwise rotation.
+
+    Args:
+        local (Point): Local coordinates (x, y) in meters
+        anchor (Anchor): Anchor point with latitude, longitude, and rotation angle
+
+    Returns:
+        Latlng: Transformed latitude/longitude (WGS84)
+    """
+    global local_crs, to_wgs84_transformer
+    key = f"{anchor.lat:.7f}-{anchor.lng:.7f}"
+
+    # Define an Azimuthal Equidistant projection centered on the anchor
+    if key not in local_crs:
+        local_crs[key] = CRS.from_proj4(
+            f"+proj=aeqd +lat_0={anchor.lat} +lon_0={anchor.lng} +ellps=WGS84 +units=m +no_defs"
+        )
+
+    # Create a transformer for local_crs -> WGS84
+    if key not in to_wgs84_transformer:
+        to_wgs84_transformer[key] = Transformer.from_crs(local_crs[key], crs_4326, always_xy=True)
+
+    # Apply the inverse of the clockwise rotation
+    theta = math.radians(anchor.rotate)
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+
+    dx = local.x * cos_t + local.y * sin_t
+    dy = -local.x * sin_t + local.y * cos_t
+
+    # Transform back to WGS84
+    target_lon, target_lat = to_wgs84_transformer[key].transform(dx, dy)
+
+    return Latlng(lat=target_lat, lng=target_lon)
+
+
+# keep old implementation
 # Define the CRS objects
 crs_4326 = CRS('epsg:4326')
 crs_3857 = CRS('epsg:3857')
@@ -429,7 +522,7 @@ def xy2mercator(src_xy, anchor):
     return Point(x=anchor.x + dx, y=anchor.y + dy)
 
 
-def global2local(latlng, anchor):
+def _global2local(latlng, anchor):
     """convert a global point into a local point in the anchor coordinate"""
     temp = latlng2mercator(anchor)
     anchor.x = temp.x
@@ -439,7 +532,7 @@ def global2local(latlng, anchor):
     return xy
 
 
-def local2global(xy, anchor):
+def _local2global(xy, anchor):
     """convert a local point in the anchor coordinate into the global point"""
     temp = latlng2mercator(anchor)
     anchor.x = temp.x
