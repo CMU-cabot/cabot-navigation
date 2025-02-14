@@ -791,7 +791,8 @@ private:
 
       // People walking below the speed threshold are not subject to velocity obstacle speed limits
       if (dist < max_radius_) {
-        return (rel_x > min_radius_) ? vo_min_speed_ : 0.0;
+        speed_limit = std::min(speed_limit, (rel_x > min_radius_) ? vo_min_speed_ : 0.0);
+        continue;
       }
 
       // Case 1: The velocity obstacle intersection range is positive
