@@ -109,6 +109,7 @@ public:
   double collision_time_horizon_;
   double person_speed_threshold_;
   double forward_approach_angle_threshold_;
+  double speed_hysteresis_margin_;
   double robot_radius_;
   double person_radius_;
   double min_margin_radius_;
@@ -169,6 +170,7 @@ public:
     collision_time_horizon_(5.0),
     person_speed_threshold_(0.5),
     forward_approach_angle_threshold_(M_PI / 6.0),
+    speed_hysteresis_margin_(1.0),
     robot_radius_(0.5),
     person_radius_(0.2),
     min_margin_radius_(0.0),
@@ -236,6 +238,7 @@ public:
     collision_time_horizon_ = declare_parameter("collision_time_horizon", collision_time_horizon_);
     person_speed_threshold_ = declare_parameter("person_speed_threshold", person_speed_threshold_);
     forward_approach_angle_threshold_ = declare_parameter("forward_approach_angle_threshold", forward_approach_angle_threshold_);
+    speed_hysteresis_margin_ = declare_parameter("speed_hysteresis_margin", speed_hysteresis_margin_);
 
     robot_radius_ = declare_parameter("robot_radius", robot_radius_);
     person_radius_ = declare_parameter("person_radius", person_radius_);
@@ -372,6 +375,9 @@ public:
       }
       if (param.get_name() == "forward_approach_angle_threshold") {
         forward_approach_angle_threshold_ = param.as_double();
+      }
+      if (param.get_name() == "speed_hysteresis_margin") {
+        speed_hysteresis_margin_ = param.as_double();
       }
       if (param.get_name() == "robot_radius") {
         robot_radius_ = param.as_double();
@@ -797,7 +803,7 @@ private:
       //
       if (vo_intersection_min > 0.0) {
         if (vo_intersection_min < rvx && rvx < vo_intersection_max) {
-          double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx : vo_intersection_max;
+          double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx + speed_hysteresis_margin_ : vo_intersection_max;
           if (checkCollisionInRange(vo_intersection_min, max_rvx, rel_x, rel_y, pvx, pvy)) {
             speed_limit = std::min(speed_limit, vo_intersection_min);
           }
