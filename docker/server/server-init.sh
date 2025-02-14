@@ -40,7 +40,7 @@ function snore()
     read ${1:+-t "$1"} -u $_snore_fd || :
 }
 
-HOST=http://map_server:9090/map
+HOST=http://map_server:8080/map
 data_dir=/home/runner_user/server_data
 admin=hulopadmin
 pass=please+change+password

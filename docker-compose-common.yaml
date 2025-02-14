@@ -398,25 +398,21 @@ services:
       - ${ENV_FILE:-.empty-env}
     environment:
       - HOST_TZ
-      - 'HULOP_MAP_SERVICE=localhost:9090/map'
+      - 'HULOP_MAP_SERVICE=localhost:8080/map'
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
       - 'SEARCH_BY_CATEGORY_ENABLED=true'
-    command:
-      - "./server"
-      - "run"
-      - "defaultServer"
 #    depends_on:
 #      mongodb:
 #        condition: service_healthy
     ports:
-      - 0.0.0.0:${MAP_SERVER_PORT:-9090}:9090
+      - 0.0.0.0:${MAP_SERVER_PORT:-9090}:8080
     networks:
       - mongodb_network
     healthcheck:
-      test: curl -f localhost:9090/map/login.jsp || exit 1
+      test: curl -f localhost:8080/map/login.jsp || exit 1
       interval: 3s
       timeout: 3s
       retries: 10  # increased from 5, needs more time to launch on Jetson
@@ -474,15 +470,11 @@ services:
       - ${ENV_FILE:-.empty-env}
     environment:
       - MONGO_HOST=mongodb://mongodb_lt:27017/navi_db
-    command:
-      - "./server"
-      - "run"
-      - "defaultServer"
     depends_on:
       mongodb_lt:
         condition: service_healthy
     ports:
-      - 127.0.0.1:9091:9090  # only localhost can access this server
+      - 127.0.0.1:9091:8080  # only localhost can access this server
     networks:
       - mongodb_network
     healthcheck:
