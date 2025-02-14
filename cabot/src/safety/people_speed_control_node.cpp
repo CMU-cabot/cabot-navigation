@@ -546,22 +546,19 @@ private:
       }
 
       // compute the intersection points between the x-axis and the velocity obstacle cone
-      {
-        auto vo_intersection = computeVOIntersection(pvx, pvy, rel_th, theta_right, theta_left);
-
-        if (vo_intersection.empty()) {
-          continue;
-        }
-        if (vo_intersection.size() != 2) {
-          RCLCPP_ERROR(get_logger(), "Invalid number of intersection points in velocity obstacle calculation.");
-          continue;
-        }
-
-        double vo_intersection_min = std::min(vo_intersection[0], vo_intersection[1]);
-        double vo_intersection_max = std::max(vo_intersection[0], vo_intersection[1]);
-
-        vo_data_queue.push({dist, rel_x, rel_y, pvx, pvy, theta_right, theta_left, vo_intersection_min, vo_intersection_max});
+      auto vo_intersection = computeVOIntersection(pvx, pvy, rel_th, theta_right, theta_left);
+      if (vo_intersection.empty()) {
+        continue;
       }
+      if (vo_intersection.size() != 2) {
+        RCLCPP_ERROR(get_logger(), "Invalid number of intersection points in velocity obstacle calculation.");
+        continue;
+      }
+
+      const double vo_intersection_min = std::min(vo_intersection[0], vo_intersection[1]);
+      const double vo_intersection_max = std::max(vo_intersection[0], vo_intersection[1]);
+
+      vo_data_queue.push({dist, rel_x, rel_y, pvx, pvy, theta_right, theta_left, vo_intersection_min, vo_intersection_max});
     }
 
     // velocity obstacle speed limit without considering social distance constraints
@@ -571,12 +568,7 @@ private:
     double combined_speed_limit = computeSafeSpeedLimit(social_distance_speed_limit, vo_data_queue);
 
     // final speed limit
-    double people_speed_limit;
-    if (use_velocity_obstacle_) {
-      people_speed_limit = combined_speed_limit;
-    } else {
-      people_speed_limit = social_distance_speed_limit;
-    }
+    double people_speed_limit = use_velocity_obstacle_ ? combined_speed_limit : social_distance_speed_limit;
 
     publishLimits(social_distance_speed_limit, pure_velocity_obstacle_speed_limit, combined_speed_limit, people_speed_limit);
 
@@ -669,7 +661,9 @@ private:
     // RCLCPP_INFO(get_logger(), "limit = %.2f", people_speed_limit);
   }
 
-  std::vector<double> computeVOIntersection(const double vx_p, const double vy_p, const double rel_th, const double theta_right, const double theta_left)
+  std::vector<double> computeVOIntersection(
+    const double vx_p, const double vy_p, const double rel_th, const double theta_right,
+    const double theta_left)
   {
     constexpr double pseudo_infinity = std::numeric_limits<double>::max();
 
@@ -693,7 +687,7 @@ private:
     // compute the velocity at the intersection point
     auto computeVelocityAtIntersection = [&](double t, double theta) -> double {
         return vx_p + t * std::cos(theta);
-    };
+      };
 
     std::optional<double> t_right = computeParametricValue(theta_right);
     std::optional<double> t_left = computeParametricValue(theta_left);
@@ -780,18 +774,18 @@ private:
   double computeSafeSpeedLimit(
     double speed_limit, const std::priority_queue<VOData, std::vector<VOData>, CompareVOIntersectionMax> & vo_data_queue)
   {
-    auto vo_data_queue_copy = vo_data_queue;
     const double rvx = last_odom_.twist.twist.linear.x;
 
+    auto vo_data_queue_copy = vo_data_queue;
     while (!vo_data_queue_copy.empty()) {
       const auto & vo_data = vo_data_queue_copy.top();
       const auto & [dist, rel_x, rel_y, pvx, pvy, theta_right, theta_left, vo_intersection_min, vo_intersection_max] = vo_data;
-
       vo_data_queue_copy.pop();
 
       // People walking below the speed threshold are not subject to velocity obstacle speed limits
       if (dist < max_radius_) {
-        speed_limit = std::min(speed_limit, (rel_x > min_radius_) ? vo_min_speed_ : 0.0);
+        double candidate_speed_limit = (rel_x > min_radius_) ? vo_min_speed_ : 0.0;
+        speed_limit = std::min(speed_limit, candidate_speed_limit);
         continue;
       }
 
@@ -823,9 +817,8 @@ private:
         double rel_vx = pvx - rvx;
         if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
-            speed_limit = (rel_x > max_radius_) ?
-              std::min(speed_limit, std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - min_radius_)))) :
-              vo_min_speed_;
+            double candidate_speed_limit = (rel_x > max_radius_) ? std::max(0.0, pvx + sqrt(-2.0 * max_dec_ * (rel_x - min_radius_))) : vo_min_speed_;
+            speed_limit = std::min(speed_limit, candidate_speed_limit);
           }
         }
       }
