@@ -231,7 +231,7 @@ services:
     volumes:
 # code
       - type: bind
-        source: ./cabot_site_pkg/${CABOT_SITE}
+        source: ${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/${CABOT_SITE}
         target: /home/developer/ros2_ws/install/${CABOT_SITE}
         bind:
           create_host_path: false
@@ -329,7 +329,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /tmp/.docker.xauth:/tmp/.docker.xauth
       - type: bind
-        source: ./cabot_site_pkg/${CABOT_SITE}
+        source: ${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/${CABOT_SITE}
         target: /home/developer/loc_ws/install/${CABOT_SITE}
         bind:
           create_host_path: false
@@ -395,18 +395,21 @@ services:
         output:
           - type=registry
     env_file:
-      - ${ENV_FILE:-.empty-env}
+      - ${CABOT_MAP_SERVER_ENV_FILE:-${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/$CABOT_SITE/share/$CABOT_SITE/server_data/server.env}
     environment:
+      - HOST_UID
+      - HOST_GID
       - HOST_TZ
+      - CABOT_SITE
       - 'HULOP_MAP_SERVICE=localhost:8080/map'
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
-      - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb:27017/navi_db"}}]}'  # for local mongodb service
+      - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb_ms:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
       - 'SEARCH_BY_CATEGORY_ENABLED=true'
-#    depends_on:
-#      mongodb:
-#        condition: service_healthy
+    depends_on:
+      mongodb_ms:
+        condition: service_healthy
     ports:
       - 0.0.0.0:${MAP_SERVER_PORT:-9090}:8080
     networks:
@@ -419,22 +422,19 @@ services:
 
   map_data:
     extends: map_server
-    env_file:
-      - ${ENV_FILE:-.empty-env}
+    env_file: !override []
     ports: !override []  # this does not work if extended
     depends_on:
       map_server:
         condition: service_healthy
     command:
-      - "bash"
-      - "-c"
-      - "cp -r /server_data /home/runner_user/server_data && /home/runner_user/server-init.sh && /home/runner_user/server-data.sh -i /home/runner_user/server_data/MapData.geojson"
+      - /home/runner_user/server-init.sh
     volumes:
-      - ${CABOT_SERVER_DATA_MOUNT:-./doc}:/server_data
+      - ${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}:/cabot_site_pkg
     networks:
       - mongodb_network
 
-  mongodb:
+  mongodb_ms:
 #    image : mongo:3.4.3  # there is no aarch64 image for this version
     image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
     environment:
@@ -445,7 +445,7 @@ services:
     networks:
       - mongodb_network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb:27017/test --quiet
+      test: echo 'db.runCommand("ping").ok' | mongo mongodb_ms:27017/test --quiet
       interval: 3s
       timeout: 3s
       retries: 5

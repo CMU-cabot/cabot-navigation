@@ -22,14 +22,18 @@
 
 trap ctrl_c INT TERM KILL
 
+function backup_mapdata() {
+    log_name="MapData-$(date +%Y-%m-%d-%H-%M-%S).geojson"
+    docker compose run --rm --no-deps map_data /home/runner_user/server-data.sh -e /cabot_site_pkg/.tmp/$log_name
+    blue "data saved"
+}
+
 function ctrl_c() {
     blue "exit script is hooked"
-    log_name="MapData-$(date +%Y-%m-%d-%H-%M-%S).geojson"
-    $DATA_SH -e $scriptdir/.tmp/$log_name
-    blue "data saved"
+    backup_mapdata
 
     cd $scriptdir
-    ENV_FILE=$data_dir/server.env docker compose -p $launch_prefix --profile $profile down
+    docker compose -p $launch_prefix --profile $profile down
     exit
 }
 
@@ -66,6 +70,10 @@ function help()
     echo "-l           location tools server"
     echo "-E 1-10      separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
 }
+
+if [[ -e .env ]]; then
+    source .env
+fi
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -119,10 +127,13 @@ done
 shift $((OPTIND-1))
 
 if [[ $development -eq 1 ]]; then
-    data_dir=$(find $scriptdir/cabot_sites -wholename "*/$CABOT_SITE/server_data" | head -1)
+    CABOT_SITE_PKG_DIR=$scriptdir/cabot_sites
 else
-    data_dir=$(find $scriptdir/cabot_site_pkg -wholename "*/$CABOT_SITE/server_data" | head -1)
+    : ${CABOT_SITE_PKG_DIR:=$scriptdir/cabot_site_pkg}    # default cabot_site_pkg
 fi
+blue "finding $CABOT_SITE in $CABOT_SITE_PKG_DIR"
+data_dir=$(find $CABOT_SITE_PKG_DIR -wholename "*/$CABOT_SITE/server_data" | head -1)
+: ${CABOT_MAP_SERVER_ENV_FILE:=$data_dir/server.env}
 
 ## private variables
 pids=()
@@ -140,13 +151,16 @@ fi
 if [[ $clean_server -eq 2 ]]; then
     blue "Clean servers"
 
-    services="map_server map_data mongodb"
+    services="map_server map_data mongodb_ms"
     if [[ $location_tools -eq 1 ]]; then
         services="location_tools mongodb_lt"
     fi
     for service in $services; do
         if [[ ! -z $(docker ps -f "name=${launch_prefix}-$service" -q -a) ]]; then
             blue "stopping ${launch_prefix}-$service"
+            if [[ $service == "map_server" ]]; then
+                backup_mapdata
+            fi
             docker ps -f "name=${launch_prefix}-$service-"
             docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker stop
             docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker container rm
@@ -204,8 +218,11 @@ if [[ $clean_server -eq 1 ]]; then
         exit 0
     else
         blue "Clean servers"
-        for service in "map_server" "map_data" "mongodb"; do
+        for service in "map_server" "map_data" "mongodb_ms"; do
             if [[ ! -z $(docker ps -f "name=${launch_prefix}-$service" -q -a) ]]; then
+                if [[ $service == "map_server" ]]; then
+                    backup_mapdata
+                fi
                 docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker stop
                 docker ps -f "name=${launch_prefix}-$service" -q -a | xargs docker container rm
             fi
@@ -217,7 +234,7 @@ else
         exit 0
     fi
 
-    for service in "map_server" "map_data" "mongodb"; do
+    for service in "map_server" "map_data" "mongodb_ms"; do
         if [[ $(docker ps -f "name=${launch_prefix}-$service" -q | wc -l) -ne 0 ]]; then
             err "There is ${launch_prefix}-$service server running"
             flag=1
@@ -250,24 +267,17 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
 fi
 
 
-export CABOT_SERVER_DATA_MOUNT=$data_dir
-export MAP_SERVER_PORT=${MAP_SERVER_PORT}
-if [ -e $scriptdir/.env ]; then
-    source $scriptdir/.env
+export HOST_UID=$(id -u)
+export HOST_GID=$(id -g)
+export MAP_SERVER_PORT
+export CABOT_SITE
+export CABOT_SITE_PKG_DIR
+if [ -e $CABOT_MAP_SERVER_ENV_FILE ]; then
+    export CABOT_MAP_SERVER_ENV_FILE
 fi
-if [ -e $data_dir/server.env ]; then
-    export ENV_FILE=$data_dir/server.env
-    if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix --profile $profile up -d
-        docker compose --ansi never -p $launch_prefix logs -f
-    else
-        docker compose -p $launch_prefix --profile $profile up -d
-    fi
+if [[ $verbose -eq 1 ]]; then
+    docker compose -p $launch_prefix --profile $profile up -d
+    docker compose --ansi never -p $launch_prefix logs -f
 else
-    if [[ $verbose -eq 1 ]]; then
-        docker compose -p $launch_prefix --profile $profile up -d
-        docker compose --ansi never -p $launch_prefix logs -f
-    else
-        docker compose -p $launch_prefix --profile $profile up -d
-    fi
+    docker compose -p $launch_prefix --profile $profile up -d
 fi
