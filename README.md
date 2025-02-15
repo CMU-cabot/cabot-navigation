@@ -105,6 +105,7 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   HOST_UID             # host user UID (default=1000)
   HOST_GID             # host user GID (default=1000)
   HOST_TZ              # host timezone (default=UTC)
+  CABOT_SITE_PKG_DIR   # location of the cabot_site_pkg dir for map server
   ```
 - Options for image description (hold down right button for 1-3 seconds)
   ```
