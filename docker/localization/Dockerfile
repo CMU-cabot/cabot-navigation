@@ -70,7 +70,6 @@ RUN apt update && \
     npm \
     python3-pip \
     python3-matplotlib \
-    python3-pandas \
     python3-sklearn \
     ros-${ROS_DISTRO}-diagnostic-updater \
     ros-${ROS_DISTRO}-gazebo-msgs \
@@ -202,6 +201,7 @@ RUN apt update && \
     npm \
     python3-pip \
     python3-matplotlib \
+    python3-pandas \
     python3-sklearn \
     ros-${ROS_DISTRO}-diagnostic-updater \
     ros-${ROS_DISTRO}-gazebo-msgs \
