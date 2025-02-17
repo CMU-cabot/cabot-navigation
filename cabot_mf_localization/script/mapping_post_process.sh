@@ -25,27 +25,42 @@ WORKDIR=/home/developer/post_process
 QUIT_WHEN_ROSBAG_FINISH=${QUIT_WHEN_ROSBAG_FINISH:-true}
 PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
-LIDAR_MODEL=${LIDAR_MODEL:-VLP16}
+: ${LIDAR_MODEL:=}
 MAPPING_USE_GNSS=${MAPPING_USE_GNSS:-false}
+CONVERT_BAG=${CONVERT_BAG:-true}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
 
 # topic
-points2_topic='/velodyne_points'
-imu_topic=/imu/data
-fix_topic=/ublox/fix
-fix_velocity_topic=/ublox/fix_velocity
-fix_filtered_topic=/ublox/fix_filtered
+points2_topic='velodyne_points'
+imu_topic=imu/data
+fix_topic=ublox/fix
+fix_velocity_topic=ublox/fix_velocity
+fix_filtered_topic=ublox/fix_filtered
+fix_status_threshold=2
 convert_points=true  # VLP16 (default LIDAR_MODEL)
 
 if [[ $gazebo -eq 1 ]]; then
-    imu_topic=/cabot/imu/data
+    imu_topic=cabot/imu/data
     convert_points=false
+    fix_status_threshold=0
 elif [ "${LIDAR_MODEL}" != "VLP16" ]; then
     convert_points=false
+    if [ "${LIDAR_MODEL}" = "" ]; then
+      imu_topic=cabot/imu/data
+    fi
 fi
 
+echo "mapping post process"
+echo "CABOT_MODEL=$CABOT_MODEL"
 echo "LIDAR_MODEL=$LIDAR_MODEL"
+echo "MAPPING_USE_GNSS=$MAPPING_USE_GNSS"
+echo "CONVERT_BAG=$CONVERT_BAG"
+echo "gazebo=$gazebo"
+echo "points_topic=$points2_topic"
+echo "imu_topic=$imu_topic"
+echo "fix_topic=$fix_topic"
+echo "fix_status_threshold=$fix_status_threshold"
 
 function red {
     echo -en "\033[31m"  ## red
@@ -78,7 +93,25 @@ else
     cabot_model=""
 fi
 
-if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted ]]; then
+# set local variables for file names
+if [ $CONVERT_BAG = true ]; then
+  bag_file2=${BAG_FILENAME}.carto-converted
+else
+  bag_file2=${BAG_FILENAME}
+fi
+
+samples_file=$bag_file2.loc.samples.json
+pbstream_file=$bag_file2.pbstream
+log_file=$bag_file2.log
+pgm_file=$bag_file2.pgm
+yaml_file=$bag_file2.yaml
+png_file=$bag_file2.png
+info_txt_file=$bag_file2.info.txt
+node_options_file=$bag_file2.node-options.yaml
+trajectory_csv_file=$bag_file2.trajectory.csv
+gnss_csv_file=$bag_file2.gnss.csv
+
+if [[ ! -e $WORKDIR/${bag_file2} ]]; then
     ros2 launch mf_localization_mapping convert_rosbag_for_cartographer.launch.py \
 	      points2:=${points2_topic} \
 	      imu:=${imu_topic} \
@@ -88,10 +121,10 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted ]]; then
 	      convert_points:=$convert_points \
 	      bag_filename:=$WORKDIR/${BAG_FILENAME}
 else
-    blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted"
+    blue "skipping $WORKDIR/${bag_file2}"
 fi
 
-if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json ]] || [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.pbstream ]]; then
+if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; then
     com="ros2 launch mf_localization_mapping demo_2d_VLP16.launch.py \
 	      save_samples:=true \
 	      save_state:=true \
@@ -99,8 +132,11 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json ]] || [[ ! 
 	      imu:=${imu_topic} \
 	      delay:=10 \
 	      rate:=${PLAYBAG_RATE_CARTOGRAPHER} \
+	      play_limited_topics:=true \
+	      convert_points:=$convert_points \
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
-	      bag_filename:=$WORKDIR/${BAG_FILENAME}.carto-converted"
+	      fix_status_threshold:=${fix_status_threshold} \
+	      bag_filename:=$WORKDIR/${bag_file2}"
 
     if [ $cabot_model != "" ]; then
         com="$com cabot_model:=$cabot_model"
@@ -112,6 +148,7 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json ]] || [[ ! 
     if [ "$MAPPING_USE_GNSS" = true ]; then
         com="$com \
             save_pose:=true \
+            save_trajectory:=true \
             fix:=$fix_filtered_topic \
             configuration_basename:=cartographer_2d_mapping_gnss.lua \
             interpolate_samples_by_trajectory:=true \
@@ -119,66 +156,66 @@ if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json ]] || [[ ! 
     fi
 
     # copy output to a file
-    com="$com | tee $WORKDIR/${BAG_FILENAME}.carto-converted.log"
+    com="$com | tee $WORKDIR/${log_file}"
 
     echo $com
     eval $com
 else
-    blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.loc.samples.json"
-    blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.pbstream"
+    blue "skipping $WORKDIR/${samples_file}"
+    blue "skipping $WORKDIR/${pbstream_file}"
 fi
 
 # convert pbstream to pgm
-if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.pgm ]]; then
+if [[ ! -e $WORKDIR/${pgm_file} ]]; then
     ros2 run cartographer_ros cartographer_pbstream_to_ros_map \
-	   -pbstream_filename $WORKDIR/${BAG_FILENAME}.carto-converted.pbstream \
-	   -map_filestem $WORKDIR/${BAG_FILENAME}.carto-converted
+	   -pbstream_filename $WORKDIR/${pbstream_file} \
+	   -map_filestem $WORKDIR/${bag_file2}
 else
-    blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.pgm"
+    blue "skipping $WORKDIR/${pgm_file}"
 fi
 
 # convert pgm to png
-if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.png ]]; then
-    convert $WORKDIR/${BAG_FILENAME}.carto-converted.pgm $WORKDIR/${BAG_FILENAME}.carto-converted.png
+if [[ ! -e $WORKDIR/${png_file} ]]; then
+    convert $WORKDIR/${pgm_file} $WORKDIR/${png_file}
 else
-    blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.png"
+    blue "skipping $WORKDIR/${png_file}"
 fi
 
 # extract floor map info from the ros map files
-if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt ]]; then
+if [[ ! -e $WORKDIR/${info_txt_file} ]]; then
     # origin_x, origin_y, ppm
     ros2 run mf_localization_mapping extract_floormap_info_from_yaml.py \
-        --input $WORKDIR/${BAG_FILENAME}.carto-converted.yaml \
-        --output $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt
+        --input $WORKDIR/${yaml_file} \
+        --output $WORKDIR/${info_txt_file}
     # width, height
-    identify -format "width: %w\nheight: %h\n" $WORKDIR/${BAG_FILENAME}.carto-converted.pgm \
-        | tee -a $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt
+    identify -format "width: %w\nheight: %h\n" $WORKDIR/${pgm_file} \
+        | tee -a $WORKDIR/${info_txt_file}
 else
-    blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.info.txt"
+    blue "skipping $WORKDIR/${info_txt_file}"
 fi
 
 # post process for mapping with gnss data
 if [ "$MAPPING_USE_GNSS" = true ]; then
     # extract option info from log
-    if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.node-options.yaml ]]; then
+    if [[ ! -e $WORKDIR/${node_options_file} ]]; then
         ros2 run mf_localization_mapping extract_node_options.py \
-            -i $WORKDIR/${BAG_FILENAME}.carto-converted.log \
-            -o $WORKDIR/${BAG_FILENAME}.carto-converted.node-options.yaml
+            -i $WORKDIR/${log_file} \
+            -o $WORKDIR/${node_options_file}
     else
-        blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.node-options.yaml"
+        blue "skipping $WORKDIR/${node_options_file}"
     fi
 
     # export gnss from bag
-    if [[ ! -e $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv ]]; then
+    if [[ ! -e $WORKDIR/${gnss_csv_file} ]]; then
         ros2 run mf_localization_mapping export_gnss_fix.py \
-            -i $WORKDIR/${BAG_FILENAME}.carto-converted \
-            -o $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv
+            -i $WORKDIR/${bag_file2} \
+            -o $WORKDIR/${gnss_csv_file}
     else
-        blue "skipping $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv"
+        blue "skipping $WORKDIR/${gnss_csv_file}"
     fi
 
     # calculate error between trajectory and gnss
     ros2 run mf_localization_mapping compare_trajectory_and_gnss.py \
-        --trajectory $WORKDIR/${BAG_FILENAME}.carto-converted.trajectory.csv \
-        --gnss $WORKDIR/${BAG_FILENAME}.carto-converted.gnss.csv --plot
+        --trajectory $WORKDIR/${trajectory_csv_file} \
+        --gnss $WORKDIR/${gnss_csv_file} --plot
 fi
