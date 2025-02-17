@@ -795,13 +795,8 @@ private:
         continue;
       }
 
-      // Case 1: The velocity obstacle intersection range is positive
-      //
-      //                  VO Range
-      //         --+-----+-------+---->
-      //           0   vo_min  vo_max
-      //
       if (vo_intersection_min > 0.0) {
+        // Case 1: The velocity obstacle intersection range is positive
         if (vo_intersection_min < rvx && rvx < vo_intersection_max) {
           double max_rvx = (vo_intersection_max == std::numeric_limits<double>::max()) ? rvx + speed_hysteresis_margin_ : vo_intersection_max;
           if (checkCollisionInRange(vo_intersection_min, max_rvx, rel_x, rel_y, pvx, pvy)) {
@@ -812,14 +807,8 @@ private:
             speed_limit = std::min(speed_limit, vo_intersection_min);
           }
         }
-      }
-      // Case 2: The velocity obstacle intersection range includes zero or negative values
-      //
-      //               VO Range
-      //         ----+-----+----+---->
-      //           vo_min  0  vo_max
-      //
-      else if (vo_intersection_max >= 0.0) {
+      } else if (vo_intersection_max >= 0.0) {
+        // Case 2: The velocity obstacle intersection range includes zero or negative values
         double rel_vx = pvx - rvx;
         if (rel_x > 0.0 && willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
           if (vo_intersection_max >= std::min(speed_limit, rvx)) {
