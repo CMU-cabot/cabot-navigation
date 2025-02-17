@@ -378,7 +378,7 @@ if [ $cart_mapping -eq 1 ]; then
     fi
 
     # switch lidar if specified
-    LIDAR_MODEL=${LIDAR_MODEL:-VLP16}
+    : ${LIDAR_MODEL:=}
     echo "LIDAR_MODEL=$LIDAR_MODEL"
     if [ "${LIDAR_MODEL}" != "VLP16" ]; then
         USE_VELODYNE=false
@@ -396,8 +396,8 @@ if [ $cart_mapping -eq 1 ]; then
             echo $cmd
             eval $cmd
             pids+=($!)
-        elif [ "${LIDAR_MODEL}" = "NA" ]; then
-            echo "LIDAR_MODEL is set to N/A. Skip starting lidar driver"
+        elif [ "${LIDAR_MODEL}" = "" ]; then
+            echo "LIDAR_MODEL is not set. Skip starting lidar driver"
             imu_topic=/cabot/imu/data
         else
             echo "Please specify a known lidar model (LIDAR_MODEL=$LIDAR_MODEL)"
