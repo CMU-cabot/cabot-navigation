@@ -5,7 +5,3 @@
 # 
 
 repositories:
-  cabot-common:
-    type: git
-    url: https://github.com/CMU-cabot/cabot-common
-    version: daisukes/separate-common-and-base
