@@ -32,10 +32,10 @@ THE SOFTWARE. -->
 
     <!-- To access this server from a remote client add a host attribute to the following element, e.g. host="*" -->
     <httpEndpoint id="defaultHttpEndpoint"
-                  httpPort="9090"
-                  httpsPort="9443" />
+                  httpPort="8080"
+                  httpsPort="8443" />
 
-    <httpEndpoint id="defaultHttpEndpoint" host="*" httpPort="9090" />
+    <httpEndpoint id="defaultHttpEndpoint" host="*" httpPort="8080" />
     
     <webApplication contextRoot="tools" location="LocationTools-0.0.1-SNAPSHOT.war"/>
 
