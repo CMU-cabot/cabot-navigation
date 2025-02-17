@@ -750,7 +750,7 @@ private:
 
   bool checkCollisionInRange(double vo_min, double vo_max, double rel_x, double rel_y, double pvx, double pvy)
   {
-    constexpr double v_step = 0.1; // step size for velocity iteration
+    constexpr double v_step = 0.1;  // step size for velocity iteration
     for (double rvx_curr = vo_min; rvx_curr <= vo_max; rvx_curr += v_step) {
       double rel_vx = pvx - rvx_curr;
       if (willCollideWithinTime(rel_x, rel_y, rel_vx, pvy)) {
