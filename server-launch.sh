@@ -80,7 +80,7 @@ clean_server=0
 location_tools=0
 environment=
 launch_prefix=
-: ${MAP_SERVER_PORT:=9090}
+: ${MAP_SERVER_PORT:=8080}
 profile=map
 
 while getopts "hdE:p:fvcCl" arg; do
