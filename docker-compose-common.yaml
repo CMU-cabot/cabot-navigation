@@ -395,7 +395,8 @@ services:
         output:
           - type=registry
     env_file:
-      - ${CABOT_MAP_SERVER_ENV_FILE:-${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/$CABOT_SITE/share/$CABOT_SITE/server_data/server.env}
+      - path: ${CABOT_MAP_SERVER_ENV_FILE:-${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/$CABOT_SITE/share/$CABOT_SITE/server_data/server.env}
+        required: false
     environment:
       - HOST_UID
       - HOST_GID
