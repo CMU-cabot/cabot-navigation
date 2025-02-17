@@ -206,9 +206,9 @@ if __name__ == "__main__":
     if anchor_tmp is not None:
         anchor = anchor_tmp
         anchor_msg = Anchor()
-        anchor_msg.lat = anchor.lat
-        anchor_msg.lng = anchor.lng
-        anchor_msg.rotate = anchor.rotate
+        anchor_msg.lat = float(anchor.lat)
+        anchor_msg.lng = float(anchor.lng)
+        anchor_msg.rotate = float(anchor.rotate)
         anchor_pub.publish(anchor_msg)
     else:
         node.get_logger().info(F"Could not load anchor_file {anchor_file}")
