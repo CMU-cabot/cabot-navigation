@@ -22,6 +22,7 @@
 
 import argparse
 import re
+import numpy
 
 
 def main():
@@ -36,7 +37,10 @@ def main():
 
     pattern = r'.*Using NavSatFix.*lat = ([0-9.]+).*long = ([0-9.]+).*use_enu_local_frame = ([0-1]).*use_spherical_mercator = ([0-1]).*'
     matches = re.findall(pattern, string)
-    lat, long, use_enu_local_frame, use_spherical_mercator = matches[0]
+    if len(matches) > 0:
+        lat, long, use_enu_local_frame, use_spherical_mercator = matches[0]
+    else:
+        lat, long, use_enu_local_frame, use_spherical_mercator = numpy.nan, numpy.nan, "false", "false"
 
     # replace text
     use_enu_local_frame = "true" if use_enu_local_frame in [1, "1"] else "false"
@@ -55,7 +59,7 @@ def main():
     output = args.output
     if output is not None and output != "":
         with open(output, "w") as f:
-            f.write("\n".lines)
+            f.write("\n".join(lines))
 
 
 if __name__ == "__main__":
