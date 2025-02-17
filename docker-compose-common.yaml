@@ -467,8 +467,6 @@ services:
           - linux/arm64
         output:
           - type=registry
-    env_file:
-      - ${ENV_FILE:-.empty-env}
     environment:
       - MONGO_HOST=mongodb://mongodb_lt:27017/navi_db
     depends_on:
