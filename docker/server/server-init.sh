@@ -40,12 +40,17 @@ function snore()
     read ${1:+-t "$1"} -u $_snore_fd || :
 }
 
+pwd=`pwd`
+scriptdir=`dirname $0`
+cd $scriptdir
+scriptdir=`pwd`
+
 HOST=http://map_server:8080/map
-data_dir=/home/runner_user/server_data
+data_dir=$(find /cabot_site_pkg -wholename "*/$CABOT_SITE/server_data" | head -1)
+cp -r $data_dir .
 admin=hulopadmin
 pass=please+change+password
 editor=editor
-
 
 count=0
 echo "waiting server is up"
@@ -65,16 +70,21 @@ curl -b admin-cookie.txt -c admin-cookie.txt -d "redirect_url=admin.jsp&user=${a
 curl -b admin-cookie.txt -d "user=$editor&password=$editor&password2=$edito&role=editor" "$HOST/api/user?action=add-user"
 
 blue "importing attachments.zip"
-mkdir -p $data_dir/attachments
-cd $data_dir
+pushd server_data
+mkdir -p attachments
 find . -type f ! -name 'content-md5' ! -name 'attachments.zip' -exec md5sum {} + | LC_COLLATE=C sort -k 2 | md5sum > attachments/content-md5
-cd $data_dir/attachments
+pushd attachments
 zip -r ../attachments.zip .
+popd
 
-cd
-
-if [ -e $data_dir/attachments.zip ]; then
+if [ -e attachments.zip ]; then
     curl -b admin-cookie.txt -c admin-cookie.txt $HOST/admin.jsp
     curl -b admin-cookie.txt -c admin-cookie.txt -d "redirect_url=admin.jsp&user=${admin}&password=${pass}" $HOST/login.jsp
-    curl -b admin-cookie.txt -F file=@$data_dir/attachments.zip "$HOST/api/admin?action=import&type=attachment.zip"
+    curl -b admin-cookie.txt -F file=@attachments.zip "$HOST/api/admin?action=import&type=attachment.zip"
+fi
+popd
+
+if [[ -e ./server_data/MapData.geojson ]]; then
+    blue "importing MapData.geojson"
+    ./server-data.sh -i ./server_data/MapData.geojson
 fi
