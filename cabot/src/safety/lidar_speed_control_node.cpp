@@ -231,8 +231,8 @@ private:
       const double rect_height = max_speed_ * limit_factor_;
       Point region_ur_point(min_distance_ + rect_height, front_region_width_ / 2.0);
       Point region_ul_point(min_distance_ + rect_height, -front_region_width_ / 2.0);
-      Point region_lr_point(min_distance_, front_region_width_ / 2.0);
-      Point region_ll_point(min_distance_, -front_region_width_ / 2.0);
+      Point region_lr_point(0.0, front_region_width_ / 2.0);
+      Point region_ll_point(0.0, -front_region_width_ / 2.0);
 
       region_ur_point.transform(map_to_robot_tf2);
       region_ul_point.transform(map_to_robot_tf2);
@@ -262,9 +262,9 @@ private:
         point_in_map_frame.transform(map_to_robot_tf2 * robot_to_lidar_tf2);
 
         // Check if the point is in the front region
-        if (point_in_robot_frame.x > min_distance_ && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
+        if (point_in_robot_frame.x > 0.0 && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
           double local_speed_limit = (point_in_robot_frame.x - min_distance_) / limit_factor_;
-          if (min_speed_ < local_speed_limit && local_speed_limit < max_speed_) {
+          if (local_speed_limit < max_speed_) {
             CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
           }
 
