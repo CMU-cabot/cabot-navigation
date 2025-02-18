@@ -43,4 +43,7 @@ POSE_GRAPH.constraint_builder.sampling_ratio = 0.05 --default=0.3
 POSE_GRAPH.constraint_builder.min_score = 0.5 -- cartographer default 0.55
 POSE_GRAPH.constraint_builder.global_localization_min_score = 0.55 -- cartographer default 0.6
 
+-- reduce cpu load after FinishTrajectory is called
+POSE_GRAPH.clear_work_queue_on_finish_trajectory = true
+
 return options
