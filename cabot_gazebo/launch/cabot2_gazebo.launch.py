@@ -1,4 +1,4 @@
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2022, 2025  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -382,5 +382,18 @@ def generate_launch_description():
                 PythonExpression(['"', model_name, '"==""']),
                 PythonExpression(['"', world_file, '"==""'])
             ))
+        ),
+        Node(
+            package='cabot_gazebo',
+            executable='gps_converter.py',
+            name='vector3_stamped_to_twist_covariance_stamped',
+            output=output,
+            parameters=[{
+                'use_sim_time': use_sim_time,
+            }],
+            remappings=[
+                ('/in', '/ublox/velocity'),
+                ('/out', '/ublox/fix_velocity')
+            ]
         )
     ])
