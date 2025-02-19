@@ -35,6 +35,7 @@ RUN apt update && \
         gosu \
         jq \
         openjdk-11-jre \
+        sudo \
         zip \
         && \
         apt clean && \
