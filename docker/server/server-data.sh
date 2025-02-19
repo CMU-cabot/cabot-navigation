@@ -62,19 +62,19 @@ while getopts "hi:e:df" arg; do
             exit
             ;;
         i)
-	    file_path=$(realpath $OPTARG)
-	    action=import
-	    ;;
-	e)
-	    file_path=$(realpath $OPTARG)
-	    action=export
-	    ;;
-	d)
-	    action=delete-all
+            file_path=$(realpath $OPTARG)
+            action=import
             ;;
-	f)
-	    force=1
-	    ;;
+        e)
+            file_path=$OPTARG
+            action=export
+            ;;
+        d)
+            action=delete-all
+            ;;
+        f)
+            force=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -88,37 +88,34 @@ pwd=`pwd`
 scriptdir=`dirname $0`
 cd $scriptdir
 scriptdir=`pwd`
-temp_dir=$scriptdir/.tmp
-mkdir -p $temp_dir
 
 HOST=http://map_server:8080/map
 API_KEY=local-server-editor-api-key
 
-cd $temp_dir
-
 if [ "$action" = "import" ]; then
     blue "importing $file_path"
     if [ ! -e $file_path ]; then
-	err "import: $file_path does not exists"
-	exit 3
+        err "import: $file_path does not exists"
+        exit 3
     fi
     cat $file_path | jq .features > insert.json
     curl -X POST \
-	 -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
-	 --data-urlencode  "editor_api_key=$API_KEY" \
-	 --data-urlencode  "user=script" \
-	 --data-urlencode  "lang=en" \
-	 --data-urlencode  "action=editdata" \
-	 --data-urlencode  "remove=[]" \
-	 --data-urlencode  "update=[]" \
-	 --data-urlencode  insert@insert.json \
-	 "$HOST/api/editor" > /dev/null 2>&1
+         -H "Content-Type: application/x-www-form-urlencoded; charset=utf-8" \
+         --data-urlencode  "editor_api_key=$API_KEY" \
+         --data-urlencode  "user=script" \
+         --data-urlencode  "lang=en" \
+         --data-urlencode  "action=editdata" \
+         --data-urlencode  "remove=[]" \
+         --data-urlencode  "update=[]" \
+         --data-urlencode  insert@insert.json \
+         "$HOST/api/editor" > /dev/null 2>&1
 elif [ "$action" = "export" ]; then
-    blue "exporting to $file_path"
+    blue "exporting MapData.geojson to $file_path"
     if [ -e $file_path ] && [ $force -eq 0 ]; then
-	err "export: $file_path already exists, use -f option to overwrite"
-	exit 4
+        err "export: $file_path already exists, use -f option to overwrite"
+        exit 4
     fi
+    mkdir -p $(dirname $file_path)
     curl "$HOST/api/config" > config.json 2> /dev/null
     LAT=$(jq .INITIAL_LOCATION.lat config.json)
     LNG=$(jq .INITIAL_LOCATION.lng config.json)
@@ -139,12 +136,12 @@ elif [ "$action" = "delete-all" ]; then
     curl "$HOST/routesearch?action=features&$options" > features.json 2> /dev/null
     jq -s '. | add' nodemap.json features.json > remove.json
     curl -X POST \
-	 --data-urlencode  "editor_api_key=$API_KEY" \
-	 --data-urlencode  "user=script" \
-	 --data-urlencode  "lang=en" \
-	 --data-urlencode  "action=editdata" \
-	 --data-urlencode  remove@remove.json \
-	 --data-urlencode  "update=[]" \
-	 --data-urlencode  "insert=[]" \
-	 "$HOST/api/editor" > /dev/null 2>&1
+         --data-urlencode  "editor_api_key=$API_KEY" \
+         --data-urlencode  "user=script" \
+         --data-urlencode  "lang=en" \
+         --data-urlencode  "action=editdata" \
+         --data-urlencode  remove@remove.json \
+         --data-urlencode  "update=[]" \
+         --data-urlencode  "insert=[]" \
+         "$HOST/api/editor" > /dev/null 2>&1
 fi

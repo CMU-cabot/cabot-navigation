@@ -21,8 +21,8 @@
 FROM ubuntu:jammy AS base
 
 ARG TZ="Etc/UTC"
-ARG UID=1001
-ARG GID=1001
+ARG UID=1000
+ARG GID=1000
 
 ENV TZ=$TZ \
         DEBIAN_FRONTEND="noninteractive"
@@ -35,6 +35,7 @@ RUN apt update && \
         gosu \
         jq \
         openjdk-11-jre \
+        sudo \
         zip \
         && \
         apt clean && \

@@ -122,10 +122,10 @@ services:
     profiles:
       - map
 
-  mongodb:
+  mongodb_ms:
     extends:
       file: docker-compose-common.yaml
-      service: mongodb
+      service: mongodb_ms
     profiles:
       - map
 

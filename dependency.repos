@@ -26,6 +26,10 @@ repositories:
     url: https://github.com/cmu-cabot/ntrip_client.git
     version: feature/ros2_launch_argument
 
+  docker/ros2/grid_map:
+    type: git
+    url: https://github.com/ANYbotics/grid_map.git
+    version: 12fd001c1e354bc6dd1281e72f95ecda515b0ef1
   docker/ros2/tf2_web_republisher:
     type: git
     url: https://github.com/CMU-cabot/tf2_web_republisher
