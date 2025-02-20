@@ -228,25 +228,30 @@ while getopts "hdm:n:w:sOT:NMr:fR:XCpG" arg; do
 done
 shift $((OPTIND-1))
 
-# load site package
-if [ "$site" != "" ]; then
-    sitedir=`ros2 pkg prefix $site`/share/$site
-    source $sitedir/config/config.sh
-    if [ "$map" == "" ] && [ "$world" == "" ]; then
-        echo "Please check config/config.sh in site package ($sitedir) to set map and world"
-        exit
+
+# load site data for localization/simulation
+if [ $cart_mapping -eq 0 ] || [ $gazebo -eq 1 ]; then
+    # if site is defined
+    if [ "$site" != "" ]; then
+        sitedir=`ros2 pkg prefix $site`/share/$site
+        source $sitedir/config/config.sh
+        if [ "$map" == "" ] && [ "$world" == "" ]; then
+            echo "Please check config/config.sh in site package ($sitedir) to set map and world"
+            exit
+        fi
     fi
-else
-    if [ $cart_mapping -eq 0 ]; then
-	if [ "$map" == "" ]; then
+    # check map and world
+    if [ "$map" == "" ]; then
             echo "-T <site> or -m <map> should be specified"
             exit
-	fi
-	if [ $gazebo -eq 1 ] && [ "$world" == "" ]; then
+    fi
+    if [ $gazebo -eq 1 ] && [ "$world" == "" ]; then
             echo "-T <site> or -w <world> should be specified"
             exit
-	fi
     fi
+else
+    # mapping
+    echo "Skip site package check in mapping mode (site=$site)"
 fi
 
 
@@ -292,7 +297,12 @@ else
             echo "NTRIP_HOST does not exist in environment variables. load NTRIP_HOST from CABOT_SITE package"
             if [ "${CABOT_SITE}" != "" ]; then
                 sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
-                source $sitedir/config/rtk_config.sh
+                rtk_config_file=$sitedir/config/rtk_config.sh
+                if [ -e $rtk_config_file ]; then
+                    source $sitedir/config/rtk_config.sh
+                else
+                    red "File not found: $rtk_config_file"
+                fi
             fi
         fi
 
