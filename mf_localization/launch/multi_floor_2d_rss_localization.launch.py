@@ -33,12 +33,14 @@ from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
+from launch_ros.actions import SetParameter
 from launch_ros.actions import SetParametersFromFile
 from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization')
+    use_sim_time = LaunchConfiguration('use_sim_time')
     robot = LaunchConfiguration('robot')
     rssi_offset = LaunchConfiguration('rssi_offset')
 
@@ -65,6 +67,7 @@ def generate_launch_description():
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("mf_localization")])),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
 
         DeclareLaunchArgument('robot', default_value='', description='Robot type should be specified'),
         DeclareLaunchArgument('rssi_offset', default_value='0.0', description='Set RSSI offset to estimate location'),
@@ -96,6 +99,7 @@ def generate_launch_description():
                 PathJoinSubstitution([pkg_dir, 'configuration_files', 'multi_floor', 'multi_floor_manager.yaml']),
                 condition=UnlessCondition(with_odom_topic),
             ),
+            SetParameter('use_sim_time', use_sim_time),
             Node(
                 package='mf_localization',
                 executable='multi_floor_topic_proxy',
