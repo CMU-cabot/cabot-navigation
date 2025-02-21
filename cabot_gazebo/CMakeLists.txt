@@ -30,6 +30,7 @@ install(PROGRAMS
   script/wireless_rss_simulator_node.py
   script/wireless_sample_simulator_node.py
   script/check_gazebo_ready.py
+  script/pressure_simulator_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 ament_package()
