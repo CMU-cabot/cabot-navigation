@@ -313,6 +313,18 @@ def generate_launch_description():
                 }.items(),
                 condition=LaunchConfigurationNotEquals('wireless_config_file', '')
             ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([pkg_dir,
+                                              '/launch/gazebo_pressure_helper.launch.py']),
+                launch_arguments={
+                    'verbose': 'true',
+                    'namespace': 'pressure_simulator',
+                    'pressure_topic': '/cabot/pressure',
+                    'config_file': wireless_config_file,
+                    'use_sim_time': use_sim_time,
+                }.items(),
+                condition=LaunchConfigurationNotEquals('wireless_config_file', '')
+            ),
 
             # cabot feature handleside (ad-hoc implementation)
             ExecuteProcess(
