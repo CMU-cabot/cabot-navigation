@@ -524,6 +524,11 @@ private:
       double rel_th = atan2(rel_y, rel_x);
       double dist = hypot(rel_x, rel_y);
 
+      // people walking below the speed threshold are not subject to velocity obstacle speed limits
+      if (hypot(pvx, pvy) < person_speed_threshold_) {
+        continue;
+      }
+
       if (dist < max_radius) {
         vo_data_queue.push({dist, rel_x, rel_y, pvx, pvy, 0.0, 0.0, 0.0, max_speed_});
         continue;
@@ -535,11 +540,6 @@ private:
 
       if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
         addVOMarker(dist, pvx, pvy, theta_right, theta_left, max_radius, map_to_robot_tf2);
-      }
-
-      // people walking below the speed threshold are not subject to velocity obstacle speed limits
-      if (hypot(pvx, pvy) < person_speed_threshold_) {
-        continue;
       }
 
       // compute the intersection points between the x-axis and the velocity obstacle cone
@@ -782,7 +782,7 @@ private:
 
       // People walking below the speed threshold are not subject to velocity obstacle speed limits
       if (dist < max_radius) {
-        double candidate_speed_limit = (rel_x > min_radius) ? vo_min_speed_ : 0.0;
+        double candidate_speed_limit = (dist > min_radius) ? vo_min_speed_ : 0.0;
         speed_limit = std::min(speed_limit, candidate_speed_limit);
         continue;
       }
