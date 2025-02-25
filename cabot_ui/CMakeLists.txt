@@ -35,15 +35,15 @@ set(dependencies
 )
 
 add_library(cabot_handle_v2_lib SHARED
-  src/cabot_handle_v2_node.cpp
-  src/handle_v2.cpp
-  src/event.cpp
+  src/cabot/cabot_handle_v2_node.cpp
+  src/cabot/handle_v2.cpp
+  src/cabot/event.cpp
 )
 
 add_library(cabot_handle_v3_lib SHARED
-  src/cabot_handle_v3_node.cpp
-  src/handle_v3.cpp
-  src/event.cpp
+  src/cabot/cabot_handle_v3_node.cpp
+  src/cabot/handle_v3.cpp
+  src/cabot/event.cpp
 )
 
 ament_target_dependencies(cabot_handle_v2_lib
