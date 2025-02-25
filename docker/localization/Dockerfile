@@ -1,5 +1,6 @@
 ARG BASE_IMAGE=cabot-base
 ARG FROM_IMAGE=cmucal/${BASE_IMAGE}:humble-desktop-custom-mesa
+ARG ARM_CFLAGS="-march=armv8.2-a+crypto+fp16+rcpc+dotprod+flagm -frecord-gcc-switches"
 
 FROM ${FROM_IMAGE} as cache
 
@@ -35,8 +36,17 @@ RUN sed -i 's:d902eb869bcfacc1bad14933ed9af4bed006d481:8c0b94e793a66495e0b1f34a5
 RUN src/cartographer/scripts/install_debs_cmake.sh && rm -rf /var/lib/apt/lists/*
 RUN src/cartographer/scripts/install_abseil.sh && rm -rf /var/lib/apt/lists/*
 
-RUN . /opt/custom_ws/install/setup.sh && \
-	colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+ARG TARGETARCH
+ARG ARM_CFLAGS
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+        export CFLAGS="${ARM_CFLAGS} ${CFLAGS}" && \
+        export CXXFLAGS="${ARM_CFLAGS} ${CXXFLAGS}" && \
+        . /opt/custom_ws/install/setup.sh && \
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo ; \
+    else \
+        . /opt/custom_ws/install/setup.sh && \
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo ; \
+    fi
 
 FROM $FROM_IMAGE as build
 
@@ -166,6 +176,16 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_gazebo src/m
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_mapping src/mf_localization_mapping
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_msgs src/mf_localization_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_rviz src/mf_localization_rviz
+
+ARG TARGETARCH
+ARG ARM_CFLAGS
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+        export CFLAGS="${ARM_CFLAGS} ${CFLAGS}" && \
+        export CXXFLAGS="${ARM_CFLAGS} ${CXXFLAGS}" && \
+        /ros_entrypoint.sh /launch.sh build ; \
+    else \
+        /ros_entrypoint.sh /launch.sh build ; \
+    fi
 
 RUN /ros_entrypoint.sh /launch.sh build
 

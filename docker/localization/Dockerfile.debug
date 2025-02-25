@@ -1,5 +1,6 @@
 ARG PREFIX=cabot
 ARG FROM_IMAGE=${PREFIX}__jammy-humble-custom-mesa
+ARG ARM_CFLAGS="-march=armv8.2-a+crypto+fp16+rcpc+dotprod+flagm -frecord-gcc-switches"
 
 FROM $FROM_IMAGE as build
 
@@ -79,8 +80,17 @@ COPY ./ntrip_client /opt/cartographer_ws/src/ntrip_client
 WORKDIR /opt/cartographer_ws/
 
 # build packages in /opt/cartographer_ws other than cartographer
-RUN . /opt/custom_ws/install/setup.sh && \
-	colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+ARG TARGETARCH
+ARG ARM_CFLAGS
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+        export CFLAGS="${ARM_CFLAGS} ${CFLAGS}" && \
+        export CXXFLAGS="${ARM_CFLAGS} ${CXXFLAGS}" && \
+        . /opt/custom_ws/install/setup.sh && \
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo ; \
+    else \
+        . /opt/custom_ws/install/setup.sh && \
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo ; \
+    fi
 
 # start build cartographer
 COPY ./cartographer /opt/cartographer_ws/src/cartographer

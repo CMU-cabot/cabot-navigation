@@ -20,6 +20,7 @@
 
 ARG BASE_IMAGE=cabot-base
 ARG FROM_IMAGE=cmucal/${BASE_IMAGE}:humble-desktop-custom-mesa
+ARG ARM_CFLAGS="-march=armv8.2-a+crypto+fp16+rcpc+dotprod+flagm -frecord-gcc-switches"
 
 # build underlay
 FROM ${FROM_IMAGE} as cache
@@ -46,9 +47,17 @@ RUN apt update && rosdep update && rosdep install -q -y \
 	--from-paths src \
 	--ignore-src
 
-RUN . /opt/custom_ws/install/setup.sh && \
-	colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
-
+ARG TARGETARCH
+ARG ARM_CFLAGS
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+        export CFLAGS="${ARM_CFLAGS} ${CFLAGS}" && \
+        export CXXFLAGS="${ARM_CFLAGS} ${CXXFLAGS}" && \
+        . /opt/custom_ws/install/setup.sh && \
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo ; \
+    else \
+        . /opt/custom_ws/install/setup.sh && \
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo ; \
+    fi
 
 FROM ${FROM_IMAGE} as build
 ENV ROS_DISTRO=humble
@@ -197,7 +206,15 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_people_py src/queue_pe
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_utils_py src/queue_utils_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
 
-RUN /ros_entrypoint.sh /launch.sh build
+ARG TARGETARCH
+ARG ARM_CFLAGS
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+        export CFLAGS="${ARM_CFLAGS} ${CFLAGS}" && \
+        export CXXFLAGS="${ARM_CFLAGS} ${CXXFLAGS}" && \
+        /ros_entrypoint.sh /launch.sh build ; \
+    else \
+        /ros_entrypoint.sh /launch.sh build ; \
+    fi
 
 FROM ${FROM_IMAGE} as final
 ENV ROS_DISTRO=humble
