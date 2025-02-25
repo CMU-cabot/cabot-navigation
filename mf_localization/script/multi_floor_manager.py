@@ -320,8 +320,17 @@ class GNSSParameters:
     gnss_floor_search_radius: float = 5.0  # [m]
 
 
+@dataclass
+class MultiFloorManagerParameters:
+    # area classification
+    area_floor_const: float = 10000
+    area_check_interval: float = 1.0  # [s]
+    area_distance_threshold: float = 10  # [m]
+
+
 class MultiFloorManager:
-    def __init__(self, node):
+    def __init__(self, node,
+                 multi_floor_manager_parameters: MultiFloorManagerParameters = MultiFloorManagerParameters()):
         self.node = node
         self.clock = node.get_clock()
         self.logger = node.get_logger()
@@ -359,13 +368,14 @@ class MultiFloorManager:
         self.use_wifi = False
 
         # area identification
-        self.area_floor_const = 10000
         self.area_localizer = None
         self.X_area = None
         self.Y_area = None
         self.previous_area_check_time = None
-        self.area_check_interval = 1.0  # [s]
-        self.area_distance_threshold = 10  # [m]
+        # area identification parameters
+        self.area_floor_const = multi_floor_manager_parameters.area_floor_const
+        self.area_check_interval = multi_floor_manager_parameters.area_check_interval
+        self.area_distance_threshold = multi_floor_manager_parameters.area_distance_threshold
 
         self.transforms = []
 
@@ -2153,7 +2163,14 @@ if __name__ == "__main__":
     tfBuffer = BufferProxy(node)
 
     # multi floor manager
-    multi_floor_manager = MultiFloorManager(node)
+    multi_floor_manager_config = map_config.get("multi_floor_manager", None)
+    if multi_floor_manager_config is None:
+        multi_floor_manager = MultiFloorManager(node)
+    else:
+        multi_floor_manager_parameters = MultiFloorManagerParameters(**multi_floor_manager_config)
+        logger.info(f"multi_floor_manager_config={multi_floor_manager_config}")
+        multi_floor_manager = MultiFloorManager(node, multi_floor_manager_parameters)
+
     # load node parameters
     if not node.has_parameter("use_sim_time"):
         node.declare_parameter("use_sim_time", False)
@@ -2207,6 +2224,7 @@ if __name__ == "__main__":
     # pressure topic parameters
     multi_floor_manager.pressure_available = node.declare_parameter("pressure_available", True).value
     altitude_floor_estimator_config = map_config["altitude_floor_estimator"] if "altitude_floor_estimator" in map_config else None
+    floor_height_mapper_config = map_config.get("floor_height_mapper", None)
 
     verbose = node.declare_parameter("verbose", True).value
     multi_floor_manager.verbose = verbose
@@ -2557,7 +2575,11 @@ if __name__ == "__main__":
         area = int(s["information"]["area"])
         height = s["information"]["height"]
         X_height_mapper.append([x_a, y_a, f_a, area, height])
-    multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper)
+    if floor_height_mapper_config is None:
+        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper)
+    else:
+        logger.info(f"floor_height_mapper_config={floor_height_mapper_config}")
+        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, **floor_height_mapper_config)
 
     # area localizer
     X_area = []
