@@ -21,16 +21,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import argparse
-import rclpy
-import rclpy.node
-import threading
 import math
 
 from python_qt_binding.QtWidgets import QWidget
 from rqt_gui_py.plugin import Plugin
 
-from python_qt_binding.QtWidgets import QVBoxLayout, QPushButton, QGridLayout, QLabel, QVBoxLayout
+from python_qt_binding.QtWidgets import QVBoxLayout, QPushButton, QGridLayout, QLabel
 from std_msgs.msg import Bool, Int8, UInt8, Int16
 from python_qt_binding.QtCore import Qt, QEvent, QTimer
 from python_qt_binding.QtWidgets import QGraphicsView, QGraphicsScene
