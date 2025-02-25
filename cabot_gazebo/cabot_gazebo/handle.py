@@ -92,12 +92,15 @@ class Handle(Plugin):
         self.canvas.setFixedSize(150, 150)
         self.scene = QGraphicsScene()
         self.canvas.setScene(self.scene)
-        layout.addWidget(self.canvas, 3, 1, alignment=Qt.AlignCenter)
-
         # Draw a circle in the canvas
         self.circle = self.scene.addEllipse(0, 0, 100, 100)
         # Draw a line from the center of the circle toward the top of the circle
         self.line = self.scene.addLine(50, 50, 50, 0)
+        layout.addWidget(self.canvas, 3, 1, alignment=Qt.AlignCenter)
+
+        # Add label to show the status of servo_free
+        self.servo_free_label = QLabel('Free: True')
+        layout.addWidget(self.servo_free_label, 3, 2, alignment=Qt.AlignCenter)
 
         # timer to draw the indicator
         def update_plot():
@@ -208,6 +211,7 @@ class Handle(Plugin):
 
     def servo_free_callback(self, msg):
         self.servo_free = msg.data
+        self.servo_free_label.setText(f'Free: {self.servo_free}')
 
     def servo_target_callback(self, msg):
         self.servo_target_msg = msg
