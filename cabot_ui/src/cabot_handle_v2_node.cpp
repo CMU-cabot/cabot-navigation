@@ -33,7 +33,7 @@ CaBotHandleV2Node::CaBotHandleV2Node(const rclcpp::NodeOptions & options)
   handle_(nullptr), button_keys_({}), event_pub_(nullptr)
 {
   event_pub_ = create_publisher<std_msgs::msg::String>("/cabot/event", 10);
-  button_keys_ = declare_parameter("buttons", std::vector<std::string>{""});
+  button_keys_ = declare_parameter("buttons", std::vector<std::string>{"BUTTON_UP", "BUTTON_DOWN", "BUTTON_LEFT", "BUTTON_RIGHT", "BUTTON_CENTER"});
   std::string button_keys_str = std::accumulate(
     button_keys_.begin(), button_keys_.end(), std::string(),
     [](const std::string & result, const std::string & key) {
