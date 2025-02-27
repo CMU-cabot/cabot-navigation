@@ -34,6 +34,25 @@ set(dependencies
   tf2_ros
 )
 
+add_library(cabot_handle_v2_lib SHARED
+  src/cabot/cabot_handle_v2_node.cpp
+  src/cabot/handle_v2.cpp
+  src/cabot/event.cpp
+)
+
+add_library(cabot_handle_v3_lib SHARED
+  src/cabot/cabot_handle_v3_node.cpp
+  src/cabot/handle_v3.cpp
+  src/cabot/event.cpp
+)
+
+ament_target_dependencies(cabot_handle_v2_lib
+  ${dependencies}
+)
+
+ament_target_dependencies(cabot_handle_v3_lib
+  ${dependencies}
+)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_copyright REQUIRED)
@@ -85,6 +104,21 @@ install(PROGRAMS
   scripts/cabot_ui_manager.py
   scripts/stop_reasons_node.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+rclcpp_components_register_node(cabot_handle_v2_lib
+  PLUGIN "CaBotHandleV2Node"
+  EXECUTABLE cabot_handle_v2_node
+)
+rclcpp_components_register_node(cabot_handle_v3_lib
+  PLUGIN "CaBotHandleV3Node"
+  EXECUTABLE cabot_handle_v3_node
+)
+
+install(TARGETS
+  cabot_handle_v2_lib
+  cabot_handle_v3_lib
+  DESTINATION lib
 )
 
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch/)

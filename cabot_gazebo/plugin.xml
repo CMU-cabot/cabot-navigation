@@ -1,0 +1,17 @@
+<library path="src">
+  <class name="Handle" type="cabot_gazebo.handle.Handle" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      A plugin visualizing CaBot Handle
+    </description>
+    <qtgui>
+      <group>
+        <label>CaBot Handle</label>
+        <icon type="theme">folder</icon>
+        <statustip>Plugins related to CaBot.</statustip>
+      </group>
+      <label>Handle</label>
+      <icon type="theme">utilities-system-monitor</icon>
+      <statustip>A plugin visualizing CaBot Handle</statustip>
+    </qtgui>
+  </class>
+</library>
