@@ -244,7 +244,7 @@ void Handle::vib_waiting_timer_callback()
     if (is_waiting_cnt_ < 2) {  // 1.0sec(vib_waiting_timer_) * 2 = 2.0sec
       is_waiting_cnt_++;
     } else {
-      setServoFree(true);
+      // setServoFree(true);
       // vibrateWaitingPattern();
     }
   } else {
@@ -479,6 +479,7 @@ void Handle::changeDiControlModeCallback(std_msgs::msg::String::UniquePtr & msg)
 
 void Handle::changeServoPos(int16_t target_pos)
 {
+  setServoFree(false);
   std::unique_ptr<std_msgs::msg::Int16> msg = std::make_unique<std_msgs::msg::Int16>();
   msg->data = -1 * target_pos;
   servo_target_pub_->publish(std::move(msg));
@@ -498,6 +499,7 @@ void Handle::navigationArrived()
   is_navigating_ = false;
   wma_data_buffer_.clear();
   resetServoPosition();
+  setServoFree(true);
   if (vibratorType_ == vibrator_type_::ERM) {
     vibratePattern(vibrator1_pub_, VibConst::ERM::NumVibrations::HAS_ARRIVED, VibConst::ERM::Duration::HAS_ARRIVED, VibConst::ERM::Sleep::DEFAULT);
   } else if (vibratorType_ == vibrator_type_::LRA) {
@@ -510,7 +512,6 @@ void Handle::navigationStart()
   is_navigating_ = true;
   wma_data_buffer_.clear();
   resetServoPosition();
-  setServoFree(false);
 }
 
 void Handle::resetServoPosition()
@@ -520,7 +521,6 @@ void Handle::resetServoPosition()
   di.target_turn_angle = 0.0f;
   di.target_pos_global = 0.0f;
   changeServoPos(0);
-  // setServoFree(true);   // this may be a bug
 }
 
 void Handle::vibrateLeftTurn()
