@@ -364,7 +364,8 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg)
     di.target_pos_global = static_cast<int16_t>(di.target_turn_angle - turned_angle);
     if (std::abs(di.target_pos_global) < di.THRESHOLD_RESET) {
       if (std::abs(di.target_pos_global - di.target_pos_local) < di.THRESHOLD_PASS_CONTROL_MIN) {
-        resetServoPosition();
+        // resetServoPosition();
+        di.is_controlled_by_imu = false;
         RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "(global -> local) global: %d, local: %d ", di.target_pos_global, di.target_pos_local);
       } else {
         RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "(global -> local) waiting for pass control, global: %d, local: %d", di.target_pos_global, di.target_pos_local);
