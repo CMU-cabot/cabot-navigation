@@ -643,7 +643,6 @@ private:
 
     char buff[100];
     snprintf(buff, sizeof(buff), "limit - %.2fm/s", people_speed_limit);
-
     CaBotSafety::add_text(this->get_clock()->now(), buff, start_point);
   }
 
