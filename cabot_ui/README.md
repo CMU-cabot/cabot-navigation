@@ -90,7 +90,7 @@
   ```
   CABOT_HANDLE_BUTTON_MAPPING=2
   ```
-##### 1 (default)
+##### 1 (Old: ~2025/02)
 example .env file
 ```
 CABOT_IMAGE_DESCRIPTION_ENABLED=true
@@ -112,7 +112,7 @@ Key Mapping
   ```
 
 
-##### 2 (New button mapping)
+##### 2 (Default)
 example .env file
 ```
 CABOT_IMAGE_DESCRIPTION_ENABLED=true
