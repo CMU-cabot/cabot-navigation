@@ -26,6 +26,7 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import Vector3Stamped, TwistWithCovarianceStamped
 
+
 class Vector3StampedToTwistCovarianceStamped(Node):
     def __init__(self, name):
         super().__init__(name)
@@ -53,12 +54,14 @@ class Vector3StampedToTwistCovarianceStamped(Node):
         self.publisher.publish(twist_msg)
         self.get_logger().info(f'Publishing: {twist_msg}')
 
+
 def main():
     rclpy.init()
     converter = Vector3StampedToTwistCovarianceStamped('vector3_stamped_to_twist_covariance_stamped')
     rclpy.spin(converter)
     converter.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
