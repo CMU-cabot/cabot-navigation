@@ -603,7 +603,7 @@ class CabotUIManager(NavigationInterface, object):
                 # force to pause state
                 self._logger.info("NavigationState: state is not in action state={}".format(self._status_manager.state))
 
-        if event.subtype == "resume":
+        if event.subtype in {"resume", "resume_or_stop_reason"}:
             if self.destination is not None:
                 self._logger.info("NavigationState: User Resume requested")
                 if self._status_manager.state == State.in_pause:
@@ -615,7 +615,16 @@ class CabotUIManager(NavigationInterface, object):
                 elif self._status_manager.state == State.in_pausing:
                     self._interface.pausing_navigation()
                 else:
-                    self._logger.info("NavigationState: state is not in pause state")
+                    if event.subtype == "resume_or_stop_reason" and self._description.enabled:
+                        self._logger.info("Request Stop Reason Description")
+                        if self._interface.last_pose:
+                            gp = self._interface.last_pose['global_position']
+                            self._interface.requesting_describe_surround_stop_reason()
+                            result = self._description.request_description_with_images2(gp, "stop_reason", length_index=0)
+                            if result:
+                                self._interface.describe_surround(result['description'])
+                    else:
+                        self._logger.info("NavigationState: state is not in pause state")
             else:
                 self._logger.info("NavigationState: Next")
                 e = NavigationEvent("next", None)
@@ -766,7 +775,7 @@ class EventMapper2(object):
             return None
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="resume")
+                return NavigationEvent(subtype="resume_or_stop_reason")
             if event.buttons == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="toggle_speak_state")
             if event.buttons == cabot_common.button.BUTTON_UP:
@@ -779,8 +788,6 @@ class EventMapper2(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 description_length = min(event.count, 3)
                 return NavigationEvent(subtype="description_surround", param=description_length)
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="description_stop_reason")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
                 return NavigationEvent(subtype="pause")

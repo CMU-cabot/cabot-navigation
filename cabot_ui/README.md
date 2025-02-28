@@ -90,7 +90,7 @@
   ```
   CABOT_HANDLE_BUTTON_MAPPING=2
   ```
-##### 1 (default)
+##### 1 (Old: ~2025/02)
 example .env file
 ```
 CABOT_IMAGE_DESCRIPTION_ENABLED=true
@@ -112,7 +112,7 @@ Key Mapping
   ```
 
 
-##### 2 (New button mapping)
+##### 2 (Default)
 example .env file
 ```
 CABOT_IMAGE_DESCRIPTION_ENABLED=true
@@ -126,9 +126,9 @@ Key Mapping
 - Down Hold: Gradually decrease speed (speed drops every second)
 - Up Hold: Gradually increase speed (speed rises every second)
 - Left Click: Pause/Resume speech output
-- Right Click: Start navigation
-- Down Click (1 time): Start conversation interface
-- Down Click (2 times): Describe stop reason
+- Right Click: Start/Resume navigation
+  - *while navigating: Describe stop reason
+- Down Click: Start conversation interface
 - Up Click: Describe the surroundings
   - Single click: Short analysis
   - Double click: Medium-length analysis
