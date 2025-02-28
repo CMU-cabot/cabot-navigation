@@ -788,8 +788,6 @@ class EventMapper2(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 description_length = min(event.count, 3)
                 return NavigationEvent(subtype="description_surround", param=description_length)
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="description_stop_reason")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
                 return NavigationEvent(subtype="pause")
