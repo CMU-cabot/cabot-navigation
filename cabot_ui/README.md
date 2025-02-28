@@ -126,9 +126,9 @@ Key Mapping
 - Down Hold: Gradually decrease speed (speed drops every second)
 - Up Hold: Gradually increase speed (speed rises every second)
 - Left Click: Pause/Resume speech output
-- Right Click: Start navigation
-- Down Click (1 time): Start conversation interface
-- Down Click (2 times): Describe stop reason
+- Right Click: Start/Resume navigation
+  - *while navigating: Describe stop reason
+- Down Click: Start conversation interface
 - Up Click: Describe the surroundings
   - Single click: Short analysis
   - Double click: Medium-length analysis
