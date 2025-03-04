@@ -111,6 +111,8 @@ node_options_file=$bag_file2.node-options.yaml
 trajectory_csv_file=$bag_file2.trajectory.csv
 gnss_csv_file=$bag_file2.gnss.csv
 
+pkg_share_dir=`ros2 pkg prefix --share mf_localization_mapping`
+
 if [[ ! -e $WORKDIR/${bag_file2} ]]; then
     ros2 launch mf_localization_mapping convert_rosbag_for_cartographer.launch.py \
 	      points2:=${points2_topic} \
@@ -125,6 +127,9 @@ else
 fi
 
 if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; then
+    cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping.lua \
+          $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping.lua
+
     com="ros2 launch mf_localization_mapping demo_2d_VLP16.launch.py \
 	      save_samples:=true \
 	      save_state:=true \
@@ -146,6 +151,9 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 
     # outdoor mapping
     if [ "$MAPPING_USE_GNSS" = true ]; then
+        cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping_gnss.lua \
+              $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping_gnss.lua
+
         com="$com \
             save_pose:=true \
             save_trajectory:=true \
