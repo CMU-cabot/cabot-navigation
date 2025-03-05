@@ -394,9 +394,8 @@ services:
           - linux/arm64
         output:
           - type=registry
-    env_file:
-      - path: ${CABOT_MAP_SERVER_ENV_FILE:-${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/$CABOT_SITE/share/$CABOT_SITE/server_data/server.env}
-        required: false
+    volumes:
+      - ${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}:/cabot_site_pkg
     environment:
       - HOST_UID
       - HOST_GID
@@ -408,6 +407,10 @@ services:
       - 'EDITOR_API_KEY=local-server-editor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
       - 'SEARCH_BY_CATEGORY_ENABLED=true'
+    command:
+      - bash
+      - -c
+      - "set -a && source $(find /cabot_site_pkg -wholename \"*/$CABOT_SITE/server_data\" | head -1)/server.env && ./server run defaultServer"
     depends_on:
       mongodb_ms:
         condition: service_healthy
