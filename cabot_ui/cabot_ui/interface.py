@@ -318,7 +318,7 @@ class UserInterface(object):
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
         if statement:
-            priority=self.get_speech_priority(poi)
+            priority = self.get_speech_priority(poi)
             if priority == SpeechPriority.LOW:
                 self.speak(statement, priority=priority, timeout=1.0)
             else:
@@ -328,7 +328,7 @@ class UserInterface(object):
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
         if statement:
-            priority=self.get_speech_priority(poi)
+            priority = self.get_speech_priority(poi)
             if priority == SpeechPriority.LOW:
                 self.speak(statement, priority=priority, timeout=1.0)
             else:
@@ -338,7 +338,7 @@ class UserInterface(object):
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
-            priority=self.get_speech_priority(poi)
+            priority = self.get_speech_priority(poi)
             if priority == SpeechPriority.LOW:
                 self.speak(statement, priority=priority, timeout=1.0)
             else:
