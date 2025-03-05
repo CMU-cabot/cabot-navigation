@@ -42,7 +42,7 @@ class SpeechPriority:
     REQUIRED = 90
     HIGH = 60
     NORMAL = 30
-    MODERATE = 20
+    MODERATE = 25
     LOW = 10
 
 
