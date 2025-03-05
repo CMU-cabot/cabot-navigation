@@ -54,6 +54,7 @@ class Description:
         self.last_plan_distance = None
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
+        self.api_key = os.environ.get("CABOT_IMAGE_DESCRIPTION_API_KEY", "")
         if self.enabled:
             # handle modes (default=surround)
             modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", DescriptionMode.SURROUND.value).split(",")
@@ -130,8 +131,10 @@ class Description:
     def request_description(self, global_position):
         self._logger.info(F"Request Description at {global_position}")
         try:
+            headers = {'x-api-key': self.api_key}
             req = requests.get(
-                F"{self.host}/{Description.DESCRIPTION_API}?lat={global_position.lat}&lng={global_position.lng}&rotation={global_position.r}&max_distance={self.max_distance}"
+                F"{self.host}/{Description.DESCRIPTION_API}?lat={global_position.lat}&lng={global_position.lng}&rotation={global_position.r}&max_distance={self.max_distance}",
+                headers=headers
             )
             data = json.loads(req.text)
             if req.status_code != requests.codes.ok:
@@ -213,7 +216,10 @@ class Description:
 
         # Send HTTP request with the image data
         try:
-            headers = {'Content-Type': 'application/json'}
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': self.api_key
+            }
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
             lat = global_position.lat
@@ -304,7 +310,10 @@ class Description:
 
         # Send HTTP request with the image data
         try:
-            headers = {'Content-Type': 'application/json'}
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': self.api_key
+            }
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
             lat = global_position.lat
