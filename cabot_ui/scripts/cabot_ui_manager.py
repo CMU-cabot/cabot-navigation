@@ -40,6 +40,7 @@ import threading
 import traceback
 import yaml
 import requests
+import time
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
@@ -90,6 +91,7 @@ class CabotUIManager(NavigationInterface, object):
         self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
         self._description = Description(desc_node)
+        self._last_description_event_time = 0
         self._processing_lock = threading.Lock()
         # self._exploration = Exploration()
         # self._exploration.delegate = self
@@ -464,6 +466,11 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.describe_surround(result['description'])
 
         if event.subtype == "description_stop_reason" and self._description.enabled:
+            current_time = time.time()
+            if current_time - self._last_description_event_time < 10:
+                return
+            self._last_description_event_time = current_time
+
             if not self._processing_lock.acquire(blocking=False):
                 return
 
@@ -485,6 +492,11 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "description_surround" and self._description.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
+            current_time = time.time()
+            if current_time - self._last_description_event_time < 10:
+                return
+            self._last_description_event_time = current_time
+
             if not self._processing_lock.acquire(blocking=False):
                 return
 
@@ -640,6 +652,11 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.pausing_navigation()
                 else:
                     if event.subtype == "resume_or_stop_reason" and self._description.enabled:
+                        current_time = time.time()
+                        if current_time - self._last_description_event_time < 10:
+                            return
+                        self._last_description_event_time = current_time
+
                         if not self._processing_lock.acquire(blocking=False):
                             return
 
