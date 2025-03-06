@@ -523,6 +523,7 @@ class CabotUIManager(NavigationInterface, object):
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)
+            self._last_description_event_time = 0
 
         if event.subtype == "toggle_conversation":
             self._logger.info("Request Start/Stop Conversation Interface")
