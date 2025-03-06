@@ -119,7 +119,7 @@ class UserInterface(object):
         self.lang = lang
         i18n.set_language(self.lang)
 
-    def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL, timeout=0.0):
+    def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
         if text is None:
             return
 
@@ -134,7 +134,7 @@ class UserInterface(object):
             if not speak_proxy.wait_for_service(timeout_sec=1):
                 CaBotRclpyUtil.error("Service cannot be found")
                 return
-            CaBotRclpyUtil.info(F"try to speak {text} (v={voice}, r={rate}, p={pitch}, priority={priority}, timeout={timeout}) {force}")
+            CaBotRclpyUtil.info(F"try to speak {text} (v={voice}, r={rate}, p={pitch}, priority={priority}) {force}")
             request = cabot_msgs.srv.Speak.Request()
             request.text = text
             request.rate = rate
@@ -144,7 +144,7 @@ class UserInterface(object):
             request.voice = voice
             request.force = force
             request.priority = priority
-            request.timeout = timeout
+            request.timeout = 2.0
             request.channels = cabot_msgs.srv.Speak.Request.CHANNEL_BOTH
             speak_proxy.call_async(request)
             CaBotRclpyUtil.info("speak requested")
@@ -283,7 +283,7 @@ class UserInterface(object):
 
         self._activity_log("cabot/interface", "human")
         self.vibrate(pattern=vib)
-        self.speak(i18n.localized_string("AVOIDING_A_PERSON"), priority=SpeechPriority.NORMAL, timeout=5.0)
+        self.speak(i18n.localized_string("AVOIDING_A_PERSON"), priority=SpeechPriority.NORMAL)
 
     def have_arrived(self, goal):
         raise RuntimeError("Should no use this func")
@@ -318,31 +318,19 @@ class UserInterface(object):
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
         if statement:
-            priority = self.get_speech_priority(poi)
-            if priority == SpeechPriority.LOW:
-                self.speak(statement, priority=priority, timeout=1.0)
-            else:
-                self.speak(statement, priority=priority)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approaching")
 
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
         if statement:
-            priority = self.get_speech_priority(poi)
-            if priority == SpeechPriority.LOW:
-                self.speak(statement, priority=priority, timeout=1.0)
-            else:
-                self.speak(statement, priority=priority)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
-            priority = self.get_speech_priority(poi)
-            if priority == SpeechPriority.LOW:
-                self.speak(statement, priority=priority, timeout=1.0)
-            else:
-                self.speak(statement, priority=priority)
+            self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "passed")
 
     def could_not_get_current_location(self):
@@ -413,12 +401,12 @@ class UserInterface(object):
 
     def requesting_describe_surround(self):
         self._activity_log("cabot/interface", "requesting_describe_surround", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.MODERATE, timeout=1.0)
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.MODERATE)
 
     def requesting_describe_surround_stop_reason(self):
         self._activity_log("cabot/interface", "requesting_describe_surround_stop_reason", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE, timeout=1.0)
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
 
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
-        self.speak(description, priority=SpeechPriority.MODERATE, timeout=1.0)
+        self.speak(description, priority=SpeechPriority.MODERATE)
