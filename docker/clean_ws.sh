@@ -23,8 +23,9 @@
 wd=`dirname $0`
 
 for name in loc_ws people_ws people_nuc_wc ros2_ws bag_ws; do
-    rm -rf $wd/home/$name/build
-    rm -rf $wd/home/$name/install
-    rm -rf $wd/home/$name/log
+    rm -rf $wd/home/$name/build/*
+    rm -rf $wd/home/$name/install/*
+    rm -rf $wd/home/$name/log/*
+    rm -rf $wd/home/$name/DEBUG_BUILD
+    rm -rf $wd/home/$name/RELEASE_BUILD
 done
-
