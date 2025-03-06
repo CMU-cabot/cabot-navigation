@@ -242,7 +242,7 @@ class Description:
         return None
 
     # for EventMapper2()
-    def request_description_with_images2(self, global_position, mode, length_index=0):
+    def request_description_with_images2(self, global_position, mode, length_index=0, timeout=10):
         if not self.enabled:
             return None
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
@@ -323,7 +323,8 @@ class Description:
             response = requests.post(
                 F"{API_URL}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
-                data=json_data
+                data=json_data,
+                timeout=timeout
             )
             if response.status_code == 200:
                 response_json = response.json()
@@ -331,6 +332,8 @@ class Description:
                 return response_json
             else:
                 self._logger.error(f'Failed to send images to server. Status code: {response.status_code}')
+        except requests.exceptions.Timeout:
+            self._logger.error("Request timed out. Skipping description processing.")
         except Exception as e:
             self._logger.error(f'Error sending HTTP request: {e}')
         return None

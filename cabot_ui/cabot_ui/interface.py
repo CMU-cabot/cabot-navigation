@@ -42,6 +42,7 @@ class SpeechPriority:
     REQUIRED = 90
     HIGH = 60
     NORMAL = 30
+    MODERATE = 25
     LOW = 10
 
 
@@ -400,12 +401,12 @@ class UserInterface(object):
 
     def requesting_describe_surround(self):
         self._activity_log("cabot/interface", "requesting_describe_surround", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.HIGH)
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.MODERATE)
 
     def requesting_describe_surround_stop_reason(self):
         self._activity_log("cabot/interface", "requesting_describe_surround_stop_reason", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.HIGH)
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
 
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
-        self.speak(description, priority=SpeechPriority.HIGH)
+        self.speak(description, priority=SpeechPriority.MODERATE)
