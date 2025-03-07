@@ -448,8 +448,8 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.describe_surround(result['description'])
                 else:
                     self._logger.info("description - Error")
+                    self._interface.describe_error()
             except:   # noqa: #722
-                self._interface.describe_error()
                 self._logger.error(traceback.format_exc())
 
         if event.subtype == "description" and self._description.enabled:
