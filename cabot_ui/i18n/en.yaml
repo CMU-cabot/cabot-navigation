@@ -116,5 +116,6 @@ LEFT_SIDE: "on your left"
 APPROACEHD_TO_FACILITY: "{0} is {1}"
 
 ## Describe Surround
+REQUESTING_PLEASE_WAIT: "Requesting"
 REQUESTING_DESCRIBE_SURROUND: "Requesting surrounding situation"
 REQUESTING_DESCRIBE_FORWARD: "Requesting forward situation"
