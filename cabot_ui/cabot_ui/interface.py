@@ -403,6 +403,10 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "requesting_please_wait", "")
         self.speak(i18n.localized_string("REQUESTING_PLEASE_WAIT"), priority=SpeechPriority.MODERATE)
 
+    def describe_error(self):
+        self._activity_log("cabot/interface", "describe_error")
+        self.speak(i18n.localized_string("REQUESTING_ERROR"), priority=SpeechPriority.MODERATE)
+
     def requesting_describe_surround(self):
         self._activity_log("cabot/interface", "requesting_describe_surround", "")
         self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.MODERATE)

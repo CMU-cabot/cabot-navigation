@@ -240,8 +240,8 @@ class Description:
                 data=json_data
             )
             self._requesting_lock.release()
-        except:
-            self._logger.error("Request timed out.")
+        except requests.exceptions.RequestException as e:
+            self._logger.error(f"Request failed: {e}")
             self._requesting_lock.release()
             callback(None)
             return

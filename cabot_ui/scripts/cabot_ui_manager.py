@@ -39,8 +39,6 @@ import sys
 import threading
 import traceback
 import yaml
-import requests
-import time
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
@@ -443,6 +441,17 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        def description_callback(result):
+            try:
+                if result:
+                    self._logger.info(f"description - {result}")
+                    self._interface.describe_surround(result['description'])
+                else:
+                    self._logger.info("description - Error")
+            except:   # noqa: #722
+                self._interface.describe_error()
+                self._logger.error(traceback.format_exc())
+
         if event.subtype == "description" and self._description.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
@@ -474,7 +483,7 @@ class CabotUIManager(NavigationInterface, object):
                         self._interface.requesting_describe_surround_stop_reason()
                     else:
                         self._interface.requesting_please_wait()
-            except:
+            except:  # noqa: #722
                 self._logger.error(traceback.format_exc())
 
         def request_surround_description():
@@ -491,17 +500,7 @@ class CabotUIManager(NavigationInterface, object):
                         self._interface.requesting_describe_surround()
                     else:
                         self._interface.requesting_please_wait()
-            except:
-                self._logger.error(traceback.format_exc())
-
-        def description_callback(result):
-            try:
-                if result:
-                    self._logger.info(F"description - {result}")
-                    self._interface.describe_surround(result['description'])
-                else:
-                    self._logger.info(F"description - Error")
-            except:
+            except:  # noqa: #722
                 self._logger.error(traceback.format_exc())
 
         if event.subtype == "description_stop_reason" and self._description.enabled:
