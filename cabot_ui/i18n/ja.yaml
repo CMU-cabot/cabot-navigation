@@ -116,5 +116,7 @@ LEFT_SIDE: "左側"
 APPROACEHD_TO_FACILITY: "{1}に{0}があります"
 
 ## Describe Surround
+REQUESTING_PLEASE_WAIT: "確認中です"
+REQUESTING_ERROR: "エラーが発生しました。あとで再度お試しください。"
 REQUESTING_DESCRIBE_SURROUND: "周囲の状況を確認します。"
 REQUESTING_DESCRIBE_FORWARD: "前方の状況を確認します。"

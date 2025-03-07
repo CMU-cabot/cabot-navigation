@@ -39,8 +39,6 @@ import sys
 import threading
 import traceback
 import yaml
-import requests
-import time
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
@@ -91,8 +89,6 @@ class CabotUIManager(NavigationInterface, object):
         self._navigation = Navigation(nav_node, tf_node, srv_node, act_node, soc_node)
         self._navigation.delegate = self
         self._description = Description(desc_node)
-        self._last_description_event_time = 0
-        self._processing_lock = threading.Lock()
         # self._exploration = Exploration()
         # self._exploration.delegate = self
 
@@ -445,6 +441,17 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        def description_callback(result):
+            try:
+                if result:
+                    self._logger.info(f"description - {result}")
+                    self._interface.describe_surround(result['description'])
+                else:
+                    self._logger.info("description - Error")
+                    self._interface.describe_error()
+            except:   # noqa: #722
+                self._logger.error(traceback.format_exc())
+
         if event.subtype == "description" and self._description.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
@@ -460,62 +467,47 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
+                self._description.request_description_with_images1(gp, length_index=length_index, callback=description_callback)
 
-                result = self._description.request_description_with_images1(gp, length_index=length_index)
-                if result:
-                    self._interface.describe_surround(result['description'])
-
-        if event.subtype == "description_stop_reason" and self._description.enabled:
-            current_time = time.time()
-            if current_time - self._last_description_event_time < 10:
-                return
-            self._last_description_event_time = current_time
-
-            if not self._processing_lock.acquire(blocking=False):
-                return
-
-            self._logger.info("Request Stop Reason Description")
+        # request description internal functions
+        def request_stop_reason_description():
+            self._logger.info("description - Request Stop Reason Description")
             try:
                 if self._interface.last_pose:
                     gp = self._interface.last_pose['global_position']
-                    self._interface.requesting_describe_surround_stop_reason()
-                    try:
-                        result = self._description.request_description_with_images2(gp, "stop_reason", length_index=0, timeout=10)
-                        if result:
-                            self._interface.describe_surround(result['description'])
-                    except requests.exceptions.Timeout:
-                        self._logger.error("Request timed out. Skipping description processing.")
-                    except Exception as e:
-                        self._logger.error(f"Error in request: {e}")
-            finally:
-                self._processing_lock.release()
+                    if self._description.request_description_with_images2(
+                            gp,
+                            "stop_reason",
+                            length_index=0,
+                            callback=description_callback):
+                        self._interface.requesting_describe_surround_stop_reason()
+                    else:
+                        self._interface.requesting_please_wait()
+            except:  # noqa: #722
+                self._logger.error(traceback.format_exc())
 
-        if event.subtype == "description_surround" and self._description.enabled:
-            # TODO: needs to reset last_plan_distance when arrived/paused
-            current_time = time.time()
-            if current_time - self._last_description_event_time < 10:
-                return
-            self._last_description_event_time = current_time
-
-            if not self._processing_lock.acquire(blocking=False):
-                return
-
-            self._logger.info(F"Request Surround Description (Duration: {event.param})")
+        def request_surround_description():
+            self._logger.info(F"description - Request Surround Description (Duration: {event.param})")
             try:
                 if self._interface.last_pose:
                     length_index = event.param
                     gp = self._interface.last_pose['global_position']
-                    self._interface.requesting_describe_surround()
-                    try:
-                        result = self._description.request_description_with_images2(gp, "surround", length_index=length_index, timeout=10)
-                        if result:
-                            self._interface.describe_surround(result['description'])
-                    except requests.exceptions.Timeout:
-                        self._logger.error("Request timed out. Skipping description processing.")
-                    except Exception as e:
-                        self._logger.error(f"Error in request: {e}")
-            finally:
-                self._processing_lock.release()
+                    if self._description.request_description_with_images2(
+                            gp,
+                            "surround",
+                            length_index=length_index,
+                            callback=description_callback):
+                        self._interface.requesting_describe_surround()
+                    else:
+                        self._interface.requesting_please_wait()
+            except:  # noqa: #722
+                self._logger.error(traceback.format_exc())
+
+        if event.subtype == "description_stop_reason" and self._description.enabled:
+            request_stop_reason_description()
+
+        if event.subtype == "description_surround" and self._description.enabled:
+            request_surround_description()
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
@@ -523,7 +515,6 @@ class CabotUIManager(NavigationInterface, object):
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)
-            self._last_description_event_time = 0
 
         if event.subtype == "toggle_conversation":
             self._logger.info("Request Start/Stop Conversation Interface")
@@ -653,29 +644,7 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.pausing_navigation()
                 else:
                     if event.subtype == "resume_or_stop_reason" and self._description.enabled:
-                        current_time = time.time()
-                        if current_time - self._last_description_event_time < 10:
-                            return
-                        self._last_description_event_time = current_time
-
-                        if not self._processing_lock.acquire(blocking=False):
-                            return
-
-                        self._logger.info("Request Stop Reason Description")
-                        try:
-                            if self._interface.last_pose:
-                                gp = self._interface.last_pose['global_position']
-                                self._interface.requesting_describe_surround_stop_reason()
-                                try:
-                                    result = self._description.request_description_with_images2(gp, "stop_reason", length_index=0, timeout=10)
-                                    if result:
-                                        self._interface.describe_surround(result['description'])
-                                except requests.exceptions.Timeout:
-                                    self._logger.error("Request timed out. Skipping description processing.")
-                                except Exception as e:
-                                    self._logger.error(f"Error in request: {e}")
-                        finally:
-                            self._processing_lock.release()
+                        request_stop_reason_description()
                     else:
                         self._logger.info("NavigationState: state is not in pause state")
             else:
