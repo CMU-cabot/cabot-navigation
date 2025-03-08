@@ -457,6 +457,7 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info(F"Request Description duration={event.param}")
             if self._interface.last_pose:
                 gp = self._interface.last_pose['global_position']
+                cf = self._interface.last_pose['current_floor']
                 length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
                 if self._description.stop_reason_enabled and self._description.surround_enabled:
                     if length_index <= 1:
@@ -467,7 +468,7 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
-                self._description.request_description_with_images1(gp, length_index=length_index, callback=description_callback)
+                self._description.request_description_with_images1(gp, cf, length_index=length_index, callback=description_callback)
 
         # request description internal functions
         def request_stop_reason_description():
@@ -475,8 +476,10 @@ class CabotUIManager(NavigationInterface, object):
             try:
                 if self._interface.last_pose:
                     gp = self._interface.last_pose['global_position']
+                    cf = self._interface.last_pose['current_floor']
                     if self._description.request_description_with_images2(
                             gp,
+                            cf,
                             "stop_reason",
                             length_index=0,
                             callback=description_callback):
@@ -492,8 +495,10 @@ class CabotUIManager(NavigationInterface, object):
                 if self._interface.last_pose:
                     length_index = event.param
                     gp = self._interface.last_pose['global_position']
+                    cf = self._interface.last_pose['current_floor']
                     if self._description.request_description_with_images2(
                             gp,
+                            cf,
                             "surround",
                             length_index=length_index,
                             callback=description_callback):
