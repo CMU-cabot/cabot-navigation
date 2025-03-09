@@ -139,7 +139,7 @@ class Description:
         self.last_plan_distance = dist
 
     # for EventMapper1()
-    def request_description_with_images1(self, global_position, current_floor, length_index=0, callback=None):
+    def request_description_with_images1(self, global_position, current_floor, lang, length_index=0, callback=None):
         if not self.enabled:
             self._logger.debug("Description is not enabled")
             return None
@@ -226,15 +226,15 @@ class Description:
             lng = global_position.lng
             rotation = global_position.r
             max_distance = self.max_distance
-            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, length_index, distance_to_travel, callback)).start()
+            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
         except Exception as e:
             self._logger.error(f'Error sending HTTP request: {e}')
         return True
 
-    def post_request(self, API_URL, headers, json_data, lat, lng, floor, rotation, max_distance, length_index, distance_to_travel, callback):
+    def post_request(self, API_URL, headers, json_data, lat, lng, floor, rotation, max_distance, lang, length_index, distance_to_travel, callback):
         try:
             response = requests.post(
-                F"{API_URL}?{lat=}&{lng=}&{floor=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
+                F"{API_URL}?{lat=}&{lng=}&{floor=}&{rotation=}&{max_distance=}&{lang=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
                 timeout=15,
                 data=json_data
@@ -255,7 +255,7 @@ class Description:
             callback(None)
 
     # for EventMapper2()
-    def request_description_with_images2(self, global_position, current_floor, mode, length_index=0, callback=None):
+    def request_description_with_images2(self, global_position, current_floor, mode, lang, length_index=0, callback=None):
         if not self.enabled:
             self._logger.debug("Description is not enabled")
             return None
@@ -344,7 +344,7 @@ class Description:
             lng = global_position.lng
             rotation = global_position.r
             max_distance = self.max_distance
-            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, length_index, distance_to_travel, callback)).start()
+            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
         except requests.exceptions.Timeout:
             self._logger.error("Request timed out. Skipping description processing.")
         except Exception as e:

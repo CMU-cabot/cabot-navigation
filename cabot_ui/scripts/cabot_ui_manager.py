@@ -444,8 +444,8 @@ class CabotUIManager(NavigationInterface, object):
         def description_callback(result):
             try:
                 if result:
-                    self._logger.info(f"description - {result}")
-                    self._interface.describe_surround(result['description'])
+                    self._logger.info(f"description - {result=}")
+                    self._interface.describe_surround(result['translated'])
                 else:
                     self._logger.info("description - Error")
                     self._interface.describe_error()
@@ -468,7 +468,7 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
-                self._description.request_description_with_images1(gp, cf, length_index=length_index, callback=description_callback)
+                self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
 
         # request description internal functions
         def request_stop_reason_description():
@@ -481,6 +481,7 @@ class CabotUIManager(NavigationInterface, object):
                             gp,
                             cf,
                             "stop_reason",
+                            self._interface.lang,
                             length_index=0,
                             callback=description_callback):
                         self._interface.requesting_describe_surround_stop_reason()
@@ -500,6 +501,7 @@ class CabotUIManager(NavigationInterface, object):
                             gp,
                             cf,
                             "surround",
+                            self._interface.lang,
                             length_index=length_index,
                             callback=description_callback):
                         self._interface.requesting_describe_surround()
