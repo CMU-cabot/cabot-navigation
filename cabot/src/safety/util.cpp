@@ -1,4 +1,4 @@
-// Copyright 2020, 2024 Carnegie Mellon University and Miraikan
+// Copyright 2020, 2025 Carnegie Mellon University and Miraikan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -268,5 +268,29 @@ void add_triangle(
     marker.points.push_back(p);
   }
   array.markers.push_back(marker);
+}
+
+void add_circle(
+  rclcpp::Time now, std::size_t num_points, Point center, float radius,
+  float size, float r, float g, float b, float a)
+{
+  std::vector<Point> points;
+
+  // Generate points on the circle
+  for (std::size_t i = 0; i < num_points; i++) {
+    float curr_angle = 2.0 * M_PI * i / num_points;
+    Point p;
+    p.x = center.x + radius * cos(curr_angle);
+    p.y = center.y + radius * sin(curr_angle);
+    points.push_back(p);
+  }
+
+  // Connect consecutive points with lines
+  for (std::size_t i = 0; i < num_points; i++) {
+    Line line;
+    line.s = points[i];
+    line.e = points[(i + 1) % num_points];  // Connect last point to the first
+    add_line(now, line, size, r, g, b, a);
+  }
 }
 }  // namespace CaBotSafety
