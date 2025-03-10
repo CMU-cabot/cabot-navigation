@@ -71,6 +71,9 @@ cabot:
       collision_time_horizon: 5.0
       vx_range_offset: 0.2
       person_speed_threshold: 0.5
+      gaussian:
+        position_variance: 0.17
+        velocity_variance: 0.52
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
