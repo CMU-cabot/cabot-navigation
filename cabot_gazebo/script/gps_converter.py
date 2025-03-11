@@ -52,7 +52,7 @@ class Vector3StampedToTwistCovarianceStamped(Node):
         twist_msg.twist.covariance = [0.0] * 36
 
         self.publisher.publish(twist_msg)
-        self.get_logger().info(f'Publishing: {twist_msg}')
+        self.get_logger().debug(f'Publishing: {twist_msg}')
 
 
 def main():
