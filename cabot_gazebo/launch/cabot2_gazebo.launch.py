@@ -172,6 +172,11 @@ def generate_launch_description():
             description='Gazebo world file to be open'
         ),
         DeclareLaunchArgument(
+            'use_gnss',
+            default_value='false',
+            description='use gnss'
+        ),
+        DeclareLaunchArgument(
             'wireless_config_file',
             default_value='',
             description='wireless config file'
