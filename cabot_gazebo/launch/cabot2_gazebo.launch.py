@@ -96,6 +96,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
+    use_gnss = LaunchConfiguration('use_gnss')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
     gdb = LaunchConfiguration('gdb')
 
@@ -394,6 +395,7 @@ def generate_launch_description():
             remappings=[
                 ('/in', '/ublox/velocity'),
                 ('/out', '/ublox/fix_velocity')
-            ]
+            ],
+            condition=IfCondition(use_gnss)
         )
     ])
