@@ -25,6 +25,7 @@ import sys
 import argparse
 import os
 
+import tourdata
 from cabot_ui import datautil
 from cabot_ui import geoutil
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
@@ -80,7 +81,27 @@ class TourTestNode(rclpy.node.Node):
         self.datautil.set_anchor(self.anchor)
         print("Done")
 
+
+def load_tourdata():
+    MAP_SERVICE_HOST = "http://localhost:9090/map"
+    TOUR_DATA = "cabot/tourdata.json"
+
+    tour_data_url = f"{MAP_SERVICE_HOST}/{TOUR_DATA}"
+    print(f"Fetching tour data from {tour_data_url}") if args.debug else None
+    response = requests.get(tour_data_url)
+    if response.status_code != 200:
+        print(f"Failed to fetch tour data: {response.status_code} - {response.text}")
+        sys.exit(1)
+    data = response.json()
+    tours = tourdata.parse_tour_data(data)
+    print(tours)
+
+
 if __name__ == "__main__":
+
+    load_tourdata()
+    sys.exit(0)
+
     rclpy.init(args=[
         "--ros-args",
         "-p",
@@ -101,93 +122,3 @@ if __name__ == "__main__":
     except:
         pass
     node.destroy_node()
-
-
-
-"""
-MAP_SERVICE_HOST = "http://localhost:9090/map"
-TOUR_DATA = "cabot/tourdata.json"
-API_CONFIG = "api/config"
-ROUTE_SEARCH = "routesearch"
-START_ACTION = "action=start"
-
-config_url = f"{MAP_SERVICE_HOST}/{API_CONFIG}"
-print(f"Fetching config from {config_url}") if args.debug else None
-response = requests.get(config_url)
-if response.status_code != 200:
-    print(f"Failed to fetch config: {response.status_code} - {response.text}")
-    sys.exit(1)
-config_data = response.json()
-print(config_data) if args.debug else None
-initial_location = config_data.get("INITIAL_LOCATION", {})
-
-lang = args.lang
-user = "tour-test-script"
-lat = float(initial_location.get("lat", 0))
-lng = float(initial_location.get("lng", 0))
-dist = int(config_data.get("MAX_RADIUS", 0))
-
-start_url = f"{MAP_SERVICE_HOST}/{ROUTE_SEARCH}?{START_ACTION}&{lat=}&{lng=}&{dist=}&user={user}&lang={lang}"
-print(f"Starting route search with URL: {start_url}") if args.debug else None
-response = requests.get(start_url)
-if response.status_code != 200:
-    print(f"Failed to start route search: {response.status_code} - {response.text}")
-    sys.exit(1)
-landmarks = response.json()
-print(landmarks) if args.debug else None
-
-start_url = f"{MAP_SERVICE_HOST}/{ROUTE_SEARCH}?{START_ACTION}&{lat=}&{lng=}&{dist=}&user={user}&lang={lang}"
-print(f"Starting route search with URL: {start_url}") if args.debug else None
-response = requests.get(start_url)
-if response.status_code != 200:
-    print(f"Failed to start route search: {response.status_code} - {response.text}")
-    sys.exit(1)
-landmarks = response.json()
-landmarks = landmarks.get('landmarks', [])
-print(len(landmarks)) if args.debug else None
-for landmark in landmarks:
-    for key, value in landmark.items():
-        print(f"{key}: {value}") if args.debug else None
-    break
-
-
-tour_data_url = f"{MAP_SERVICE_HOST}/{TOUR_DATA}"
-print(f"Fetching tour data from {tour_data_url}") if args.debug else None
-response = requests.get(tour_data_url)
-if response.status_code != 200:
-    print(f"Failed to fetch tour data: {response.status_code} - {response.text}")
-    sys.exit(1)
-
-tour_data = response.json()
-tour_list = tour_data.get("tours", [])
-
-
-def get_i18n_text(data, key, lang=args.lang):
-    lang_key = f"{key}-{lang}"
-    if lang_key in data:
-        return data[lang_key]
-    if key in data:
-        return data[key]
-
-    return f"__{key}__"
-
-
-for tour in tour_list:
-    tour_id = tour.get("tour_id")
-    if args.tour_id and tour_id != args.tour_id:
-        continue
-    tour_name = get_i18n_text(tour, "title")
-    print(f"Tour ID: {tour_id}, Tour Name: {tour_name}")
-    destinations = tour.get("destinations", [])
-
-if not destinations:
-    sys.exit(0)
-
-for destination in destinations:
-    print(f"Destination: {destination}") if args.debug else None
-    dest_id = destination.get("dest_id")
-    dest_name = get_i18n_text(destination, "name")
-    dest_desc = get_i18n_text(destination, "description")
-
-    print(f"Destination ID: {dest_id}, Name: {dest_name}, Description: {dest_desc}")"
-"""
