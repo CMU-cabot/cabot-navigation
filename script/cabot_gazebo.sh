@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2023  Carnegie Mellon University
+# Copyright (c) 2023, 2025  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -81,6 +81,7 @@ function signal() {
 : ${CABOT_SIDE:=left}
 : ${CABOT_SITE:=}
 : ${CABOT_MODEL:=}
+: ${CABOT_USE_GNSS:=0}
 # variables with default value
 : ${CABOT_INITX:=0}
 : ${CABOT_INITY:=0}
@@ -167,6 +168,7 @@ com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
         model:=$CABOT_MODEL \
         world_file:=$world \
         wireless_config_file:=$wireless_config \
+        use_gnss:=$CABOT_USE_GNSS \
         $command_postfix"
 echo $com
 eval $com
