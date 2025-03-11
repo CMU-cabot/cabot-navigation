@@ -116,6 +116,8 @@ public:
   double max_margin_radius_;
   double pos_var_;
   double vel_var_;
+  double min_pos_gain_;
+  double min_vel_gain_;
   bool no_people_flag_;
   bool use_velocity_obstacle_;
   int not_collision_count_;
@@ -177,6 +179,8 @@ public:
     max_margin_radius_(0.3),
     pos_var_(0.17),
     vel_var_(0.52),
+    min_pos_gain_(0.1),
+    min_vel_gain_(0.1),
     no_people_flag_(false),
     use_velocity_obstacle_(true),
     not_collision_count_(0)
@@ -249,6 +253,8 @@ public:
 
     pos_var_ = declare_parameter("gaussian.position_variance", pos_var_);
     vel_var_ = declare_parameter("gaussian.velocity_variance", vel_var_);
+    min_pos_gain_ = declare_parameter("min_pos_gain", min_pos_gain_);
+    min_vel_gain_ = declare_parameter("min_vel_gain", min_vel_gain_);
 
     RCLCPP_INFO(
       get_logger(), "PeopleSpeedControl with max_speed=%.2f, social_distance=(%.2f, %.2f)",
@@ -399,6 +405,12 @@ public:
       }
       if (param.get_name() == "gaussian.velocity_variance") {
         vel_var_ = param.as_double();
+      }
+      if (param.get_name() == "min_pos_gain") {
+        min_pos_gain_ = param.as_double();
+      }
+      if (param.get_name() == "min_vel_gain") {
+        min_vel_gain_ = param.as_double();
       }
     }
     results->successful = true;
@@ -582,7 +594,7 @@ private:
     // final speed limit
     double people_speed_limit;
     if (use_velocity_obstacle_) {
-      people_speed_limit = social_distance_speed_limit - (social_distance_speed_limit - combined_speed_limit) * gain;
+      people_speed_limit = (1.0 - gain) * social_distance_speed_limit + gain * combined_speed_limit;
     } else {
       people_speed_limit = social_distance_speed_limit;
     }
@@ -844,8 +856,8 @@ private:
     theta_pos = std::fabs(theta_pos);
     theta_vel = std::fabs(theta_vel);
 
-    double gain_pos = std::min(1.0, 0.1 + gaussianGain(theta_pos, M_PI_4, pos_var_));
-    double gain_vel = std::min(1.0, 0.1 + gaussianGain(theta_vel, M_PI_2, vel_var_));
+    double gain_pos = std::clamp(min_pos_gain_ + gaussianGain(theta_pos, M_PI_4, pos_var_), 0.0, 1.0);
+    double gain_vel = std::clamp(min_vel_gain_ + gaussianGain(theta_vel, M_PI_2, vel_var_), 0.0, 1.0);
     double overall_gain = gain_pos * gain_vel;
     return overall_gain;
   }
