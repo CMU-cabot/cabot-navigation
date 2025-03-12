@@ -833,9 +833,9 @@ class NavGoal(Goal):
         temp = []
         for (_, item) in enumerate(self.navcog_route):
             if isinstance(item, geojson.RouteLink):
-                print(item._id)
+                CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    print("  ", type(poi), poi._id)
+                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
                 temp.extend(item.pois)
         return temp
 

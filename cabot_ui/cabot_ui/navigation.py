@@ -84,7 +84,7 @@ class NavigationInterface(object):
     def have_arrived(self, goal):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def have_completed(self, goal):
+    def have_completed(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def approaching_to_poi(self, poi=None):
@@ -344,7 +344,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     TURN_NEARBY_THRESHOLD = 2
 
     def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
-                 datautil_instance=None, anchor_file=None, wait_for_action=True):
+                 datautil_instance=None, anchor_file='', wait_for_action=True):
 
         self.current_floor = None
         self.current_frame = None
