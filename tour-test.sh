@@ -44,6 +44,11 @@ function help()
     echo "Usage:"
     echo "-h          show this help"
     echo "-d          use dev profile"
+    echo "-D          debug mode"
+    echo "-l <lang>   language (en, zh, ja, ko)"
+    echo "-t <tour>   tour id"
+    echo "-s <start>  start node id"
+    echo "-g <goal>   goal node id"
 }
 
 pwd=`pwd`
@@ -56,8 +61,10 @@ profile=prod
 debug=
 lang=
 tour_id=
+start_id=
+goal_id=
 
-while getopts "hdl:t:" arg; do
+while getopts "hdDl:t:s:g:" arg; do
     case $arg in
         h)
             help
@@ -65,6 +72,8 @@ while getopts "hdl:t:" arg; do
             ;;
         d)
             profile=dev
+            ;;
+        D)
             debug="-d"
             ;;
         l)
@@ -72,6 +81,12 @@ while getopts "hdl:t:" arg; do
             ;;
         t)
             tour_id="-t $OPTARG"
+            ;;
+        s)
+            start_id="-s $OPTARG"
+            ;;
+        g)
+            goal_id="-g $OPTARG"
             ;;
         *)
             err "Invalid option - $arg"
@@ -87,8 +102,8 @@ fi
 
 dccom="docker compose -f $scriptdir/docker-compose.yaml --profile $profile"
 com="$dccom run --rm navigation-$profile bash -c \
-     \"source install/setup.bash; script/tour_test.py $debug $lang $tour_id\""
-if [[ $profile = "dev" ]]; then
+     \"source install/setup.bash; script/tour_test.py $debug $lang $tour_id $start_id $goal_id\""
+if [[ $debug -eq 1 ]]; then
     echo $com
 fi
 eval $com
