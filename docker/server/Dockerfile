@@ -70,7 +70,6 @@ WORKDIR /home/$USERNAME
 RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtime/release/23.0.0.8/openliberty-javaee8-23.0.0.8.zip && \
         unzip openliberty-javaee8-23.0.0.8.zip
 
-ADD https://api.github.com/repos/CMU-cabot/MapService/git/refs/heads/cabot-hokoukukan_2018 MapService-version.json
 RUN git clone https://github.com/CMU-cabot/MapService -b cabot-hokoukukan_2018 && \
         cd MapService && \
         sh download-lib.sh
@@ -79,7 +78,6 @@ RUN cd MapService/MapService && \
         mvn initialize && \
         mvn package
 
-ADD https://api.github.com/repos/CMU-cabot/QueryService/git/refs/heads/hokoukukan-2018 QueryService-version.json
 RUN git clone https://github.com/CMU-cabot/QueryService -b hokoukukan-2018 && \
         cd QueryService && \
         sh download-lib.sh
@@ -91,6 +89,10 @@ RUN cd QueryService/QueryService && \
 FROM base AS final
 
 USER $USERNAME
+WORKDIR /home/$USERNAME
+ADD --chown=$USERNAME:$USERNAME https://api.github.com/repos/CMU-cabot/MapService/git/refs/heads/cabot-hokoukukan_2018 MapService-version.json
+ADD --chown=$USERNAME:$USERNAME https://api.github.com/repos/CMU-cabot/QueryService/git/refs/heads/hokoukukan-2018 QueryService-version.json
+
 COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/wlp /home/$USERNAME/wlp
 WORKDIR /home/$USERNAME/wlp/bin
 RUN ./server create defaultServer
