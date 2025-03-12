@@ -65,6 +65,16 @@ class TourData:
     messages: List[Message]
     tours: List[Tour]
 
+    def get_destination(self, ref):
+        if "#" in ref:
+            (ref, var) = ref.split("#")
+        else:
+            (ref, var) = (ref, None)
+        for dest in self.destinations:
+            if dest.value == ref and (not var or dest.var == var):
+                return dest
+        return None
+
 
 def get_required_field(data, field_name):
     if field_name not in data:

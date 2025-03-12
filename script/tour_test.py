@@ -289,6 +289,8 @@ class DummyNavigation(Navigation):
 class TourTestNode(rclpy.node.Node, NavigationInterface):
     def __init__(self):
         super().__init__("tour_test_node")
+        self._tour_manager = None
+        self._done_callback = None
 
     def initialize(self, lang="en", debug=False, interval=0.001):
         self.debug = debug
@@ -306,7 +308,8 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
     def item(self, msg, depth=0):
         print(f"- {msg}")
 
-    def navigate(self, start, goal):
+    def navigate(self, start, goal, callback):
+        self._done_callback = callback
         self.head(f"Navigation from {start} to {goal}")
 
         def callback(node):
@@ -326,19 +329,30 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
     def i_am_ready(self):
         pass
 
+    def start_navigation(self):
+        CaBotRclpyUtil.warn("start_navigation")
+        if self._tour_manager:
+            self._tour_manager.start_navigation()
+
     def enter_goal(self, goal):
-        CaBotRclpyUtil.warn(f"Enter {goal.__class__}")
+        CaBotRclpyUtil.warn(f"enter_goal {goal.__class__}")
         pass
 
     def exit_goal(self, goal):
-        CaBotRclpyUtil.warn(f"Exit {goal.__class__}")
+        CaBotRclpyUtil.warn(f"enter_goal {goal.__class__}")
         pass
 
     def have_arrived(self, goal):
+        CaBotRclpyUtil.warn(f"have_arrived {goal.__class__}")
+        if self._tour_manager:
+            self._tour_manager.have_arrived(goal)
         pass
 
     def have_completed(self):
-        rclpy.shutdown()
+        CaBotRclpyUtil.warn("have_completed")
+        if self._tour_manager:
+            self._tour_manager.have_completed()
+        self._done_callback()
         pass
 
     def notify_turn(self, device=None, turn=None):
@@ -381,6 +395,49 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
         self.item(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
 
 
+class TourManager:
+    def __init__(self, node, start, tour, tourdata):
+        self.node = node
+        self.start = start
+        self.tour = tour
+        self.tourdata = tourdata
+        self.index = 0
+        self.current_destination = None
+        self.timer = self.node.create_timer(0.1, self.check_tour)
+
+    def check_tour(self):
+        def callback():
+            self.current_destination = None
+            self.index += 1
+
+        if self.current_destination:
+            return
+
+        dest = self.tour.destinations[self.index]
+        self.current_destination = self.tourdata.get_destination(dest.ref)
+        self.node.navigate(self.start, self.current_destination.value, callback)
+        self.start = self.current_destination.value  # update start
+
+    def start_navigation(self):
+        print(self.current_destination)
+        pass
+
+    def have_arrived(self, goal):
+        pass
+
+    def have_completed(self):
+        pass
+
+
+def spin(node):
+    try:
+        executor = MultiThreadedExecutor()
+        rclpy.spin(node, executor=executor)
+    except:  # noqa E722
+        traceback.print_exc()
+    node.destroy_node()
+
+
 def main(args):
     rclpy.init(args=[
         "--ros-args",
@@ -396,20 +453,48 @@ def main(args):
     _ = node.create_timer(args.interval, process_queue)
     node.initialize(lang=args.lang, debug=args.debug, interval=args.interval)
 
-    if args.tour_id:
-        node.tour(args.tour_id)
-    elif args.start and args.goal:
-        node.navigate(args.start, args.goal)
-    else:
-        print(tours)
+    def i18n(data, lang):
+        if lang in data:
+            return data[lang]
+        return data
+
+    def red(msg):
+        return f"\033[91m{msg}\033[0m"
+
+    def blue(msg):
+        return f"\033[94m{msg}\033[0m"
+
+    def list_tours(tourdata):
+        for tour in tourdata.tours:
+            print(f"{tour.tour_id}: {i18n(tour.title, args.lang)}")
+
+    if args.goal:
+        def callback():
+            rclpy.shutdown()
+        if args.start is None:
+            print(red("Please specify both start and goal nodes."))
+            return
+        node.navigate(args.start, args.goal, callback)
+        spin(node)
         return
 
-    try:
-        executor = MultiThreadedExecutor()
-        rclpy.spin(node, executor=executor)
-    except:  # noqa E722
-        traceback.print_exc()
-    node.destroy_node()
+    tourdata = load_tourdata()
+    if args.tour_id:
+        if args.start is None:
+            print(red("Please specify both start node and tour id."))
+            return
+        tour = next((t for t in tourdata.tours if t.tour_id == args.tour_id), None)
+        if tour:
+            manager = TourManager(node, args.start, tour, tourdata)
+            node._tour_manager = manager
+            spin(node)
+            return
+        print(red(f"Tour with id '{args.tour_id}' not found."))
+        list_tours(tourdata)
+        return
+
+    print(red("You need to specify a start and either a goal or a tour ID"))
+    list_tours(tourdata)
 
 
 if __name__ == "__main__":
@@ -421,6 +506,5 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--start", type=str, help="start node")
     parser.add_argument("-g", "--goal", type=str, help="goal node")
     parser.add_argument("-i", "--interval", type=float, default=0.001, help="Interval for processing queue")
-    tours = load_tourdata()
     args = parser.parse_args()
     main(args)
