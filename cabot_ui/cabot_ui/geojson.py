@@ -934,7 +934,7 @@ class ElevatorCabPOI(POI):
         b_pose = geoutil.Pose.pose_from_points(pose, b_pos)
         dir = angles.shortest_angular_distance(pose.r, b_pose.r)
 
-        CaBotRclpyUtil.info(pose, b_pos, b_pose, dir)
+        CaBotRclpyUtil.info(f"{pose=}, {b_pos=}, {b_pose=}, {dir=}")
 
         if abs(dir) > math.pi / 3 * 2:
             return "BACK"
