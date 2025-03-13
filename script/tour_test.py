@@ -34,21 +34,22 @@ import uuid
 import rclpy
 import rclpy.node
 from rclpy.executors import MultiThreadedExecutor
-from rclpy import Parameter
 from ament_index_python.packages import get_package_share_directory
 from unique_identifier_msgs.msg import UUID
+from action_msgs.msg import GoalStatus
 import geometry_msgs.msg
+from mf_localization_msgs.msg import MFLocalizeStatus
+import std_msgs.msg
 
 # others
 from tourdata import load_tourdata
 from cabot_common import util
-from cabot_ui import geoutil, geojson, i18n
+from cabot_ui import datautil, event, geoutil, geojson, i18n
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui.navigation import Navigation, NavigationInterface
 from cabot_ui.navgoal import NavGoal, TurnGoal, DoorGoal
 from cabot_ui.navgoal import ElevatorGoal, ElevatorWaitGoal, ElevatorInGoal, ElevatorTurnGoal, ElevatorFloorGoal, ElevatorOutGoal
-from mf_localization_msgs.msg import MFLocalizeStatus
-from action_msgs.msg import GoalStatus
+
 
 
 INTERVAL = 0.001
@@ -223,6 +224,13 @@ class DummyNavigation(Navigation):
                 self._loop_handle = self._node.create_timer(self._interval, self._check_loop, callback_group=self._main_callback_group)
             self.lock.release()
 
+    def _goto_floor(self, floor, gh_callback, callback):
+        self._logger.info(F"go to floor {floor}")
+        self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
+        future = DummyNavigation.DummyFuture(DummyNavigation.DummyGoalStatus())
+        future.add_done_callback(callback)
+        future.delay_done()
+
     # override
     def _check_loop(self):
         super()._check_loop()
@@ -253,6 +261,8 @@ class DummyNavigation(Navigation):
                     routes = self._current_goal.separated_route
                     self._dummy_poses = make_poses(routes[self._current_goal.route_index])
                     self._logger.warn(f"NavGoal {self._current_goal.route_index}/{len(routes)} Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
+                    if self._current_goal.route_index == 0:
+                        self.delegate.start_navigation()
                 else:
                     if len(self._dummy_poses) > 0:
                         self._current_pose = self._dummy_poses.pop(0)
@@ -261,8 +271,7 @@ class DummyNavigation(Navigation):
                         DummyNavigation._goal_handle.completed()
                         DummyNavigation._goal_handle = None
                         self._dummy_poses = None
-
-        if isinstance(self._current_goal, TurnGoal):
+        elif isinstance(self._current_goal, TurnGoal):
             with self._dummy_poses_lock:
                 if self._dummy_poses is None:
                     def make_poses(end):
@@ -284,6 +293,113 @@ class DummyNavigation(Navigation):
                         DummyNavigation._goal_handle.completed()
                         DummyNavigation._goal_handle = None
                         self._dummy_poses = None
+        elif isinstance(self._current_goal, ElevatorWaitGoal):
+            with self._dummy_poses_lock:
+                if self._dummy_poses is None:
+                    def make_poses(end):
+                        poses = []
+                        start = self._current_pose.r
+                        count = int(math.fabs(end - start) / 0.017)
+                        for i in range(0, count + 1):
+                            r = start + (end - start) * i / count
+                            pose = geoutil.Pose(xy=self._current_pose, r=r)
+                            poses.append(pose)
+                        return poses
+                    pose = geoutil.Pose.pose_from_points(self._current_pose, self._current_goal.cab_poi.door_geometry)
+                    self._dummy_poses = make_poses(pose.r)
+                    self._logger.warn(f"ElevatorWaitGoal Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
+                else:
+                    if len(self._dummy_poses) > 0:
+                        self._current_pose = self._dummy_poses.pop(0)
+                    else:
+                        self._logger.warn("ElevatorWaitGoal completed")
+                        DummyNavigation._goal_handle.completed()
+                        DummyNavigation._goal_handle = None
+                        self._dummy_poses = None
+        elif isinstance(self._current_goal, ElevatorInGoal):
+            with self._dummy_poses_lock:
+                if self._dummy_poses is None:
+                    def make_poses(start, end):
+                        poses = []
+                        r = math.atan2(end.y - start.y, end.x - start.x)
+                        count = int(start.distance_to(end) / 0.1) + 1
+                        for i in range(0, count + 1):
+                            x = start.x + (end.x - start.x) * i / count
+                            y = start.y + (end.y - start.y) * i / count
+                            pose = geoutil.Pose(x=x, y=y, r=r)
+                            poses.append(pose)
+                        return poses
+                    self._dummy_poses = make_poses(self._current_pose, self._current_goal)
+                    self._logger.warn(f"ElevatorInGoal Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
+                    self.delegate.elevator_opening()
+                else:
+                    if len(self._dummy_poses) > 0:
+                        self._current_pose = self._dummy_poses.pop(0)
+                    else:
+                        self._logger.warn("ElevatorInGoal completed")
+                        DummyNavigation._goal_handle.completed()
+                        DummyNavigation._goal_handle = None
+                        self._dummy_poses = None
+        elif isinstance(self._current_goal, ElevatorTurnGoal):
+            with self._dummy_poses_lock:
+                if self._dummy_poses is None:
+                    def make_poses(end):
+                        poses = []
+                        start = self._current_pose.r
+                        count = int(math.fabs(end - start) / 0.017)
+                        for i in range(0, count + 1):
+                            r = start + (end - start) * i / count
+                            pose = geoutil.Pose(xy=self._current_pose, r=r)
+                            poses.append(pose)
+                        return poses
+                    self._dummy_poses = make_poses(self._current_goal.cab_poi.r)
+                    self._logger.warn(f"ElevatorTurnGoal Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
+                else:
+                    if len(self._dummy_poses) > 0:
+                        self._current_pose = self._dummy_poses.pop(0)
+                    else:
+                        self._logger.warn("ElevatorTurnGoal completed")
+                        DummyNavigation._goal_handle.completed()
+                        DummyNavigation._goal_handle = None
+                        self._dummy_poses = None
+        elif isinstance(self._current_goal, ElevatorFloorGoal):
+            self._logger.warn("ElevatorFloorGoal completed")
+            self.current_floor = self._current_goal.cab_poi.floor
+            DummyNavigation._goal_handle.completed()
+            DummyNavigation._goal_handle = None
+            self._dummy_poses = None
+            self.floor_changed(self.current_floor)
+        elif isinstance(self._current_goal, ElevatorOutGoal):
+            with self._dummy_poses_lock:
+                if self._dummy_poses is None:
+                    def make_poses(start, end):
+                        poses = []
+                        r = math.atan2(end.y - start.y, end.x - start.x)
+                        count = int(start.distance_to(end) / 0.1) + 1
+                        for i in range(0, count + 1):
+                            x = start.x + (end.x - start.x) * i / count
+                            y = start.y + (end.y - start.y) * i / count
+                            pose = geoutil.Pose(x=x, y=y, r=r)
+                            poses.append(pose)
+                        return poses
+                    pose = self._current_pose
+                    pose = geoutil.Pose(
+                        x=pose.x + math.cos(pose.r) * self._current_goal.set_forward[0] - math.sin(pose.r) * self._current_goal.set_forward[1],
+                        y=pose.y + math.sin(pose.r) * self._current_goal.set_forward[0] + math.cos(pose.r) * self._current_goal.set_forward[1],
+                        r=pose.r
+                    )
+                    self._dummy_poses = make_poses(self._current_pose, pose)
+                    self._logger.warn(f"ElevatorOutGoal Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
+                else:
+                    if len(self._dummy_poses) > 0:
+                        self._current_pose = self._dummy_poses.pop(0)
+                    else:
+                        self._logger.warn("ElevatorOutGoal completed")
+                        DummyNavigation._goal_handle.completed()
+                        DummyNavigation._goal_handle = None
+                        self._dummy_poses = None
+        else:
+            self._logger.error(f"Unsupported goal type: {self._current_goal.__class__}")
 
 
 class TourTestNode(rclpy.node.Node, NavigationInterface):
@@ -303,14 +419,20 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
         print("TBD")
 
     def head(self, msg):
-        print(f"# {msg}")
+        print(f"## {msg}")
 
     def item(self, msg, depth=0):
         print(f"- {msg}")
 
     def navigate(self, start, goal, callback):
         self._done_callback = callback
-        self.head(f"Navigation from {start} to {goal}")
+        goal_name = goal
+        for landmark in datautil.getInstance().landmarks:
+            for ent in landmark.entrances:
+                if ent.node._id == goal:
+                    goal_name = landmark.name
+
+        self.head(f"{goal_name}")
 
         def callback(node):
             self.navigation.current_floor = node.floor
@@ -373,6 +495,13 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
         if statement:
             self.item(statement)
 
+    def please_call_elevator(self, pos):
+        if pos:
+            self.item(i18n.localized_string("CALL_ELEVATOR_PLEASE_ON_YOUR",
+                                            i18n.localized_string(pos)))
+        else:
+            self.item(i18n.localized_string("CALL_ELEVATOR_PLEASE"))
+
     def elevator_opening(self):
         self.item(i18n.localized_string("ELEVATOR_IS_OPENING"))
 
@@ -396,14 +525,16 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
 
 
 class TourManager:
-    def __init__(self, node, start, tour, tourdata):
+    def __init__(self, node, start, tour, tourdata, lang):
         self.node = node
         self.start = start
         self.tour = tour
         self.tourdata = tourdata
+        self.lang = lang
         self.index = 0
         self.current_destination = None
         self.timer = self.node.create_timer(0.1, self.check_tour)
+        print(f"# {i18nText(tour.title, args.lang)}")
 
     def check_tour(self):
         def callback():
@@ -413,20 +544,39 @@ class TourManager:
         if self.current_destination:
             return
 
+        if self.index >= len(self.tour.destinations):
+            rclpy.shutdown()
+            return
         dest = self.tour.destinations[self.index]
         self.current_destination = self.tourdata.get_destination(dest.ref)
         self.node.navigate(self.start, self.current_destination.value, callback)
         self.start = self.current_destination.value  # update start
 
+    def _check_message(self, message_type):
+        ref = self.current_destination.value
+        if self.current_destination.var:
+            ref += "#" + self.current_destination.var
+        message = self.tourdata.get_message(ref, message_type)
+        if message and message.read is False:
+            message.read = True
+            self.node.item(i18nText(message.text, self.lang))
+
     def start_navigation(self):
-        print(self.current_destination)
+        self._check_message("startMessage")
         pass
 
     def have_arrived(self, goal):
+        self._check_message("arriveMessage")
         pass
 
     def have_completed(self):
         pass
+
+
+def i18nText(data, lang):
+    if lang in data:
+        return data[lang]
+    return data
 
 
 def spin(node):
@@ -452,11 +602,7 @@ def main(args):
     CaBotRclpyUtil.initialize(node)
     _ = node.create_timer(args.interval, process_queue)
     node.initialize(lang=args.lang, debug=args.debug, interval=args.interval)
-
-    def i18n(data, lang):
-        if lang in data:
-            return data[lang]
-        return data
+    tourdata = load_tourdata()
 
     def red(msg):
         return f"\033[91m{msg}\033[0m"
@@ -466,7 +612,24 @@ def main(args):
 
     def list_tours(tourdata):
         for tour in tourdata.tours:
-            print(f"{tour.tour_id}: {i18n(tour.title, args.lang)}")
+            print(f"{tour.tour_id}: {i18nText(tour.title, args.lang)}")
+
+    def list_landmarks():
+        for landmark in datautil.getInstance().landmarks:
+            for ent in landmark.entrances:
+                print(f"{ent.node._id}: {landmark.name} {ent.name}")
+
+    def list_messages(tourdata):
+        for message in tourdata.messages:
+            print(f"{message.parent}.{message.type}: {i18nText(message.text, args.lang)}")
+
+    if args.landmarks:
+        list_landmarks()
+        return
+
+    if args.messages:
+        list_messages(tourdata)
+        return
 
     if args.goal:
         def callback():
@@ -478,14 +641,13 @@ def main(args):
         spin(node)
         return
 
-    tourdata = load_tourdata()
     if args.tour_id:
         if args.start is None:
             print(red("Please specify both start node and tour id."))
             return
         tour = next((t for t in tourdata.tours if t.tour_id == args.tour_id), None)
         if tour:
-            manager = TourManager(node, args.start, tour, tourdata)
+            manager = TourManager(node, args.start, tour, tourdata, args.lang)
             node._tour_manager = manager
             spin(node)
             return
@@ -506,5 +668,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--start", type=str, help="start node")
     parser.add_argument("-g", "--goal", type=str, help="goal node")
     parser.add_argument("-i", "--interval", type=float, default=0.001, help="Interval for processing queue")
+    parser.add_argument("-L", "--landmarks", action="store_true", help="Show landmarks")
+    parser.add_argument("-M", "--messages", action="store_true", help="Show messages")
     args = parser.parse_args()
     main(args)

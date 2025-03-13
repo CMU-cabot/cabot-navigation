@@ -49,6 +49,7 @@ function help()
     echo "-t <tour>   tour id"
     echo "-s <start>  start node id"
     echo "-g <goal>   goal node id"
+    echo "-L          list landmarks"
 }
 
 pwd=`pwd`
@@ -63,8 +64,10 @@ lang=
 tour_id=
 start_id=
 goal_id=
+landmarks=
+messages=
 
-while getopts "hdDl:t:s:g:" arg; do
+while getopts "hdDl:t:s:g:LM" arg; do
     case $arg in
         h)
             help
@@ -88,6 +91,12 @@ while getopts "hdDl:t:s:g:" arg; do
         g)
             goal_id="-g $OPTARG"
             ;;
+        L)
+            landmarks="-L"
+            ;;
+        M)
+            messages="-M"
+            ;;
         *)
             err "Invalid option - $arg"
             help
@@ -102,7 +111,7 @@ fi
 
 dccom="docker compose -f $scriptdir/docker-compose.yaml --profile $profile"
 com="$dccom run --rm navigation-$profile bash -c \
-     \"source install/setup.bash; script/tour_test.py $debug $lang $tour_id $start_id $goal_id\""
+     \"source install/setup.bash; script/tour_test.py $debug $lang $tour_id $start_id $goal_id $landmarks $messages\""
 if [[ $debug -eq 1 ]]; then
     echo $com
 fi

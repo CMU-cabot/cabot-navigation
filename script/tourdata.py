@@ -41,6 +41,7 @@ class Message:
     type: Optional[str]
     parent: Optional[str]
     text: Optional[dict] = None  # Use a dictionary for text fields
+    read: bool = False
 
 
 @dataclass
@@ -73,6 +74,12 @@ class TourData:
         for dest in self.destinations:
             if dest.value == ref and (not var or dest.var == var):
                 return dest
+        return None
+
+    def get_message(self, ref, message_type):
+        for msg in self.messages:
+            if msg.type == message_type and msg.parent == ref:
+                return msg
         return None
 
 
