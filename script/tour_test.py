@@ -445,6 +445,7 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
             self.navigation.current_floor = node.floor
             self.navigation._current_pose = geoutil.Pose(xy=node.local_geometry, r=0)
             if goal:
+                self.navigation._started = False
                 self.navigation.set_destination(goal)
         geojson.Object.get_object_by_id(start, callback)
 
