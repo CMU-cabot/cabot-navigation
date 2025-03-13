@@ -196,6 +196,7 @@ class DummyNavigation(Navigation):
         self._spin_client = DummyNavigation.DummyActionClient("/", "spin")
 
         self.localize_status = MFLocalizeStatus.TRACKING
+        self._started = False
 
     # override
     def current_local_pose(self, frame=None):
@@ -261,7 +262,8 @@ class DummyNavigation(Navigation):
                     routes = self._current_goal.separated_route
                     self._dummy_poses = make_poses(routes[self._current_goal.route_index])
                     self._logger.warn(f"NavGoal {self._current_goal.route_index}/{len(routes)} Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
-                    if self._current_goal.route_index == 0:
+                    if not self._started:
+                        self._started = True
                         self.delegate.start_navigation()
                 else:
                     if len(self._dummy_poses) > 0:
@@ -331,6 +333,7 @@ class DummyNavigation(Navigation):
                         return poses
                     self._dummy_poses = make_poses(self._current_pose, self._current_goal)
                     self._logger.warn(f"ElevatorInGoal Count = {len(self._dummy_poses)} Last pose = {self._dummy_poses[-1]}")
+                    self.delegate.take_elevator()
                     self.delegate.elevator_opening()
                 else:
                     if len(self._dummy_poses) > 0:
@@ -398,6 +401,7 @@ class DummyNavigation(Navigation):
                         DummyNavigation._goal_handle.completed()
                         DummyNavigation._goal_handle = None
                         self._dummy_poses = None
+                        self.delegate.exit_elevator()
         else:
             self._logger.error(f"Unsupported goal type: {self._current_goal.__class__}")
 
@@ -423,6 +427,9 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
 
     def item(self, msg, depth=0):
         print(f"- {msg}")
+
+    def system(self, msg, depth=0):
+        print(f"- ({i18n.localized_string('SYSTEM')}) {msg}")
 
     def navigate(self, start, goal, callback):
         self._done_callback = callback
@@ -482,46 +489,54 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
 
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
-        if statement:
-            self.item(statement)
+        if statement: 
+            self.item(f"({poi.__class__.__name__}) {statement}")
 
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
         if statement:
-            self.item(statement)
+            self.item(f"({poi.__class__.__name__}) {statement}")
 
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
-            self.item(statement)
+            self.item(f"({poi.__class__.__name__}) {statement}")
 
     def please_call_elevator(self, pos):
         if pos:
-            self.item(i18n.localized_string("CALL_ELEVATOR_PLEASE_ON_YOUR",
+            self.system(i18n.localized_string("CALL_ELEVATOR_PLEASE_ON_YOUR",
                                             i18n.localized_string(pos)))
         else:
-            self.item(i18n.localized_string("CALL_ELEVATOR_PLEASE"))
+            self.system(i18n.localized_string("CALL_ELEVATOR_PLEASE"))
+
+    def take_elevator(self):
+        if self._tour_manager:
+            self._tour_manager.take_elevator()
+
+    def exit_elevator(self):
+        if self._tour_manager:
+            self._tour_manager.exit_elevator()
 
     def elevator_opening(self):
-        self.item(i18n.localized_string("ELEVATOR_IS_OPENING"))
+        self.system(i18n.localized_string("ELEVATOR_IS_OPENING"))
 
     def floor_changed(self, floor):
-        self.item(i18n.localized_string("GETTING_OFF_THE_ELEVATOR"))
+        self.system(i18n.localized_string("GETTING_OFF_THE_ELEVATOR"))
 
     def queue_start_arrived(self):
-        self.item(i18n.localized_string("GOING_TO_GET_IN_LINE"))
+        self.system(i18n.localized_string("GOING_TO_GET_IN_LINE"))
 
     def queue_proceed(self):
-        self.item(i18n.localized_string("DOOR_POI_USER_ACTION"))
+        self.system(i18n.localized_string("DOOR_POI_USER_ACTION"))
 
     def door_passed(self):
-        self.item(i18n.localized_string("DOOR_POI_PASSED"))
+        self.system(i18n.localized_string("DOOR_POI_PASSED"))
 
     def please_follow_behind(self):
-        self.item(i18n.localized_string("FOLLOW_BEHIND_PLEASE_NARROW"))
+        self.system(i18n.localized_string("FOLLOW_BEHIND_PLEASE_NARROW"))
 
     def please_return_position(self):
-        self.item(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
+        self.system(i18n.localized_string("RETURN_TO_POSITION_PLEASE"))
 
 
 class TourManager:
@@ -559,13 +574,21 @@ class TourManager:
         message = self.tourdata.get_message(ref, message_type)
         if message and message.read is False:
             message.read = True
-            self.node.item(i18nText(message.text, self.lang))
+            self.node.item(f"({message_type}) {i18nText(message.text, self.lang)}")
+
+    def take_elevator(self):
+        self.node.item(f"**{i18n.localized_string('TAKE_ELEVATOR')}**")
+
+    def exit_elevator(self):
+        self.node.item(f"**{i18n.localized_string('EXIT_ELEVATOR')}**")
 
     def start_navigation(self):
+        self.node.item(f"**{i18n.localized_string('START_NAVIGATION')}**")
         self._check_message("startMessage")
         pass
 
     def have_arrived(self, goal):
+        self.node.item(f"**{i18n.localized_string('ARRIVE_DESTINATON')}**")
         self._check_message("arriveMessage")
         pass
 
