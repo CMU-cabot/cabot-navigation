@@ -29,6 +29,7 @@ import sys
 import threading
 import traceback
 import uuid
+import time
 
 # ros2
 import rclpy
@@ -51,34 +52,50 @@ from cabot_ui.navgoal import NavGoal, TurnGoal, DoorGoal
 from cabot_ui.navgoal import ElevatorGoal, ElevatorWaitGoal, ElevatorInGoal, ElevatorTurnGoal, ElevatorFloorGoal, ElevatorOutGoal
 
 
+class TaskScheduler:
+    _instance = None
 
-INTERVAL = 0.001
-_lock = threading.Lock()
-_queue = []
+    def __new__(cls, *args, **kwargs):
+        raise NotImplementedError("Please use get_instance() method")
 
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("Please use get_instance() method")
 
-def process_queue():
-    global _queue
-    if len(_queue) > 0:
-        data = None
-        with _lock:
-            data = _queue.pop(0)
-        if data and len(data) == 3:
-            try:
-                data[0](*data[1], **data[2])
-            except:  # noqa E722
-                traceback.print_exc()
+    @classmethod
+    def get_instance(cls, node, interval=0.0001):
+        if cls._instance is None:
+            obj = super().__new__(cls)
+            obj._lock = threading.Lock()
+            obj._queue = []
+            obj.timer = node.create_timer(interval, obj.process_tasks)
+            cls._instance = obj
+        return cls._instance
 
+    def add_task(self, task):
+        """Add a task (function) to the queue in a thread-safe manner"""
+        with self._lock:
+            self._queue.append(task)
 
-# utility functions
-def setInterval():
-    def outer_wrap(function):
-        def wrap(*args, **kwargs):
-            with _lock:
-                _queue.append((function, args, kwargs))
-            return None
-        return wrap
-    return outer_wrap
+    def process_tasks(self):
+        """
+        Retrieve and run all tasks in the queue.
+        After executing, the queue will be empty.
+        """
+        with self._lock:
+            tasks = self._queue.copy()
+            self._queue.clear()
+        for task in tasks:
+            task()
+
+    @classmethod
+    def setInterval(cls):
+        def outer_wrap(function):
+            def wrap(*args, **kwargs):
+                if cls._instance is not None:
+                    cls._instance.add_task(lambda: function(*args, **kwargs))
+                return None
+            return wrap
+        return outer_wrap
 
 
 def get_anchor_file():
@@ -104,15 +121,6 @@ def get_anchor_file():
     return map_value
 
 
-# override call_delay for testing
-@setInterval()
-def dummy_call_delay(self, func):
-    func()
-
-
-NavGoal.call_delay = dummy_call_delay
-
-
 # override Navigation for testing
 # replacing out-facing interfaces (TF/paramters/nav2)
 class DummyNavigation(Navigation):
@@ -121,11 +129,11 @@ class DummyNavigation(Navigation):
             return pose_stamped
 
     class DummyParamManager:
-        @setInterval()
+        @TaskScheduler.setInterval()
         def change_parameters(self, params, callback):
             callback(True)
 
-        @setInterval()
+        @TaskScheduler.setInterval()
         def request_parameters(self, params, callback):
             callback({})
 
@@ -144,7 +152,7 @@ class DummyNavigation(Navigation):
         def add_done_callback(self, callback):
             self._callbacks.append(callback)
 
-        @setInterval()
+        @TaskScheduler.setInterval()
         def delay_done(self):
             self._completed = True
             for callback in self._callbacks:
@@ -186,7 +194,12 @@ class DummyNavigation(Navigation):
         self._current_pose = geoutil.Pose(x=0, y=0, r=0)
         self._dummy_poses = None
         self._dummy_poses_lock = threading.Lock()
+
         # override
+        @TaskScheduler.setInterval()
+        def dummy_call_delay(self, func):
+            func()
+        NavGoal.call_delay = dummy_call_delay
         self.buffer = DummyNavigation.DummyBuffer()
         self.param_manager = DummyNavigation.DummyParamManager()
         for ns in Navigation.NS:
@@ -613,6 +626,8 @@ def spin(node):
 
 
 def main(args):
+    global scheduler
+
     rclpy.init(args=[
         "--ros-args",
         "-p",
@@ -624,7 +639,8 @@ def main(args):
     ])
     node = TourTestNode()
     CaBotRclpyUtil.initialize(node)
-    _ = node.create_timer(args.interval, process_queue)
+    scheduler = TaskScheduler.get_instance(node, interval=args.interval)
+
     node.initialize(lang=args.lang, debug=args.debug, interval=args.interval)
     tourdata = load_tourdata()
 
@@ -691,7 +707,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--tour_id", type=str, help="Specify a tour_id to show")
     parser.add_argument("-s", "--start", type=str, help="start node")
     parser.add_argument("-g", "--goal", type=str, help="goal node")
-    parser.add_argument("-i", "--interval", type=float, default=0.001, help="Interval for processing queue")
+    parser.add_argument("-i", "--interval", type=float, default=0.0001, help="Interval for processing queue")
     parser.add_argument("-L", "--landmarks", action="store_true", help="Show landmarks")
     parser.add_argument("-M", "--messages", action="store_true", help="Show messages")
     args = parser.parse_args()
