@@ -69,6 +69,7 @@ WORKDIR /home/$USERNAME
 RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtime/release/23.0.0.8/openliberty-javaee8-23.0.0.8.zip && \
         unzip openliberty-javaee8-23.0.0.8.zip
 
+ADD https://api.github.com/repos/CMU-cabot/BLELocalization/git/refs/heads/cabot-mapping BLELocalization-version.json
 RUN git clone https://github.com/cmu-cabot/BLELocalization -b cabot-mapping && \
         cd BLELocalization/LocationTools && \
         sh download-lib.sh
@@ -81,14 +82,12 @@ RUN cd BLELocalization/LocationTools && \
 FROM base AS final
 
 USER $USERNAME
-WORKDIR /home/$USERNAME
-ADD --chown=$USERNAME:$USERNAME https://api.github.com/repos/CMU-cabot/BLELocalization/git/refs/heads/cabot-mapping BLELocalization-version.json
-
 COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/wlp /home/$USERNAME/wlp
 WORKDIR /home/$USERNAME/wlp/bin
 RUN ./server create defaultServer
 
 COPY --from=build /home/$USERNAME/BLELocalization/LocationTools/target/LocationTools-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
+COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/BLELocalization-version.json /home/$USERNAME/
 
 COPY --chown=$USERNAME:$USERNAME server-location-tools.xml /home/$USERNAME/wlp/usr/servers/defaultServer/server.xml
 
