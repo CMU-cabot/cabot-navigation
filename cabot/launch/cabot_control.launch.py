@@ -99,9 +99,9 @@ def generate_launch_description():
         ),
         Node(
             package='cabot',
-            executable='wheelie_control_node',
+            executable='wheelie_speed_control_node',
             namespace='/cabot',
-            name='wheelie_control_node',
+            name='wheelie_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
         ),

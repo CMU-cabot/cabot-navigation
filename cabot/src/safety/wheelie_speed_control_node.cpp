@@ -33,7 +33,7 @@ class WheelieControlNode : public rclcpp::Node
 {
 public:
   explicit WheelieControlNode(const rclcpp::NodeOptions & options)
-  : rclcpp::Node("wheelie_control_node", options),
+  : rclcpp::Node("wheelie_speed_control_node", options),
     latest_pitch_(0.0),
     max_speed_(1.0),
     min_speed_(0.0)

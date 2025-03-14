@@ -80,7 +80,7 @@ add_library(safety_nodes SHARED
   src/safety/tf_speed_control_node.cpp
   src/safety/touch_speed_control_node.cpp
   src/safety/util.cpp
-  src/safety/wheelie_control_node.cpp
+  src/safety/wheelie_speed_control_node.cpp
 )
 
 ament_target_dependencies(cabot
@@ -130,7 +130,7 @@ rclcpp_components_register_node(
 rclcpp_components_register_node(
   safety_nodes
   PLUGIN "CaBotSafety::WheelieControlNode"
-  EXECUTABLE wheelie_control_node
+  EXECUTABLE wheelie_speed_control_node
 )
 
 if(BUILD_TESTING)
@@ -154,7 +154,7 @@ install(TARGETS
   speed_visualize
   safety_nodes
   cabot
-  wheelie_control_node
+  wheelie_speed_control_node
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
