@@ -1,4 +1,4 @@
-// Copyright 2020, 2024 Carnegie Mellon University and Miraikan
+// Copyright 2020, 2025 Carnegie Mellon University and Miraikan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -94,6 +94,10 @@ void add_text(
 void add_triangle(
   rclcpp::Time now, const std::array<Point, 3> & points,
   float size = 1.0, float r = 0, float g = 0, float b = 0, float a = 1);
+void add_circle(
+  rclcpp::Time now, std::size_t num_points, Point center, float radius,
+  float size = 0.05, float r = 0, float g = 0, float b = 0, float a = 1);
+
 }  // namespace CaBotSafety
 
 #endif  // CABOT__UTIL_HPP_
