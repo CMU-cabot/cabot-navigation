@@ -1382,6 +1382,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def set_pause_control(self, flag):
         self._logger.info("set_pause_control")
+        flag = True  # TODO: this line is for TBD data collection purporse
         self.delegate.activity_log("cabot/navigation", "pause_control", str(flag))
         self.pause_control_msg.data = flag
         self.pause_control_pub.publish(self.pause_control_msg)
