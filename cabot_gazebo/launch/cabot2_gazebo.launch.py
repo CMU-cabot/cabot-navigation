@@ -1,4 +1,4 @@
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2022, 2025  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -96,6 +96,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
+    use_gnss = LaunchConfiguration('use_gnss')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
     gdb = LaunchConfiguration('gdb')
 
@@ -169,6 +170,11 @@ def generate_launch_description():
             'world_file',
             default_value=PathJoinSubstitution([get_package_share_directory('gazebo_ros'), 'worlds', 'empty.world']),
             description='Gazebo world file to be open'
+        ),
+        DeclareLaunchArgument(
+            'use_gnss',
+            default_value='false',
+            description='use gnss'
         ),
         DeclareLaunchArgument(
             'wireless_config_file',
@@ -382,5 +388,19 @@ def generate_launch_description():
                 PythonExpression(['"', model_name, '"==""']),
                 PythonExpression(['"', world_file, '"==""'])
             ))
+        ),
+        Node(
+            package='cabot_gazebo',
+            executable='gps_converter.py',
+            name='vector3_stamped_to_twist_covariance_stamped',
+            output=output,
+            parameters=[{
+                'use_sim_time': use_sim_time,
+            }],
+            remappings=[
+                ('/in', '/ublox/velocity'),
+                ('/out', '/ublox/fix_velocity')
+            ],
+            condition=IfCondition(use_gnss)
         )
     ])

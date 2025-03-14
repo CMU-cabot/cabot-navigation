@@ -31,6 +31,7 @@ install(PROGRAMS
   script/wireless_sample_simulator_node.py
   script/check_gazebo_ready.py
   script/pressure_simulator_node.py
+  script/gps_converter.py
   DESTINATION lib/${PROJECT_NAME}
 )
 ament_package()
