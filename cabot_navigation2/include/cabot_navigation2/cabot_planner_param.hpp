@@ -48,7 +48,7 @@ struct CaBotPlannerOptions
 {
   // public params
   float optimize_distance_from_start = 10.0;
-  float initial_node_interval = 0.20;
+  float initial_node_interval_scale = 4.0;
   float gravity_factor = 0.5;                 // distance from lethal cost
   float link_spring_factor = 0.3;             // 20~100% of gravity factor would be good
   float anchor_spring_factor = 0.01;          // 0.01 or 0.00
