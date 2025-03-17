@@ -177,7 +177,7 @@ class Properties(object):
             try:
                 setattr(self, key, dic[key])
             except:  # noqa E722
-                print(F"Cannot use unicode string for a property name: \"{key.encode('utf8')}\"")
+                CaBotRclpyUtil.error(F"Cannot use unicode string for a property name: \"{key.encode('utf8')}\"")
 
     def __str__(self):
         return json.dumps(self.__dict__, sort_keys=True, indent=2)
@@ -408,7 +408,7 @@ class Object(object):
             try:
                 self.local_geometry = geoutil.global2local(self.geometry, anchor)
             except:  # noqa E722
-                print(F"Could not convert geometry: {self.local_geometry}")
+                CaBotRclpyUtil.error(F"Could not convert geometry: {self.local_geometry}")
 
     def distance_to(self, point):
         if isinstance(point, geoutil.Point):
@@ -934,7 +934,7 @@ class ElevatorCabPOI(POI):
         b_pose = geoutil.Pose.pose_from_points(pose, b_pos)
         dir = angles.shortest_angular_distance(pose.r, b_pose.r)
 
-        print(pose, b_pos, b_pose, dir)
+        CaBotRclpyUtil.info(f"{pose=}, {b_pos=}, {b_pose=}, {dir=}")
 
         if abs(dir) > math.pi / 3 * 2:
             return "BACK"
