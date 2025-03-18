@@ -165,8 +165,8 @@ void CaBotPlan::findIndex()
 void CaBotPlan::adjustNodeInterval()
 {
   bool changed = false;
-  int devide_link_cell_interval_threshold = param.options.initial_node_interval * 2.0 / param.resolution;
-  int shrink_link_cell_interval_threshold = param.options.initial_node_interval / 2.0 / param.resolution;
+  int devide_link_cell_interval_threshold = param.options.initial_node_interval_scale * 2.0;
+  int shrink_link_cell_interval_threshold = param.options.initial_node_interval_scale / 2.0;
   for (uint64_t i = 0; i < nodes.size() - 2; i++) {
     if (nodes_backup.size() * 2 < nodes.size()) {
       break;
@@ -266,7 +266,7 @@ bool CaBotPlan::checkPathIsOkay()
     auto n0 = nodes[i];
     auto n1 = nodes[i + 1];
 
-    int N = ceil(n0.distance(n1) / param.options.initial_node_interval);
+    int N = ceil(n0.distance(n1) / (param.options.initial_node_interval_scale * param.resolution));
     for (int j = 0; j < 1; j++) {
       Point temp((n0.x * j + n1.x * (N - j)) / N, (n0.y * j + n1.y * (N - j)) / N);
 
@@ -545,7 +545,7 @@ int CaBotPlannerParam::getIndexByPoint(Point & p) const
 std::vector<Node> CaBotPlannerParam::getNodes(DetourMode detour_mode) const
 {
   std::vector<Node> nodes;
-  auto initial_node_interval = options.initial_node_interval;
+  auto initial_node_interval = options.initial_node_interval_scale * resolution;
 
   // push initial pose
   auto p0 = path.poses[0].pose.position;
