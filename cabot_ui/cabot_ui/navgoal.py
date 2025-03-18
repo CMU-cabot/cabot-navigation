@@ -319,8 +319,13 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
 
     for (index, item) in enumerate(navcog_route):
         if index == 0 and isinstance(item.geometry, geojson.LineString):
-            # if the first item is link, add the source node
-            points.append(convert(item.source_node.geometry))
+            if item.navigation_mode != geojson.NavigationMode.Standard:
+                # if the first item is link, add the source node
+                points.append(convert(item.source_node.geometry))
+            else:
+                sp = convert(item.source_node.geometry)
+                ep = convert(item.target_node.geometry)
+                points.append(sp.interpolate(ep, 0.5))
         elif index == last_index:
             if isinstance(item.geometry, geojson.Point):
                 # if navcog_route only has one Node
