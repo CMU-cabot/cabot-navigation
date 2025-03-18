@@ -49,7 +49,7 @@ cabot:
       min_speed: 0.0
       min_distance: 1.0
       limit_factor: 1.0
-      front_angle_in_degree: 28.95  # 1.0 * sin(x/2) * 2 = 0.8
+      min_distance: 1.0
 
   people_speed_control_node: # old name cabot_e_people_speed:
     ros__parameters:
