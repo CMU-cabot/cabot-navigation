@@ -812,6 +812,7 @@ class NavGoal(Goal):
 
         last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
+        self.gradient = self._extract_gradient()
         self.handle = None
         self.mode = None
         self.route_index = 0
@@ -842,6 +843,15 @@ class NavGoal(Goal):
                 for poi in item.pois:
                     CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
                 temp.extend(item.pois)
+        return temp
+
+    def _extract_gradient(self):
+        """extract gradient along the route"""
+        temp = []
+        for (_, item) in enumerate(self.navcog_route):
+            if isinstance(item, geojson.RouteLink):
+                if item.gradient in [geojson.Gradient.Up, geojson.Gradient.Down]:
+                    temp.append(item)
         return temp
 
     @util.setInterval(5, times=1)
