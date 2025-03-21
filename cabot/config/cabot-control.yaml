@@ -106,7 +106,7 @@ cabot:
       imu_topic: /cabot/imu/data
       cmd_vel_topic: /cabot/cmd_vel
       wheelie_speed_topic: /cabot/wheelie_speed
-      min_speed: 0.3
+      min_speed: 0.001
       max_speed: 1.0
 
   ekf_node:
