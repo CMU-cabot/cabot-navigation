@@ -91,7 +91,7 @@ private:
     std_msgs::msg::Float32 wheelie_msg;
     geometry_msgs::msg::Twist cmd_msg;
     wheelie_msg.data = wheelie_state ? min_speed_ : max_speed_;
-    if(wheelie_state == true || latest_gradient_ == 0.0)
+    if(wheelie_state == true && latest_gradient_ <= 0.0)
     {
       wheelie_msg.data = min_speed_;
     } else {
