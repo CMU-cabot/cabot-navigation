@@ -39,6 +39,7 @@ public:
     min_speed_(0.0)
   {
     imu_topic_ = this->declare_parameter("imu_topic", "/cabot/imu/data");
+    gradient_topic_ = this->declare_parameter("gradient_topic", "/cabot/gradient");
     wheelie_speed_topic_ = this->declare_parameter("wheelie_speed_topic", "/cabot/wheelie_speed");
     pitch_threshold_ = this->declare_parameter("pitch_threshold", -0.15);
     max_speed_ = declare_parameter("max_speed", max_speed_);
@@ -48,6 +49,11 @@ public:
       create_subscription<sensor_msgs::msg::Imu>(
       imu_topic_, 10,
       std::bind(&WheelieControlNode::imuCallback, this, std::placeholders::_1));
+
+    gradient_sub_ =
+      create_subscription<std_msgs::msg::Float32>(
+      gradient_topic_, 10,
+      std::bind(&WheelieControlNode::gradientCallback, this, std::placeholders::_1));
 
     wheelie_speed_pub_ = create_publisher<std_msgs::msg::Float32>(wheelie_speed_topic_, rclcpp::SystemDefaultsQoS().transient_local());
 
@@ -73,6 +79,11 @@ private:
     latest_pitch_ = pitch;
   }
 
+  void gradientCallback(const std_msgs::msg::Float32::SharedPtr msg)
+  {
+    latest_gradient_ = msg->data;
+  }
+
   void checkWheelieState()
   {
     bool wheelie_state = latest_pitch_ < pitch_threshold_;
@@ -80,21 +91,30 @@ private:
     std_msgs::msg::Float32 wheelie_msg;
     geometry_msgs::msg::Twist cmd_msg;
     wheelie_msg.data = wheelie_state ? min_speed_ : max_speed_;
+    if(wheelie_state == true || latest_gradient_ == 0.0)
+    {
+      wheelie_msg.data = min_speed_;
+    } else {
+      wheelie_msg.data = max_speed_;
+    }
     wheelie_speed_pub_->publish(wheelie_msg);
 
     RCLCPP_INFO(this->get_logger(), "speed limit: %.3f (%.3f <=> %.3f)", wheelie_msg.data, latest_pitch_, pitch_threshold_);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr gradient_sub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr wheelie_speed_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   double pitch_threshold_;
   double latest_pitch_;
+  double latest_gradient_;
   double max_speed_;
   double min_speed_;
 
   std::string imu_topic_;
+  std::string gradient_topic_;
   std::string cmd_vel_topic_;
   std::string wheelie_speed_topic_;
 };  // WheelieControlNode
