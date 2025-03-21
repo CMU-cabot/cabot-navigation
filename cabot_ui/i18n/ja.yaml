@@ -120,3 +120,11 @@ REQUESTING_PLEASE_WAIT: "確認中です"
 REQUESTING_ERROR: "エラーが発生しました。あとで再度お試しください。"
 REQUESTING_DESCRIBE_SURROUND: "周囲の状況を確認します。"
 REQUESTING_DESCRIBE_FORWARD: "前方の状況を確認します。"
+
+
+## Tour test
+START_NAVIGATION: "案内開始"
+ARRIVE_DESTINATON: "目的地到着"
+TAKE_ELEVATOR: "エレベーターに乗る"
+EXIT_ELEVATOR: "エレベーターを降りる"
+SYSTEM: "システム"

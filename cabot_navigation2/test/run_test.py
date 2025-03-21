@@ -411,23 +411,43 @@ class Tester:
             )
             return
 
-        if button == 3:
+        if button == 1:
             self.pub_topic(**dict(
                 dict(
                     action_name=f'button_down({button})',
                     topic='/cabot/event',
                     topic_type='std_msgs/msg/String',
-                    message=f"data: 'button_down_{button}'"
+                    message="data: 'navigation_speedup'"
                 ),
                 **kwargs)
             )
-        else:
+        elif button == 2:
             self.pub_topic(**dict(
                 dict(
-                    action_name=f'click_({button}_1)',
+                    action_name=f'button_down({button})',
                     topic='/cabot/event',
                     topic_type='std_msgs/msg/String',
-                    message=f"data: 'click_{button}_1'"
+                    message="data: 'navigation_speeddown'"
+                ),
+                **kwargs)
+            )
+        elif button == 3:
+            self.pub_topic(**dict(
+                dict(
+                    action_name=f'button_down({button})',
+                    topic='/cabot/event',
+                    topic_type='std_msgs/msg/String',
+                    message="data: 'navigation_pause'"
+                ),
+                **kwargs)
+            )
+        elif button == 4:
+            self.pub_topic(**dict(
+                dict(
+                    action_name=f'button_down({button})',
+                    topic='/cabot/event',
+                    topic_type='std_msgs/msg/String',
+                    message="data: 'navigation_resume'"
                 ),
                 **kwargs)
             )

@@ -111,9 +111,9 @@ void CaBotPlanner::configure(
   node->get_parameter(name + ".optimize_distance_from_start", options_.optimize_distance_from_start);
 
   declare_parameter_if_not_declared(
-    node, name + ".initial_node_interval",
-    rclcpp::ParameterValue(defaultValue.initial_node_interval));
-  node->get_parameter(name + ".initial_node_interval", options_.initial_node_interval);
+    node, name + ".initial_node_interval_scale",
+    rclcpp::ParameterValue(defaultValue.initial_node_interval_scale));
+  node->get_parameter(name + ".initial_node_interval_scale", options_.initial_node_interval_scale);
 
   declare_parameter_if_not_declared(
     node, name + ".gravity_factor",
@@ -382,8 +382,8 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     if (param.get_name() == name_ + ".optimize_distance_from_start") {
       options_.optimize_distance_from_start = param.as_double();
     }
-    if (param.get_name() == name_ + ".initial_node_interval") {
-      options_.initial_node_interval = param.as_double();
+    if (param.get_name() == name_ + ".initial_node_interval_scale") {
+      options_.initial_node_interval_scale = param.as_double();
     }
     if (param.get_name() == name_ + ".gravity_factor") {
       options_.gravity_factor = param.as_double();

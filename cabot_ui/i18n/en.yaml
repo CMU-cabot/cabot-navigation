@@ -120,3 +120,10 @@ REQUESTING_PLEASE_WAIT: "Requesting"
 REQUESTING_ERROR: "Something went wrong. Please try again later"
 REQUESTING_DESCRIBE_SURROUND: "Requesting surrounding situation"
 REQUESTING_DESCRIBE_FORWARD: "Requesting forward situation"
+
+## Tour test
+START_NAVIGATION: "Start Navigation"
+ARRIVE_DESTINATON: "Arrive Destination"
+TAKE_ELEVATOR: "Taking Elevator"
+EXIT_ELEVATOR: "Exit Elevator"
+SYSTEM: "System"

@@ -319,8 +319,13 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
 
     for (index, item) in enumerate(navcog_route):
         if index == 0 and isinstance(item.geometry, geojson.LineString):
-            # if the first item is link, add the source node
-            points.append(convert(item.source_node.geometry))
+            if item.navigation_mode != geojson.NavigationMode.Standard:
+                # if the first item is link, add the source node
+                points.append(convert(item.source_node.geometry))
+            else:
+                sp = convert(item.source_node.geometry)
+                ep = convert(item.target_node.geometry)
+                points.append(sp.interpolate(ep, 0.5))
         elif index == last_index:
             if isinstance(item.geometry, geojson.Point):
                 # if navcog_route only has one Node
@@ -807,6 +812,7 @@ class NavGoal(Goal):
 
         last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
+        self.gradient = self._extract_gradient()
         self.handle = None
         self.mode = None
         self.route_index = 0
@@ -833,10 +839,19 @@ class NavGoal(Goal):
         temp = []
         for (_, item) in enumerate(self.navcog_route):
             if isinstance(item, geojson.RouteLink):
-                print(item._id)
+                CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    print("  ", type(poi), poi._id)
+                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
                 temp.extend(item.pois)
+        return temp
+
+    def _extract_gradient(self):
+        """extract gradient along the route"""
+        temp = []
+        for (_, item) in enumerate(self.navcog_route):
+            if isinstance(item, geojson.RouteLink):
+                if item.gradient in [geojson.Gradient.Up, geojson.Gradient.Down]:
+                    temp.append(item)
         return temp
 
     @util.setInterval(5, times=1)

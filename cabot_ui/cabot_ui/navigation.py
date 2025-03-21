@@ -84,7 +84,7 @@ class NavigationInterface(object):
     def have_arrived(self, goal):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def have_completed(self, goal):
+    def have_completed(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def approaching_to_poi(self, poi=None):
@@ -344,7 +344,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     TURN_NEARBY_THRESHOLD = 2
 
     def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
-                 datautil_instance=None, anchor_file=None, wait_for_action=True):
+                 datautil_instance=None, anchor_file='', wait_for_action=True):
 
         self.current_floor = None
         self.current_frame = None
@@ -404,6 +404,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_pub = node.create_publisher(std_msgs.msg.Bool, pause_control_output, 10, callback_group=MutuallyExclusiveCallbackGroup())
         map_speed_output = node.declare_parameter("map_speed_topic", "/cabot/map_speed").value
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -786,11 +787,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.speed_pois = [x for x in goal.pois if isinstance(x, geojson.SpeedPOI)]
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
+            self.gradient = goal.gradient
         else:
             self.visualizer.pois = []
             self.speed_poi = []
             self.info_pois = []
             self.queue_wait_pois = []
+            self.gradient = []
         self.turns = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
@@ -885,6 +888,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._check_gradient(self.current_pose)
+        except:  # noqa: E722
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_nearby_facility(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
@@ -926,6 +933,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
+
+    def _check_gradient(self, current_pose):
+        msg = std_msgs.msg.Float32()
+        msg.data = 0.0
+        for g in self.gradient:
+            if g.within_link(current_pose):
+                sign = 1.0 if g.gradient == geojson.Gradient.Up else -1.0
+                msg.data = sign * float(g.max_gradient if g.max_gradient else 5.0)
+                break
+        self.gradient_pub.publish(msg)
 
     def _check_nearby_facility(self, current_pose):
         if not self.nearby_facilities:

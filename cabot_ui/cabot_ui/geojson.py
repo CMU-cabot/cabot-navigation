@@ -57,6 +57,13 @@ class RouteStruct(enum.IntEnum):
     Unknown = 99
 
 
+class Gradient(enum.IntEnum):
+    Unknown = 99
+    AlmostFlat = 1
+    Up = 2
+    Down = 3
+
+
 class Geometry(object):
     """Geometry class"""
 
@@ -160,7 +167,9 @@ class Properties(object):
         "hulop_poi_external_category": None,
         "hulop_show_labels_zoomlevel": None,
         "hulop_road_width": 1.5,
-        "rt_struct": RouteStruct.InFacility
+        "rt_struct": RouteStruct.InFacility,
+        "vtcl_slope": Gradient.Unknown,
+        "vSlope_max": 0,
         }
 
     def __getattr__(self, name):
@@ -177,7 +186,7 @@ class Properties(object):
             try:
                 setattr(self, key, dic[key])
             except:  # noqa E722
-                print(F"Cannot use unicode string for a property name: \"{key.encode('utf8')}\"")
+                CaBotRclpyUtil.error(F"Cannot use unicode string for a property name: \"{key.encode('utf8')}\"")
 
     def __str__(self):
         return json.dumps(self.__dict__, sort_keys=True, indent=2)
@@ -408,7 +417,7 @@ class Object(object):
             try:
                 self.local_geometry = geoutil.global2local(self.geometry, anchor)
             except:  # noqa E722
-                print(F"Could not convert geometry: {self.local_geometry}")
+                CaBotRclpyUtil.error(F"Could not convert geometry: {self.local_geometry}")
 
     def distance_to(self, point):
         if isinstance(point, geoutil.Point):
@@ -519,12 +528,32 @@ class Link(Object):
     def pose(self):
         return geoutil.Pose.pose_from_points(self.start_node.local_geometry, self.end_node.local_geometry)
 
+    @property
+    def gradient(self):
+        return self.properties.vtcl_slope
+
+    @property
+    def max_gradient(self):
+        return self.properties.vSlope_max
+
     def register_poi(self, poi):
         self.pois.append(poi)
 
     def update_anchor(self, anchor):
+        if isinstance(self.geometry, Point):
+            super().update_anchor(anchor)
+            return
         self.anchor = anchor
-        # TODO
+        if anchor is not None:
+            try:
+                start = geoutil.global2local(self.geometry.start, anchor)
+                end = geoutil.global2local(self.geometry.end, anchor)
+                self.local_geometry = geoutil.Line(start=start, end=end)
+            except:  # noqa E722
+                CaBotRclpyUtil.error(traceback.format_exc())
+
+    def within_link(self, point):
+        return self.local_geometry.within_link(point)
 
 
 class RouteLink(Link):
@@ -544,7 +573,7 @@ class RouteLink(Link):
         Object.get_object_by_id(self._id, self._found_link)
 
     def update_anchor(self, anchor):
-        self.anchor = anchor
+        super().update_anchor(anchor)
         # here is to work around to get POIs on the first temp link
         if self.is_temp:
             # the source_node should be updated with an anchor beforehand
@@ -558,6 +587,8 @@ class RouteLink(Link):
         self.target_node = node
 
     def _found_link(self, link):
+        self.update_anchor(link.anchor)
+        self.original_link = link
         self.pois = link.pois
 
     @property
@@ -567,6 +598,16 @@ class RouteLink(Link):
     @property
     def pose(self):
         return geoutil.Pose.pose_from_points(self.source_node.local_geometry, self.target_node.local_geometry)
+
+    @property
+    def gradient(self):
+        # if link is reveresed, flip the gradient
+        if self.start_node != self.source_node:
+            if super().gradient == Gradient.Up:
+                return Gradient.Down
+            elif super().gradient == Gradient.Down:
+                return Gradient.Up
+        return super().gradient
 
 
 class Node(Object):
@@ -934,7 +975,7 @@ class ElevatorCabPOI(POI):
         b_pose = geoutil.Pose.pose_from_points(pose, b_pos)
         dir = angles.shortest_angular_distance(pose.r, b_pose.r)
 
-        print(pose, b_pos, b_pose, dir)
+        CaBotRclpyUtil.info(f"{pose=}, {b_pos=}, {b_pose=}, {dir=}")
 
         if abs(dir) > math.pi / 3 * 2:
             return "BACK"
