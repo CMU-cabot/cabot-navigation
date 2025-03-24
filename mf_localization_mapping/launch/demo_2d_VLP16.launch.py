@@ -97,8 +97,17 @@ def generate_launch_description():
             cmd.append('/esp32/wifi')
             cmd.append('/wireless/beacons')
             cmd.append('/wireless/wifi')
+            # ublox
             cmd.append('/ublox/fix')
             cmd.append('/ublox/fix_velocity')
+            cmd.append('/ublox/navclock')
+            cmd.append('/ublox/navcov')
+            cmd.append('/ublox/navheading')
+            cmd.append('/ublox/navpvt')
+            cmd.append('/ublox/navrelposned')
+            cmd.append('/ublox/navsat')
+            cmd.append('/ublox/navstatus')
+            cmd.append('/ublox/navsvin')
         if convert_imu.perform(context) == 'true' or convert_points.perform(context) == 'true':
             cmd.append('--remap')
             if convert_imu.perform(context) == 'true':
@@ -212,6 +221,21 @@ def generate_launch_description():
             remappings=[
                 ('fix', 'ublox/fix'),
                 ('fix_filtered', 'ublox/fix_filtered')
+            ]
+        ),
+
+        Node(
+            package='mf_localization',
+            executable='ublox_converter.py',
+            name='ublox_converter',
+            parameters=[{
+                'min_cno': 30,
+                'min_elev': 45,
+                'num_sv_threshold_low': 10,
+                'num_sv_threshold_high': 15,
+            }],
+            remappings=[
+                ('navsat', 'ublox/navsat')
             ]
         ),
 
