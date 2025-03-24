@@ -88,6 +88,7 @@ function signal() {
 : ${CABOT_INITZ:=0}
 : ${CABOT_INITA:=0}  # in degree
 export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
+: ${CABOT_LOW_OBSTABLE_DETECT_VERSION:=0}
 
 # check required environment variables
 error_flag=0
@@ -101,6 +102,11 @@ if [[ -z $CABOT_MODEL ]]; then
 fi
 if [[ $error_flag -ne 0 ]]; then
     exit
+fi
+
+use_low_obstacle_detect=false
+if [[ $CABOT_LOW_OBSTABLE_DETECT_VERSION -gt 0 ]]; then
+    use_low_obstacle_detect=true
 fi
 
 # initialize local variables
@@ -169,6 +175,7 @@ com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
         world_file:=$world \
         wireless_config_file:=$wireless_config \
         use_gnss:=$CABOT_USE_GNSS \
+        use_low_obstacle_detect:=$use_low_obstacle_detect \
         $command_postfix"
 echo $com
 eval $com
