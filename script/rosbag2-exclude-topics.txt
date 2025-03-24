@@ -8,6 +8,8 @@
 ^/diagnostics$
 ^/joint_states$
 ^/marker$
+^/livox/points_filtered$
+^/livox/points_ground$
 ^/local/marker$
 ^/navigate_to_pose/_action/feedback$
 ^/odom_unused$
