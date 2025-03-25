@@ -95,7 +95,6 @@ private:
   double min_speed_;
 
   std::string imu_topic_;
-  std::string cmd_vel_topic_;
   std::string wheelie_speed_topic_;
 };  // WheelieControlNode
 
