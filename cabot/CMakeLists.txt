@@ -154,7 +154,6 @@ install(TARGETS
   speed_visualize
   safety_nodes
   cabot
-  wheelie_speed_control_node
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
