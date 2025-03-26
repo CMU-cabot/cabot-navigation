@@ -236,7 +236,10 @@ def generate_launch_description():
                 parameters=[{
                     'use_sim_time': use_sim_time,
                     'use_directional_indicator': use_directional_indicator,
-                }]
+                }],
+                arguments=[
+                    "--force-discover"
+                ]
             ),
 
             # launch velodyne lider related nodes

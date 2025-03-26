@@ -210,6 +210,8 @@ class Handle(Plugin):
         self.servo_free_label.setText(f'Free: {self.servo_free}')
 
     def servo_target_callback(self, msg):
+        self.servo_free = False
+        self.servo_free_label.setText(f'Free: {self.servo_free}')
         self.servo_target_msg = msg
 
     def eventFilter(self, obj, event):
