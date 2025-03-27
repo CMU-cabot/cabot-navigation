@@ -232,7 +232,7 @@ def generate_launch_description():
                 'min_cno': 30,
                 'min_elev': 45,
                 'num_sv_threshold_low': 10,
-                'num_sv_threshold_high': 15,
+                'num_sv_threshold_high': 17,
             }],
             remappings=[
                 ('navsat', 'ublox/navsat')
