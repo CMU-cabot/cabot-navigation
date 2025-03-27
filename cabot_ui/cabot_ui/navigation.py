@@ -779,7 +779,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _navigate_sub_goal(self, goal):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "sub_goal")
-
+        self.visualizer.reset()
         if isinstance(goal, navgoal.NavGoal):
             self.visualizer.pois = goal.pois
             self.visualizer.visualize()
@@ -1205,7 +1205,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         self._logger.info("visualize goal")
-        self.visualizer.reset()
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
@@ -1246,7 +1245,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         get_result_future.add_done_callback(done_cb)
 
         self._logger.info("visualize goal")
-        self.visualizer.reset()
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
