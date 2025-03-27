@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <pcl/filters/extract_indices.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl_ros/transforms.hpp>
 
@@ -122,13 +123,20 @@ void AbstractGroundFilterNode::pointCloudCallback(const sensor_msgs::msg::PointC
   }
 
   // filter point cloud by range and height
-  pcl::PointCloud<pcl::PointXYZ>::Ptr valid_transformed_normal_points(new pcl::PointCloud<pcl::PointXYZ>);
-  for (const auto & p : transformed_normal_points->points) {
+  pcl::PointIndices valid_indices;
+  for (unsigned int i = 0; i < transformed_normal_points->points.size(); i++) {
+    const auto & p = transformed_normal_points->points[i];
     float r = hypot(p.x, p.y);
     if ((r >= min_range_) && (r <= max_range_) && (p.z >= min_height_) && (p.z <= max_height_)) {
-      valid_transformed_normal_points->push_back(p);
+      valid_indices.indices.push_back(i);
     }
   }
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr valid_transformed_normal_points(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::ExtractIndices<pcl::PointXYZ> valid_extract_indices;
+  valid_extract_indices.setIndices(pcl::make_shared<const pcl::PointIndices>(valid_indices));
+  valid_extract_indices.setInputCloud(transformed_normal_points);
+  valid_extract_indices.filter(*valid_transformed_normal_points);
 
   // filter ground point cloud
   pcl::PointCloud<pcl::PointXYZ>::Ptr ground_points(new pcl::PointCloud<pcl::PointXYZ>);
