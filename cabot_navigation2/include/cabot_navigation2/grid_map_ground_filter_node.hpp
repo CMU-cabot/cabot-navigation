@@ -44,7 +44,7 @@ protected:
   void filterGround(const rclcpp::Time & time, const pcl::PointCloud<pcl::PointXYZ>::Ptr input, pcl::PointCloud<pcl::PointXYZ>::Ptr ground, pcl::PointCloud<pcl::PointXYZ>::Ptr filtered) override;
 
 private:
-  void odomCallback(const nav_msgs::msg::Odometry::SharedPtr input);
+  void moveGridMap(const grid_map::Position & gmap_origin_position);
   int calcLivoxGridEstimatedNumPoints(float distance, float resolution);
   bool isVisibleAngle(const grid_map::Position & check_position, const grid_map::Position & sensor_position, double sensor_yaw);
   void inflateBinaryLayer(const std::string layner_name, int inflate_size);
@@ -81,10 +81,8 @@ private:
   float log_odds_occupied_;
   float ground_estimate_radius_;
 
-  std::recursive_mutex grid_map_mutex_;
   std::shared_ptr<grid_map::GridMap> grid_map_ptr_;
 
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_outlier_pointcloud_pub_;
   rclcpp::Publisher<grid_map_msgs::msg::GridMap>::SharedPtr debug_grid_map_pub_;
 };  // class GridMapGroundFilterNode

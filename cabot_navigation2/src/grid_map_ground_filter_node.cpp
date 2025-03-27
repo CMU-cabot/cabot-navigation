@@ -95,28 +95,22 @@ GridMapGroundFilterNode::GridMapGroundFilterNode(const rclcpp::NodeOptions & opt
   log_odds_occupied_ = std::log(grid_prob_occupied_ / (1.0 - grid_prob_occupied_));
   ground_estimate_radius_ = grid_length_ / 2.0;
 
-  odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(odom_topic_, 10, std::bind(&GridMapGroundFilterNode::odomCallback, this, std::placeholders::_1));
-
   if (publish_debug_ground_) {
     debug_outlier_pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(output_debug_ground_topic_ + "/outlier_pointcloud", rclcpp::QoS(1).transient_local());
     debug_grid_map_pub_ = create_publisher<grid_map_msgs::msg::GridMap>(output_debug_ground_topic_, rclcpp::QoS(1).transient_local());
   }
 }
 
-void GridMapGroundFilterNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr input)
+void GridMapGroundFilterNode::moveGridMap(const grid_map::Position & gmap_origin_position)
 {
-  grid_map::Position input_pos(input->pose.pose.position.x, input->pose.pose.position.y);
-
-  std::unique_lock<std::recursive_mutex> lock(grid_map_mutex_);
-
   if (!grid_map_ptr_) {
     grid_map_ptr_ =
       std::make_shared<grid_map::GridMap, const std::vector<std::string>>(
       {"num_points", "mean_points_z", "m2_points_z", "var_points_z", "is_observed_enough_points", "is_observed_ground", "is_observed_occupied", "log_odds", "occupancy", "is_free",
         "is_occupied", "observed_ground_z", "valid_ground_z", "estimated_ground_z", "ground_confidence"});
     grid_map_ptr_->setFrameId("odom");
-    grid_map_ptr_->setGeometry(grid_map::Length(grid_length_, grid_length_), grid_resolution_, input_pos);
-    grid_map_ptr_->move(input_pos);
+    grid_map_ptr_->setGeometry(grid_map::Length(grid_length_, grid_length_), grid_resolution_, gmap_origin_position);
+    grid_map_ptr_->move(gmap_origin_position);
     (*grid_map_ptr_)["num_points"].setZero();
     (*grid_map_ptr_)["mean_points_z"].setZero();
     (*grid_map_ptr_)["m2_points_z"].setZero();
@@ -136,7 +130,7 @@ void GridMapGroundFilterNode::odomCallback(const nav_msgs::msg::Odometry::Shared
   }
 
   std::vector<grid_map::BufferRegion> new_regions;
-  grid_map_ptr_->move(input_pos, new_regions);
+  grid_map_ptr_->move(gmap_origin_position, new_regions);
 
   for (auto region : new_regions) {
     for (auto iterator = grid_map::SubmapIterator(*grid_map_ptr_, region); !iterator.isPastEnd(); ++iterator) {
@@ -226,26 +220,16 @@ void GridMapGroundFilterNode::filterGround(
     return;
   }
 
-  std::unique_lock<std::recursive_mutex> lock(grid_map_mutex_);
-
-  if (!grid_map_ptr_) {
-    RCLCPP_WARN(get_logger(), "grid map is not ready");
-    return;
-  }
-
-  grid_map::Position gmap_origin_pose_position(gmap_origin_pose.pose.position.x, gmap_origin_pose.pose.position.y);
-  if (!grid_map_ptr_->isInside(gmap_origin_pose_position)) {
-    RCLCPP_WARN(get_logger(), "robot is not inside grid map");
-    return;
-  }
+  grid_map::Position gmap_origin_position(gmap_origin_pose.pose.position.x, gmap_origin_pose.pose.position.y);
+  moveGridMap(gmap_origin_position);
 
   // collect visible area grid map indices in spiral order
   std::vector<grid_map::Index> visible_grid_spiral_indices;
   std::vector<grid_map::Index> invisible_grid_spiral_indices;
   grid_map::Index gmap_origin_pose_index;
-  grid_map_ptr_->getIndex(gmap_origin_pose_position, gmap_origin_pose_index);
+  grid_map_ptr_->getIndex(gmap_origin_position, gmap_origin_pose_index);
   const double gmap_origin_pose_yaw = tf2::getYaw(gmap_origin_pose.pose.orientation);
-  for (auto iterator = grid_map::SpiralIterator(*grid_map_ptr_, gmap_origin_pose_position, ground_estimate_radius_); !iterator.isPastEnd(); ++iterator) {
+  for (auto iterator = grid_map::SpiralIterator(*grid_map_ptr_, gmap_origin_position, ground_estimate_radius_); !iterator.isPastEnd(); ++iterator) {
     grid_map::Index gmap_index = *iterator;
 
     if ((gmap_index(0) == gmap_origin_pose_index(0)) && (gmap_index(1) == gmap_origin_pose_index(1))) {
@@ -256,7 +240,7 @@ void GridMapGroundFilterNode::filterGround(
       grid_map_ptr_->getPosition(gmap_index, gmap_position);
 
       if (grid_map_ptr_->isInside(gmap_position)) {
-        if (isVisibleAngle(gmap_position, gmap_origin_pose_position, gmap_origin_pose_yaw)) {
+        if (isVisibleAngle(gmap_position, gmap_origin_position, gmap_origin_pose_yaw)) {
           visible_grid_spiral_indices.push_back(gmap_index);
         } else {
           invisible_grid_spiral_indices.push_back(gmap_index);
@@ -308,7 +292,7 @@ void GridMapGroundFilterNode::filterGround(
       // point is enough below previous estimated ground height
       float z_slope = (p.z - gmap_origin_pose.pose.position.z) / std::hypot(p.x - gmap_origin_pose.pose.position.x, p.y - gmap_origin_pose.pose.position.y);
 
-      auto los_iterator = grid_map::LineIterator(*grid_map_ptr_, gmap_origin_pose_position, p_pos);
+      auto los_iterator = grid_map::LineIterator(*grid_map_ptr_, gmap_origin_position, p_pos);
       ++los_iterator;
       for (; !los_iterator.isPastEnd(); ++los_iterator) {
         grid_map::Index los_gmap_index = *los_iterator;
@@ -494,7 +478,7 @@ void GridMapGroundFilterNode::filterGround(
       grid_map::Position gmap_position;
       grid_map_ptr_->getPosition(gmap_index, gmap_position);
 
-      auto los_iterator = grid_map::LineIterator(*grid_map_ptr_, gmap_position, gmap_origin_pose_position);
+      auto los_iterator = grid_map::LineIterator(*grid_map_ptr_, gmap_position, gmap_origin_position);
       ++los_iterator;
       for (; !los_iterator.isPastEnd(); ++los_iterator) {
         grid_map::Index los_gmap_index = *los_iterator;
@@ -525,7 +509,7 @@ void GridMapGroundFilterNode::filterGround(
     }
   }
 
-  // estimate ground height by inteporating validated ground height from center of grid map in spiral order
+  // estimate ground height by interpolating validated ground height from center of grid map in spiral order
   for (unsigned int i = 0; i < visible_grid_spiral_indices.size(); i++) {
     grid_map::Index gmap_index = visible_grid_spiral_indices[i];
 
@@ -559,7 +543,7 @@ void GridMapGroundFilterNode::filterGround(
     }
   }
 
-  // filter point cloud by intepolated ground height
+  // filter point cloud by interpolated ground height
   pcl::PointIndices ground_indices;
   pcl::PointIndices filtered_indices;
   for (unsigned int i = 0; i < transformed_input->points.size(); i++) {
