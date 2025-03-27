@@ -218,6 +218,7 @@ void GridMapGroundFilterNode::filterGround(
     return;
   }
 
+  // update grid map position
   grid_map::Position gmap_origin_position(gmap_origin_pose.pose.position.x, gmap_origin_pose.pose.position.y);
   moveGridMap(gmap_origin_position);
 
@@ -266,8 +267,9 @@ void GridMapGroundFilterNode::filterGround(
   // add points to grid map
   const grid_map::Size gmap_size = grid_map_ptr_->getSize();
   std::vector<std::vector<std::vector<double>>> grid_map_pointcloud_z(gmap_size(0), std::vector<std::vector<double>>(gmap_size(1)));
-  pcl::PointCloud<pcl::PointXYZ>::Ptr outlier_points(new pcl::PointCloud<pcl::PointXYZ>);
-  for (const auto & p : transformed_input->points) {
+  pcl::PointIndices outlier_indices;
+  for (unsigned int i = 0; i < transformed_input->points.size(); i++) {
+    const auto & p = transformed_input->points[i];
     const auto & p_pos = grid_map::Position(p.x, p.y);
     if (!grid_map_ptr_->isInside(p_pos)) {
       continue;
@@ -302,7 +304,7 @@ void GridMapGroundFilterNode::filterGround(
     if (!is_outlier) {
       grid_map_pointcloud_z[p_index(0)][p_index(1)].push_back(p.z);
     } else {
-      outlier_points->push_back(p);
+      outlier_indices.indices.push_back(i);
     }
   }
 
@@ -567,6 +569,12 @@ void GridMapGroundFilterNode::filterGround(
   filtered_extract_indices.filter(*filtered);
 
   if (publish_debug_ground_) {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr outlier_points(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::ExtractIndices<pcl::PointXYZ> outlier_extract_indices;
+    outlier_extract_indices.setIndices(pcl::make_shared<const pcl::PointIndices>(outlier_indices));
+    outlier_extract_indices.setInputCloud(input);
+    outlier_extract_indices.filter(*outlier_points);
+
     sensor_msgs::msg::PointCloud2 outlier_points_msg;
     pcl::toROSMsg(*outlier_points, outlier_points_msg);
     outlier_points_msg.header.frame_id = "odom";
