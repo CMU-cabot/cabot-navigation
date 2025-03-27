@@ -240,9 +240,11 @@ class AltitudeFloorEstimator:
                 relative_height_array = self.height_array - self.height_array[index]
                 height_difference_array = self.calculate_height_difference(relative_height_array)
                 threshold_height_array = relative_height_array - height_difference_array * self.floor_threshold_height_coeff
-                if self.last_state == 1:  # up
+                # update floor only when floor change state and height_diff match
+                idx_new_floor = index
+                if self.last_state == 1 and height_diff > 0:  # up
                     idx_new_floor = bisect.bisect_right(threshold_height_array, height_diff) - 1
-                elif self.last_state == -1:  # down
+                elif self.last_state == -1 and height_diff < 0:  # down
                     idx_new_floor = bisect.bisect_left(threshold_height_array, height_diff)
                 floor_est = self.floor_array[idx_new_floor]
             else:
