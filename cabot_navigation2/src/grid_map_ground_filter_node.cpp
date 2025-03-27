@@ -106,14 +106,13 @@ void GridMapGroundFilterNode::moveGridMap(const grid_map::Position & gmap_origin
   if (!grid_map_ptr_) {
     grid_map_ptr_ =
       std::make_shared<grid_map::GridMap, const std::vector<std::string>>(
-      {"num_points", "mean_points_z", "m2_points_z", "var_points_z", "is_observed_enough_points", "is_observed_ground", "is_observed_occupied", "log_odds", "occupancy", "is_free",
+      {"num_points", "mean_points_z", "var_points_z", "is_observed_enough_points", "is_observed_ground", "is_observed_occupied", "log_odds", "occupancy", "is_free",
         "is_occupied", "observed_ground_z", "valid_ground_z", "estimated_ground_z", "ground_confidence"});
     grid_map_ptr_->setFrameId("odom");
     grid_map_ptr_->setGeometry(grid_map::Length(grid_length_, grid_length_), grid_resolution_, gmap_origin_position);
     grid_map_ptr_->move(gmap_origin_position);
     (*grid_map_ptr_)["num_points"].setZero();
     (*grid_map_ptr_)["mean_points_z"].setZero();
-    (*grid_map_ptr_)["m2_points_z"].setZero();
     (*grid_map_ptr_)["var_points_z"].setZero();
     (*grid_map_ptr_)["is_observed_enough_points"].setZero();
     (*grid_map_ptr_)["is_observed_ground"].setZero();
@@ -138,7 +137,6 @@ void GridMapGroundFilterNode::moveGridMap(const grid_map::Position & gmap_origin
 
       grid_map_ptr_->at("num_points", gmap_index) = 0.0;
       grid_map_ptr_->at("mean_points_z", gmap_index) = 0.0;
-      grid_map_ptr_->at("m2_points_z", gmap_index) = 0.0;
       grid_map_ptr_->at("var_points_z", gmap_index) = 0.0;
       grid_map_ptr_->at("is_observed_enough_points", gmap_index) = 0.0;
       grid_map_ptr_->at("is_observed_ground", gmap_index) = 0.0;
@@ -266,16 +264,8 @@ void GridMapGroundFilterNode::filterGround(
   }
 
   // add points to grid map
-  std::vector<std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>> grid_map_pointcloud;
   const grid_map::Size gmap_size = grid_map_ptr_->getSize();
-  grid_map_pointcloud.resize(gmap_size(0));
-#pragma omp parallel for num_threads(num_threads_) schedule(dynamic, 1)
-  for (int row = 0; row < gmap_size(0); row++) {
-    grid_map_pointcloud[row].resize(gmap_size(1));
-    for (int col = 0; col < gmap_size(1); col++) {
-      grid_map_pointcloud[row][col].reset(new pcl::PointCloud<pcl::PointXYZ>);
-    }
-  }
+  std::vector<std::vector<std::vector<double>>> grid_map_pointcloud_z(gmap_size(0), std::vector<std::vector<double>>(gmap_size(1)));
   pcl::PointCloud<pcl::PointXYZ>::Ptr outlier_points(new pcl::PointCloud<pcl::PointXYZ>);
   for (const auto & p : transformed_input->points) {
     const auto & p_pos = grid_map::Position(p.x, p.y);
@@ -310,7 +300,7 @@ void GridMapGroundFilterNode::filterGround(
     }
 
     if (!is_outlier) {
-      grid_map_pointcloud[p_index(0)][p_index(1)]->push_back(p);
+      grid_map_pointcloud_z[p_index(0)][p_index(1)].push_back(p.z);
     } else {
       outlier_points->push_back(p);
     }
@@ -319,7 +309,6 @@ void GridMapGroundFilterNode::filterGround(
   // initialize grid map except log odds
   (*grid_map_ptr_)["num_points"].setZero();
   (*grid_map_ptr_)["mean_points_z"].setZero();
-  (*grid_map_ptr_)["m2_points_z"].setZero();
   (*grid_map_ptr_)["var_points_z"].setZero();
   (*grid_map_ptr_)["is_observed_enough_points"].setZero();
   (*grid_map_ptr_)["is_observed_ground"].setZero();
@@ -337,20 +326,19 @@ void GridMapGroundFilterNode::filterGround(
   for (auto iterator = visible_grid_spiral_indices.begin(); iterator != visible_grid_spiral_indices.end(); ++iterator) {
     grid_map::Index gmap_index = *iterator;
 
-    for (const auto & p : grid_map_pointcloud[gmap_index(0)][gmap_index(1)]->points) {
-      const float num_points = (*grid_map_ptr_)["num_points"](gmap_index(0), gmap_index(1));
-      const float mean_points_z = (*grid_map_ptr_)["mean_points_z"](gmap_index(0), gmap_index(1));
-      const float m2_points_z = (*grid_map_ptr_)["m2_points_z"](gmap_index(0), gmap_index(1));
-
-      const float new_num_points = num_points + 1;
-      const float new_mean_points_z = mean_points_z + (p.z - mean_points_z) / new_num_points;
-      (*grid_map_ptr_)["num_points"](gmap_index(0), gmap_index(1)) = new_num_points;
-      (*grid_map_ptr_)["mean_points_z"](gmap_index(0), gmap_index(1)) = new_mean_points_z;
-      (*grid_map_ptr_)["m2_points_z"](gmap_index(0), gmap_index(1)) = m2_points_z + (p.z - new_mean_points_z) * (p.z - mean_points_z);
+    int num_points = 0;
+    float mean_points_z = 0.0;
+    float m2_points_z = 0.0;
+    for (const auto & p_z : grid_map_pointcloud_z[gmap_index(0)][gmap_index(1)]) {
+      num_points += 1;
+      float delta = p_z - mean_points_z;
+      mean_points_z += delta / num_points;
+      m2_points_z += delta * (p_z - mean_points_z);
     }
-    const float num_points = (*grid_map_ptr_)["num_points"](gmap_index(0), gmap_index(1));
+    (*grid_map_ptr_)["num_points"](gmap_index(0), gmap_index(1)) = num_points;
+    (*grid_map_ptr_)["mean_points_z"](gmap_index(0), gmap_index(1)) = mean_points_z;
     if (num_points > 1) {
-      (*grid_map_ptr_)["var_points_z"](gmap_index(0), gmap_index(1)) = (*grid_map_ptr_)["m2_points_z"](gmap_index(0), gmap_index(1)) / (num_points - 1);
+      (*grid_map_ptr_)["var_points_z"](gmap_index(0), gmap_index(1)) = m2_points_z / (num_points - 1);
     }
   }
 
