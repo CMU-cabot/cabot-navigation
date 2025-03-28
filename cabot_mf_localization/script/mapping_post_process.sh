@@ -226,8 +226,15 @@ if [ "$MAPPING_USE_GNSS" = true ]; then
         blue "skipping $WORKDIR/${gnss_csv_file}"
     fi
 
+    # get lattiude and longitude used for anchor in error calculation from node options file
+    anchor_latitude=$(grep '^options.nav_sat_predefined_enu_frame_latitude' $WORKDIR/${node_options_file} | cut -d ':' -f2)
+    anchor_longitude=$(grep '^options.nav_sat_predefined_enu_frame_longitude' $WORKDIR/${node_options_file} | cut -d ':' -f2)
+
     # calculate error between trajectory and gnss
     ros2 run mf_localization_mapping compare_trajectory_and_gnss.py \
         --trajectory $WORKDIR/${trajectory_csv_file} \
-        --gnss $WORKDIR/${gnss_csv_file} --plot
+        --gnss $WORKDIR/${gnss_csv_file} \
+        --anchor_latitude $anchor_latitude \
+        --anchor_longitude $anchor_longitude \
+        --plot
 fi
