@@ -56,7 +56,9 @@ public:
       gradient_topic_, 10,
       std::bind(&WheelieControlNode::gradientCallback, this, std::placeholders::_1));
 
-    wheelie_speed_pub_ = create_publisher<std_msgs::msg::Float32>(wheelie_speed_topic_, rclcpp::SystemDefaultsQoS().transient_local());
+    wheelie_speed_pub_ = create_publisher<std_msgs::msg::Float32>(
+      wheelie_speed_topic_,
+      rclcpp::SystemDefaultsQoS().transient_local());
 
     timer_ = create_wall_timer(
       std::chrono::milliseconds(100),  // 100ms check
@@ -83,7 +85,7 @@ private:
   void gradientCallback(const std_msgs::msg::Float32::SharedPtr msg)
   {
     if (msg->data > 0.0) {
-      latest_gradient_offset_ = atan(msg->data / 100.0); // percentage to radian
+      latest_gradient_offset_ = atan(msg->data / 100.0);  // percentage to radian
     } else {
       latest_gradient_offset_ = 0.0;
     }
