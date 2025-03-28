@@ -1,4 +1,4 @@
-// Copyright (c) 2024  Carnegie Mellon University
+// Copyright (c) 2024, 2025  Carnegie Mellon University and Miraikan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,7 @@
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <cmath>
 
 namespace CaBotSafety
 {
@@ -81,24 +82,20 @@ private:
 
   void gradientCallback(const std_msgs::msg::Float32::SharedPtr msg)
   {
-    latest_gradient_ = msg->data;
+    if (msg->data > 0.0) {
+      latest_gradient_offset_ = atan(msg->data / 100.0); // percentage to radian
+    } else {
+      latest_gradient_offset_ = 0.0;
+    }
   }
 
   void checkWheelieState()
   {
-    bool wheelie_state = latest_pitch_ < pitch_threshold_;
-
-    std_msgs::msg::Float32 wheelie_msg;
-    geometry_msgs::msg::Twist cmd_msg;
-    wheelie_msg.data = wheelie_state ? min_speed_ : max_speed_;
-    if (wheelie_state == true && latest_gradient_ <= 0.0) {
-      wheelie_msg.data = min_speed_;
-    } else {
-      wheelie_msg.data = max_speed_;
-    }
-    wheelie_speed_pub_->publish(wheelie_msg);
-
-    RCLCPP_INFO(this->get_logger(), "speed limit: %.3f (%.3f <=> %.3f)", wheelie_msg.data, latest_pitch_, pitch_threshold_);
+    std_msgs::msg::Float32 wheelie_speed_msg;
+    bool wheelie_state = latest_pitch_ < pitch_threshold_ + latest_gradient_offset_;
+    wheelie_speed_msg.data = wheelie_state ? min_speed_ : max_speed_;
+    wheelie_speed_pub_->publish(wheelie_speed_msg);
+    RCLCPP_INFO(this->get_logger(), "speed limit: %.3f (%.6f <=> %.6f + %.6f)", wheelie_speed_msg.data, latest_pitch_, pitch_threshold_, latest_gradient_offset_);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
@@ -108,7 +105,7 @@ private:
 
   double pitch_threshold_;
   double latest_pitch_;
-  double latest_gradient_;
+  double latest_gradient_offset_;
   double max_speed_;
   double min_speed_;
 
