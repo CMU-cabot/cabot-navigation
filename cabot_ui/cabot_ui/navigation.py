@@ -491,8 +491,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
         if duration_in_sec > 1.0:
             self._stop_loop()
-            if self._current_goal:
-                self._current_goal.prevent_callback = True
 
             def done_callback():
                 self.resume_navigation()
