@@ -27,6 +27,7 @@ PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
 : ${LIDAR_MODEL:=}
 MAPPING_USE_GNSS=${MAPPING_USE_GNSS:-false}
+MAPPING_RESOLUTION=${MAPPING_RESOLUTION:-0.1}
 CONVERT_BAG=${CONVERT_BAG:-true}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
@@ -55,6 +56,7 @@ echo "mapping post process"
 echo "CABOT_MODEL=$CABOT_MODEL"
 echo "LIDAR_MODEL=$LIDAR_MODEL"
 echo "MAPPING_USE_GNSS=$MAPPING_USE_GNSS"
+echo "MAPPING_RESOLUTION=$MAPPING_RESOLUTION"
 echo "CONVERT_BAG=$CONVERT_BAG"
 echo "gazebo=$gazebo"
 echo "points_topic=$points2_topic"
@@ -141,6 +143,7 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 	      convert_points:=$convert_points \
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
 	      fix_status_threshold:=${fix_status_threshold} \
+	      grid_resolution:=${MAPPING_RESOLUTION} \
 	      bag_filename:=$WORKDIR/${bag_file2}"
 
     if [ $cabot_model != "" ]; then
@@ -177,7 +180,8 @@ fi
 if [[ ! -e $WORKDIR/${pgm_file} ]]; then
     ros2 run cartographer_ros cartographer_pbstream_to_ros_map \
 	   -pbstream_filename $WORKDIR/${pbstream_file} \
-	   -map_filestem $WORKDIR/${bag_file2}
+	   -map_filestem $WORKDIR/${bag_file2} \
+	   -resolution $MAPPING_RESOLUTION
 else
     blue "skipping $WORKDIR/${pgm_file}"
 fi
