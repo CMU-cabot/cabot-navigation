@@ -95,7 +95,8 @@ private:
     bool wheelie_state = latest_pitch_ < pitch_threshold_ + latest_gradient_offset_;
     wheelie_speed_msg.data = wheelie_state ? min_speed_ : max_speed_;
     wheelie_speed_pub_->publish(wheelie_speed_msg);
-    RCLCPP_INFO(this->get_logger(), "speed limit: %.3f (%.6f <=> %.6f + %.6f)",
+    RCLCPP_INFO(
+      this->get_logger(), "speed limit: %.3f (%.6f <=> %.6f + %.6f)",
       wheelie_speed_msg.data, latest_pitch_, pitch_threshold_, latest_gradient_offset_);
   }
 
