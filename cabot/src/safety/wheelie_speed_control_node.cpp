@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#include <cmath>
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/transform_datatypes.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -26,7 +28,6 @@
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/msg/imu.hpp>
-#include <cmath>
 
 namespace CaBotSafety
 {
@@ -94,11 +95,11 @@ private:
   void checkWheelieState()
   {
     std_msgs::msg::Float32 wheelie_speed_msg;
-    bool wheelie_state = latest_pitch_ < pitch_threshold_ + latest_gradient_offset_;
+    bool wheelie_state = latest_pitch_ < pitch_threshold_ - latest_gradient_offset_;
     wheelie_speed_msg.data = wheelie_state ? min_speed_ : max_speed_;
     wheelie_speed_pub_->publish(wheelie_speed_msg);
     RCLCPP_INFO(
-      this->get_logger(), "speed limit: %.3f (%.6f <=> %.6f + %.6f)",
+      this->get_logger(), "speed limit: %.3f (%.6f <=> %.6f - %.6f)",
       wheelie_speed_msg.data, latest_pitch_, pitch_threshold_, latest_gradient_offset_);
   }
 
