@@ -61,7 +61,9 @@ class Visualizer(object):
     def _visualize_pois(self):
 
         def make_marker(poi, **kwargs):
-            return make_marker2(ns=type(poi).__name__, pose=poi.local_pose.to_pose_msg(), **kwargs)
+            pose = poi.local_pose.to_pose_msg()
+            pose.position.z = 5.0 * (poi.floor - 1 if poi.floor > 0 else poi.floor)  # TODO, needs to get height from map list
+            return make_marker2(ns=type(poi).__name__, pose=pose, **kwargs)
 
         def make_marker2(ns=None, pose=None,
                          a=0.8, r=0.0, g=0.0, b=0.0,
@@ -86,11 +88,16 @@ class Visualizer(object):
             marker.ns = ns
             marker.id = Visualizer._count
             Visualizer._count += 1
-            marker.pose = pose
-            marker.pose.position.z = pz
-            marker.scale.x = x*s
-            marker.scale.y = y*s
-            marker.scale.z = z*s
+            marker.pose.position.x = pose.position.x
+            marker.pose.position.y = pose.position.y
+            marker.pose.position.z = pose.position.z + pz
+            marker.pose.orientation.x = pose.orientation.x
+            marker.pose.orientation.y = pose.orientation.y
+            marker.pose.orientation.z = pose.orientation.z
+            marker.pose.orientation.w = pose.orientation.w
+            marker.scale.x = x * s
+            marker.scale.y = y * s
+            marker.scale.z = z * s
             marker.color.a = a
             marker.color.r = r
             marker.color.g = g
@@ -102,6 +109,7 @@ class Visualizer(object):
         clear_marker.action = Marker.DELETEALL
         array.markers.append(clear_marker)
 
+        # self._node.get_logger().info(F"visualize {self} pois {len(self.pois)} turns {len(self.turns)} spoken {len(self.spoken)}")
         if self.pois is not None:
             for poi in self.pois:
                 if isinstance(poi, geojson.DoorPOI):
@@ -120,16 +128,16 @@ class Visualizer(object):
         if self.turns is not None:
             for turn in self.turns:
                 array.markers.append(make_marker2(ns="turn", pose=turn.pose,
-                                                  r=0.0, g=1.0, b=0.0, _type=Marker.SPHERE, s=0.5))
+                                                  r=0.0, g=1.0, b=0.0, _type=Marker.SPHERE, s=1.0))
                 if turn.end is not None:
                     array.markers.append(make_marker2(ns="turn", pose=turn.end,
-                                                      r=0.0, g=1.0, b=0.0, _type=Marker.SPHERE, s=0.5))
+                                                      r=0.0, g=1.0, b=0.0, _type=Marker.SPHERE, s=1.0))
                 array.markers.append(make_marker2(ns="turn", pose=turn.pose, text=turn.text,
                                                   _type=Marker.TEXT_VIEW_FACING))
 
         for entry in self.spoken:
             posemsg, text, ns = entry
-            posemsg.position.z = 0.0  # for visualization
+            # posemsg.position.z = 0.0  # for visualization
             pz = 1.0
             if ns == "vib":
                 pz = 0.75
@@ -145,5 +153,5 @@ class Visualizer(object):
                     frame_id=self.goal.pose.header.frame_id, b=1.0, _type=Marker.SPHERE))
 
         # print array
-        self._node.get_logger().debug(F"publish {len(array.markers)} markers")
+        # self._node.get_logger().info(F"visualize publish {len(array.markers)} markers")
         self.poi_pub.publish(array)
