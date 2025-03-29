@@ -138,6 +138,9 @@ class NavigationInterface(object):
     def request_sound(self, message: SNMessage):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
+    def system_pause_navigation(self, callback):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
 
 class BufferProxy():
     def __init__(self, node):
@@ -488,12 +491,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
         if duration_in_sec > 1.0:
             self._stop_loop()
-            if self._current_goal:
-                self._current_goal.prevent_callback = True
 
             def done_callback():
                 self.resume_navigation()
-            self.pause_navigation(done_callback)
+            self.delegate.system_pause_navigation(done_callback)
 
     def _plan_callback(self, path):
         msg = nav_msgs.msg.Path()
