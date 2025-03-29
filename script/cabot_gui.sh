@@ -130,11 +130,14 @@ checks+=($!)
 pids+=($!)
 
 if [[ $CABOT_GAZEBO -eq 1 ]]; then
-	blue "launch cabot_keyboard teleop"
-	com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
-    echo $com
-    eval $com
-    pids+=($!)
+    # Replaced with cabot_gazebo cabot_handle_simulator (2025.02.25 @daisukes)
+    #
+    # blue "launch cabot_keyboard teleop"
+    # com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
+    # echo $com
+    # eval $com
+    # pids+=($!)
+    :
 else
     if [[ $CABOT_USE_HANDLE_SIMULATOR -eq 1 ]]; then
 	blue "launch cabot_keyboard teleop"
