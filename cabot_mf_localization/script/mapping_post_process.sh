@@ -156,6 +156,8 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
     if [ "$MAPPING_USE_GNSS" = true ]; then
         cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping_gnss.lua \
               $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping_gnss.lua
+        cp $pkg_share_dir/configuration_files/mapping_config.yaml \
+          $WORKDIR/${BAG_FILENAME}.mapping_config.yaml
 
         com="$com \
             save_pose:=true \

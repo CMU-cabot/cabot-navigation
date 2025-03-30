@@ -38,12 +38,24 @@ from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
+
+from launch_ros.descriptions import ParameterFile
 from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions
 
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization_mapping')
+
+    param_files = [
+        ParameterFile(PathJoinSubstitution([
+            pkg_dir,
+            'configuration_files',
+            'mapping_config.yaml'
+        ]),
+            allow_substs=True,
+        )
+    ]
 
     bag_filename = LaunchConfiguration('bag_filename')
     save_samples = LaunchConfiguration('save_samples')
@@ -214,10 +226,13 @@ def generate_launch_description():
             package='mf_localization',
             executable='fix_filter.py',
             name='ublox_fix_filter',
-            parameters=[{
-                'status_threshold': fix_status_threshold,
-                'overwrite_time': fix_overwrite_time,
-            }],
+            parameters=[
+                *param_files,
+                {
+                    'status_threshold': fix_status_threshold,
+                    'overwrite_time': fix_overwrite_time,
+                }
+            ],
             remappings=[
                 ('fix', 'ublox/fix'),
                 ('fix_filtered', 'ublox/fix_filtered')
@@ -228,12 +243,9 @@ def generate_launch_description():
             package='mf_localization',
             executable='ublox_converter.py',
             name='ublox_converter',
-            parameters=[{
-                'min_cno': 30,
-                'min_elev': 45,
-                'num_sv_threshold_low': 10,
-                'num_sv_threshold_high': 17,
-            }],
+            parameters=[
+                *param_files
+            ],
             remappings=[
                 ('navsat', 'ublox/navsat')
             ]
@@ -264,9 +276,12 @@ def generate_launch_description():
             name="tracked_pose_listener",
             package="mf_localization",
             executable="tracked_pose_listener.py",
-            parameters=[{
-                "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
-            }],
+            parameters=[
+                *param_files,
+                {
+                    "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
+                }
+            ],
             condition=IfCondition(save_pose),
         ),
 
