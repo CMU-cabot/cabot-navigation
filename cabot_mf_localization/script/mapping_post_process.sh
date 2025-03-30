@@ -131,6 +131,8 @@ fi
 if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; then
     cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping.lua \
           $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping.lua
+    cp $pkg_share_dir/configuration_files/mapping_config.yaml \
+          $WORKDIR/${BAG_FILENAME}.mapping_config.yaml
 
     com="ros2 launch mf_localization_mapping demo_2d_VLP16.launch.py \
 	      save_samples:=true \
@@ -156,8 +158,6 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
     if [ "$MAPPING_USE_GNSS" = true ]; then
         cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping_gnss.lua \
               $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping_gnss.lua
-        cp $pkg_share_dir/configuration_files/mapping_config.yaml \
-          $WORKDIR/${BAG_FILENAME}.mapping_config.yaml
 
         com="$com \
             save_pose:=true \

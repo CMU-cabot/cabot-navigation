@@ -261,13 +261,17 @@ def generate_launch_description():
             name="tf2_beacons_listener",
             package="mf_localization",
             executable="tf2_beacons_listener.py",
-            parameters=[{
-                'output': [bag_filename, '.loc.samples.json'],
-                'topics': wireless_topics,
-                'save_empty_beacon_sample': save_empty_beacon_sample,
-                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
-                'interpolate_by_trajectory': interpolate_samples_by_trajectory,
-            }],
+            parameters=[
+                *param_files,
+                {
+                    'output': [bag_filename, '.loc.samples.json'],
+                    'topics': wireless_topics,
+                    'save_empty_beacon_sample': save_empty_beacon_sample,
+                    'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
+                    'trajectory_recorder_timer_period': 10.0,
+                    'interpolate_by_trajectory': interpolate_samples_by_trajectory,
+                 }
+            ],
             condition=IfCondition(save_samples),
         ),
 

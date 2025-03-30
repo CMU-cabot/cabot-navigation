@@ -18,6 +18,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+tf2_beacons_listener:
+  ros__parameters:
+    map_frame: map
+    tracking_frame: imu_frame
+
 ublox_converter:
   ros__parameters:
     min_cno: 30
