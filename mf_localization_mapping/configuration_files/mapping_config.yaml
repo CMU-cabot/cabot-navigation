@@ -20,12 +20,12 @@
 
 tf2_beacons_listener:
   ros__parameters:
-    map_frame: map
-    tracking_frame: imu_frame
+    map_frame: map  # default: map
+    tracking_frame: imu_frame  # default: base_link
 
 ublox_converter:
   ros__parameters:
-    min_cno: 30
-    min_elev: 45
-    num_sv_threshold_low: 10
-    num_sv_threshold_high: 17
+    min_cno: 30  # default: 30
+    min_elev: 15  # default: 15
+    num_sv_threshold_low: 5  # default: 5
+    num_sv_threshold_high: 10  # default: 10
