@@ -785,9 +785,6 @@ class NavGoal(Goal):
         if anchor is None:
             raise RuntimeError("anchor should be provided")
 
-        # to prevent callback when doing cancel/resume for area change
-        self.prevent_callback = False
-
         # need init global_map_name for initialization
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
@@ -898,10 +895,6 @@ class NavGoal(Goal):
         self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
-        if self.prevent_callback:
-            self.prevent_callback = False
-            return
-
         if future:
             CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
         else:

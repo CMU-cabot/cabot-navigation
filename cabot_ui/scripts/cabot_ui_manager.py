@@ -286,6 +286,15 @@ class CabotUIManager(NavigationInterface, object):
 
     def request_sound(self, sound):
         self._interface.request_sound(sound)
+
+    def system_pause_navigation(self, callback):
+        def done_callback():
+            self._status_manager.set_state(State.in_pause)
+            self._logger.info("NavigationState: paused (system)")
+            callback()
+        self._status_manager.set_state(State.in_pausing)
+        self._navigation.pause_navigation(done_callback)
+
     # endregion NavigationInterface
 
     def _event_callback(self, msg):

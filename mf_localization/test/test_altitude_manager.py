@@ -459,3 +459,60 @@ def test_altitude_floor_estimator_incomplete_floor_list():
         print(f"floor_est={floor_est}, height_est={height_est}")
 
     assert floor_est == target_floor
+
+
+def test_altitude_floor_estimator_irregular_pressure_pattern():
+    X = generate_all_samples()
+
+    floor_height_mapper = FloorHeightMapper(X)
+    altitude_floor_estimator = AltitudeFloorEstimator()
+    pressure_simulator = PressureSimulator()
+
+    x = [0, 0]
+    floor_est = 0
+    height_est = 0
+
+    altitude_floor_estimator.reset(floor_est=floor_est, height_est=height_est)
+
+    timestamp = 0
+    floor = 0
+    height = 0
+
+    dt = 0.5  # [s]
+    floor_list, height_list = floor_height_mapper.get_floor_height_list(x)
+    altitude_floor_estimator.set_floor_height_list(floor_list, height_list)
+    print(f"floor_list={floor_list}, height_list={height_list}")
+
+    # stable
+    for i in range(60):
+        timestamp += dt
+        pressure = pressure_simulator.simulate_pressure(height)
+        result = altitude_floor_estimator._put_pressure(timestamp, pressure)
+        floor_est, height_est, current_state = result.floor_est, result.height_est, result.current_state
+        print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
+
+    target_height = -2.0
+    vel_height = -1.0  # [m/s]
+
+    # decrease height to enter DOWN state
+    for i in range(int((target_height - height)/(vel_height*dt))):
+        timestamp += dt
+        height += vel_height*dt
+        pressure = pressure_simulator.simulate_pressure(height)
+        result = altitude_floor_estimator._put_pressure(timestamp, pressure)
+        floor_est, height_est, current_state = result.floor_est, result.height_est, result.current_state
+        print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
+
+    # rapidly increase height in DOWN state before floor change
+    height = 0.0
+    target_height = 1
+    vel_height = 0.5
+    for i in range(int((target_height - height)/(vel_height*dt))):
+        timestamp += dt
+        height += vel_height*dt
+        pressure = pressure_simulator.simulate_pressure(height)
+        result = altitude_floor_estimator._put_pressure(timestamp, pressure)
+        floor_est, height_est, current_state = result.floor_est, result.height_est, result.current_state
+        print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
+
+    assert floor == floor_est
