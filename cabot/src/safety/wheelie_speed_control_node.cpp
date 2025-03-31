@@ -40,8 +40,8 @@ public:
     min_speed_(0.0)
   {
     imu_topic_ = this->declare_parameter("imu_topic", "/cabot/imu/data");
-    gradient_topic_ = this->declare_parameter("gradient_topic", "/cabot/gradient");
     wheelie_speed_topic_ = this->declare_parameter("wheelie_speed_topic", "/cabot/wheelie_speed");
+    gradient_topic_ = this->declare_parameter("gradient_topic", "/cabot/gradient");
     pitch_threshold_ = this->declare_parameter("pitch_threshold", -0.15);
     max_speed_ = declare_parameter("max_speed", max_speed_);
     min_speed_ = declare_parameter("min_speed", min_speed_);
@@ -51,14 +51,14 @@ public:
       imu_topic_, 10,
       std::bind(&WheelieControlNode::imuCallback, this, std::placeholders::_1));
 
+    wheelie_speed_pub_ = create_publisher<std_msgs::msg::Float32>(
+      wheelie_speed_topic_,
+      rclcpp::SystemDefaultsQoS().transient_local());
+
     gradient_sub_ =
       create_subscription<std_msgs::msg::Float32>(
       gradient_topic_, 10,
       std::bind(&WheelieControlNode::gradientCallback, this, std::placeholders::_1));
-
-    wheelie_speed_pub_ = create_publisher<std_msgs::msg::Float32>(
-      wheelie_speed_topic_,
-      rclcpp::SystemDefaultsQoS().transient_local());
 
     timer_ = create_wall_timer(
       std::chrono::milliseconds(100),  // 100ms check
@@ -123,6 +123,7 @@ private:
 
   std::string imu_topic_;
   std::string wheelie_speed_topic_;
+  std::string gradient_topic_;
 };  // WheelieControlNode
 
 }  // namespace CaBotSafety
