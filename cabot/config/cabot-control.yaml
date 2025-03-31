@@ -107,7 +107,7 @@ cabot:
       speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
       speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
       complete_stop: [false,false,false,false,true,true,false,true,true]
-      configurable: [true,false,false,false,false,false,false,false]
+      configurable: [true,false,false,false,false,false,false,false,false]
 
   speed_control_node_touch_false:  #TODO better way
     ros__parameters:
