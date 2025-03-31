@@ -180,10 +180,12 @@ fi
 
 # convert pbstream to pgm
 if [[ ! -e $WORKDIR/${pgm_file} ]]; then
+    pushd $WORKDIR
     ros2 run cartographer_ros cartographer_pbstream_to_ros_map \
-	   -pbstream_filename $WORKDIR/${pbstream_file} \
-	   -map_filestem $WORKDIR/${bag_file2} \
+	   -pbstream_filename ${pbstream_file} \
+	   -map_filestem ${bag_file2} \
 	   -resolution $MAPPING_RESOLUTION
+    popd
 else
     blue "skipping $WORKDIR/${pgm_file}"
 fi
