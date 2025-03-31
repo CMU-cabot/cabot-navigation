@@ -70,6 +70,9 @@ public:
 private:
   void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
   {
+    // Subscribe IMU data and calculate roll, pitch, and yaw from the quaternion.
+    // Hold the pitch angle value in latest_pitch_.
+    // If the robot is in a wheelie state, the pitch angle will be negative.
     tf2::Quaternion quat(
       msg->orientation.x,
       msg->orientation.y,
@@ -84,8 +87,11 @@ private:
 
   void gradientCallback(const std_msgs::msg::Float32::SharedPtr msg)
   {
+    // Subscribe gradient data and convert the percentage to radians.
+    // Hold the gradient offset value in latest_gradient_offset_.
+    // If it is an uphill slope, the gradient offset value will be positive.
     if (msg->data > 0.0) {
-      latest_gradient_offset_ = atan(msg->data / 100.0);  // percentage to radian
+      latest_gradient_offset_ = atan(msg->data / 100.0);
     } else {
       latest_gradient_offset_ = 0.0;
     }
@@ -93,6 +99,8 @@ private:
 
   void checkWheelieState()
   {
+    // When the pitch angle is less than the pitch threshold, the robot is considered to be in a wheelie state.
+    // For uphill slopes, adjust the threshold by subtracting the gradient offset.
     std_msgs::msg::Float32 wheelie_speed_msg;
     bool wheelie_state = latest_pitch_ < pitch_threshold_ - latest_gradient_offset_;
     wheelie_speed_msg.data = wheelie_state ? min_speed_ : max_speed_;
