@@ -47,7 +47,7 @@ private:
   void moveGridMap(const grid_map::Position & gmap_origin_position);
   int calcLivoxGridEstimatedNumPoints(float distance, float resolution);
   bool isVisibleAngle(const grid_map::Position & check_position, const grid_map::Position & sensor_position, double sensor_yaw);
-  void inflateBinaryLayer(const std::string layner_name, int inflate_size);
+  void inflateBinaryMat(const cv::Mat & binary_mat, cv::Mat & inflate_binary_mat, int inflate_size);
 
   int num_threads_;
   std::string odom_topic_;
@@ -82,6 +82,8 @@ private:
   float ground_estimate_radius_;
 
   std::shared_ptr<grid_map::GridMap> grid_map_ptr_;
+  cv::Mat grid_map_is_observed_occupied_;
+  cv::Mat grid_map_is_occupied_;
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_outlier_pointcloud_pub_;
   rclcpp::Publisher<grid_map_msgs::msg::GridMap>::SharedPtr debug_grid_map_pub_;
