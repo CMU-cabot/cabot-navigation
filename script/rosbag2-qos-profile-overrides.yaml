@@ -41,6 +41,10 @@
   reliability: reliable
   durability: transient_local
   depth: 10
+/cabot/low_lidar_speed:
+  reliability: reliable
+  durability: transient_local
+  depth: 10
 /cabot/map_speed:
   reliability: reliable
   durability: transient_local
