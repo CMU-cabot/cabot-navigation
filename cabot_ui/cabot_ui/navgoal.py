@@ -641,6 +641,8 @@ class Nav2Params:
     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
     min_distance: 1.0
+/cabot/low_lidar_speed_control_node:
+    min_distance: 1.0
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
     social_distance_y: 0.5
@@ -666,6 +668,8 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
+    min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
@@ -697,6 +701,8 @@ class Nav2Params:
     inflation_layer.inflation_radius: 0.25
 /cabot/lidar_speed_control_node:
     min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
@@ -726,6 +732,8 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
+    min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
