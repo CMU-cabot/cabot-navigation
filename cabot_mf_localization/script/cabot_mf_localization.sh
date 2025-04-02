@@ -108,6 +108,7 @@ if [[ $CABOT_HEADLESS -eq 1 ]]; then
     CABOT_SHOW_LOC_RVIZ=0
 fi
 : ${CABOT_PRESSURE_AVAILABLE:=0}
+: ${CABOT_ROSBAG_COMPRESSION:='message'}
 : ${CABOT_USE_GNSS:=0}
 
 # ntrip client parameters
@@ -444,6 +445,7 @@ if [ $cart_mapping -eq 1 ]; then
           save_samples:=true \
           record_required:=true \
           record_points:=$record_points \
+          compression_mode:=$CABOT_ROSBAG_COMPRESSION \
           use_xsens:=${USE_XSENS:-true} \
           use_arduino:=${USE_ARDUINO:-false} \
           use_esp32:=${USE_ESP32:-false} \
