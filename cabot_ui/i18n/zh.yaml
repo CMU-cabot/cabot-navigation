@@ -110,7 +110,7 @@ RETURN_TO_POSITION_PLEASE: "已穿过狭窄道路。请返回原位。"
 NOT_DETECT_TOUCH: "未检测到把手被触碰。"
 
 ## Facility
-IN_FRONT: "正面"左侧
+IN_FRONT: "正面"
 RIGHT_SIDE: "右侧"
 LEFT_SIDE: "左側"
 APPROACEHD_TO_FACILITY: "在{1}有{0}"
