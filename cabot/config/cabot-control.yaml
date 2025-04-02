@@ -113,6 +113,7 @@ cabot:
       pitch_threshold: -0.22689280275926 # -13 degree
       imu_topic: /cabot/imu/data
       wheelie_speed_topic: /cabot/wheelie_speed
+      gradient_topic_: /cabot/gradient
       min_speed: 0.001
       max_speed: 1.0
 
