@@ -381,6 +381,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_loop_handler = None
         self.lock = threading.Lock()
 
+        self.restart_navigation_threthold_sec = node.declare_parameter("restart_navigation_threthold_sec", 5.0).value
+
         self._max_speed = node.declare_parameter("max_speed", 1.1).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
         self._speed_poi_params = node.declare_parameter("speed_poi_params", [0.5, 0.5, 0.5]).value
@@ -489,7 +491,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"wait_for_restart_navigation {duration_in_sec:.2f}")
         if self._current_goal is None:
             return
-        if duration_in_sec > 1.0:
+        if duration_in_sec > self.restart_navigation_threthold_sec:
             self._stop_loop()
 
             def done_callback():
