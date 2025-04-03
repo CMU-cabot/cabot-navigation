@@ -499,13 +499,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.system_pause_navigation(done_callback)
 
     def _plan_callback(self, path):
-        msg = nav_msgs.msg.Path()
-        msg.header.frame_id = self._global_map_name
-        for pose in path.poses:
-            pose.header.frame_id = path.header.frame_id
-            msg.poses.append(self.buffer.transform(pose, self._global_map_name))
-            # msg.poses[-1].pose.position.z = 0.0
-        path = msg
+        try:
+            msg = nav_msgs.msg.Path()
+            msg.header.frame_id = self._global_map_name
+            for pose in path.poses:
+                pose.header.frame_id = path.header.frame_id
+                msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+                # msg.poses[-1].pose.position.z = 0.0
+            path = msg
+        except:
+            self._logger.info(traceback.format_exc())
         try:
             self.turns = TurnDetector.detects(path, current_pose=self.current_pose)
             self.visualizer.turns = self.turns
