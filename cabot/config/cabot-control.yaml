@@ -168,3 +168,7 @@ cabot:
       imu0_remove_gravitational_acceleration: true
       print_diagnostics: true
       publish_tf: false
+      # diagnostics settings
+      diagnostics_frequency_diff: 20.0
+      diagnostics_tolerance: 0.2
+      diagnostics_window: 10.0
