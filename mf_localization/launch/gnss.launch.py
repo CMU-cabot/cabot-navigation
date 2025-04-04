@@ -102,6 +102,7 @@ def generate_launch_description():
                                 'authentificate': authentificate,
                                 'username': username,
                                 'password': password,
+                                'reconnect_attempt_max': '10000',  # default: 10
                                 'respawn' : respawn_ntrip_client,
                                 'nmea_max_length': '90',  # a large value to accept high precision mode
                             }.items(),
