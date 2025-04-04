@@ -13,6 +13,12 @@ ublox:
 
     rate: 10.0 # Hz
 
+    # diagnostics
+    ignore_fix_timestamp: true
+    # fix_frequency_tolerance: 0.15
+    # fix_frequency_window: 10
+    # timestamp_status_min: 0
+
     # message publishers
     publish:
       all: false
