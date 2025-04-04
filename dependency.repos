@@ -34,6 +34,10 @@ repositories:
     type: git
     url: https://github.com/CMU-cabot/tf2_web_republisher
     version: ros2
+  docker/ros2/robot_localization:
+    type: git
+    url: https://github.com/CMU-cabot/robot_localization
+    version: humble-devel-cabot
   docker/ros2/rosbridge_suite:
     type: git
     url: https://github.com/CMU-cabot/rosbridge_suite

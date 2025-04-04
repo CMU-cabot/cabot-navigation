@@ -30,6 +30,7 @@ ENV UNDERLAY_WS=/opt/underlay_ws
 RUN mkdir -p $UNDERLAY_WS/src
 COPY ./grid_map $UNDERLAY_WS/src/grid_map
 COPY ./tf2_web_republisher $UNDERLAY_WS/src/tf2_web_republisher
+COPY ./robot_localization $UNDERLAY_WS/src/robot_localization
 COPY ./rosbridge_suite $UNDERLAY_WS/src/rosbridge_suite
 
 WORKDIR $UNDERLAY_WS
