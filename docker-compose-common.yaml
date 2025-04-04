@@ -186,6 +186,8 @@ services:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
+      - CABOT_ROS2_RVIZ_CONFIG
+      - CABOT_ROS2_LOCAL_RVIZ_CONFIG
     volumes:
 # device, bluetooth
       - /dev:/dev
