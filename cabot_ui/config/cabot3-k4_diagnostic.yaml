@@ -150,9 +150,11 @@ diagnostic_aggregator:
       path: discard
       contains:
         - "ublox: TMODE3"
+        - "fix topic status"
 
     hard_ublox:
       type: diagnostic_aggregator/GenericAnalyzer
       path: "Hard: ublox GNSS"
-      contains:
-        - "ublox: fix"
+      regex:
+        - "ublox: fix$"
+        - "ntrip_client.*"
