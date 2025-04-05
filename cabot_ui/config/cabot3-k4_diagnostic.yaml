@@ -91,43 +91,30 @@ diagnostic_aggregator:
         - "ROS2"
         - "Nav2"
       remove_prefix:
-        - "lifecycle_manager_navigation"
-        - "lifecycle_manager_local_navigation"
-        - "lifecycle_manager_localization"
+        - "lifecycle_manager_"
 
     hard_wireless:
       type: diagnostic_aggregator/GenericAnalyzer
       path: "Hard: Wireless"
+      timeout: 15.0
       contains:
         - "Beacon Scanner"
         - "Beacon Converter"
-        # - "esp32_wifi_scan_converter: "
+        - "esp32_wifi_scan_converter: "
         # - "rosserial_esp32: "
       remove_prefix:
         - "dbus_ibeacon_scanner: "
         - "ble_scan_converter: "
-        # - "esp32_wifi_scan_converter: "
+        - "esp32_wifi_scan_converter: "
         # - "rosserial_esp32: "
 
-    hard_micon:
+    hard_can:
       type: diagnostic_aggregator/GenericAnalyzer
-      path: "Hard: Micro Controller"
+      path: "Hard: CAN"
       contains:
-        - "canSocketStatus"
-        - "temperature1"
-        - "temperature2"
-        - "temperature3"
-        - "temperature4"
-        - "temperature5"
-        - "bme/temperature"
-        - "imu"
-        - "pressure"
-        - "capacitive/touch_raw"
-        - "tof/touch_raw"
-        - "pushed"
-        - "servo_pos"
+        - "cabot_can"
       remove_prefix:
-        - "cabot_can_node: "
+        - "cabot_can: "
 
     hard_odrive:
       type: diagnostic_aggregator/GenericAnalyzer
