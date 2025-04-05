@@ -59,6 +59,7 @@ def generate_launch_description():
     authentificate = LaunchConfiguration('authentificate')
     username = LaunchConfiguration('username')
     password = LaunchConfiguration('password')
+    respawn_ntrip_client = LaunchConfiguration('respawn_ntrip_client')
 
     # str2str_node
     serial_port = LaunchConfiguration('serial_port')
@@ -101,6 +102,8 @@ def generate_launch_description():
                                 'authentificate': authentificate,
                                 'username': username,
                                 'password': password,
+                                'reconnect_attempt_max': '10000',  # default: 10
+                                'respawn' : respawn_ntrip_client,
                                 'nmea_max_length': '90',  # a large value to accept high precision mode
                             }.items(),
                             condition=IfCondition(ntrip_client)
@@ -182,6 +185,7 @@ def generate_launch_description():
         DeclareLaunchArgument('authentificate', default_value='false', description='Whether to authentificate with the server. If set to true, username and password must be supplied.'),
         DeclareLaunchArgument('username', default_value=''),
         DeclareLaunchArgument('password', default_value=''),
+        DeclareLaunchArgument('respawn_ntrip_client', default_value='true'),
 
         # str2str_node
         DeclareLaunchArgument('serial_port', default_value='ttyUBLOX'),
