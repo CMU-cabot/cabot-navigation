@@ -56,6 +56,7 @@ def generate_launch_description():
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
+    bond_timeout = LaunchConfiguration('bond_timeout')
 
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
 
@@ -170,6 +171,10 @@ def generate_launch_description():
             'publish_low_obstacle_ground', default_value='false',
             description='publish ground to detect low obstacles only for debug purpose'),
 
+        DeclareLaunchArgument(
+            'bond_timeout', default_value='30.0',
+            description='bond timeout for lifecycle managers'),
+
         # default navigator
         Node(
             package='nav2_controller',
@@ -224,7 +229,7 @@ def generate_launch_description():
                     output='log',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
-                                {'bond_timeout': 15.0},
+                                {'bond_timeout': bond_timeout},
                                 {'node_names': ['controller_server',
                                                 'planner_server',
                                                 'behavior_server',
@@ -297,7 +302,7 @@ def generate_launch_description():
                     namespace='local',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
-                                {'bond_timeout': 15.0},
+                                {'bond_timeout': bond_timeout},
                                 {'node_names': ['controller_server',
                                                 'planner_server',
                                                 'behavior_server',
@@ -323,7 +328,7 @@ def generate_launch_description():
             output='log',
             parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': autostart},
-                        {'bond_timeout': 15.0},
+                        {'bond_timeout': bond_timeout},
                         {'node_names': ['map_server']},
                         ]
         ),
