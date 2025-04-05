@@ -130,7 +130,7 @@ cabot:
 
   ekf_node:
     ros__parameters:
-      frequency: 100.0
+      frequency: 25.0
       sensor_timeout: 0.1
       two_d_mode: true
       odom_frame: odom
