@@ -361,6 +361,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.queue_wait_pois = []
         self.speed_pois = []
         self.turns = []
+        self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self.i_am_ready = False
