@@ -415,6 +415,7 @@ def estimate_next_goal(goals, current_pose, current_floor):
 class Goal(geoutil.TargetPlace):
     GOAL_XY_THRETHOLD = 0.5
     GOAL_ANGLE_THRETHOLD_IN_DEGREE = 15
+    default_params = {}
 
     def __init__(self, delegate, **kwargs):
         super(Goal, self).__init__(**kwargs)
@@ -429,7 +430,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
-        self._saved_params = None
+        self._saved_params = Goal.default_params
         self._is_exiting_goal = False
 
     def reset(self):
