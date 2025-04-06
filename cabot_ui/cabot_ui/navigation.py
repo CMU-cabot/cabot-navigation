@@ -448,7 +448,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
-        self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+        self._process_timer = act_node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
     def _localize_status_callback(self, msg):
