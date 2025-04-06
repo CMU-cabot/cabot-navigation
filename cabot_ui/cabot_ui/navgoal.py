@@ -312,7 +312,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
         return points
     CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
-    last_index = len(navcog_route)-1
+    last_index = len(navcog_route) - 1
 
     def convert(g, a=anchor):
         return geoutil.global2local(g, a)
@@ -342,8 +342,8 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         elif isinstance(item.geometry, geojson.LineString):
             points.append(convert(item.target_node.geometry))
         else:
-            CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
-        CaBotRclpyUtil.info(F"{index}: {str(points)}")
+            CaBotRclpyUtil.debug("geometry is not point or linestring {item.geometry}")
+        CaBotRclpyUtil.debug(F"{index}: {str(points)}")
 
     # make a path from points
     path = nav_msgs.msg.Path()

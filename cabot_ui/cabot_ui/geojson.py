@@ -213,10 +213,10 @@ class LinkKDTree:
             self._link_kdtree = scipy.spatial.KDTree(self._link_points)
 
     def _add_link_index(self, sp, ep, obj):
-        mp = (sp+ep)/2.0
+        mp = (sp + ep) / 2.0
         self._link_points.append(mp)
         self._link_index.append(obj)
-        if numpy.linalg.norm(sp-ep) > 1:
+        if numpy.linalg.norm(sp - ep) > 1:
             self._add_link_index(sp, mp, obj)
             self._add_link_index(mp, ep, obj)
 
