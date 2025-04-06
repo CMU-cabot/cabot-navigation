@@ -234,7 +234,11 @@ class LinkKDTree:
             if exclude is not None and exclude(link):
                 continue
 
-            dist = link.geometry.distance_to(latlng)
+            # use local geometry if available, which is more efficient
+            if link.local_geometry:
+                dist = link.local_geometry.distance_to(point)
+            else:
+                dist = link.geometry.distance_to(latlng)
             if node.floor is not None:
                 if link.start_node.floor != node.floor and \
                    link.end_node.floor != node.floor:
