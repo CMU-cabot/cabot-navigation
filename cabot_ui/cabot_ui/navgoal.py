@@ -108,7 +108,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     :rtype: [navgoal.Goal]
     """
     CaBotRclpyUtil.info(F"--make_goals-{len(groute)}--------------------")
-    CaBotRclpyUtil.info(F"{groute}")
+    CaBotRclpyUtil.debug(F"{groute}")
 
     if len(groute) == 0:
         CaBotRclpyUtil.error("groute length should not be 0")
@@ -299,7 +299,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
         goal_node = groute[-1]  # should be Node
         goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
-    CaBotRclpyUtil.info(F"goals: {goals}")
+    CaBotRclpyUtil.debug(F"goals: {goals}")
     return goals
 
 
@@ -311,7 +311,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
     if len(navcog_route) == 0:
         CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
         return points
-    CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
+    CaBotRclpyUtil.debug(F"create_ros_path, {str(navcog_route)}")
     last_index = len(navcog_route) - 1
 
     def convert(g, a=anchor):
@@ -396,7 +396,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
             path.poses[-1].pose.position.x = last_pose.position.x
             path.poses[-1].pose.position.y = last_pose.position.y
 
-    CaBotRclpyUtil.info(F"path {path}")
+    CaBotRclpyUtil.debug(F"path {path}")
     return (path, path.poses[-1] if len(path.poses) > 0 else None, mode)
 
 
