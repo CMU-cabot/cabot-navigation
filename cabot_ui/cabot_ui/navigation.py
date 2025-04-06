@@ -651,39 +651,41 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
         self._goal_index = -1
 
-        # check facilities
-        self.nearby_facilities = []
-        links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
-        target = groute[-1]
-        if len(links) > 0:
-            kdtree = geojson.LinkKDTree()
-            kdtree.build(links)
+        def check_facilities_task():
+            # check facilities
+            self.nearby_facilities = []
+            links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
+            target = groute[-1]
+            if len(links) > 0:
+                kdtree = geojson.LinkKDTree()
+                kdtree.build(links)
 
-            start = time.time()
-            facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
-            for facility in facilities:
-                # self._logger.debug(f"facility {facility._id}: {facility.name}")
-                if not facility.name:
-                    continue
-                if not facility.is_read:
-                    continue
+                start = time.time()
+                facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+                for facility in facilities:
+                    # self._logger.debug(f"facility {facility._id}: {facility.name}")
+                    if not facility.name:
+                        continue
+                    if not facility.is_read:
+                        continue
 
-                for ent in facility.entrances:
-                    min_link, min_dist = kdtree.get_nearest_link(ent.node)
-                    if min_link is None or min_dist >= 5.0:
-                        continue
-                    # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
-                    gp = ent.set_target(min_link)
-                    dist = target.geometry.distance_to(gp)
-                    if dist < 1.0:
-                        self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
-                        continue
-                    self.nearby_facilities.append({
-                        "facility": facility,
-                        "entrance": ent
-                    })
-            end = time.time()
-            self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+                    for ent in facility.entrances:
+                        min_link, min_dist = kdtree.get_nearest_link(ent.node)
+                        if min_link is None or min_dist >= 5.0:
+                            continue
+                        # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
+                        gp = ent.set_target(min_link)
+                        dist = target.geometry.distance_to(gp)
+                        if dist < 1.0:
+                            self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
+                            continue
+                        self.nearby_facilities.append({
+                            "facility": facility,
+                            "entrance": ent
+                        })
+                end = time.time()
+                self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+        threading.Thread(target=check_facilities_task).start()
 
         # for dashboad
         (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
