@@ -507,7 +507,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 msg.poses.append(self.buffer.transform(pose, self._global_map_name))
                 # msg.poses[-1].pose.position.z = 0.0
             path = msg
-        except:
+        except:  # noqa: E722
             self._logger.info(traceback.format_exc())
         try:
             self.turns = TurnDetector.detects(path, current_pose=self.current_pose)
