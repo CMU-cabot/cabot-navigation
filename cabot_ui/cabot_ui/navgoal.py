@@ -1090,7 +1090,8 @@ class ElevatorGoal(Goal):
 
     def nav_params_keys(self):
         return {
-            "/cabot/people_speed_control_node": ["social_distance_x", "social_distance_y"]
+            "/cabot/people_speed_control_node": ["social_distance_x", "social_distance_y"],
+            "/footprint_publisher": ["footprint_mode"],
         }
 
     def nav_params(self):
@@ -1098,6 +1099,9 @@ class ElevatorGoal(Goal):
             "/cabot/people_speed_control_node": {
                 "social_distance_x": ElevatorGoal.ELEVATOR_SOCIAL_DISTANCE_X,
                 "social_distance_y": ElevatorGoal.ELEVATOR_SOCIAL_DISTANCE_Y
+            },
+            "/footprint_publisher": {
+                "footprint_mode": 1
             }
         }
 
