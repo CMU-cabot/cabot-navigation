@@ -479,8 +479,18 @@ class Goal(geoutil.TargetPlace):
         def done_change_parameters_callback(result):
             CaBotRclpyUtil.info("done_change_parameters_callback is called")
             callback()
-        if self.nav_params():
-            self.delegate.change_parameters(self.nav_params(), done_change_parameters_callback)
+        params = self.nav_params()
+        if self._saved_params:
+            for node, values in list(params.items()):
+                if node in self._saved_params:
+                    for key, value in list(values.items()):
+                        if key in self._saved_params[node] and self._saved_params[node][key] == value:
+                            del params[node][key]
+                        if not params[node]:
+                            del params[node]
+        CaBotRclpyUtil.info(F"params to be chanegd: {params=}")
+        if params:
+            self.delegate.change_parameters(params, done_change_parameters_callback)
         else:
             callback()
 
@@ -636,7 +646,6 @@ class Nav2Params:
     FollowPath.sim_time: 1.7
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: True
     inflation_layer.inflation_radius: 0.75
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.75
@@ -664,7 +673,6 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.45
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
@@ -696,7 +704,6 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.25
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.25
@@ -728,7 +735,6 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.45
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
