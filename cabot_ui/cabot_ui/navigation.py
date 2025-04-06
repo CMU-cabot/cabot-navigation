@@ -564,6 +564,23 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self._current_goal:
             self._current_goal.update_goal(msg)
 
+    def request_defult_params(self):
+        with self._process_queue_lock:
+            self._process_queue.append((self._request_default_params, ))
+
+    def _request_default_params(self):
+        # dummy Goal instance
+        goal = navgoal.Goal(self, x=0, y=0, r=0, angle=0, floor=0)
+
+        def dummy_nav_params_key():
+            return navgoal.Nav2Params.all_keys()
+        goal.nav_params_keys = dummy_nav_params_key
+
+        def done_callback():
+            self._logger.info(f"done_callback f{goal._saved_params}")
+            navgoal.Goal.default_params = goal._saved_params
+        goal._save_params(done_callback)
+
     # public interfaces
 
     def set_handle_side(self, side):
@@ -889,6 +906,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.i_am_ready = True
             self._logger.debug("i am ready")
             self.delegate.i_am_ready()
+            self.request_defult_params()
 
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
