@@ -19,6 +19,7 @@
 # SOFTWARE.
 
 from typing import List
+import copy
 import math
 import inspect
 import numpy
@@ -430,7 +431,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
-        self._saved_params = Goal.default_params
+        self._saved_params = copy.deepcopy(Goal.default_params)
         self._is_exiting_goal = False
 
     def reset(self):
@@ -524,7 +525,6 @@ class Goal(geoutil.TargetPlace):
     def exit(self, callback):
         def done_change_parameters_callback(result):
             CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
-            self._saved_params = None
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
         CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
