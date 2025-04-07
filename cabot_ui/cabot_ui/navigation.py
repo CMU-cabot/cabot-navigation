@@ -19,6 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 import math
 import inspect
 import numpy
@@ -1508,6 +1509,7 @@ class NavigationParamManager:
             done_callback(None)
 
     def change_parameters(self, params, callback):
+        params = copy.deepcopy(params)
         def sub_callback(node_name, future):
             del params[node_name]
             self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")

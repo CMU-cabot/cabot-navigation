@@ -19,7 +19,6 @@
 # SOFTWARE.
 
 from typing import List
-import copy
 import math
 import inspect
 import numpy
@@ -431,7 +430,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
-        self._saved_params = copy.deepcopy(Goal.default_params)
+        self._saved_params = Goal.default_params
         self._is_exiting_goal = False
 
     def reset(self):
