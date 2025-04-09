@@ -35,6 +35,10 @@ services:
         platforms:
           - linux/amd64
           - linux/arm64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-debug
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-debug,mode=max
         output:
           - type=registry
     environment:

@@ -118,6 +118,18 @@ if [[ -z $(docker buildx ls | grep "mybuilder\*") ]]; then
     fi
 fi
 
+# setup buildx cache
+cache_dir=~/.cache/docker-buildx-mybuilder
+for service in ${services}; do
+    target_cache_dir=$cache_dir/cabot-${service}
+    if [[ ! -d $target_cache_dir ]]; then
+        echo "create cabot-${service} cache directory"
+        mkdir -p $target_cache_dir
+    else
+        echo "cabot-${service} cache directory already exists"
+    fi
+done
+
 # platform option
 platform_option=
 if [[ -n $platform ]]; then
@@ -140,8 +152,9 @@ done
 # bake
 base_com=
 if [[ -n $base_name ]]; then
-    base_com="docker buildx bake -f docker-compose.yaml $platform_option $tag_option $services"
+    base_com="docker buildx bake -f docker-compose.yaml --allow=fs=$cache_dir $platform_option $tag_option $services"
     export BASE_IMAGE=$base_name
+    export BUILDX_CACHE_DIR=$cache_dir
     echo $base_com
     eval $base_com
     if [[ $? -ne 0 ]]; then

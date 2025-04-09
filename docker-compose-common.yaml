@@ -34,6 +34,10 @@ services:
         platforms:
           - linux/amd64
           - linux/arm64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-navigation
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-navigation,mode=max
         output:
           - type=registry
     environment:
@@ -109,6 +113,10 @@ services:
         platforms:
           - linux/amd64
           - linux/arm64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-localization
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-localization,mode=max
         output:
           - type=registry
     environment:
@@ -395,6 +403,10 @@ services:
         platforms:
           - linux/amd64
           - linux/arm64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-map_server
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-map_server,mode=max
         output:
           - type=registry
     volumes:
@@ -471,6 +483,10 @@ services:
         platforms:
           - linux/amd64
           - linux/arm64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-location_tools
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-location_tools,mode=max
         output:
           - type=registry
     environment:
