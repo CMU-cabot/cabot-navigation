@@ -104,10 +104,11 @@ void CaBotHandleV3Node::eventListener(const std::map<std::string, std::string> &
     const int & button = std::stoi(msg.at("button"));
     const bool & up = (msg.at("up") == "True") ? true : false;
     const bool & hold = (msg.find("hold") != msg.end()) ? true : false;
+    const bool & was_hold = (msg.find("was_hold") != msg.end() && msg.at("was_hold") == "True") ? true : false;
     std::shared_ptr<ButtonEvent> buttonEvent = std::make_shared<ButtonEvent>(button, up, hold);
     event = buttonEvent;
-    // button down confirmation
-    if (buttonEvent && buttonEvent->is_up()) {
+    // button up confirmation
+    if (buttonEvent && buttonEvent->is_up() && was_hold == false) {
       this->handle_->executeStimulus(8);
     }
   } else if (msg_str.find("holddown") != std::string::npos) {

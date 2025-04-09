@@ -37,7 +37,7 @@ const char * Handle::stimuli_names[] =
 const rclcpp::Duration Handle::double_click_interval_ = rclcpp::Duration(0, 250000000);  // 250 msec
 const rclcpp::Duration Handle::ignore_interval_ = rclcpp::Duration(0, 50000000);  // 50 msec
 const rclcpp::Duration Handle::holddown_min_interval_ = rclcpp::Duration(1, 0);
-const rclcpp::Duration Handle::holddown_max_interval_ = rclcpp::Duration(5, 100000000);  // 5.1 sec (margin=0.1sec)
+const rclcpp::Duration Handle::holddown_max_interval_ = rclcpp::Duration(50, 500000000);  // 50.5 sec (margin=0.5sec)
 const rclcpp::Duration Handle::holddown_interval_ = rclcpp::Duration(1, 0);
 
 std::string Handle::get_name(int stimulus)

@@ -38,7 +38,7 @@ const std::vector<std::string> Handle::stimuli_names =
 const rclcpp::Duration Handle::double_click_interval_ = rclcpp::Duration(0, 250000000);
 const rclcpp::Duration Handle::ignore_interval_ = rclcpp::Duration(0, 50000000);
 const rclcpp::Duration Handle::holddown_min_interval_ = rclcpp::Duration(1, 0);
-const rclcpp::Duration Handle::holddown_max_interval_ = rclcpp::Duration(5, 100000000);  // 5.1 sec (margin=0.1sec)
+const rclcpp::Duration Handle::holddown_max_interval_ = rclcpp::Duration(50, 500000000);  // 50.5 sec (margin=0.5sec)
 const rclcpp::Duration Handle::holddown_interval_ = rclcpp::Duration(1, 0);
 
 std::string Handle::get_name(int stimulus)
@@ -282,6 +282,11 @@ void Handle::buttonCheck(std_msgs::msg::Int8::UniquePtr & msg, int index)
   if (!btn_push && btn_dwn[index]) {
     event.insert(std::pair<std::string, std::string>("button", std::to_string(button_keys(index))));
     event.insert(std::pair<std::string, std::string>("up", "True"));
+    if (last_holddwn[index] == zerotime) {
+      event.insert(std::pair<std::string, std::string>("was_hold", "False"));
+    } else {
+      event.insert(std::pair<std::string, std::string>("was_hold", "True"));
+    }
     up_count[index]++;
     last_up[index] = now;
     btn_dwn[index] = false;
