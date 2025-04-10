@@ -563,6 +563,10 @@ class Goal(geoutil.TargetPlace):
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
+    async def cancel_async_fix_me(self, callback=None):
+        self.cancel(callback)
+        await asyncio.sleep(0)
+
     def _cancel(self, callback=None):
         self._is_canceled = True
 
@@ -581,7 +585,7 @@ class Goal(geoutil.TargetPlace):
                         self._logger.info(f"cancel future result = {future.result}")
                 if cancel_callback:
                     cancel_callback()
-                self.delegate._process_queue.append((self.cancel, callback))
+                self.delegate._process_queue.append((self.cancel_async_fix_me, callback))
             future.add_done_callback(done_callback)
 
             def timeout_watcher(future, timeout_duration):
@@ -914,7 +918,7 @@ class NavGoal(Goal):
 
         if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
             self.route_index += 1
-            self.enter()
+            asyncio.create_task(self.enter())
         else:
             if self.mode == geojson.NavigationMode.Tight:
                 self.delegate.please_return_position()

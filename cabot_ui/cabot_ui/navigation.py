@@ -778,6 +778,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._current_goal = None
         else:
             callback()
+        asyncio.sleep(0)
 
     # private methods for navigation
     async def _navigate_next_sub_goal(self):
@@ -885,9 +886,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # say I am ready once
         if not self.i_am_ready:
             self.i_am_ready = True
+            await self._request_default_params()
             self._logger.debug("i am ready")
             self.delegate.i_am_ready()
-            await self._request_default_params()
 
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
