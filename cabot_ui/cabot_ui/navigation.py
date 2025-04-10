@@ -145,30 +145,6 @@ class NavigationInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
 
-def wrap_rclpy_future(rclpy_future):
-    """
-    Wrap a rclpy Future as an asyncio Future.
-
-    This bridge coroutine awaits the rclpy Future (so its __await__
-    is consumed) and then sets the result/exception on an asyncio Future.
-    """
-    loop = asyncio.get_running_loop()
-    asyncio_future = loop.create_future()
-
-    async def bridge():
-        try:
-            # Await the rclpy future; this consumes its __await__.
-            result = await rclpy_future
-        except Exception as exc:
-            asyncio_future.set_exception(exc)
-        else:
-            asyncio_future.set_result(result)
-
-    # Schedule the bridge coroutine as an asyncio Task.
-    asyncio.create_task(bridge())
-    return asyncio_future
-
-
 class BufferProxy():
     def __init__(self, node):
         self._clock = node.get_clock()
@@ -198,8 +174,6 @@ class BufferProxy():
                 await asyncio.sleep(0)
                 return transform
 
-        #if __debug__:
-        #    self.debug()
         self._logger.debug(f"lookup_transform({target}, {source})")
         req = LookupTransform.Request()
         req.target_frame = target
@@ -220,7 +194,7 @@ class BufferProxy():
         while not future.done():
             try:
                 await asyncio.sleep(0.1)
-            except:
+            except:  # noqa: E722
                 str = "\n"
                 for stack in inspect.stack():
                     str += f"{stack.filename}:{stack.lineno} {stack.function}\n"
@@ -776,7 +750,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "resume")
 
-        current_pose = self.current_local_pose()
+        current_pose = await self.current_local_pose()
         goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
         self._logger.info(F"navigation.{util.callee_name()} estimated next goal index={index}: {goal}")
         if goal:
@@ -853,16 +827,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.error(traceback.format_exc())
 
     def _process_queue_func(self):
-        asyncio.create_task(self._process_queue_func_async())
-
-    async def _process_queue_func_async(self):
         process = None
         with self._process_queue_lock:
             if len(self._process_queue) > 0:
                 process = self._process_queue.pop(0)
         try:
             if process:
-                await process[0](*process[1:])
+                asyncio.create_task(process[0](*process[1:]))
         except:  # noqa: 722
             self._logger.error(f"{process[0]}, {process[1:]}")
             self._logger.error(traceback.format_exc())
