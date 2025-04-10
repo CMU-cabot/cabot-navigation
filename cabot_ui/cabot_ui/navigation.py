@@ -19,6 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import copy
 import math
 import inspect
@@ -144,6 +145,30 @@ class NavigationInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
 
+def wrap_rclpy_future(rclpy_future):
+    """
+    Wrap a rclpy Future as an asyncio Future.
+
+    This bridge coroutine awaits the rclpy Future (so its __await__
+    is consumed) and then sets the result/exception on an asyncio Future.
+    """
+    loop = asyncio.get_running_loop()
+    asyncio_future = loop.create_future()
+
+    async def bridge():
+        try:
+            # Await the rclpy future; this consumes its __await__.
+            result = await rclpy_future
+        except Exception as exc:
+            asyncio_future.set_exception(exc)
+        else:
+            asyncio_future.set_result(result)
+
+    # Schedule the bridge coroutine as an asyncio Task.
+    asyncio.create_task(bridge())
+    return asyncio_future
+
+
 class BufferProxy():
     def __init__(self, node):
         self._clock = node.get_clock()
@@ -162,7 +187,7 @@ class BufferProxy():
         self.countPub.publish(msg)
 
     # buffer interface
-    def lookup_transform(self, target, source, time=None):
+    async def lookup_transform(self, target, source, time=None):
         # find the latest saved transform first
         key = f"{target}-{source}"
         now = self._clock.now()
@@ -170,15 +195,17 @@ class BufferProxy():
             (transform, last_time) = self.transformMap[key]
             if now - last_time < self.min_interval:
                 self._logger.debug(f"found old lookup_transform({target}, {source}, {(now - last_time).nanoseconds/1000000000:.2f}sec)")
+                await asyncio.sleep(0)
                 return transform
 
-        if __debug__:
-            self.debug()
+        #if __debug__:
+        #    self.debug()
         self._logger.debug(f"lookup_transform({target}, {source})")
         req = LookupTransform.Request()
         req.target_frame = target
         req.source_frame = source
-        if not self.lookup_transform_service.wait_for_service(timeout_sec=1.0):
+        if not await wait_for_service_async(self.lookup_transform_service):
+            await asyncio.sleep(0)
             raise RuntimeError("lookup transform service is not available")
         # usage of call() can cause SIGSEGV at exit due to infinite wait
         # however, call(req, timeout_sec=1.0) is implemented in J-turtle release not in humble
@@ -188,34 +215,26 @@ class BufferProxy():
         # so implemented call with timeout from here
         # reference implementation is
         # https://github.com/ros2/rclpy/blob/7a7f23e0d7e51dd244001ef606b97f1153e5a97e/rclpy/rclpy/client.py#L72-L110
-        event = threading.Event()
 
-        def unblock(future):
-            nonlocal event
-            event.set()
         future = self.lookup_transform_service.call_async(req)
-        future.add_done_callback(unblock)
-        # Check future.done() before waiting on the event.
-        # The callback might have been added after the future is completed,
-        # resulting in the event never being set.
-        if not future.done():
-            if not event.wait(1.0):
-                # Timed out. remove_pending_request() to free resources
-                self.lookup_transform_service.remove_pending_request(future)
-                raise RuntimeError("timeout")
-        if future.exception() is not None:
-            raise future.exception()
+        while not future.done():
+            try:
+                await asyncio.sleep(0.1)
+            except:
+                str = "\n"
+                for stack in inspect.stack():
+                    str += f"{stack.filename}:{stack.lineno} {stack.function}\n"
+                self._logger.error(str)
+                pass
         result = future.result()
-        # sync call end here
-
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
         self.transformMap[key] = (result.transform, now)
         return result.transform
 
-    def transform(self, pose_stamped, target):
+    async def transform(self, pose_stamped, target):
         do_transform = tf2_ros.TransformRegistration().get(type(pose_stamped))
-        transform = self.lookup_transform(target, pose_stamped.header.frame_id)
+        transform = await self.lookup_transform(target, pose_stamped.header.frame_id)
         return do_transform(pose_stamped, transform)
 
 
@@ -230,7 +249,6 @@ class ControlBase(object):
         self._node = node
         self._logger = node.get_logger()
         self.visualizer = visualizer.instance(node)
-
         self.delegate: NavigationInterface = NavigationInterface()
         self.buffer = BufferProxy(tf_node)
 
@@ -271,13 +289,13 @@ class ControlBase(object):
             self._datautil.set_anchor(self._anchor)
 
     # current location
-    def current_ros_pose(self, frame=None):
+    async def current_ros_pose(self, frame=None):
         """get current local location"""
         if frame is None:
             frame = self._global_map_name
 
         try:
-            transformStamped = self.buffer.lookup_transform(
+            transformStamped = await self.buffer.lookup_transform(
                 frame, 'base_footprint', CaBotRclpyUtil.time_zero())
             ros_pose = geometry_msgs.msg.Pose()
             ros_pose.position.x = transformStamped.transform.translation.x
@@ -290,17 +308,18 @@ class ControlBase(object):
             return ros_pose
         except RuntimeError:
             self._logger.debug("cannot get current_ros_pose")
+            self._logger.debug(traceback.format_exc())
         except:  # noqa: E722
             self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
-    def current_local_pose(self, frame=None) -> geoutil.Pose:
+    async def current_local_pose(self, frame=None) -> geoutil.Pose:
         """get current local location"""
         if frame is None:
             frame = self._global_map_name
 
         try:
-            transformStamped = self.buffer.lookup_transform(
+            transformStamped = await self.buffer.lookup_transform(
                 frame, 'base_footprint', CaBotRclpyUtil.time_zero())
             translation = transformStamped.transform.translation
             rotation = transformStamped.transform.rotation
@@ -309,14 +328,15 @@ class ControlBase(object):
             return current_pose
         except RuntimeError:
             self._logger.debug("cannot get current_local_pose")
+            self._logger.debug(traceback.format_exc())
         except:  # noqa: E722
             self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
-    def current_local_odom_pose(self):
+    async def current_local_odom_pose(self):
         """get current local odom location"""
         try:
-            transformStamped = self.buffer.lookup_transform(
+            transformStamped = await self.buffer.lookup_transform(
                 'local/odom', 'local/base_footprint', CaBotRclpyUtil.time_zero())
             translation = transformStamped.transform.translation
             rotation = transformStamped.transform.rotation
@@ -325,20 +345,21 @@ class ControlBase(object):
             return current_pose
         except RuntimeError:
             self._logger.debug("cannot get current_local_odom_pose")
+            self._logger.debug(traceback.format_exc())
         except:  # noqa: E722
             self._logger.debug(traceback.format_exc())
         raise RuntimeError("no transformation")
 
-    def current_global_pose(self):
-        local = self.current_local_pose()
+    async def current_global_pose(self):
+        local = await self.current_local_pose()
         _global = geoutil.local2global(local, self._anchor)
         self._logger.debug(F"current global pose ({_global})", throttle_duration_sec=1.0)
         return _global
 
-    def current_location_id(self):
+    async def current_location_id(self):
         """get id string for the current loaction in ROS"""
 
-        _global = self.current_global_pose()
+        _global = await self.current_global_pose()
         return F"latlng:{_global.lat:.7f}:{_global.lng:.7f}:{self.current_floor}"
 
 
@@ -358,7 +379,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         super(Navigation, self).__init__(
             node, tf_node, datautil_instance=datautil_instance, anchor_file=anchor_file)
-
         self.param_manager = NavigationParamManager(srv_node)
 
         self.info_pois = []
@@ -454,7 +474,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
         self._process_timer = act_node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
-        self._start_loop()
+        self._loop_handle = node.create_timer(2, self._check_loop, callback_group=self._main_callback_group)
 
     def _localize_status_callback(self, msg):
         self._logger.info(F"_localize_status_callback {msg}")
@@ -497,19 +517,20 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self._current_goal is None:
             return
         if duration_in_sec > self.restart_navigation_threthold_sec:
-            self._stop_loop()
-
             def done_callback():
                 self.resume_navigation()
             self.delegate.system_pause_navigation(done_callback)
 
-    def _plan_callback(self, path):
+    def _plan_callback(self, msg):
+        asyncio.create_task(self._plan_callback_async(msg))
+
+    async def _plan_callback_async(self, path):
         try:
             msg = nav_msgs.msg.Path()
             msg.header.frame_id = self._global_map_name
             for pose in path.poses:
                 pose.header.frame_id = path.header.frame_id
-                msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+                msg.poses.append(await self.buffer.transform(pose, self._global_map_name))
                 # msg.poses[-1].pose.position.z = 0.0
             path = msg
         except:  # noqa: E722
@@ -569,22 +590,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self._current_goal:
             self._current_goal.update_goal(msg)
 
-    def request_defult_params(self):
-        with self._process_queue_lock:
-            self._process_queue.append((self._request_default_params, ))
-
-    def _request_default_params(self):
+    async def _request_default_params(self):
         # dummy Goal instance
-        goal = navgoal.Goal(self, x=0, y=0, r=0, angle=0, floor=0)
-
         def dummy_nav_params_key():
             return navgoal.Nav2Params.all_keys()
+        goal = navgoal.Goal(self, x=0, y=0, r=0, angle=0, floor=0)
         goal.nav_params_keys = dummy_nav_params_key
-
-        def done_callback():
-            self._logger.info(f"done_callback f{goal._saved_params}")
-            navgoal.Goal.default_params = goal._saved_params
-        goal._save_params(done_callback)
+        navgoal.Goal.default_params = await goal._save_params()
 
     # public interfaces
 
@@ -593,7 +605,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         with self._process_queue_lock:
             self._process_queue.append((self._set_handle_side, side))
 
-    def _set_handle_side(self, side):
+    async def _set_handle_side(self, side):
         self._logger.info("_set_handle_side is called")
 
         def callback(result):
@@ -617,7 +629,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         with self._process_queue_lock:
             self._process_queue.append((self._set_touch_mode, mode))
 
-    def _set_touch_mode(self, mode):
+    async def _set_touch_mode(self, mode):
         self._logger.info("_set_touch_mode is called")
 
         def callback(result):
@@ -640,7 +652,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self.destination:
             self.set_destination(self.destination)
 
-    def _set_destination(self, destination):
+    async def _set_destination(self, destination):
         """
         memo: current logic is not beautiful.
         1. get a NavCog route from the server
@@ -652,7 +664,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         """
         self._logger.info(F"navigation.{util.callee_name()} called")
         try:
-            from_id = self.current_location_id()
+            from_id = await self.current_location_id()
         except RuntimeError:
             self._logger.error("could not get current location")
             self.delegate.could_not_get_current_location()
@@ -715,32 +727,32 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         msg.header = gpath.header
         msg.header.frame_id = self._global_map_name
         for pose in gpath.poses:
-            msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+            msg.poses.append(await self.buffer.transform(pose, self._global_map_name))
             msg.poses[-1].pose.position.z = 0.0
         self.path_all_pub.publish(msg)
 
         # navigate from the first path
-        self._navigate_next_sub_goal()
+        await self._navigate_next_sub_goal()
 
     # wrap execution by a queue
     def retry_navigation(self):
         with self._process_queue_lock:
             self._process_queue.append((self._retry_navigation,))
 
-    def _retry_navigation(self):
+    async def _retry_navigation(self):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "retry")
         self.turns = []
 
         self._logger.info(f"{self._current_goal=}, {self._goal_index}")
-        self._navigate_next_sub_goal()
+        await self._navigate_next_sub_goal()
 
     # wrap execution by a queue
     def pause_navigation(self, callback):
         with self._process_queue_lock:
             self._process_queue.append((self._pause_navigation, callback))
 
-    def _pause_navigation(self, callback):
+    async def _pause_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "pause")
 
@@ -760,7 +772,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         with self._process_queue_lock:
             self._process_queue.append((self._resume_navigation, callback))
 
-    def _resume_navigation(self, callback):
+    async def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "resume")
 
@@ -771,7 +783,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             goal.estimate_inner_goal(current_pose, self.current_floor)
             self._goal_index = index-1
             self._last_estimated_goal = None
-            self._navigate_next_sub_goal()
+            await self._navigate_next_sub_goal()
         else:
             self.reset_destination()
 
@@ -781,13 +793,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._process_queue.append((self._cancel_navigation, callback))
         self.social_navigation.set_active(False)
 
-    def _cancel_navigation(self, callback):
+    async def _cancel_navigation(self, callback):
         """callback for cancel topic"""
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "cancel")
         self._sub_goals = None
         self._goal_index = -1
-        self._stop_loop()
         if self._current_goal:
             self._current_goal.cancel(callback)
             self._current_goal = None
@@ -795,7 +806,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             callback()
 
     # private methods for navigation
-    def _navigate_next_sub_goal(self):
+    async def _navigate_next_sub_goal(self):
         self._logger.info(F"navigation.{util.callee_name()} called")
         if self._sub_goals is None:
             self._logger.info("navigation is canceled")
@@ -806,7 +817,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._goal_index += 1
             self._current_goal = self._sub_goals[self._goal_index]
             self._current_goal.reset()
-            self._navigate_sub_goal(self._current_goal)
+            await self._navigate_sub_goal(self._current_goal)
             return
 
         self._current_goal = None
@@ -814,7 +825,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.delegate.activity_log("cabot/navigation", "completed")
         self.social_navigation.set_active(False)
 
-    def _navigate_sub_goal(self, goal):
+    async def _navigate_sub_goal(self, goal):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "sub_goal")
         self.visualizer.reset()
@@ -836,54 +847,44 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._logger.info(F"goal: {goal}")
         try:
-            goal.enter()
+            await goal.enter()
         except:  # noqa: E722
             import traceback
             self._logger.error(traceback.format_exc())
-        self._start_loop()
-
-    def _start_loop(self):
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        if self.lock.acquire():
-            if self._loop_handle is None:
-                self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
-            self.lock.release()
-
-    def _stop_loop(self):
-        return
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        if self.lock.acquire():
-            if self._loop_handle is not None:
-                self._loop_handle.cancel()
-                self._loop_handle = None
-            self.lock.release()
 
     def _process_queue_func(self):
+        asyncio.create_task(self._process_queue_func_async())
+
+    async def _process_queue_func_async(self):
         process = None
         with self._process_queue_lock:
             if len(self._process_queue) > 0:
                 process = self._process_queue.pop(0)
         try:
             if process:
-                process[0](*process[1:])
+                await process[0](*process[1:])
         except:  # noqa: 722
+            self._logger.error(f"{process[0]}, {process[1:]}")
             self._logger.error(traceback.format_exc())
 
     # Main loop of navigation
     GOAL_POSITION_TORELANCE = 1
 
     def _check_loop(self):
+        asyncio.create_task(self._check_loop_async())
+
+    async def _check_loop_async(self):
         self._logger.info("_check_loop", throttle_duration_sec=1.0)
         if not rclpy.ok():
-            self._stop_loop()
+            self._loop_handle.cancel()
             return
 
         # need a robot position
         try:
-            self.current_pose = self.current_local_pose()
-            self.delegate.update_pose(ros_pose=self.current_ros_pose(),
+            self.current_pose = await self.current_local_pose()
+            self.delegate.update_pose(ros_pose=await self.current_ros_pose(),
                                       current_pose=self.current_pose,
-                                      global_position=self.current_global_pose(),
+                                      global_position=await self.current_global_pose(),
                                       current_floor=self.current_floor,
                                       global_frame=self._global_map_name
                                       )
@@ -892,7 +893,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self._datautil.post_location(self.current_global_pose(), self.current_floor)
                     self.last_log_time = self._node.get_clock().now()
             self._logger.debug(F"current pose {self.current_pose}", throttle_duration_sec=1)
-            self.current_odom_pose = self.current_local_odom_pose()
+            self.current_odom_pose = await self.current_local_odom_pose()
         except RuntimeError:
             self._logger.info("could not get position", throttle_duration_sec=3)
             return
@@ -915,7 +916,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.i_am_ready = True
             self._logger.debug("i am ready")
             self.delegate.i_am_ready()
-            self.request_defult_params()
+            await self._request_default_params()
 
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
@@ -946,7 +947,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
-            self._check_queue_wait(self.current_pose)
+            await self._check_queue_wait(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
@@ -1087,7 +1088,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(f"_check_already_notified_turn_nearby, {device}, {result}, {turn}")
         return result
 
-    def _check_queue_wait(self, current_pose):
+    async def _check_queue_wait(self, current_pose):
         if not isinstance(self._current_goal, navgoal.QueueNavGoal) or not self.queue_wait_pois:
             return
 
@@ -1112,7 +1113,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 tail_pose.header = self.current_queue_msg.header
                 tail_pose.pose.position = self.current_queue_msg.people[-1].position
                 try:
-                    tail_global_pose = self.buffer.transform(tail_pose, self._global_map_name)
+                    tail_global_pose = await self.buffer.transform(tail_pose, self._global_map_name)
                     tail_global_position = numpy.array([tail_global_pose.pose.position.x, tail_global_pose.pose.position.y])
                     tail_global_position_on_queue_path = geoutil.get_projected_point_to_line(tail_global_position, poi_position, poi.link_orientation)
                     dist_robot_to_tail = numpy.linalg.norm(tail_global_position_on_queue_path - current_position_on_queue_path)
@@ -1199,7 +1200,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._last_estimated_goal_check = now
 
         if goal.is_canceled:
-            self._stop_loop()
             self._current_goal = None
             self._goal_index = max(-1, self._goal_index - 1)
             self.delegate.goal_canceled(goal)
@@ -1219,7 +1219,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 # keep this for test
                 self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
                 self.delegate.have_arrived(goal)
-            self._navigate_next_sub_goal()
+            asyncio.create_task(self._navigate_next_sub_goal())
         goal.exit(goal_exit_callback)
 
     # GoalInterface
@@ -1237,6 +1237,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.delegate.exit_goal(goal)
 
     def navigate_to_pose(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
+        asyncio.create_task(self.navigate_to_pose_async(goal_pose, behavior_tree, gh_cb, done_cb, namespace))
+
+    async def navigate_to_pose_async(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
         self._logger.info(F"{namespace}/navigate_to_pose")
         self.delegate.activity_log("cabot/navigation", "navigate_to_pose")
         client = self._clients["/".join([namespace, "navigate_to_pose"])]
@@ -1252,7 +1255,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         goal.behavior_tree = behavior_tree
 
         if namespace == "":
-            goal.pose = self.buffer.transform(goal_pose, self._global_map_name)
+            goal.pose = await self.buffer.transform(goal_pose, self._global_map_name)
             goal.pose.header.stamp = self._node.get_clock().now().to_msg()
             goal.pose.header.frame_id = self._global_map_name
         elif namespace == "/local":
@@ -1449,6 +1452,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_pub.publish(self.pause_control_msg)
 
     def publish_path(self, global_path, convert=True):
+        asyncio.create_task(self._publish_path_async(global_path, convert))
+
+    async def _publish_path_async(self, global_path, convert=True):
         local_path = global_path
         if convert:
             local_path = nav_msgs.msg.Path()
@@ -1456,7 +1462,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             local_path.header.frame_id = "map"
 
             for pose in global_path.poses:
-                local_path.poses.append(self.buffer.transform(pose, "map"))
+                local_path.poses.append(await self.buffer.transform(pose, "map"))
                 local_path.poses[-1].pose.position.z = 0.0
 
         self.path_pub.publish(local_path)
@@ -1479,11 +1485,23 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def please_return_position(self):
         self.delegate.please_return_position()
 
-    def change_parameters(self, params, callback):
-        self.param_manager.change_parameters(params, callback)
+    async def change_parameters(self, params):
+        await self.param_manager.change_parameters(params)
 
-    def request_parameters(self, params, callback):
-        self.param_manager.request_parameters(params, callback)
+    async def request_parameters(self, params):
+        await self.param_manager.request_parameters(params)
+
+
+async def wait_for_service_async(client, timeout_sec=1.0):
+    start = time.time()
+    while client and not client.service_is_ready():
+        if time.time() - start > timeout_sec:
+            return False
+        try:
+            await asyncio.sleep(0.01)
+        except:  # noqa: E722
+            pass
+    return True
 
 
 class NavigationParamManager:
@@ -1492,30 +1510,34 @@ class NavigationParamManager:
         self.clients = {}
         self.callback_group = MutuallyExclusiveCallbackGroup()
 
-    def get_client(self, node_name, service_type, service_name):
+    async def get_client(self, node_name, service_type, service_name):
         key = f'{node_name}/{service_name}'
         if key not in self.clients:
             self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
-        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=5.0):
+        if not await wait_for_service_async(self.clients[key], timeout_sec=5.0):
             self.node.get_logger().error(f'{key} is not available...')
             self.clients[key] = False
+        await asyncio.sleep(0)
         return self.clients[key]
 
-    def change_parameter(self, node_name, param_dict, callback):
-        def done_callback(future):
-            callback(node_name, future)
+    async def change_parameter(self, node_name, param_dict):
         request = SetParameters.Request()
         for param_name, param_value in param_dict.items():
             new_parameter = Parameter(param_name, value=param_value)
             request.parameters.append(new_parameter.to_parameter_msg())
-        client = self.get_client(node_name, SetParameters, "set_parameters")
+        client = await self.get_client(node_name, SetParameters, "set_parameters")
         if client:
             future = client.call_async(request)
-            future.add_done_callback(done_callback)
-        else:
-            done_callback(None)
+            while not future.done():
+                await asyncio.sleep(0.1)
+        await asyncio.sleep(0)
 
-    def change_parameters(self, params, callback):
+    async def change_parameters(self, params):
+        tasks = []
+        for node_name, param_dict in params.items():
+            tasks.append(self.change_parameter(node_name, param_dict))
+        asyncio.gather(*tasks, return_exceptions=True)
+        """
         params = copy.deepcopy(params)
 
         def sub_callback(node_name, future):
@@ -1535,20 +1557,48 @@ class NavigationParamManager:
             except:  # noqa: 722
                 self.node.get_logger().error(traceback.format_exc())
             break
+        """
 
-    def request_parameter(self, node_name, param_list, callback):
-        def done_callback(future):
-            callback(node_name, param_list, future)
+    async def request_parameter(self, node_name, param_list):
         request = GetParameters.Request()
         request.names = param_list
-        client = self.get_client(node_name, GetParameters, "get_parameters")
+        client = await self.get_client(node_name, GetParameters, "get_parameters")
         if client:
             future = client.call_async(request)
-            future.add_done_callback(done_callback)
+            while not future.done():
+                await asyncio.sleep(0.1)
+            result = future.result()
+            if result:
+                values = {}
+                for name, value in zip(param_list, result.values):
+                    msg = rcl_interfaces.msg.Parameter()
+                    msg.name = name
+                    msg.value = value
+                    param = Parameter.from_parameter_msg(msg)
+                    values[name] = param.value
+                return node_name, values
+            else:
+                return node_name, None
         else:
-            done_callback(None)
+            await asyncio.sleep(0)
+            return node_name, None
 
-    def request_parameters(self, params, callback):
+    async def request_parameters(self, params):
+        results = {}
+        for node_name, param_list in params.items():
+            (node_name, values) = await self.request_parameter(node_name, param_list)
+            results[node_name] = values
+        return results
+"""
+        for node_name, param_list in params.items():
+            task = asyncio.ensure_future(self.request_parameter(node_name, param_list))
+            tasks.append(task)
+        result_list = await asyncio.gather(*tasks, return_exceptions=True)
+        results = {}
+        for (node_name, values) in result_list:
+            results[node_name] = values
+        return results
+
         self.rcount = 0
         self.result = {}
 
@@ -1574,3 +1624,4 @@ class NavigationParamManager:
                 self.request_parameter(node_name, param_list, sub_callback)
             except:  # noqa: 722
                 self.node.get_logger().error(traceback.format_exc())
+"""

@@ -19,6 +19,7 @@
 # SOFTWARE.
 
 from typing import List
+import asyncio
 import math
 import inspect
 import numpy
@@ -438,7 +439,7 @@ class Goal(geoutil.TargetPlace):
         self._is_canceled = False
         self._is_exiting_goal = False
 
-    def enter(self):
+    async def enter(self):
         """
         Goal.enter() is called when the goal is activated
         This tries to save parameters and then change parameters, following Goal._enter() call
@@ -449,36 +450,22 @@ class Goal(geoutil.TargetPlace):
             return
         self.delegate.enter_goal(self)
 
-        def restore_callback():
-            def change_callback():
-                self._enter()
-            self._change_params(change_callback)
-        self._save_params(restore_callback)
+        await self._save_params()
+        await self._change_params()
+        self._enter()
 
     def _enter(self):
         pass
 
-    def _save_params(self, callback):
-        CaBotRclpyUtil.info(F"{util.callee_name()} is called")
-
-        def done_request_parameters_callback(result):
-            CaBotRclpyUtil.info("done_request_parameters_callback is called")
-            self._saved_params = result
-            CaBotRclpyUtil.info(F"{self.__class__.__name__}._saved_params = {self._saved_params}")
-            callback()
+    async def _save_params(self):
+        CaBotRclpyUtil.info(F"{util.callee_name()} is called {self._saved_params=}")
         if self._saved_params:
-            done_request_parameters_callback(self._saved_params)
-        else:
-            if self.nav_params_keys():
-                CaBotRclpyUtil.info(f"call request_parameters {self.nav_params_keys()}")
-                self.delegate.request_parameters(self.nav_params_keys(), done_request_parameters_callback)
-            else:
-                callback()
+            return
+        if self.nav_params_keys():
+            CaBotRclpyUtil.info(f"call request_parameters {self.nav_params_keys()}")
+            self._saved_params = await self.delegate.request_parameters(self.nav_params_keys())
 
-    def _change_params(self, callback):
-        def done_change_parameters_callback(result):
-            CaBotRclpyUtil.info("done_change_parameters_callback is called")
-            callback()
+    async def _change_params(self):
         params = self.nav_params()
         if self._saved_params:
             for node, values in list(params.items()):
@@ -490,9 +477,7 @@ class Goal(geoutil.TargetPlace):
                             del params[node]
         CaBotRclpyUtil.info(F"params to be chanegd: {params=}")
         if params:
-            self.delegate.change_parameters(params, done_change_parameters_callback)
-        else:
-            callback()
+            await self.delegate.change_parameters(params)
 
     def nav_params_keys(self):
         return []
@@ -857,7 +842,7 @@ class NavGoal(Goal):
             if isinstance(item, geojson.RouteLink):
                 CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
+                    CaBotRclpyUtil.debug(str(["  ", type(poi), poi._id]))
                 temp.extend(item.pois)
         return temp
 
@@ -882,7 +867,7 @@ class NavGoal(Goal):
         self.mode = new_mode
         return Nav2Params.get_parameters_for(new_mode)
 
-    def enter(self):
+    async def enter(self):
         CaBotRclpyUtil.info("NavGoal enter")
         new_mode = self.navcog_routes[self.route_index][2]
         CaBotRclpyUtil.info(F"NavGoal.check_mode new_mode={new_mode}")
@@ -895,9 +880,9 @@ class NavGoal(Goal):
             delay = True
         self.mode = new_mode
         if delay:
-            self.call_delay(super(NavGoal, self).enter)
-        else:
-            super(NavGoal, self).enter()
+            # self.call_delay(super(NavGoal, self).enter)
+            await asyncio.sleep(5)
+        await super(NavGoal, self).enter()
 
     def _enter(self):
         CaBotRclpyUtil.info("NavGoal._enter is called")

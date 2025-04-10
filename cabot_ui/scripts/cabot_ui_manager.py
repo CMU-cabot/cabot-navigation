@@ -34,6 +34,7 @@ Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
 
+import asyncio
 import signal
 import sys
 import threading
@@ -861,47 +862,76 @@ if __name__ == "__main__":
     desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
     nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
     executors = [MultiThreadedExecutor(),
-                 MultiThreadedExecutor(),
+                 SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  ]
-    names = ["node", "tf", "nav", "srv", "act", "soc", "desc"]
+    names = ["node", "nav", "tf", "srv", "act", "soc", "desc"]
     manager = CabotUIManager(node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node)
+    # manager = CabotUIManager(nav_node, nav_node, nav_node, nav_node, nav_node, nav_node, desc_node)
 
     threads = []
     for tnode, executor, name in zip(nodes, executors, names):
-        def run_node(target_node, executor, name):
-            def _run_node():
-                # debug code to analyze the bottle neck of nodes
-                # high frequency spinning node should have smaller number of waits
-                #
-                # import time
-                # count = 0
-                # start = time.time()
-                executor.add_node(target_node)
-                try:
-                    while rclpy.ok():
-                        # count += 1
-                        # target_node.get_logger().info(f"spin rate {name} {count / (time.time()-start):.2f}Hz - \n"
-                        #                               f"  subscriptions {[sub.topic_name for sub in list(target_node.subscriptions)]}\n"
-                        #                               f"  timers {len(list(target_node.timers))}\n"
-                        #                               f"  clients {[cli.srv_name for cli in list(target_node.clients)]}\n"
-                        #                               f"  services {len(list(target_node.services))}\n"
-                        #                               f"  guards {len(list(target_node.guards))}\n"
-                        #                               f"  waitables {len(list(target_node.waitables))}\n",
-                        #                               throttle_duration_sec=1.0)
-                        executor.spin_once()
-                except:  # noqa: 722
-                    pass
-                target_node.destroy_node()
-            return _run_node
+        if isinstance(executor, MultiThreadedExecutor):
+            def run_node(target_node, executor, name):
+                def _run_node():
+                    # debug code to analyze the bottle neck of nodes
+                    # high frequency spinning node should have smaller number of waits
+                    #
+                    # import time
+                    # count = 0
+                    # start = time.time()
+                    executor.add_node(target_node)
+                    try:
+                        while rclpy.ok():
+                            # count += 1
+                            # target_node.get_logger().info(f"spin rate {name} {count / (time.time()-start):.2f}Hz - \n"
+                            #                               f"  subscriptions {[sub.topic_name for sub in list(target_node.subscriptions)]}\n"
+                            #                               f"  timers {len(list(target_node.timers))}\n"
+                            #                               f"  clients {[cli.srv_name for cli in list(target_node.clients)]}\n"
+                            #                               f"  services {len(list(target_node.services))}\n"
+                            #                               f"  guards {len(list(target_node.guards))}\n"
+                            #                               f"  waitables {len(list(target_node.waitables))}\n",
+                            #                               throttle_duration_sec=1.0)
+                            executor.spin_once()
+                    except:  # noqa: 722
+                        pass
+                    target_node.destroy_node()
+                return _run_node
 
-        thread = threading.Thread(target=run_node(tnode, executor, name))
-        thread.start()
-        threads.append(thread)
+            thread = threading.Thread(target=run_node(tnode, executor, name))
+            thread.start()
+            threads.append(thread)
+        else:
+            def run_node(target_node, target_executor, name):
+                def _run_node():
+                    async def ros_loop():
+                        count = 0
+                        while rclpy.ok():
+                            try:
+                                count += 1
+                                if name == "nav":
+                                    target_node.get_logger().info(f"{name} spin {count=}", throttle_duration_sec=5.0)
+                                target_executor.spin_once(timeout_sec=0.01)
+                            except:  # noqa: 722
+                                traceback.print_exc()
+                            await asyncio.sleep(0)
+                    try:
+                        target_executor.add_node(target_node)
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(ros_loop())
+                    except:  # noqa: 722
+                        traceback.print_exc()
+                    target_node.destroy_node()
+                return _run_node
+
+            thread = threading.Thread(target=run_node(tnode, executor, name))
+            thread.start()
+            threads.append(thread)
 
     for thread in threads:
         thread.join()
