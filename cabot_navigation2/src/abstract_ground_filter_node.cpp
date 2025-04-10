@@ -41,7 +41,8 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
   ignore_noise_(true),
   input_topic_("/livox/points"),
   output_ground_topic_("/livox/points_ground"),
-  output_filtered_topic_("/livox/points_filtered")
+  output_filtered_topic_("/livox/points_filtered"),
+  queue_size_(2)
 {
   RCLCPP_INFO(get_logger(), "NodeClass Constructor");
   RCLCPP_INFO(get_logger(), "Livox Point Cloud Node - %s", __FUNCTION__);
@@ -66,7 +67,7 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
 
   pointcloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
     input_topic_, 10, std::bind(&AbstractGroundFilterNode::pointCloudCallback, this, std::placeholders::_1));
-
+  filter_ground_timer_ = this->create_wall_timer(std::chrono::duration<float>(0.01), std::bind(&AbstractGroundFilterNode::filterGroundTimerCallback, this));
   ground_pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(output_ground_topic_, 1);
   filtered_pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(output_filtered_topic_, 1);
 }
@@ -80,6 +81,27 @@ AbstractGroundFilterNode::~AbstractGroundFilterNode()
 
 void AbstractGroundFilterNode::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr input)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (queue_pointcloud_.size() < queue_size_) {
+    queue_pointcloud_.push(input);
+  } else {
+    queue_pointcloud_.pop();
+    queue_pointcloud_.push(input);
+  }
+}
+
+void AbstractGroundFilterNode::filterGroundTimerCallback()
+{
+  sensor_msgs::msg::PointCloud2::SharedPtr input;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (queue_pointcloud_.size() == 0) {
+      return;
+    }
+    input = queue_pointcloud_.front();
+    queue_pointcloud_.pop();
+  }
+
   pcl::PointCloud<pcl::PointXYZ>::Ptr normal_points(new pcl::PointCloud<pcl::PointXYZ>);
   if (xfer_format_ == POINTCLOUD2_XYZRTL) {
     pcl::PointCloud<CabotLivoxPointXyzrtl>::Ptr input_points(new pcl::PointCloud<CabotLivoxPointXyzrtl>);

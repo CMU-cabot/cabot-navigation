@@ -111,7 +111,7 @@ void GridMapGroundFilterNode::moveGridMap(const grid_map::Position & gmap_origin
         "valid_ground_z", "estimated_ground_z", "ground_confidence"});
     grid_map_ptr_->setFrameId("odom");
     grid_map_ptr_->setGeometry(grid_map::Length(grid_length_, grid_length_), grid_resolution_, gmap_origin_position);
-    grid_map_ptr_->move(gmap_origin_position);
+
     (*grid_map_ptr_)["num_points"].setZero();
     (*grid_map_ptr_)["mean_points_z"].setZero();
     (*grid_map_ptr_)["var_points_z"].setZero();
