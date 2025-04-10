@@ -152,7 +152,7 @@ class BufferProxy():
         self.lookup_transform_service = node.create_client(LookupTransform, 'lookup_transform', callback_group=MutuallyExclusiveCallbackGroup())
         self.countPub = node.create_publisher(std_msgs.msg.Int32, "transform_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.transformMap = {}
-        self.min_interval = rclpy.duration.Duration(seconds=0.2)
+        self.min_interval = rclpy.duration.Duration(seconds=0.1)
 
     def debug(self):
         if not hasattr(self, "count"):
@@ -1296,9 +1296,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         time_allowance = max(3.0, min(time_limit, abs(diff)/0.3))
         goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
 
-        self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}")
-        if (clockwise < 0 and diff < - math.pi / 4) or \
-           (clockwise > 0 and diff > + math.pi / 4):
+        self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}, {time_allowance=}")
+        if (clockwise < 0 and diff < - math.pi / 2) or \
+           (clockwise > 0 and diff > + math.pi / 2):
             diff = diff - clockwise * math.pi * 2
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
@@ -1320,10 +1320,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         get_result_future = goal_handle.get_result_async()
 
         def done_callback(future):
-            self._logger.info(F"_turn_towards_sent_goal done_callback: {future.result().status=}, {self.turn_towards_last_diff=}")
+            self._logger.info(F"_turn_towards_sent_goal done_callback: {future.result().status=}")
             if future.result().status == GoalStatus.STATUS_CANCELED:
                 return
             diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
+            self._logger.info(F"_turn_towards_sent_goal done_callback: {self.turn_towards_last_diff=}, {diff=}")
             if self.turn_towards_last_diff and abs(self.turn_towards_last_diff - diff) < 0.1:
                 self.turn_towards_count += 1
 
@@ -1382,14 +1383,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
             def handler(self):
                 try:
-                    self._handle()
+                    asyncio.create_task(self._handle())
                 except:  # noqa: #722
                     self._logger.error(traceback.format_exc())
 
-            def _handle(self):
+            async def _handle(self):
                 first = True
                 while rclpy.ok():
-                    self.rate.sleep()
+                    await asyncio.sleep(0.5)
                     self._logger.info(F"GotoFloorTask loop cancelled={self.cancelled}")
                     if self.cancelled:
                         self._logger.info("GotoFloorTask cancelled")
@@ -1402,7 +1403,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
                     self._logger.info(F"trying to find tf from map to {self._nav.current_frame}")
                     try:
-                        self.buffer.lookup_transform("map", self._nav.current_frame, CaBotRclpyUtil.time_zero())
+                        await self.buffer.lookup_transform("map", self._nav.current_frame, CaBotRclpyUtil.time_zero())
                         break
                     except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
                             tf2_ros.ExtrapolationException):
