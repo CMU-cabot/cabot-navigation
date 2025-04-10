@@ -26,6 +26,8 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <mutex>
+#include <queue>
 #include <string>
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -80,6 +82,7 @@ protected:
 
 private:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr input);
+  void filterGroundTimerCallback();
 
   int xfer_format_;
   bool ignore_noise_;
@@ -87,7 +90,12 @@ private:
   std::string output_ground_topic_;
   std::string output_filtered_topic_;
 
+  std::mutex mutex_;
+  std::queue<sensor_msgs::msg::PointCloud2::SharedPtr> queue_pointcloud_;
+  int queue_size_;
+
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub_;
+  rclcpp::TimerBase::SharedPtr filter_ground_timer_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr ground_pointcloud_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filtered_pointcloud_pub_;
 };  // class AbstractPointCloudFilterNode
