@@ -448,7 +448,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
         self._process_timer = act_node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
-        self._loop_handle = node.create_timer(2, self._check_loop, callback_group=self._main_callback_group)
+        self._loop_handle = node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
 
     def _localize_status_callback(self, msg):
         self._logger.info(F"_localize_status_callback {msg}")
@@ -1302,8 +1302,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             diff = diff - clockwise * math.pi * 2
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
+        start_yaw = self.current_pose.orientation
 
-        future = self._spin_client.send_goal_async(goal)
+        def spin_feedback(msg):
+            sdiff = geoutil.diff_angle(start_yaw, self.current_pose.orientation)
+            self._logger.info(F"turn_towards: spin feedback {msg.feedback=} {sdiff=}")
+        future = self._spin_client.send_goal_async(goal, feedback_callback=spin_feedback)
         future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
         return future
 
