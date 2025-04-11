@@ -304,7 +304,7 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.error("cabot event %s cannot be parsed", msg.data)
             return
         try:
-            self.process_event(event)
+            asyncio.create_task(self.process_event(event))
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
 
@@ -319,7 +319,7 @@ class CabotUIManager(NavigationInterface, object):
         self._logger.debug(F"menu_selected, {menu.identifier}, {menu.type}")
         if menu.identifier == "destination_menu":
             event = NavigationEvent("destination", menu.value.value)
-            self.process_event(event)
+            asyncio.create_task(self.process_event(event))
 
         # if menu.identifier == "main_menu" and menu.value is not None:
         #     self._logger.info(menu.value)
@@ -329,18 +329,18 @@ class CabotUIManager(NavigationInterface, object):
         #         self.process_event(event)
 
     # event delegate method
-    def process_event(self, event):
+    async def process_event(self, event):
         '''
         all events go through this method
         '''
         # self._logger.info(f"process_event {str(event)}")
 
-        self._event_mapper.push(event)
-        self._process_menu_event(event)
-        self._process_navigation_event(event)
-        self._process_exploration_event(event)
+        await self._event_mapper.push(event)
+        await self._process_menu_event(event)
+        await self._process_navigation_event(event)
+        await self._process_exploration_event(event)
 
-    def _process_menu_event(self, event):
+    async def _process_menu_event(self, event):
         '''
         process only menu event
         '''
@@ -350,11 +350,11 @@ class CabotUIManager(NavigationInterface, object):
         curr_menu = self.menu_stack[-1]
         if event.subtype == "next":
             curr_menu.next()
-            self._interface.menu_changed(menu=curr_menu)
+            await self._interface.menu_changed(menu=curr_menu)
 
         elif event.subtype == "prev":
             curr_menu.prev()
-            self._interface.menu_changed(menu=curr_menu)
+            await self._interface.menu_changed(menu=curr_menu)
 
         elif event.subtype == "select":
             selected = curr_menu.select()
@@ -369,20 +369,20 @@ class CabotUIManager(NavigationInterface, object):
                 if selected.value is None:
                     selected.next()
 
-            self._interface.menu_changed(menu=selected, usage=True)
+            await self._interface.menu_changed(menu=selected, usage=True)
 
         elif event.subtype == "back":
             if len(self.menu_stack) > 1:
                 self.menu_stack.pop()
                 curr_menu = self.menu_stack[-1]
 
-            self._interface.menu_changed(menu=curr_menu, backed=True)
+            await self._interface.menu_changed(menu=curr_menu, backed=True)
 
             self.speed = 0
             # self.cancel_pub.publish(True)
             self._navigation.pause_navigation()
 
-    def _process_navigation_event(self, event):
+    async def _process_navigation_event(self, event):
         if event.type != NavigationEvent.TYPE:
             return
         self._logger.info(f"_process_navigation_event {event}")
@@ -417,7 +417,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
-            self._interface.speed_changed(speed=self.speed_menu.description)
+            await self._interface.speed_changed(speed=self.speed_menu.description)
             e = NavigationEvent("sound", "SpeedUp")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -425,14 +425,14 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speeddown":
             self.speed_menu.next()
-            self._interface.speed_changed(speed=self.speed_menu.description)
+            await self._interface.speed_changed(speed=self.speed_menu.description)
             e = NavigationEvent("sound", "SpeedDown")
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)
 
         if event.subtype == "event":
-            self._navigation.process_event(event)
+            await self._navigation.process_event(event)
 
         if event.subtype == "arrived":
             self.destination = None
@@ -448,14 +448,15 @@ class CabotUIManager(NavigationInterface, object):
         # deactivate control
         if event.subtype == "idle":
             self._logger.info("NavigationState: Pause control = True")
-            self._interface.set_pause_control(True)
-            self._navigation.set_pause_control(True)
+            itask = self._interface.set_pause_control(True)
+            ntask = self._navigation.set_pause_control(True)
+            asyncio.gather(itask, ntask)
 
         def description_callback(result):
             try:
                 if result:
                     self._logger.info(f"description - {result=}")
-                    self._interface.describe_surround(result['translated'])
+                    await self._interface.describe_surround(result['translated'])
                 else:
                     self._logger.info("description - Error")
                     self._interface.describe_error()
@@ -478,7 +479,8 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
-                self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
+                description = await self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index)
+                await description_callback(description)
 
         # request description internal functions
         def request_stop_reason_description():
@@ -676,7 +678,7 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(False)
             self._navigation.set_pause_control(False)
 
-    def _process_exploration_event(self, event):
+    async def _process_exploration_event(self, event):
         if event.type != ExplorationEvent.TYPE:
             return
 
@@ -690,7 +692,7 @@ class EventMapper1(object):
         self._manager = StatusManager.get_instance()
         self.description_duration = 0
 
-    def push(self, event):
+    async def push(self, event):
         # state = self._manager.state
 
         if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
@@ -714,7 +716,7 @@ class EventMapper1(object):
         '''
 
         if mevent:
-            self.delegate.process_event(mevent)
+            await self.delegate.process_event(mevent)
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:
@@ -771,7 +773,7 @@ class EventMapper2(object):
         self.button_hold_down_duration = 0
         self.button_hold_down_duration_prev = 0
 
-    def push(self, event):
+    async def push(self, event):
         if event.type not in {ButtonEvent.TYPE, ClickEvent.TYPE, HoldDownEvent.TYPE}:
             return
 
@@ -792,7 +794,7 @@ class EventMapper2(object):
         '''
 
         if mevent:
-            self.delegate.process_event(mevent)
+            await self.delegate.process_event(mevent)
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:
@@ -861,7 +863,7 @@ if __name__ == "__main__":
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
     desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
     nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
-    executors = [MultiThreadedExecutor(),
+    executors = [SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),

@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import traceback
 import rclpy.logging
 from rclpy.node import Node
@@ -32,7 +33,7 @@ import os
 import math
 from enum import Enum
 
-import requests
+import grequests
 import threading
 
 
@@ -139,15 +140,18 @@ class Description:
         self.last_plan_distance = dist
 
     # for EventMapper1()
-    def request_description_with_images1(self, global_position, current_floor, lang, length_index=0, callback=None):
+    async def request_description_with_images1(self, global_position, current_floor, lang, length_index=0):
         if not self.enabled:
             self._logger.debug("Description is not enabled")
+            await asyncio.sleep(0)
             return None
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
             self._logger.debug("mode is not enabled")
+            await asyncio.sleep(0)
             return None
         if not self._requesting_lock.acquire(blocking=False):
             self._logger.debug("Description is requesting")
+            await asyncio.sleep(0)
             return None
 
         API_URL = None
@@ -174,6 +178,7 @@ class Description:
         if not API_URL:
             self._logger.error("API_URL is none")
             self._requesting_lock.release()
+            await asyncio.sleep(0)
             return None
 
         self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
@@ -215,47 +220,42 @@ class Description:
                 self._logger.warn(f'No {position} image available to process.')
 
         # Send HTTP request with the image data
-        try:
-            headers = {
-                'Content-Type': 'application/json',
-                'x-api-key': self.api_key
-            }
-            json_data = json.dumps(image_data_list)
-            self._logger.debug(F"Request data: {image_data_list}")
-            lat = global_position.lat
-            lng = global_position.lng
-            rotation = global_position.r
-            max_distance = self.max_distance
-            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
-        except Exception as e:
-            self._logger.error(f'Error sending HTTP request: {e}')
-        return True
+        headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': self.api_key
+        }
+        json_data = json.dumps(image_data_list)
+        self._logger.debug(F"Request data: {image_data_list}")
+        lat = global_position.lat
+        lng = global_position.lng
+        rotation = global_position.r
+        max_distance = self.max_distance
+        return await self.post_request(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel)
 
-    def post_request(self, API_URL, headers, json_data, lat, lng, floor, rotation, max_distance, lang, length_index, distance_to_travel, callback):
+    async def post_request(self, API_URL, headers, json_data, lat, lng, floor, rotation, max_distance, lang, length_index, distance_to_travel, callback):
         try:
-            response = requests.post(
+            response = await grequests.post(
                 F"{API_URL}?{lat=}&{lng=}&{floor=}&{rotation=}&{max_distance=}&{lang=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
                 timeout=15,
                 data=json_data
             )
             self._requesting_lock.release()
-        except requests.exceptions.RequestException as e:
+        except:  # noqa: E722, TODO
             self._logger.error(f"Request failed: {e}")
             self._requesting_lock.release()
-            callback(None)
-            return
+            return None
 
         if response.status_code == 200:
             response_json = response.json()
             self._logger.info('Successfully sent images to server.')
-            callback(response_json)
+            return response_json
         else:
             self._logger.error(f'Failed to send images to server. Status code: {response.status_code}')
-            callback(None)
+            return None
 
     # for EventMapper2()
-    def request_description_with_images2(self, global_position, current_floor, mode, lang, length_index=0, callback=None):
+    async def request_description_with_images2(self, global_position, current_floor, mode, lang, length_index=0, callback=None):
         if not self.enabled:
             self._logger.debug("Description is not enabled")
             return None
@@ -333,20 +333,14 @@ class Description:
                 self._logger.warn(f'No {position} image available to process.')
 
         # Send HTTP request with the image data
-        try:
-            headers = {
-                'Content-Type': 'application/json',
-                'x-api-key': self.api_key
-            }
-            json_data = json.dumps(image_data_list)
-            self._logger.debug(F"Request data: {image_data_list}")
-            lat = global_position.lat
-            lng = global_position.lng
-            rotation = global_position.r
-            max_distance = self.max_distance
-            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
-        except requests.exceptions.Timeout:
-            self._logger.error("Request timed out. Skipping description processing.")
-        except Exception as e:
-            self._logger.error(f'Error sending HTTP request: {e}')
-        return True
+        headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': self.api_key
+        }
+        json_data = json.dumps(image_data_list)
+        self._logger.debug(F"Request data: {image_data_list}")
+        lat = global_position.lat
+        lng = global_position.lng
+        rotation = global_position.r
+        max_distance = self.max_distance
+        return await self.post_request(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel)
