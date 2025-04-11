@@ -1512,29 +1512,10 @@ class NavigationParamManager:
     async def change_parameters(self, params):
         tasks = []
         for node_name, param_dict in params.items():
+            self.node.get_logger().info(f"change_parameters {node_name}, {param_dict}")
             tasks.append(self.change_parameter(node_name, param_dict))
-        asyncio.gather(*tasks, return_exceptions=True)
-        """
-        params = copy.deepcopy(params)
-
-        def sub_callback(node_name, future):
-            del params[node_name]
-            self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")
-            if len(params) == 0:
-                if future:
-                    callback(future.result())
-                else:
-                    callback(None)
-            else:
-                self.change_parameters(params, callback)
-        for node_name, param_dict in params.items():
-            self.node.get_logger().info(f"call change_parameter {node_name}, {param_dict}")
-            try:
-                self.change_parameter(node_name, param_dict, sub_callback)
-            except:  # noqa: 722
-                self.node.get_logger().error(traceback.format_exc())
-            break
-        """
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self.node.get_logger().info("change_parameters done")
 
     async def request_parameter(self, node_name, param_list):
         request = GetParameters.Request()
@@ -1542,6 +1523,7 @@ class NavigationParamManager:
         client = await self.get_client(node_name, GetParameters, "get_parameters")
         if client:
             future = client.call_async(request)
+            await asyncio.sleep(0)
             while not future.done():
                 await asyncio.sleep(0.1)
             result = future.result()
@@ -1561,44 +1543,17 @@ class NavigationParamManager:
             return node_name, None
 
     async def request_parameters(self, params):
-        results = {}
+        tasks = []
         for node_name, param_list in params.items():
-            (node_name, values) = await self.request_parameter(node_name, param_list)
-            results[node_name] = values
-        return results
-"""
-        for node_name, param_list in params.items():
-            task = asyncio.ensure_future(self.request_parameter(node_name, param_list))
-            tasks.append(task)
+            self.node.get_logger().info(f"request_parameters {node_name}, {param_list}")
+            tasks.append(self.request_parameter(node_name, param_list))
         result_list = await asyncio.gather(*tasks, return_exceptions=True)
         results = {}
-        for (node_name, values) in result_list:
+        for result in result_list:
+            if isinstance(result, Exception):
+                self.node.get_logger().error(f"request_parameters exception {result}")
+                continue
+            node_name, values = result
+            self.node.get_logger().info(f"request_parameters {node_name}, {values}")
             results[node_name] = values
         return results
-
-        self.rcount = 0
-        self.result = {}
-
-        def sub_callback(node_name, param_list, future):
-            self.rcount += 1
-            self.result[node_name] = {}
-            if future:
-                for name, value in zip(param_list, future.result().values):
-                    msg = rcl_interfaces.msg.Parameter()
-                    msg.name = name
-                    msg.value = value
-                    param = Parameter.from_parameter_msg(msg)
-                    self.result[node_name][name] = param.value
-            if self.rcount == len(params):
-                if future:
-                    self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, {future.result()}")
-                else:
-                    self.node.get_logger().info(f"request_parameter sub_callback {self.rcount} {len(params)} {node_name}, {param_list}, None")
-                callback(self.result)
-        for node_name, param_list in params.items():
-            self.node.get_logger().info(f"call request_parameter {node_name}, {param_list}")
-            try:
-                self.request_parameter(node_name, param_list, sub_callback)
-            except:  # noqa: 722
-                self.node.get_logger().error(traceback.format_exc())
-"""
