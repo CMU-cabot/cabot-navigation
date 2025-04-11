@@ -257,6 +257,63 @@ class Point(object):
         return point
 
 
+class Line(object):
+    """represent a 2D point"""
+    def __init__(self, **kwargs):
+        s = super(Line, self)
+        if self.__class__.mro()[-2] == s.__thisclass__:
+            s.__init__()
+        else:
+            s.__init__(**kwargs)
+
+        if 'start' in kwargs:
+            self.start = kwargs['start']
+        if 'end' in kwargs:
+            self.end = kwargs['end']
+
+    def __repr__(self):
+        return F"({self.start}, {self.end})"
+
+    def within_link(self, point):
+        A = self.start
+        B = self.end
+        dx = B.x - A.x
+        dy = B.y - A.y
+        dot = (point.x - A.x) * dx + (point.y - A.y) * dy
+        if dot < 0:
+            return False
+        len_sq = dx * dx + dy * dy
+        if dot > len_sq:
+            return False
+        return True
+
+    def distance_to(self, point):
+        if isinstance(point, Point):
+            return self.nearest_point_on_line(point).distance_to(point)
+        raise RuntimeError(F"Need to pass a Point object ({type(point)})")
+
+    def nearest_point_on_line(self, obj):
+        A = self.start
+        B = self.end
+        C = obj
+
+        # Distance between A and B
+        distAB = math.sqrt(math.pow(A.x - B.x, 2) + math.pow(A.y - B.y, 2))
+
+        # Direction vector from A to B
+        vecABx = (B.x - A.x) / distAB
+        vecABy = (B.y - A.y) / distAB
+
+        # Time from A to C
+        timeAC = max(0, min(distAB, vecABx * (C.x - A.x) + vecABy * (C.y - A.y)))
+
+        # LatLng of the point
+        x = timeAC * vecABx + A.x
+        y = timeAC * vecABy + A.y
+
+        return Point(x=x, y=y)
+
+
 class Pose(Point):
     """represent a 2D pose. init with x, y, and r"""
     def __init__(self, **kwargs):

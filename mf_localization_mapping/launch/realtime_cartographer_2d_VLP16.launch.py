@@ -61,6 +61,7 @@ def generate_launch_description():
     save_state_filename = LaunchConfiguration('save_state_filename')
     record_required = LaunchConfiguration('record_required')
     record_points = LaunchConfiguration('record_points')
+    compression_mode = LaunchConfiguration('compression_mode')
     configuration_basename = LaunchConfiguration('configuration_basename')
     # save_state_filename # todo
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
@@ -85,6 +86,8 @@ def generate_launch_description():
         cmd = node.cmd.copy()
         if use_sim_time.perform(context) == 'true':
             cmd.extend(['--use-sim-time'])
+        if compression_mode.perform(context) != 'none':
+            cmd.extend(['--compression-mode', compression_mode, '--compression-format', 'zstd'])
         if record_required.perform(context) == 'true':
             if record_points.perform(context) == 'true':
                 cmd.extend(['-a', '-x', "'/map|(.*)points_cropped|/pandar_packets|(.*)/image_raw|(.*)/image_raw/(.*)'"])
@@ -131,6 +134,7 @@ def generate_launch_description():
         DeclareLaunchArgument("load_state_filename", default_value=""),
         DeclareLaunchArgument("record_required", default_value="false"),
         DeclareLaunchArgument("record_points", default_value="false"),
+        DeclareLaunchArgument("compression_mode", default_value="message", description="{none,file,message} compress bag"),
 
         DeclareLaunchArgument("configuration_basename", default_value="cartographer_2d_mapping.lua"),
         DeclareLaunchArgument("save_state_filename", default_value=""),

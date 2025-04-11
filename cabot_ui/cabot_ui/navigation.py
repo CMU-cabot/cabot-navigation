@@ -138,6 +138,9 @@ class NavigationInterface(object):
     def request_sound(self, message: SNMessage):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
+    def system_pause_navigation(self, callback):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
 
 class BufferProxy():
     def __init__(self, node):
@@ -404,6 +407,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_pub = node.create_publisher(std_msgs.msg.Bool, pause_control_output, 10, callback_group=MutuallyExclusiveCallbackGroup())
         map_speed_output = node.declare_parameter("map_speed_topic", "/cabot/map_speed").value
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -487,14 +491,19 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
         if duration_in_sec > 1.0:
             self._stop_loop()
-            if self._current_goal:
-                self._current_goal.prevent_callback = True
 
             def done_callback():
                 self.resume_navigation()
-            self.pause_navigation(done_callback)
+            self.delegate.system_pause_navigation(done_callback)
 
     def _plan_callback(self, path):
+        msg = nav_msgs.msg.Path()
+        msg.header.frame_id = self._global_map_name
+        for pose in path.poses:
+            pose.header.frame_id = path.header.frame_id
+            msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+            # msg.poses[-1].pose.position.z = 0.0
+        path = msg
         try:
             self.turns = TurnDetector.detects(path, current_pose=self.current_pose)
             self.visualizer.turns = self.turns
@@ -779,18 +788,20 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _navigate_sub_goal(self, goal):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "sub_goal")
-
+        self.visualizer.reset()
         if isinstance(goal, navgoal.NavGoal):
             self.visualizer.pois = goal.pois
             self.visualizer.visualize()
             self.speed_pois = [x for x in goal.pois if isinstance(x, geojson.SpeedPOI)]
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
+            self.gradient = goal.gradient
         else:
             self.visualizer.pois = []
             self.speed_poi = []
             self.info_pois = []
             self.queue_wait_pois = []
+            self.gradient = []
         self.turns = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
@@ -885,6 +896,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._check_gradient(self.current_pose)
+        except:  # noqa: E722
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
             self._check_nearby_facility(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
@@ -926,6 +941,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
+
+    def _check_gradient(self, current_pose):
+        msg = std_msgs.msg.Float32()
+        msg.data = 0.0
+        for g in self.gradient:
+            if g.within_link(current_pose):
+                sign = 1.0 if g.gradient == geojson.Gradient.Up else -1.0
+                msg.data = sign * float(g.max_gradient if g.max_gradient else 5.0)
+                break
+        self.gradient_pub.publish(msg)
 
     def _check_nearby_facility(self, current_pose):
         if not self.nearby_facilities:
@@ -1205,7 +1230,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         self._logger.info("visualize goal")
-        self.visualizer.reset()
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
@@ -1246,7 +1270,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         get_result_future.add_done_callback(done_cb)
 
         self._logger.info("visualize goal")
-        self.visualizer.reset()
         self.visualizer.goal = goal
         self.visualizer.visualize()
 

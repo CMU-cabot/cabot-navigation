@@ -785,9 +785,6 @@ class NavGoal(Goal):
         if anchor is None:
             raise RuntimeError("anchor should be provided")
 
-        # to prevent callback when doing cancel/resume for area change
-        self.prevent_callback = False
-
         # need init global_map_name for initialization
         self.global_map_name = delegate.global_map_name()
         self.navcog_route = navcog_route
@@ -812,6 +809,7 @@ class NavGoal(Goal):
 
         last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
+        self.gradient = self._extract_gradient()
         self.handle = None
         self.mode = None
         self.route_index = 0
@@ -842,6 +840,15 @@ class NavGoal(Goal):
                 for poi in item.pois:
                     CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
                 temp.extend(item.pois)
+        return temp
+
+    def _extract_gradient(self):
+        """extract gradient along the route"""
+        temp = []
+        for (_, item) in enumerate(self.navcog_route):
+            if isinstance(item, geojson.RouteLink):
+                if item.gradient in [geojson.Gradient.Up, geojson.Gradient.Down]:
+                    temp.append(item)
         return temp
 
     @util.setInterval(5, times=1)
@@ -888,10 +895,6 @@ class NavGoal(Goal):
         self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
-        if self.prevent_callback:
-            self.prevent_callback = False
-            return
-
         if future:
             CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
         else:

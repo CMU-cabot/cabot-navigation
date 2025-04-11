@@ -92,21 +92,30 @@ cabot:
     ros__parameters:
       cmd_vel_input: /cabot/cmd_vel_adapter
       cmd_vel_output: /cabot/cmd_vel
-      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/people_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/touch_speed_switched']
-      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
-      complete_stop: [false,false,false,true,true,false,true]
-      configurable: [true,false,false,false,false,false,false]
+      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/people_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed', '/cabot/touch_speed_switched']
+      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
+      complete_stop: [false,false,false,true,true,false,true,true]
+      configurable: [true,false,false,false,false,false,false,false]
 
   speed_control_node_touch_false:  #TODO better way
     ros__parameters:
       cmd_vel_input: /cabot/cmd_vel_adapter
       cmd_vel_output: /cabot/cmd_vel
-      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/people_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed']
-      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
-      complete_stop: [false,false,false,true,true,false,true]
-      configurable: [true,false,false,false,false,false,false]
+      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/people_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed']
+      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
+      complete_stop: [false,false,false,true,true,false,true,true]
+      configurable: [true,false,false,false,false,false,false,false]
+
+  wheelie_speed_control_node:
+    ros__parameters:
+      pitch_threshold: -0.22689280275926 # -13 degree
+      imu_topic: /cabot/imu/data
+      wheelie_speed_topic: /cabot/wheelie_speed
+      gradient_topic_: /cabot/gradient
+      min_speed: 0.001
+      max_speed: 1.0
 
   ekf_node:
     ros__parameters:
