@@ -916,6 +916,8 @@ if __name__ == "__main__":
                                 if name == "nav":
                                     target_node.get_logger().info(f"{name} spin {count=}", throttle_duration_sec=5.0)
                                 target_executor.spin_once(timeout_sec=0.01)
+                            except rclpy.executors.ExternalShutdownException:
+                                break
                             except:  # noqa: 722
                                 traceback.print_exc()
                             await asyncio.sleep(0)

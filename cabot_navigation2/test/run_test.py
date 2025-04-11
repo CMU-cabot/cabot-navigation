@@ -397,6 +397,17 @@ class Tester:
             **kwargs)
         )
 
+    def button_up(self, button, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'button_up_({button})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'button_up_{button}'"
+            ),
+            **kwargs)
+        )
+
     # shorthand functions
     def button_down(self, button, hold=0, **kwargs):
         if hold:
