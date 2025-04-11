@@ -27,6 +27,7 @@ PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
 : ${LIDAR_MODEL:=}
 MAPPING_USE_GNSS=${MAPPING_USE_GNSS:-false}
+MAPPING_RESOLUTION=${MAPPING_RESOLUTION:-0.1}
 CONVERT_BAG=${CONVERT_BAG:-true}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
@@ -55,6 +56,7 @@ echo "mapping post process"
 echo "CABOT_MODEL=$CABOT_MODEL"
 echo "LIDAR_MODEL=$LIDAR_MODEL"
 echo "MAPPING_USE_GNSS=$MAPPING_USE_GNSS"
+echo "MAPPING_RESOLUTION=$MAPPING_RESOLUTION"
 echo "CONVERT_BAG=$CONVERT_BAG"
 echo "gazebo=$gazebo"
 echo "points_topic=$points2_topic"
@@ -129,6 +131,8 @@ fi
 if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; then
     cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping.lua \
           $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping.lua
+    cp $pkg_share_dir/configuration_files/mapping_config.yaml \
+          $WORKDIR/${BAG_FILENAME}.mapping_config.yaml
 
     com="ros2 launch mf_localization_mapping demo_2d_VLP16.launch.py \
 	      save_samples:=true \
@@ -141,6 +145,7 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 	      convert_points:=$convert_points \
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
 	      fix_status_threshold:=${fix_status_threshold} \
+	      grid_resolution:=${MAPPING_RESOLUTION} \
 	      bag_filename:=$WORKDIR/${bag_file2}"
 
     if [ $cabot_model != "" ]; then
@@ -175,9 +180,12 @@ fi
 
 # convert pbstream to pgm
 if [[ ! -e $WORKDIR/${pgm_file} ]]; then
+    pushd $WORKDIR
     ros2 run cartographer_ros cartographer_pbstream_to_ros_map \
-	   -pbstream_filename $WORKDIR/${pbstream_file} \
-	   -map_filestem $WORKDIR/${bag_file2}
+	   -pbstream_filename ${pbstream_file} \
+	   -map_filestem ${bag_file2} \
+	   -resolution $MAPPING_RESOLUTION
+    popd
 else
     blue "skipping $WORKDIR/${pgm_file}"
 fi
@@ -222,8 +230,15 @@ if [ "$MAPPING_USE_GNSS" = true ]; then
         blue "skipping $WORKDIR/${gnss_csv_file}"
     fi
 
+    # get lattiude and longitude used for anchor in error calculation from node options file
+    anchor_latitude=$(grep '^options.nav_sat_predefined_enu_frame_latitude' $WORKDIR/${node_options_file} | cut -d ':' -f2)
+    anchor_longitude=$(grep '^options.nav_sat_predefined_enu_frame_longitude' $WORKDIR/${node_options_file} | cut -d ':' -f2)
+
     # calculate error between trajectory and gnss
     ros2 run mf_localization_mapping compare_trajectory_and_gnss.py \
         --trajectory $WORKDIR/${trajectory_csv_file} \
-        --gnss $WORKDIR/${gnss_csv_file} --plot
+        --gnss $WORKDIR/${gnss_csv_file} \
+        --anchor_latitude $anchor_latitude \
+        --anchor_longitude $anchor_longitude \
+        --plot
 fi
