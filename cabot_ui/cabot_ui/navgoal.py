@@ -452,10 +452,6 @@ class Goal(geoutil.TargetPlace):
 
         await self._save_params()
         await self._change_params()
-        self._enter()
-
-    def _enter(self):
-        pass
 
     async def _save_params(self):
         CaBotRclpyUtil.info(F"{util.callee_name()} is called {self._saved_params=}")
@@ -883,13 +879,10 @@ class NavGoal(Goal):
             self.delegate.please_return_position()
             delay = True
         self.mode = new_mode
-        if delay:
-            # self.call_delay(super(NavGoal, self).enter)
-            await asyncio.sleep(5)
-        await super(NavGoal, self).enter()
+        enter = super(NavGoal, self).enter()
+        sleep = asyncio.sleep(5 if delay else 0)
+        await asyncio.gather(enter, sleep)
 
-    def _enter(self):
-        CaBotRclpyUtil.info("NavGoal._enter is called")
         # publish navcog path
         path = self.navcog_routes[self.route_index][0]
         path.header.stamp = CaBotRclpyUtil.now().to_msg()
@@ -900,7 +893,7 @@ class NavGoal(Goal):
         # bt_navigator will path only a pair of consecutive poses in the path to the plugin
         # so we use navigate_to_pose and planner will listen the published path
         # self.delegate.navigate_through_poses(self.ros_path.poses[1:], NavGoal.DEFAULT_BT_XML, self.done_callback)
-        self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
+        await self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
         if future:
@@ -987,10 +980,11 @@ class TurnGoal(Goal):
         pose._floor = goal_node.floor
         super(TurnGoal, self).__init__(delegate, target=pose, **kwargs)
 
-    def _enter(self):
+    async def enter(self):
         CaBotRclpyUtil.info("call turn_towards")
         CaBotRclpyUtil.info(F"turn target {str(self.orientation)}")
-        self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback, 0, 3.0)
+        self.delegate.enter_goal(self)
+        await self.delegate.turn_towards(self.orientation, self.goal_handle_callback, self.done_callback, 0, 3.0)
 
     def done_callback(self, result):
         if result:
@@ -1029,7 +1023,7 @@ class DoorGoal(Goal):
         )
         super(DoorGoal, self).__init__(delegate, target=target)
 
-    def enter(self):
+    async def enter(self):
         self.delegate.please_pass_door()
         self.delegate.set_pause_control(True)
         self.delegate.enter_goal(self)
@@ -1103,13 +1097,14 @@ class ElevatorWaitGoal(ElevatorGoal):
     def __init__(self, delegate, cab_poi):
         super(ElevatorWaitGoal, self).__init__(delegate, cab_poi)
 
-    def enter(self):
+    async def enter(self):
         CaBotRclpyUtil.info("ElevatorWaitGoal call turn_towards")
         CaBotRclpyUtil.info(F"current pose {str(self.delegate.current_pose)}")
         CaBotRclpyUtil.info(F"cab poi      {str(self.cab_poi.local_geometry)}")
         pose = geoutil.Pose.pose_from_points(self.delegate.current_pose, self.cab_poi.door_geometry)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
-        self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
+        self.delegate.enter_goal(self)
+        await self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, result):
         if result:
@@ -1145,9 +1140,10 @@ class ElevatorInGoal(ElevatorGoal):
         super(ElevatorInGoal, self).__init__(delegate, cab_poi, **kwargs)
 
     # use default enter to set parameters
-    def _enter(self):
+    async def enter(self):
+        await super(ElevatorInGoal, self).enter()
         # use odom frame for navigation
-        self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
+        await self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorInGoal completed")
@@ -1172,11 +1168,12 @@ class ElevatorTurnGoal(ElevatorGoal):
     def __init__(self, delegate, cab_poi, **kwargs):
         super(ElevatorTurnGoal, self).__init__(delegate, cab_poi, **kwargs)
 
-    def _enter(self):
+    async def enter(self):
+        self.delegate.enter_goal(self)
         CaBotRclpyUtil.info("call turn_towards")
         pose = geoutil.Pose(x=self.cab_poi.x, y=self.cab_poi.y, r=self.cab_poi.r)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
-        self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
+        await self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
 
     def done_callback(self, result):
         if result:
@@ -1199,8 +1196,9 @@ class ElevatorFloorGoal(ElevatorGoal):
     def __init__(self, delegate, cab_poi, **kwargs):
         super(ElevatorFloorGoal, self).__init__(delegate, cab_poi, **kwargs)
 
-    def _enter(self):
-        self.delegate.goto_floor(self.cab_poi.floor, self.goal_handle_callback, self.done_callback)
+    async def enter(self):
+        self.delegate.enter_goal(self)
+        await self.delegate.goto_floor(self.cab_poi.floor, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, result):
         CaBotRclpyUtil.info("ElevatorFloorGoal completed")
@@ -1219,7 +1217,8 @@ class ElevatorOutGoal(ElevatorGoal):
         super(ElevatorOutGoal, self).__init__(delegate, cab_poi, **kwargs)
         self.set_forward = set_forward
 
-    def _enter(self):
+    async def enter(self):
+        await super(ElevatorOutGoal, self).enter()
         CaBotRclpyUtil.info("ElevatorOutGoal _enter")
         pose = self.delegate.current_odom_pose
 
@@ -1243,7 +1242,7 @@ class ElevatorOutGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"publish path {str(pose)}")
         self.delegate.publish_path(path, False)
 
-        self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
+        await self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
 
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorOutGoal completed")
@@ -1361,7 +1360,8 @@ class QueueNavGoal(NavGoal):
     def is_social_navigation_enabled(self):
         return False
 
-    def _enter(self):
+    async def enter(self):
+        await super(QueueNavGoal, self).enter()
         # change queue_interval setting
         if self.queue_interval is not None:
             self.delegate.current_queue_interval = self.queue_interval
@@ -1371,9 +1371,9 @@ class QueueNavGoal(NavGoal):
         path.header.stamp = CaBotRclpyUtil.now().to_msg()
         self.delegate.publish_path(path)
         if self.is_exiting:
-            self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_EXIT_BT_XML, self.goal_handle_callback, self.done_callback)
+            await self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_EXIT_BT_XML, self.goal_handle_callback, self.done_callback)
         else:
-            self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_BT_XML, self.goal_handle_callback, self.done_callback)
+            await self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
         self._is_completed = future.done()
@@ -1390,9 +1390,10 @@ class QueueTurnGoal(Goal):
         super(QueueTurnGoal, self).__init__(delegate, angle=180, floor=floor, pose_msg=pose.to_pose_msg(), **kwargs)
         self.target_orientation = pose.orientation
 
-    def _enter(self):
+    async def enter(self):
+        await super(QueueNavGoal, self).enter()
         CaBotRclpyUtil.info(F"QueueTurnGoal turn_towards, target {str(self.target_orientation)}")
-        self.delegate.turn_towards(self.target_orientation, self.goal_handle_callback, self.done_callback)
+        await self.delegate.turn_towards(self.target_orientation, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, result):
         if result:
@@ -1409,11 +1410,11 @@ class QueueNavFirstGoal(QueueNavGoal):
     def __init__(self, delegate, navcog_route, anchor, **kwargs):
         super(QueueNavFirstGoal, self).__init__(delegate, navcog_route, anchor, queue_interval=None, is_target=False, is_exiting=False, **kwargs)
 
-    def _enter(self):
+    async def enter(self):
         # initialize flag to call queue start arrived info and queue proceed info
         self.delegate.need_queue_start_arrived_info = True
         self.delegate.need_queue_proceed_info = False
-        super(QueueNavFirstGoal, self)._enter()
+        await super(QueueNavFirstGoal, self)._enter()
 
 
 class QueueNavLastGoal(QueueNavGoal):

@@ -19,7 +19,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import os
+import time
 
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -89,6 +91,18 @@ class UserInterface(object):
         self.last_social_announce = None
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
 
+        self.speak_proxy = None
+        self.check_speak_proxy()
+        self.check_speak_timer = self._node.create_timer(5.0, self.check_speak_proxy)
+
+    def check_speak_proxy(self):
+        if self.speak_proxy:
+            return
+        self.speak_proxy = self._node.create_client(cabot_msgs.srv.Speak, '/speak', callback_group=MutuallyExclusiveCallbackGroup())
+        if not self.speak_proxy.wait_for_service(timeout_sec=1.0):
+            CaBotRclpyUtil.error("Service cannot be found")
+            self.speak_proxy = None
+
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
         log.header.stamp = self._node.get_clock().now().to_msg()
@@ -120,6 +134,9 @@ class UserInterface(object):
         i18n.set_language(self.lang)
 
     def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
+        if self.speak_proxy is None:
+            CaBotRclpyUtil.error("speak_proxy is None")
+            return
         if text is None:
             return
 
@@ -129,11 +146,7 @@ class UserInterface(object):
         voice = 'male'
         rate = 50
 
-        speak_proxy = self._node.create_client(cabot_msgs.srv.Speak, '/speak', callback_group=MutuallyExclusiveCallbackGroup())
         try:
-            if not speak_proxy.wait_for_service(timeout_sec=1):
-                CaBotRclpyUtil.error("Service cannot be found")
-                return
             CaBotRclpyUtil.info(F"try to speak {text} (v={voice}, r={rate}, p={pitch}, priority={priority}) {force}")
             request = cabot_msgs.srv.Speak.Request()
             request.text = text
@@ -146,7 +159,7 @@ class UserInterface(object):
             request.priority = priority
             request.timeout = 2.0
             request.channels = cabot_msgs.srv.Speak.Request.CHANNEL_BOTH
-            speak_proxy.call_async(request)
+            self.speak_proxy.call_async(request)
             CaBotRclpyUtil.info("speak requested")
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")

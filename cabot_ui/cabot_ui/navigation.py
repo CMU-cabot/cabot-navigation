@@ -191,10 +191,11 @@ class BufferProxy():
         # https://github.com/ros2/rclpy/blob/7a7f23e0d7e51dd244001ef606b97f1153e5a97e/rclpy/rclpy/client.py#L72-L110
 
         future = self.lookup_transform_service.call_async(req)
-        while not future.done():
+        while rclpy.ok() and not future.done():
             try:
                 await asyncio.sleep(0.1)
-            except:  # noqa: E722
+            except Exception as e:  # noqa: E722
+                self._logger.error(f"Exception in lookup_transform {e}")
                 str = "\n"
                 for stack in inspect.stack():
                     str += f"{stack.filename}:{stack.lineno} {stack.function}\n"
@@ -1208,10 +1209,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def exit_goal(self, goal):
         self.delegate.exit_goal(goal)
 
-    def navigate_to_pose(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
-        asyncio.create_task(self.navigate_to_pose_async(goal_pose, behavior_tree, gh_cb, done_cb, namespace))
-
-    async def navigate_to_pose_async(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
+    async def navigate_to_pose(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
         self._logger.info(F"{namespace}/navigate_to_pose")
         self.delegate.activity_log("cabot/navigation", "navigate_to_pose")
         client = self._clients["/".join([namespace, "navigate_to_pose"])]
@@ -1244,32 +1242,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._logger.info("sending goal")
         future = client.send_goal_async(goal)
-        self._logger.info("add done callback")
-        future.add_done_callback(lambda future: self._navigate_to_pose_sent_goal(goal, future, gh_cb, done_cb))
-        self._logger.info("added done callback")
-
-        def timeout_watcher(future, timeout_duration):
-            start_time = time.time()
-            while not future.done():
-                if time.time() - start_time > timeout_duration:
-                    self._logger.error("Timeout occurred while waiting for sending goal future to be completed")
-                    future.cancel()
-                    return
-                time.sleep(0.1)
-
-        timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
-        timeout_tread.start()
-        return future
-
-    def _navigate_to_pose_sent_goal(self, goal, future, gh_cb, done_cb):
-        if future.cancelled():
-            try:
+        start = time.time()
+        while not future.done():
+            await asyncio.sleep(0.1)
+            if time.time() - start > 5:
+                self._logger.error("Timeout occurred while waiting for sending goal future to be completed")
+                future.cancel()
                 done_cb(None)
-            except:  # noqa: E722
-                self._logger.error(traceback.format_exc())
-            return
-        self._logger.info("_navigate_to_pose_sent_goal")
-        self._logger.info(F"navigate to pose, threading.get_ident {threading.get_ident()}")
+                return
+
         goal_handle = future.result()
         self.goal_id_pub.publish(goal_handle.goal_id)
         gh_cb(goal_handle)
@@ -1277,23 +1258,22 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         get_result_future = goal_handle.get_result_async()
         self._logger.info("add done callback")
         get_result_future.add_done_callback(done_cb)
-
         self._logger.info("visualize goal")
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
-    def turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
+    async def turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
         self._logger.info("turn_towards")
         self.delegate.activity_log("cabot/navigation", "turn_towards",
                                    str(geoutil.get_yaw(geoutil.q_from_msg(orientation))))
         self.turn_towards_count = 0
         self.turn_towards_last_diff = None
-        self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
+        await self.try_turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
 
-    def _turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
+    async def try_turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
         goal = nav2_msgs.action.Spin.Goal()
         diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
-        time_allowance = max(3.0, min(time_limit, abs(diff)/0.3))
+        time_allowance = max(3.0, min(time_limit, abs(diff) / 0.3))
         goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
 
         self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}, {time_allowance=}")
@@ -1308,10 +1288,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             sdiff = geoutil.diff_angle(start_yaw, self.current_pose.orientation)
             self._logger.info(F"turn_towards: spin feedback {msg.feedback=} {sdiff=}")
         future = self._spin_client.send_goal_async(goal, feedback_callback=spin_feedback)
-        future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
-        return future
-
-    def _turn_towards_sent_goal(self, goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit):
+        while not future.done():
+            await asyncio.sleep(0.1)
         self._logger.info(F"_turn_towards_sent_goal: {goal=}")
         goal_handle = future.result()
 
@@ -1335,7 +1313,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             if abs(diff) > 0.05 and self.turn_towards_count < 3:
                 self._logger.info(F"send turn {diff:.2f}")
                 self.turn_towards_last_diff = diff
-                self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
+                asyncio.create_task(self.try_turn_towards(orientation, gh_callback, callback, clockwise, time_limit))
             else:
                 self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
                 callback(True)
@@ -1347,19 +1325,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # self._logger.info(F"visualize goal {goal}")
         angle = turn_yaw * 180 / math.pi
         pose = self.current_pose.to_pose_stamped_msg(self._global_map_name)
-        if abs(angle) >= 180/3:
+        if abs(angle) >= 180 / 3:
             self.delegate.notify_turn(device="vibrator", turn=Turn(pose, angle, Turn.Type.Normal))
-        elif abs(angle) >= 180/6:
+        elif abs(angle) >= 180 / 6:
             self.delegate.notify_turn(device="vibrator", turn=Turn(pose, angle, Turn.Type.Avoiding))
         self._logger.info(F"notify turn {turn_yaw}")
 
-    def goto_floor(self, floor, gh_callback, callback):
-        try:
-            self._goto_floor(floor, gh_callback, callback)
-        except:  # noqa: #722
-            self._logger.error(traceback.format_exc())
-
-    def _goto_floor(self, floor, gh_callback, callback):
+    async def goto_floor(self, floor, gh_callback, callback):
         self._logger.info(F"go to floor {floor}")
         self.delegate.activity_log("cabot/navigation", "go_to_floor", str(floor))
 
@@ -1416,6 +1388,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         task = GotoFloorTask(self)
         gh_callback(task)
+        await asyncio.sleep(0)
 
     def set_pause_control(self, flag):
         self._logger.info("set_pause_control")
