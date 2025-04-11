@@ -134,13 +134,13 @@ class UserInterface(object):
         i18n.set_language(self.lang)
 
     def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
-        if self.speak_proxy is None:
-            CaBotRclpyUtil.error("speak_proxy is None")
-            return
         if text is None:
             return
 
         self._activity_log("speech request", text, self.lang, visualize=True)
+        if self.speak_proxy is None:
+            CaBotRclpyUtil.error("speak_proxy is None")
+            return
 
         # TODO:
         voice = 'male'
