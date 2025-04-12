@@ -318,6 +318,7 @@ class GNSSParameters:
     # parameter for floor estimation
     gnss_use_floor_estimation: bool = False
     gnss_floor_search_radius: float = 5.0  # [m]
+    gnss_floor_estimation_probability_scale: float = 0.0  # p = exp(scale*(floor-max_floor))/Z  default: 0.0
 
 
 @dataclass
@@ -1419,10 +1420,15 @@ class MultiFloorManager:
                                                                       radius=self.gnss_params.gnss_floor_search_radius)
             if len(near_floor_list) == 0:
                 floor = 0  # assume ground floor
+                if self.floor != floor:
+                    self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}")
             else:
-                floor = np.max(near_floor_list)
-            if self.floor != floor:
-                self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}")
+                max_floor = np.max(near_floor_list)
+                near_floor_array = np.array(near_floor_list)
+                probs_floor = np.exp(self.gnss_params.gnss_floor_estimation_probability_scale * (near_floor_array - max_floor))
+                probs_floor /= np.sum(probs_floor)
+                floor = np.random.choice(near_floor_array, p=probs_floor)
+                self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}, probs_floor={probs_floor}")
         else:
             floor_raw = 0  # assume ground floor
             idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
