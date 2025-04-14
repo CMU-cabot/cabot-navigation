@@ -37,13 +37,13 @@ class PressureSimulator:
         return p
 
 
-def generate_samples(xmin, xmax, ymin, ymax, floor, area, height, dx=1.0, dy=1.0):
+def generate_samples(xmin, xmax, ymin, ymax, floor, area, height, effective_radius=np.nan, dx=1.0, dy=1.0):
     X = []
     for i in range(int((xmax-xmin)/dx)):
         for j in range(int((ymax-ymin)/dy)):
             x = xmin + i*dx
             y = ymin + j+dy
-            X.append([x, y, floor, area, height])
+            X.append([x, y, floor, area, height, effective_radius])
     return X
 
 

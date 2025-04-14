@@ -317,7 +317,7 @@ class GNSSParameters:
     gnss_position_covariance_indoor_threshold: float = 3.0 * 3.0
     # parameter for floor estimation
     gnss_use_floor_estimation: bool = False
-    gnss_floor_search_radius: float = 5.0  # [m]
+    gnss_floor_search_radius: float = None  # [m]
     gnss_floor_estimation_probability_scale: float = 0.0  # p = exp(scale*(floor-max_floor))/Z  default: 0.0
 
 
@@ -2345,6 +2345,7 @@ if __name__ == "__main__":
         area = int(map_dict["area"]) if "area" in map_dict else 0
         area_str = str(area)
         height = map_dict.get("height", np.nan)
+        effective_radius = map_dict.get("effective_radius", np.nan)
         node_id = map_dict["node_id"]
         frame_id = map_dict["frame_id"]
         anchor = geoutil.Anchor(lat=map_dict["latitude"],
@@ -2377,6 +2378,7 @@ if __name__ == "__main__":
         for s in samples:
             s["information"]["area"] = area
             s["information"]["height"] = height
+            s["information"]["effective_radius"] = effective_radius
 
         # extract iBeacon, WiFi, and other samples
         samples_ble, samples_wifi, samples_other = extract_samples_ble_wifi_other(samples)
@@ -2580,12 +2582,13 @@ if __name__ == "__main__":
         f_a = float(s["information"]["floor"])
         area = int(s["information"]["area"])
         height = s["information"]["height"]
-        X_height_mapper.append([x_a, y_a, f_a, area, height])
+        effective_radius = s["information"]["effective_radius"]
+        X_height_mapper.append([x_a, y_a, f_a, area, height, effective_radius])
     if floor_height_mapper_config is None:
-        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper)
+        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger,)
     else:
         logger.info(f"floor_height_mapper_config={floor_height_mapper_config}")
-        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, **floor_height_mapper_config)
+        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger, **floor_height_mapper_config)
 
     # area localizer
     X_area = []
