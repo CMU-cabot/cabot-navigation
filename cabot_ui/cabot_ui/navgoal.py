@@ -495,10 +495,10 @@ class Goal(geoutil.TargetPlace):
             callback()
 
     def nav_params_keys(self):
-        pass
+        return []
 
     def nav_params(self):
-        pass
+        return {}
 
     def check(self, current_pose):
         pass
