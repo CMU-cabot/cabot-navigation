@@ -121,6 +121,7 @@ def generate_launch_description():
             package="cabot_ui",
             executable="cabot_ui_manager.py",
             name="cabot_ui_manager",
+            output={},
             parameters=[{
                 'init_speed': init_speed,
                 'anchor_file': anchor_file,
@@ -141,6 +142,7 @@ def generate_launch_description():
             executable='navcog_map.py',
             namespace='cabot',
             name='navcog_map',
+            output={},
             parameters=[{
                 'anchor_file': anchor_file,
             }, NamespaceParameterFile('cabot/navcog_map', config_path)],
@@ -153,12 +155,14 @@ def generate_launch_description():
                 '--allow-declare', 'false',
                 '--file-path', '/home/developer/ros2_ws/persistent_params.yaml',
             ],
+            output={},
             parameters=[default_param_file],
         ),
         Node(
             package="cabot_ui",
             executable="stop_reasons_node",
             name="stop_reasons_node",
+            output={},
             parameters=[{
                 'announce_no_touch': announce_no_touch
             }],
@@ -167,5 +171,6 @@ def generate_launch_description():
             package="cabot_common",
             executable="lookup_transform_service_node",
             name="lookup_transform_service_node",
+            output={},
         )
     ])
