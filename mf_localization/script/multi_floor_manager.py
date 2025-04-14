@@ -1414,27 +1414,30 @@ class MultiFloorManager:
         covariance_matrix[0:3, 0:3] = np.reshape(position_covariance, (3, 3))
         # TODO: orientation covariance
 
-        # estimate floor if enabled
-        if self.gnss_params.gnss_use_floor_estimation:
-            near_floor_list = self.floor_height_mapper.get_floor_list([gnss_xy.x, gnss_xy.y],
-                                                                      radius=self.gnss_params.gnss_floor_search_radius)
-            if len(near_floor_list) == 0:
-                floor = 0  # assume ground floor
-                if self.floor != floor:
+        if self.floor is None:
+            # estimate floor if enabled
+            if self.gnss_params.gnss_use_floor_estimation:
+                near_floor_list = self.floor_height_mapper.get_floor_list([gnss_xy.x, gnss_xy.y],
+                                                                          radius=self.gnss_params.gnss_floor_search_radius)
+                if len(near_floor_list) == 0:
+                    floor_raw = 0  # assume ground floor
+                    idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
+                    floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
                     self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}")
+                else:
+                    max_floor = np.max(near_floor_list)
+                    near_floor_array = np.array(near_floor_list)
+                    probs_floor = np.exp(self.gnss_params.gnss_floor_estimation_probability_scale * (near_floor_array - max_floor))
+                    probs_floor /= np.sum(probs_floor)
+                    floor = np.random.choice(near_floor_array, p=probs_floor)
+                    self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}, probs_floor={probs_floor}")
             else:
-                max_floor = np.max(near_floor_list)
-                near_floor_array = np.array(near_floor_list)
-                probs_floor = np.exp(self.gnss_params.gnss_floor_estimation_probability_scale * (near_floor_array - max_floor))
-                probs_floor /= np.sum(probs_floor)
-                floor = np.random.choice(near_floor_array, p=probs_floor)
-                self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}, probs_floor={probs_floor}")
-        else:
-            floor_raw = 0  # assume ground floor
-            idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
-            floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
-            if self.floor != floor:
+                floor_raw = 0  # assume ground floor
+                idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
+                floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
                 self.logger.info(f"gnss_fix_callback: floor_est={floor}, floor_raw={floor_raw}, floor_list={self.floor_list}")
+        else:
+            floor = self.floor
 
         # x,y,yaw -> PoseWithCovarianceStamped message
         pose_with_covariance_stamped = PoseWithCovarianceStamped()
