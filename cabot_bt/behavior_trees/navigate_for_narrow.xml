@@ -61,6 +61,10 @@
           param_name="min_distance"
           param_value="0.25" store="params" name="ChangeLidarSpeedControlMinDistance" />
 
+        <ChangeParam node_name="/cabot/low_lidar_speed_control_node"
+          param_name="min_distance"
+          param_value="0.25" store="params" name="ChangeLowLidarSpeedControlMinDistance" />
+
         <!-- shared navigation behavior, __shared_blackboard="true" is required -->
         <SubTree ID="Navigation" __shared_blackboard="true" />
 

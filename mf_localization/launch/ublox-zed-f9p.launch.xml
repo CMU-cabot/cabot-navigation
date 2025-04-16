@@ -26,6 +26,7 @@
   <arg name="param_file_name"     default="zed_f9p_rover" />
   <arg name="param_file_dir"      default="$(find-pkg-share mf_localization)/configuration_files/ublox" />
   <arg name="output"              default="both" />
+  <arg name="respawn"             default="true"/>
 
   <!-- the following attributes are not available in ROS 2-->
   <!--
@@ -37,7 +38,9 @@
   <node pkg="ublox_gps"
         exec="ublox_gps_node"
         name="$(var node_name)"
-        output="$(var output)">
+        output="$(var output)"
+        respawn="$(var respawn)"
+        respawn_delay="5">
     <param from="$(var param_file_dir)/$(var param_file_name).yaml" />
     <!-- remapping because ROS 2 ublox node publishes navsat type messages to navstate topics. -->
     <remap from="navstate" to="ublox/navsat"/>

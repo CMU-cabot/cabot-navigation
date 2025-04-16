@@ -122,19 +122,31 @@ echo "CABOT_SHOW_ROS2_LOCAL_RVIZ: $CABOT_SHOW_ROS2_LOCAL_RVIZ"
 echo "CABOT_SHOW_GAZEBO_CLIENT  : $CABOT_SHOW_GAZEBO_CLIENT"
 echo "CABOT_SHOW_ROBOT_MONITOR  : $CABOT_SHOW_ROBOT_MONITOR"
 echo "CABOT_GUI_TELEOP_TWIST_TOPIC  : $CABOT_GUI_TELEOP_TWIST_TOPIC"
+echo "CABOT_ROS2_RVIZ_CONFIG        : $CABOT_ROS2_RVIZ_CONFIG"
+echo "CABOT_ROS2_LOCAL_RVIZ_CONFIG  : $CABOT_ROS2_LOCAL_RVIZ_CONFIG"
 
 blue "launch gui"
-com="$command_prefix ros2 launch cabot_ui cabot_gui.launch.py $command_postfix"
+rviz_option=
+if [[ -n $CABOT_ROS2_RVIZ_CONFIG ]]; then
+    rviz_option+=" rviz_config_file:=$CABOT_ROS2_RVIZ_CONFIG"
+fi
+if [[ -n $CABOT_ROS2_LOCAL_RVIZ_CONFIG ]]; then
+    rviz_option+=" rviz_config_file2:=$CABOT_ROS2_LOCAL_RVIZ_CONFIG"
+fi
+com="$command_prefix ros2 launch cabot_ui cabot_gui.launch.py $rviz_option $command_postfix"
 eval $com
 checks+=($!)
 pids+=($!)
 
 if [[ $CABOT_GAZEBO -eq 1 ]]; then
-	blue "launch cabot_keyboard teleop"
-	com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
-    echo $com
-    eval $com
-    pids+=($!)
+    # Replaced with cabot_gazebo cabot_handle_simulator (2025.02.25 @daisukes)
+    #
+    # blue "launch cabot_keyboard teleop"
+    # com="setsid xterm -e ros2 run cabot_ui cabot_keyboard.py &"
+    # echo $com
+    # eval $com
+    # pids+=($!)
+    :
 else
     if [[ $CABOT_USE_HANDLE_SIMULATOR -eq 1 ]]; then
 	blue "launch cabot_keyboard teleop"

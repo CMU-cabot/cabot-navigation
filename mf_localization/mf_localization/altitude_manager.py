@@ -307,20 +307,28 @@ class FloorHeightMapper:
 
     def get_floor_height_list(self, x, radius=None):
         _x = numpy.array(x).reshape(1, -1)
-        _radius = self._radius if radius is None else radius
+        radius_global = self._radius if radius is None else radius
 
         floor_list = []
         height_list = []
 
+        # search the closest sample for each floor
         for _floor in self._floors:
             nbrs = self.nbrs_dict[_floor]
             distances, indices = nbrs.kneighbors(_x)
             dist = distances[0]
             idx = indices[0]
+
+            # update radius for sample
+            radius_sample = self.X_dict[_floor][idx, 5].item()
+            if not numpy.isnan(radius_sample):
+                _radius = radius_sample
+            else:
+                _radius = radius_global
+
             if dist < _radius:
                 floor_list.append(_floor)
-                X_floor = self.X_dict[_floor]
-                height = X_floor[idx, 4].item()
+                height = self.X_dict[_floor][idx, 4].item()
                 height_list.append(height)
         return floor_list, height_list
 

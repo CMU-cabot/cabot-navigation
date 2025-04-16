@@ -108,7 +108,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     :rtype: [navgoal.Goal]
     """
     CaBotRclpyUtil.info(F"--make_goals-{len(groute)}--------------------")
-    CaBotRclpyUtil.info(F"{groute}")
+    CaBotRclpyUtil.debug(F"{groute}")
 
     if len(groute) == 0:
         CaBotRclpyUtil.error("groute length should not be 0")
@@ -299,7 +299,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
         goal_node = groute[-1]  # should be Node
         goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
-    CaBotRclpyUtil.info(F"goals: {goals}")
+    CaBotRclpyUtil.debug(F"goals: {goals}")
     return goals
 
 
@@ -311,8 +311,8 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
     if len(navcog_route) == 0:
         CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
         return points
-    CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
-    last_index = len(navcog_route)-1
+    CaBotRclpyUtil.debug(F"create_ros_path, {str(navcog_route)}")
+    last_index = len(navcog_route) - 1
 
     def convert(g, a=anchor):
         return geoutil.global2local(g, a)
@@ -342,8 +342,8 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         elif isinstance(item.geometry, geojson.LineString):
             points.append(convert(item.target_node.geometry))
         else:
-            CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
-        CaBotRclpyUtil.info(F"{index}: {str(points)}")
+            CaBotRclpyUtil.debug("geometry is not point or linestring {item.geometry}")
+        CaBotRclpyUtil.debug(F"{index}: {str(points)}")
 
     # make a path from points
     path = nav_msgs.msg.Path()
@@ -396,7 +396,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
             path.poses[-1].pose.position.x = last_pose.position.x
             path.poses[-1].pose.position.y = last_pose.position.y
 
-    CaBotRclpyUtil.info(F"path {path}")
+    CaBotRclpyUtil.debug(F"path {path}")
     return (path, path.poses[-1] if len(path.poses) > 0 else None, mode)
 
 
@@ -415,6 +415,7 @@ def estimate_next_goal(goals, current_pose, current_floor):
 class Goal(geoutil.TargetPlace):
     GOAL_XY_THRETHOLD = 0.5
     GOAL_ANGLE_THRETHOLD_IN_DEGREE = 15
+    default_params = {}
 
     def __init__(self, delegate, **kwargs):
         super(Goal, self).__init__(**kwargs)
@@ -429,7 +430,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
-        self._saved_params = None
+        self._saved_params = Goal.default_params
         self._is_exiting_goal = False
 
     def reset(self):
@@ -478,16 +479,26 @@ class Goal(geoutil.TargetPlace):
         def done_change_parameters_callback(result):
             CaBotRclpyUtil.info("done_change_parameters_callback is called")
             callback()
-        if self.nav_params():
-            self.delegate.change_parameters(self.nav_params(), done_change_parameters_callback)
+        params = self.nav_params()
+        if self._saved_params:
+            for node, values in list(params.items()):
+                if node in self._saved_params:
+                    for key, value in list(values.items()):
+                        if key in self._saved_params[node] and self._saved_params[node][key] == value:
+                            del params[node][key]
+                        if not params[node]:
+                            del params[node]
+        CaBotRclpyUtil.info(F"params to be chanegd: {params=}")
+        if params:
+            self.delegate.change_parameters(params, done_change_parameters_callback)
         else:
             callback()
 
     def nav_params_keys(self):
-        pass
+        return []
 
     def nav_params(self):
-        pass
+        return {}
 
     def check(self, current_pose):
         pass
@@ -513,7 +524,6 @@ class Goal(geoutil.TargetPlace):
     def exit(self, callback):
         def done_change_parameters_callback(result):
             CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
-            self._saved_params = None
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
         CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
@@ -635,11 +645,12 @@ class Nav2Params:
     FollowPath.sim_time: 1.7
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: True
     inflation_layer.inflation_radius: 0.75
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
+    min_distance: 1.0
+/cabot/low_lidar_speed_control_node:
     min_distance: 1.0
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
@@ -661,11 +672,12 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.45
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
+    min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
@@ -691,11 +703,12 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.25
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.25
 /cabot/lidar_speed_control_node:
+    min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
@@ -721,11 +734,12 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.45
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
+    min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
@@ -1075,7 +1089,8 @@ class ElevatorGoal(Goal):
 
     def nav_params_keys(self):
         return {
-            "/cabot/people_speed_control_node": ["social_distance_x", "social_distance_y"]
+            "/cabot/people_speed_control_node": ["social_distance_x", "social_distance_y"],
+            "/footprint_publisher": ["footprint_mode"],
         }
 
     def nav_params(self):
@@ -1083,6 +1098,9 @@ class ElevatorGoal(Goal):
             "/cabot/people_speed_control_node": {
                 "social_distance_x": ElevatorGoal.ELEVATOR_SOCIAL_DISTANCE_X,
                 "social_distance_y": ElevatorGoal.ELEVATOR_SOCIAL_DISTANCE_Y
+            },
+            "/footprint_publisher": {
+                "footprint_mode": 1
             }
         }
 

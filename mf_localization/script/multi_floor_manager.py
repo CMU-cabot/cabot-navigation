@@ -317,7 +317,8 @@ class GNSSParameters:
     gnss_position_covariance_indoor_threshold: float = 3.0 * 3.0
     # parameter for floor estimation
     gnss_use_floor_estimation: bool = False
-    gnss_floor_search_radius: float = 5.0  # [m]
+    gnss_floor_search_radius: float = None  # [m]
+    gnss_floor_estimation_probability_scale: float = 0.0  # p = exp(scale*(floor-max_floor))/Z  default: 0.0
 
 
 @dataclass
@@ -1413,22 +1414,30 @@ class MultiFloorManager:
         covariance_matrix[0:3, 0:3] = np.reshape(position_covariance, (3, 3))
         # TODO: orientation covariance
 
-        # estimate floor if enabled
-        if self.gnss_params.gnss_use_floor_estimation:
-            near_floor_list = self.floor_height_mapper.get_floor_list([gnss_xy.x, gnss_xy.y],
-                                                                      radius=self.gnss_params.gnss_floor_search_radius)
-            if len(near_floor_list) == 0:
-                floor = 0  # assume ground floor
+        if self.floor is None:
+            # estimate floor if enabled
+            if self.gnss_params.gnss_use_floor_estimation:
+                near_floor_list = self.floor_height_mapper.get_floor_list([gnss_xy.x, gnss_xy.y],
+                                                                          radius=self.gnss_params.gnss_floor_search_radius)
+                if len(near_floor_list) == 0:
+                    floor_raw = 0  # assume ground floor
+                    idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
+                    floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
+                    self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}")
+                else:
+                    max_floor = np.max(near_floor_list)
+                    near_floor_array = np.array(near_floor_list)
+                    probs_floor = np.exp(self.gnss_params.gnss_floor_estimation_probability_scale * (near_floor_array - max_floor))
+                    probs_floor /= np.sum(probs_floor)
+                    floor = np.random.choice(near_floor_array, p=probs_floor)
+                    self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}, probs_floor={probs_floor}")
             else:
-                floor = np.max(near_floor_list)
-            if self.floor != floor:
-                self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}")
-        else:
-            floor_raw = 0  # assume ground floor
-            idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
-            floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
-            if self.floor != floor:
+                floor_raw = 0  # assume ground floor
+                idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
+                floor = self.floor_list[idx_floor]  # select from floor_list to prevent using an unregistered value.
                 self.logger.info(f"gnss_fix_callback: floor_est={floor}, floor_raw={floor_raw}, floor_list={self.floor_list}")
+        else:
+            floor = self.floor
 
         # x,y,yaw -> PoseWithCovarianceStamped message
         pose_with_covariance_stamped = PoseWithCovarianceStamped()
@@ -2339,6 +2348,7 @@ if __name__ == "__main__":
         area = int(map_dict["area"]) if "area" in map_dict else 0
         area_str = str(area)
         height = map_dict.get("height", np.nan)
+        effective_radius = map_dict.get("effective_radius", np.nan)
         node_id = map_dict["node_id"]
         frame_id = map_dict["frame_id"]
         anchor = geoutil.Anchor(lat=map_dict["latitude"],
@@ -2371,6 +2381,7 @@ if __name__ == "__main__":
         for s in samples:
             s["information"]["area"] = area
             s["information"]["height"] = height
+            s["information"]["effective_radius"] = effective_radius
 
         # extract iBeacon, WiFi, and other samples
         samples_ble, samples_wifi, samples_other = extract_samples_ble_wifi_other(samples)
@@ -2574,12 +2585,13 @@ if __name__ == "__main__":
         f_a = float(s["information"]["floor"])
         area = int(s["information"]["area"])
         height = s["information"]["height"]
-        X_height_mapper.append([x_a, y_a, f_a, area, height])
+        effective_radius = s["information"]["effective_radius"]
+        X_height_mapper.append([x_a, y_a, f_a, area, height, effective_radius])
     if floor_height_mapper_config is None:
-        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper)
+        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger,)
     else:
         logger.info(f"floor_height_mapper_config={floor_height_mapper_config}")
-        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, **floor_height_mapper_config)
+        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger, **floor_height_mapper_config)
 
     # area localizer
     X_area = []

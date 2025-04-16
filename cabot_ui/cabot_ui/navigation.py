@@ -19,6 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 import math
 import inspect
 import numpy
@@ -361,6 +362,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.queue_wait_pois = []
         self.speed_pois = []
         self.turns = []
+        self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self.i_am_ready = False
@@ -380,6 +382,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_msg.data = True
         self.pause_control_loop_handler = None
         self.lock = threading.Lock()
+
+        self.restart_navigation_threthold_sec = node.declare_parameter("restart_navigation_threthold_sec", 5.0).value
 
         self._max_speed = node.declare_parameter("max_speed", 1.1).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
@@ -446,7 +450,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
-        self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+        self._process_timer = act_node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
     def _localize_status_callback(self, msg):
@@ -489,7 +493,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"wait_for_restart_navigation {duration_in_sec:.2f}")
         if self._current_goal is None:
             return
-        if duration_in_sec > 1.0:
+        if duration_in_sec > self.restart_navigation_threthold_sec:
             self._stop_loop()
 
             def done_callback():
@@ -497,13 +501,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.system_pause_navigation(done_callback)
 
     def _plan_callback(self, path):
-        msg = nav_msgs.msg.Path()
-        msg.header.frame_id = self._global_map_name
-        for pose in path.poses:
-            pose.header.frame_id = path.header.frame_id
-            msg.poses.append(self.buffer.transform(pose, self._global_map_name))
-            # msg.poses[-1].pose.position.z = 0.0
-        path = msg
+        try:
+            msg = nav_msgs.msg.Path()
+            msg.header.frame_id = self._global_map_name
+            for pose in path.poses:
+                pose.header.frame_id = path.header.frame_id
+                msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+                # msg.poses[-1].pose.position.z = 0.0
+            path = msg
+        except:  # noqa: E722
+            self._logger.info(traceback.format_exc())
         try:
             self.turns = TurnDetector.detects(path, current_pose=self.current_pose)
             self.visualizer.turns = self.turns
@@ -558,6 +565,23 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _goal_updated_callback(self, msg):
         if self._current_goal:
             self._current_goal.update_goal(msg)
+
+    def request_defult_params(self):
+        with self._process_queue_lock:
+            self._process_queue.append((self._request_default_params, ))
+
+    def _request_default_params(self):
+        # dummy Goal instance
+        goal = navgoal.Goal(self, x=0, y=0, r=0, angle=0, floor=0)
+
+        def dummy_nav_params_key():
+            return navgoal.Nav2Params.all_keys()
+        goal.nav_params_keys = dummy_nav_params_key
+
+        def done_callback():
+            self._logger.info(f"done_callback f{goal._saved_params}")
+            navgoal.Goal.default_params = goal._saved_params
+        goal._save_params(done_callback)
 
     # public interfaces
 
@@ -646,39 +670,41 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
         self._goal_index = -1
 
-        # check facilities
-        self.nearby_facilities = []
-        links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
-        target = groute[-1]
-        if len(links) > 0:
-            kdtree = geojson.LinkKDTree()
-            kdtree.build(links)
+        def check_facilities_task():
+            # check facilities
+            self.nearby_facilities = []
+            links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
+            target = groute[-1]
+            if len(links) > 0:
+                kdtree = geojson.LinkKDTree()
+                kdtree.build(links)
 
-            start = time.time()
-            facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
-            for facility in facilities:
-                # self._logger.debug(f"facility {facility._id}: {facility.name}")
-                if not facility.name:
-                    continue
-                if not facility.is_read:
-                    continue
+                start = time.time()
+                facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+                for facility in facilities:
+                    # self._logger.debug(f"facility {facility._id}: {facility.name}")
+                    if not facility.name:
+                        continue
+                    if not facility.is_read:
+                        continue
 
-                for ent in facility.entrances:
-                    min_link, min_dist = kdtree.get_nearest_link(ent.node)
-                    if min_link is None or min_dist >= 5.0:
-                        continue
-                    # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
-                    gp = ent.set_target(min_link)
-                    dist = target.geometry.distance_to(gp)
-                    if dist < 1.0:
-                        self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
-                        continue
-                    self.nearby_facilities.append({
-                        "facility": facility,
-                        "entrance": ent
-                    })
-            end = time.time()
-            self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+                    for ent in facility.entrances:
+                        min_link, min_dist = kdtree.get_nearest_link(ent.node)
+                        if min_link is None or min_dist >= 5.0:
+                            continue
+                        # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
+                        gp = ent.set_target(min_link)
+                        dist = target.geometry.distance_to(gp)
+                        if dist < 1.0:
+                            self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
+                            continue
+                        self.nearby_facilities.append({
+                            "facility": facility,
+                            "entrance": ent
+                        })
+                end = time.time()
+                self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+        threading.Thread(target=check_facilities_task).start()
 
         # for dashboad
         (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
@@ -882,6 +908,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.i_am_ready = True
             self._logger.debug("i am ready")
             self.delegate.i_am_ready()
+            self.request_defult_params()
 
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
@@ -1482,6 +1509,8 @@ class NavigationParamManager:
             done_callback(None)
 
     def change_parameters(self, params, callback):
+        params = copy.deepcopy(params)
+
         def sub_callback(node_name, future):
             del params[node_name]
             self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")

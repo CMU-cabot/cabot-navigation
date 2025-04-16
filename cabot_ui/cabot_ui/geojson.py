@@ -213,10 +213,10 @@ class LinkKDTree:
             self._link_kdtree = scipy.spatial.KDTree(self._link_points)
 
     def _add_link_index(self, sp, ep, obj):
-        mp = (sp+ep)/2.0
+        mp = (sp + ep) / 2.0
         self._link_points.append(mp)
         self._link_index.append(obj)
-        if numpy.linalg.norm(sp-ep) > 1:
+        if numpy.linalg.norm(sp - ep) > 1:
             self._add_link_index(sp, mp, obj)
             self._add_link_index(mp, ep, obj)
 
@@ -234,7 +234,11 @@ class LinkKDTree:
             if exclude is not None and exclude(link):
                 continue
 
-            dist = link.geometry.distance_to(latlng)
+            # use local geometry if available, which is more efficient
+            if link.local_geometry:
+                dist = link.local_geometry.distance_to(point)
+            else:
+                dist = link.geometry.distance_to(latlng)
             if node.floor is not None:
                 if link.start_node.floor != node.floor and \
                    link.end_node.floor != node.floor:
