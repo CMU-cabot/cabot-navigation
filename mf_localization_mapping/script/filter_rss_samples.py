@@ -27,24 +27,26 @@ import copy
 import re
 
 
-def filter_samples(samples, beacon_pattern=".", wifi_pattern="."):
+def filter_samples(samples, beacon_pattern=r".", wifi_pattern=r"."):
     samples_new = []
+    count = 0
+    count_new = 0
     for s in samples:
         s2 = copy.copy(s)
         s2_beacons = []
         for e in s["data"]["beacons"]:
+            count += 1
             if e["type"] == "iBeacon":
                 if re.match(beacon_pattern, e["id"]):
                     s2_beacons.append(e)
+                    count_new += 1
             elif e["type"] == "WiFi":
                 if re.match(wifi_pattern, e["id"]):
                     s2_beacons.append(e)
-        if 0 < len(s2_beacons):
-            s2["data"]["beacons"] = s2_beacons
-            samples_new.append(s2)
-        else:
-            continue
-    return samples_new
+                    count_new += 1
+        s2["data"]["beacons"] = s2_beacons
+        samples_new.append(s2)
+    return samples_new, count, count_new
 
 
 if __name__ == "__main__":
@@ -53,6 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output")
     parser.add_argument("--wifi_pattern", default=r".")
     parser.add_argument("--beacon_pattern", default=r".")
+    parser.add_argument("-v", "--verbose", action="store_true", default=False)
     args = parser.parse_args()
 
     input_file = args.input
@@ -63,7 +66,11 @@ if __name__ == "__main__":
     with open(input_file) as f:
         samples = json.load(f)
 
-    samples_new = filter_samples(samples, beacon_pattern=beacon_pattern, wifi_pattern=wifi_pattern)
+    samples_new, count, count_new = filter_samples(samples, beacon_pattern=beacon_pattern, wifi_pattern=wifi_pattern)
+
+    if args.verbose:
+        print(f"#samples: {len(samples)} -> {len(samples_new)}")
+        print(f"#samples.beacons {count} -> {count_new}")
 
     if output_file is not None:
         with open(output_file, "w") as f:
