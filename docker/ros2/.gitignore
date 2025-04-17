@@ -1,4 +1,5 @@
 bond_core
 grid_map
+robot_localization
 rosbridge_suite
 tf2_web_republisher
