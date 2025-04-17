@@ -38,12 +38,24 @@ from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
+
+from launch_ros.descriptions import ParameterFile
 from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions
 
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization_mapping')
+
+    param_files = [
+        ParameterFile(PathJoinSubstitution([
+            pkg_dir,
+            'configuration_files',
+            'mapping_config.yaml'
+        ]),
+            allow_substs=True,
+        )
+    ]
 
     bag_filename = LaunchConfiguration('bag_filename')
     save_samples = LaunchConfiguration('save_samples')
@@ -97,8 +109,17 @@ def generate_launch_description():
             cmd.append('/esp32/wifi')
             cmd.append('/wireless/beacons')
             cmd.append('/wireless/wifi')
+            # ublox
             cmd.append('/ublox/fix')
             cmd.append('/ublox/fix_velocity')
+            cmd.append('/ublox/navclock')
+            cmd.append('/ublox/navcov')
+            cmd.append('/ublox/navheading')
+            cmd.append('/ublox/navpvt')
+            cmd.append('/ublox/navrelposned')
+            cmd.append('/ublox/navsat')
+            cmd.append('/ublox/navstatus')
+            cmd.append('/ublox/navsvin')
         if convert_imu.perform(context) == 'true' or convert_points.perform(context) == 'true':
             cmd.append('--remap')
             if convert_imu.perform(context) == 'true':
@@ -205,13 +226,28 @@ def generate_launch_description():
             package='mf_localization',
             executable='fix_filter.py',
             name='ublox_fix_filter',
-            parameters=[{
-                'status_threshold': fix_status_threshold,
-                'overwrite_time': fix_overwrite_time,
-            }],
+            parameters=[
+                *param_files,
+                {
+                    'status_threshold': fix_status_threshold,
+                    'overwrite_time': fix_overwrite_time,
+                }
+            ],
             remappings=[
                 ('fix', 'ublox/fix'),
                 ('fix_filtered', 'ublox/fix_filtered')
+            ]
+        ),
+
+        Node(
+            package='mf_localization',
+            executable='ublox_converter.py',
+            name='ublox_converter',
+            parameters=[
+                *param_files
+            ],
+            remappings=[
+                ('navsat', 'ublox/navsat')
             ]
         ),
 
@@ -225,13 +261,17 @@ def generate_launch_description():
             name="tf2_beacons_listener",
             package="mf_localization",
             executable="tf2_beacons_listener.py",
-            parameters=[{
-                'output': [bag_filename, '.loc.samples.json'],
-                'topics': wireless_topics,
-                'save_empty_beacon_sample': save_empty_beacon_sample,
-                'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
-                'interpolate_by_trajectory': interpolate_samples_by_trajectory,
-            }],
+            parameters=[
+                *param_files,
+                {
+                    'output': [bag_filename, '.loc.samples.json'],
+                    'topics': wireless_topics,
+                    'save_empty_beacon_sample': save_empty_beacon_sample,
+                    'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
+                    'trajectory_recorder_timer_period': 10.0,
+                    'interpolate_by_trajectory': interpolate_samples_by_trajectory,
+                 }
+            ],
             condition=IfCondition(save_samples),
         ),
 
@@ -240,9 +280,12 @@ def generate_launch_description():
             name="tracked_pose_listener",
             package="mf_localization",
             executable="tracked_pose_listener.py",
-            parameters=[{
-                "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
-            }],
+            parameters=[
+                *param_files,
+                {
+                    "output": PythonExpression(['"', bag_filename, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
+                }
+            ],
             condition=IfCondition(save_pose),
         ),
 

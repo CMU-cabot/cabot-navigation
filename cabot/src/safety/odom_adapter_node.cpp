@@ -164,11 +164,12 @@ private:
 
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr input)
   {
+    // odom adapter converts input odometry topic (odomFrame_ -> offsetFrame_) to output odometry (odomFrame_ -> baseFrame_) topic
     nav_msgs::msg::Odometry odom;
 
     odom.header.stamp = get_clock()->now();
-    odom.header.frame_id = input->header.frame_id;
-    odom.child_frame_id = input->child_frame_id;
+    odom.header.frame_id = input->header.frame_id;  // = odomFrame_
+    odom.child_frame_id = baseFrame_;
 
     {
       std::lock_guard<std::mutex> lock(thread_sync_);

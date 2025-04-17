@@ -80,6 +80,7 @@ RUN apt update && \
     ros-${ROS_DISTRO}-tf2-geometry-msgs \
     ros-${ROS_DISTRO}-velodyne-description \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-robot-localization \
     && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
@@ -212,6 +213,7 @@ RUN apt update && \
     ros-${ROS_DISTRO}-tf2-geometry-msgs \
     ros-${ROS_DISTRO}-velodyne-description \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-robot-localization \
     gosu \
     && \
     apt clean && \

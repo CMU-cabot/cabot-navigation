@@ -37,7 +37,10 @@ def main():
     parser.add_argument("--fixed_frame_pose", default=None, help="fixed frame pose data csv file")
     parser.add_argument("--gnss_status_threshold", default=2, type=int, help="status threshold for gnss data. gnss data with gnss_status_threshold<=status are used to evaluate error")
     parser.add_argument("-p", "--plot", default=False, action="store_true", help="plot errors")
+    parser.add_argument("--anchor_latitude", default=None, help="latitude of the anchor to define the local coordinate")
+    parser.add_argument("--anchor_longitude", default=None, help="longitude of the anchor to define the local coordinate")
     args = parser.parse_args()
+    print(args)
     status_threshold = args.gnss_status_threshold
 
     # trajectory data
@@ -51,7 +54,11 @@ def main():
     if args.gnss is not None:
         df_gnss = pd.read_csv(args.gnss)
         point = df_gnss.iloc[0]
-        gnss_anchor = geoutil.Anchor(lat=point.latitude, lng=point.longitude, rotate=0.0)
+
+        if args.anchor_latitude is not None and args.anchor_longitude is not None:
+            gnss_anchor = geoutil.Anchor(lat=args.anchor_latitude, lng=args.anchor_longitude, rotate=0.0)
+        else:
+            gnss_anchor = geoutil.Anchor(lat=point.latitude, lng=point.longitude, rotate=0.0)
 
         X_gnss = []  # gnss local coordinate
         for index, point in df_gnss.iterrows():

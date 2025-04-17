@@ -37,6 +37,7 @@ from launch.substitutions import PathJoinSubstitution
 from launch.substitutions import PythonExpression
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
+from launch_ros.descriptions import ParameterFile
 from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions
 
@@ -69,6 +70,7 @@ def generate_launch_description():
     # cartographer
     scan = LaunchConfiguration('scan')
     imu = LaunchConfiguration('imu')
+    odom = LaunchConfiguration('odom')
     points2 = LaunchConfiguration('points2')
     imu_temp = LaunchConfiguration('imu_temp')
     points2_temp = LaunchConfiguration('points2_temp')
@@ -91,6 +93,29 @@ def generate_launch_description():
     # run multi_floor_manager
     multi_floor_config_filename = LaunchConfiguration('multi_floor_config_filename')
 
+    # robot localization
+    compute_odometry_filtered = LaunchConfiguration('compute_odometry_filtered')
+    republish_odometry_filtered = LaunchConfiguration('republish_odometry_filtered')
+
+    param_files = [
+        ParameterFile(
+            PathJoinSubstitution([
+                mf_localization_dir,
+                'configuration_files',
+                'multi_floor',
+                multi_floor_config_filename,
+            ]),
+            allow_substs=True,
+        ),
+        ParameterFile(PathJoinSubstitution([
+            pkg_dir,
+            'configuration_files',
+            'demo_config.yaml'
+        ]),
+            allow_substs=True,
+        )
+    ]
+
     def configure_ros2_bag_play(context, node):
         cmd = node.cmd.copy()
         cmd.extend(['--clock', '--start-paused', '--rate', rate])
@@ -101,6 +126,10 @@ def generate_launch_description():
             'imu/data:=imu/data',
             'tf:=tf_temp',
             'tf_static:=tf_static_temp',
+            # odometry
+            'cabot/odometry/filtered:=cabot/odometry/filtered_temp',
+            'odom:=odom_temp',
+            # mf_localization
             'current_floor:=current_floor_temp',
             'current_floor_raw:=current_floor_raw_temp',
             'current_floor_smoothed:=current_floor_smoothed_temp',
@@ -148,6 +177,7 @@ def generate_launch_description():
         # cartographer
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
         DeclareLaunchArgument('imu', default_value='imu/data'),
+        DeclareLaunchArgument('odom', default_value='odom'),
         DeclareLaunchArgument('points2', default_value='velodyne_points'),
         DeclareLaunchArgument('imu_temp', default_value='imu_temp/data'),
         DeclareLaunchArgument('points2_temp', default_value='velodyne_points_temp'),
@@ -165,12 +195,12 @@ def generate_launch_description():
         DeclareLaunchArgument('site', default_value=''),
 
         DeclareLaunchArgument('multi_floor_config_filename',
-                              default_value=PathJoinSubstitution([
-                                  mf_localization_dir,
-                                  'configuration_files',
-                                  'multi_floor',
-                                  'multi_floor_manager.yaml'
-                              ])),
+                              default_value='multi_floor_manager.yaml'),
+
+        # robot_localization
+        DeclareLaunchArgument('compute_odometry_filtered', default_value='false'),
+
+        DeclareLaunchArgument('republish_odometry_filtered', default_value='false'),
 
         # debug
         DeclareLaunchArgument('log_level', default_value='info', description="logging level"),
@@ -265,7 +295,7 @@ def generate_launch_description():
                 executable='multi_floor_manager.py',
                 name='multi_floor_manager',
                 parameters=[
-                    multi_floor_config_filename,
+                    *param_files,
                     {
                         'use_sim_time': use_sim_time,
                         'map_config_file': map_config_file,
@@ -282,6 +312,7 @@ def generate_launch_description():
                     ('wifi', wifi_topic),
                     ('points2', points2),
                     ('imu', imu),
+                    ('odom', odom),
                     ('scan', scan),
                     ('pressure', pressure_topic),
                     ('gnss_fix', gnss_fix),
@@ -333,6 +364,55 @@ def generate_launch_description():
                 )
             }],
             condition=LaunchConfigurationEquals("cabot_model", "")
+        ),
+
+        # robot localization ekf_node to compute /cabot/odometry/filtered from odom_raw and imu data
+        Node(
+            package='robot_localization',
+            executable='ekf_node',
+            namespace='/cabot',
+            name='ekf_node',
+            parameters=[
+                *param_files,
+                {
+                    'use_sim_time': use_sim_time
+                }
+            ],
+            condition=IfCondition(compute_odometry_filtered),
+        ),
+
+        # nodes for republishing /cabot/odometry/filtered topic recorded in bag file
+        # convert child_frame_id in /cabot/odometry/filtered topic to base_control_shift
+        Node(
+            package='mf_localization',
+            executable='odometry_frame_converter_node',
+            name='odometry_frame_converter_node',
+            parameters=[
+                {
+                    'use_sim_time': use_sim_time
+                }
+            ],
+            remappings=[
+                ('odom_in', '/cabot/odometry/filtered_temp'),
+                ('odom_out', '/cabot/odometry/filtered'),
+            ],
+            condition=IfCondition(republish_odometry_filtered),
+        ),
+        # republish /tf (odom -> base_footprint -> base_control_shift)
+        Node(
+            package='mf_localization',
+            executable='tf_selector_node',
+            name='tf_selector_node',
+            parameters=[
+                {
+                    'use_sim_time': use_sim_time
+                }
+            ],
+            remappings=[
+                ('tf_in', 'tf_temp'),
+                ('tf_out', 'tf'),
+            ],
+            condition=IfCondition(republish_odometry_filtered),
         ),
 
         # /velodyne_packets to /velodyne_points

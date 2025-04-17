@@ -134,7 +134,7 @@ cabot:
       sensor_timeout: 0.1
       two_d_mode: true
       odom_frame: odom
-      base_link_frame: base_footprint
+      base_link_frame: base_control_shift # wheel center
       world_frame: odom
       initial_state: [
         0.0, 0.0, 0.0,
