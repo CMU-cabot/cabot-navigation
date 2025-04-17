@@ -230,11 +230,11 @@ public:
     event_topic_ = declare_parameter("event_topic", event_topic_);
     event_pub_ = create_publisher<std_msgs::msg::String>(event_topic_, 100);
 
-    max_speed_ = declare_parameter("max_speed_", max_speed_);
-    sd_min_speed_ = declare_parameter("sosial_distance_min_speed_", sd_min_speed_);
-    vo_min_speed_ = declare_parameter("velocity_obstacle_min_speed_", vo_min_speed_);
-    max_acc_ = declare_parameter("max_acc_", max_acc_);
-    max_dec_ = declare_parameter("max_dec_", max_dec_);
+    max_speed_ = declare_parameter("max_speed", max_speed_);
+    sd_min_speed_ = declare_parameter("social_distance_min_speed", sd_min_speed_);
+    vo_min_speed_ = declare_parameter("velocity_obstacle_min_speed", vo_min_speed_);
+    max_acc_ = declare_parameter("max_acc", max_acc_);
+    max_dec_ = declare_parameter("max_dec", max_dec_);
     social_distance_x_ = declare_parameter("social_distance_x", social_distance_x_);
     social_distance_y_ = declare_parameter("social_distance_y", social_distance_y_);
     social_distance_min_radius_ = declare_parameter("social_distance_min_radius", social_distance_min_radius_);
@@ -346,19 +346,19 @@ public:
       if (param.get_name() == "use_velocity_obstacle") {
         use_velocity_obstacle_ = param.as_bool();
       }
-      if (param.get_name() == "max_speed_") {
+      if (param.get_name() == "max_speed") {
         max_speed_ = param.as_double();
       }
-      if (param.get_name() == "sd_min_speed_") {
+      if (param.get_name() == "social_distance_min_speed") {
         sd_min_speed_ = param.as_double();
       }
-      if (param.get_name() == "vo_min_speed_") {
+      if (param.get_name() == "velocity_obstacle_min_speed") {
         vo_min_speed_ = param.as_double();
       }
-      if (param.get_name() == "max_acc_") {
+      if (param.get_name() == "max_acc") {
         max_acc_ = param.as_double();
       }
-      if (param.get_name() == "max_dec_") {
+      if (param.get_name() == "max_dec") {
         max_dec_ = param.as_double();
       }
       if (param.get_name() == "social_distance_x") {
