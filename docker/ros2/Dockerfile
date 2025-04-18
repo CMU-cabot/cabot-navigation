@@ -111,6 +111,9 @@ RUN apt update && \
     ros-$ROS_DISTRO-rosbag2-storage-mcap \
     xterm \
     gosu \
+    ffmpeg \
+    libasound2 \
+    alsa-utils \
     && \
     rm -rf /var/lib/apt/lists/*
 
@@ -122,7 +125,8 @@ RUN pip3 install --no-cache-dir \
     pyproj \
     pyserial \
     requests \
-    transforms3d==0.4.1
+    transforms3d==0.4.1 \
+    pydub
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]' \
@@ -259,6 +263,9 @@ RUN apt update && \
     ros-$ROS_DISTRO-rosbag2-storage-mcap \
     xterm \
     gosu \
+    ffmpeg \
+    libasound2 \
+    alsa-utils \
     && \
     rm -rf /var/lib/apt/lists/*
 
@@ -270,7 +277,8 @@ RUN pip3 install --no-cache-dir \
     pyproj \
     pyserial \
     requests \
-    transforms3d==0.4.1
+    transforms3d==0.4.1 \
+    pydub
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
