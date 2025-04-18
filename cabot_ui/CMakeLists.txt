@@ -125,6 +125,7 @@ install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch/)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config/)
 install(DIRECTORY rviz/ DESTINATION share/${PROJECT_NAME}/rviz/)
 install(DIRECTORY i18n/ DESTINATION share/${PROJECT_NAME}/i18n/)
+install(DIRECTORY audio/ DESTINATION share/${PROJECT_NAME}/audio/)
 install(DIRECTORY test/launch/ DESTINATION share/${PROJECT_NAME}/test/launch/)
 
 ament_package()
