@@ -45,11 +45,13 @@ private:
 
     for (const auto & transform : msg->transforms) {
       if (transform.header.frame_id == "odom" &&
-          transform.child_frame_id == "base_footprint") {
+        transform.child_frame_id == "base_footprint")
+      {
         filtered_msg.transforms.push_back(transform);
       }
       if (transform.header.frame_id == "base_footprint" &&
-          transform.child_frame_id == "base_control_shift") {
+        transform.child_frame_id == "base_control_shift")
+      {
         filtered_msg.transforms.push_back(transform);
       }
     }
