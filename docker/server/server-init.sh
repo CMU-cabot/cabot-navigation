@@ -67,7 +67,7 @@ done
 blue "adding editor user"
 curl -b admin-cookie.txt -c admin-cookie.txt $HOST/admin.jsp
 curl -b admin-cookie.txt -c admin-cookie.txt -d "redirect_url=admin.jsp&user=${admin}&password=${pass}" $HOST/login.jsp
-curl -b admin-cookie.txt -d "user=$editor&password=$editor&password2=$edito&role=editor" "$HOST/api/user?action=add-user"
+curl -b admin-cookie.txt -d "user=$editor&password=$editor&password2=$editor&role=editor&role=auditor" "$HOST/api/user?action=add-user"
 
 blue "importing attachments.zip"
 pushd server_data
