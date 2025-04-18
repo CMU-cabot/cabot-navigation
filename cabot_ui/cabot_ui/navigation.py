@@ -20,7 +20,6 @@
 # SOFTWARE.
 
 import asyncio
-import copy
 import math
 import inspect
 import numpy
