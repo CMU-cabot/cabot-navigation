@@ -132,7 +132,7 @@ cabot:
       wheelie_speed_topic: /cabot/wheelie_speed
       gradient_topic_: /cabot/gradient
       min_speed: 0.001
-      max_speed: 1.0
+      max_speed: 2.0
 
   ekf_node:
     ros__parameters:
