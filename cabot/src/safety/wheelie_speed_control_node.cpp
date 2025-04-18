@@ -36,7 +36,7 @@ public:
   explicit WheelieControlNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("wheelie_speed_control_node", options),
     latest_pitch_(0.0),
-    max_speed_(1.0),
+    max_speed_(2.0),
     min_speed_(0.0)
   {
     imu_topic_ = this->declare_parameter("imu_topic", "/cabot/imu/data");
