@@ -278,7 +278,7 @@ RUN pip3 install --no-cache-dir \
     pyproj \
     pyserial \
     requests \
-    transforms3d==0.4.1 \
+    transforms3d==0.4.1
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
