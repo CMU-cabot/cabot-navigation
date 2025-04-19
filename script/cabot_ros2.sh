@@ -228,6 +228,7 @@ fi
 blue "launch cabot handle menu"
 com="$command_prefix ros2 launch cabot_ui cabot_ui.launch.py \
         anchor_file:='$map' \
+        use_sim_time:=$use_sim_time \
         $init_speed_option \
         language:='$CABOT_LANG' \
         site:='$CABOT_SITE' \

@@ -57,8 +57,10 @@ class CaBotRclpyUtil(object):
     def __init__(self, node: Node):
         # initialize
         self.node = node
+        self.use_sim_time = node.get_parameter('use_sim_time').value
         self.logger = node.get_logger()
         self.clock = node.get_clock()
+        self.logger.info(f"cabot_rclpy_util initialized with node {self.use_sim_time=}")
 
     @classmethod
     def info(cls, arg):

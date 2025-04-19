@@ -141,6 +141,7 @@ def generate_launch_description():
             executable="cabot_ui_manager.py",
             name="cabot_ui_manager",
             parameters=[{
+                'use_sim_time': use_sim_time,
                 'init_speed': init_speed,
                 'anchor_file': anchor_file,
                 'language': language,

@@ -1489,7 +1489,7 @@ class NavigationParamManager:
         key = f'{node_name}/{service_name}'
         if key not in self.clients:
             self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
-        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=1.0):
+        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=5.0):
             self.node.get_logger().error(f'{key} is not available...')
             self.clients[key] = False
         return self.clients[key]

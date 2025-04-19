@@ -684,8 +684,6 @@ class Nav2Params:
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -714,8 +712,6 @@ class Nav2Params:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
     complete_stop: [false,false,true,false,true,false,true]
 """
         if mode == geojson.NavigationMode.Crosswalk:
@@ -746,9 +742,18 @@ class Nav2Params:
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
 """
+        # if simualtion, check if 'speed_control_node_touch_true' or 'speed_control_node_touch_false' is used
+        if CaBotRclpyUtil.instance().use_sim_time:
+            CaBotRclpyUtil.info("parameters simulation mode")
+            # returns List[Tuple[node_name, namespace]]
+            nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
+            names = [name for name, ns in nodes]
+            for name in names:
+                CaBotRclpyUtil.info(f"{name}")
+            if "speed_control_node_touch_false" in names:
+                params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
+
         data = yaml.safe_load(params)
         return data
 
