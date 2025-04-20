@@ -86,9 +86,11 @@ services:
       - ROS_DOMAIN_ID
       - __NV_PRIME_RENDER_OFFLOAD
       - __GLX_VENDOR_LIBRARY_NAME
+      - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
+      - ${XDG_RUNTIME_DIR}/pulse/native:${XDG_RUNTIME_DIR}/pulse/native
 # network
     privileged: true
     network_mode: host
