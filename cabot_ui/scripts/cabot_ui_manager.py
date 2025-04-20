@@ -525,15 +525,15 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "description_surround" and self._description.enabled:
             request_surround_description()
 
-        # if event.subtype == "speaker_alert":
-        #     self._interface.set_audio_file("Beep_sound_low_urgency.wav")
-        #     self._interface.speaker_alert()
+        if event.subtype == "speaker_alert":
+            self._interface.set_audio_file("Beep_sound_low_urgency.wav")
+            self._interface.speaker_alert()
 
-        # if evemt.subtype == "set_speaker_file":
-        #     self._interface.set_speaker_file(self, event.param)
+        if evemt.subtype == "set_speaker_file":
+            self._interface.set_speaker_file(self, event.param)
 
-        # if event.subtype == "set_speaker_volume":
-        #     self._interface.set_speaker_volume(self, event.param)
+        if event.subtype == "set_speaker_volume":
+            self._interface.set_speaker_volume(self, event.param)
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
@@ -836,8 +836,8 @@ class EventMapper2(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 description_length = min(event.count, 3)
                 return NavigationEvent(subtype="description_surround", param=description_length)
-            # if event.buttons == cabot_common.button.BUTTON_RIGHT:
-            #     return NavigationEvent(subtype="speaker_alert")
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="speaker_alert")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
                 return NavigationEvent(subtype="pause")
