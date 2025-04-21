@@ -188,7 +188,6 @@ class UserInterface(object):
         except Exception as e:
             CaBotRclpyUtil.error(F"Playback failed: {e}")
 
-
     def vibrate(self, pattern=vibration.UNKNOWN):
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
         msg = std_msgs.msg.Int8()
