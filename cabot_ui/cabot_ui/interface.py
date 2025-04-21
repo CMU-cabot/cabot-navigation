@@ -95,7 +95,6 @@ class UserInterface(object):
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
 
         self._audio_dir = os.path.join(get_package_share_directory('cabot_ui'), "audio")
-        self._audio_dir = "audio/"
         self._audio_file_path = None
         self._speaker_volume = 0.0
 
