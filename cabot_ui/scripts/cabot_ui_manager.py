@@ -526,14 +526,16 @@ class CabotUIManager(NavigationInterface, object):
             request_surround_description()
 
         if event.subtype == "speaker_alert":
-            self._interface.set_audio_file("Beep_sound_low_urgency.wav")
+            # self._interface.set_audio_file("Beep_sound_low_urgency.wav")
             self._interface.speaker_alert()
 
-        if evemt.subtype == "set_audio_file":
+        if evemt.subtype == "speaker_audio_file":
             self._interface.set_audio_file(event.param)
+            self._interface.speaker_alert()
 
-        if event.subtype == "set_speaker_volume":
+        if event.subtype == "speaker_volume":
             self._interface.set_speaker_volume(event.param)
+            self._interface.speaker_alert()
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
