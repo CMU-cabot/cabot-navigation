@@ -529,7 +529,7 @@ class CabotUIManager(NavigationInterface, object):
             # self._interface.set_audio_file("Beep_sound_low_urgency.wav")
             self._interface.speaker_alert()
 
-        if evemt.subtype == "speaker_audio_file":
+        if event.subtype == "speaker_audio_file":
             self._interface.set_audio_file(event.param)
             self._interface.speaker_alert()
 
