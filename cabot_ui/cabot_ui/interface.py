@@ -97,6 +97,12 @@ class UserInterface(object):
         self._audio_dir = os.path.join(get_package_share_directory('cabot_ui'), "audio")
         self._audio_file_path = None
         self._speaker_volume = 0.0
+        wav_files = [
+            f
+            for f in os.listdir(self._audio_dir)
+            if f.endswith(".wav") and os.path.isfile(os.path.join(self._audio_dir, f))
+        ]
+        self.audio_files = ",".join(wav_files)
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
