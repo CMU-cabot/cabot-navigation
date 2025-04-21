@@ -322,6 +322,13 @@ class GNSSParameters:
 
 
 @dataclass
+class RSSLocalizationParameters:
+    initial_localization: bool = True
+    continuous_localization: bool = True
+    failure_detection: bool = True
+
+
+@dataclass
 class MultiFloorManagerParameters:
     # area classification
     area_floor_const: float = 10000
@@ -367,6 +374,8 @@ class MultiFloorManager:
         # ble wifi localization
         self.use_ble = True
         self.use_wifi = False
+        self.ble_localization_parameters: RSSLocalizationParameters = None
+        self.wifi_localization_parameters: RSSLocalizationParameters = None
 
         # area identification
         self.area_localizer = None
@@ -815,7 +824,7 @@ class MultiFloorManager:
         beacons = data["data"]
 
         if self.use_ble:
-            self.rss_callback(beacons, rss_type=RSSType.iBeacon)
+            self.rss_callback(beacons, rss_type=RSSType.iBeacon, rss_loc_params=self.ble_localization_parameters)
 
     def wifi_callback(self, message):
         self.valid_wifi = True
@@ -826,9 +835,11 @@ class MultiFloorManager:
         beacons = data["data"]
 
         if self.use_wifi:
-            self.rss_callback(beacons, rss_type=RSSType.WiFi)
+            self.rss_callback(beacons, rss_type=RSSType.WiFi, rss_loc_params=self.wifi_localization_parameters)
 
-    def rss_callback(self, beacons, rss_type=RSSType.iBeacon):
+    def rss_callback(self, beacons, rss_type=RSSType.iBeacon,
+                     rss_loc_params: RSSLocalizationParameters = RSSLocalizationParameters()
+                     ):
         if not self.is_active:
             # do nothing
             return
@@ -885,6 +896,11 @@ class MultiFloorManager:
 
         # switch cartgrapher node
         if self.floor is None:
+            # skip if not activated
+            if not rss_loc_params.initial_localization:
+                self.logger.info(F"rss_callback({rss_type}): skipping initial localization", throttle_duration_sec=5.0)
+                return
+
             # coarse initial localization on local frame (frame_id)
             localizer = None
             if rss_type == RSSType.iBeacon:
@@ -920,6 +936,11 @@ class MultiFloorManager:
         # floor change or init->track
         elif ((self.altitude_manager.is_height_changed() or not self.pressure_available) and self.floor != floor) \
                 or (self.mode == LocalizationMode.INIT and self.optimization_detected):
+            # skip if not activated
+            if not rss_loc_params.continuous_localization:
+                self.logger.info(F"rss_callback({rss_type}): skipping continuous localization", throttle_duration_sec=5.0)
+                return
+
             if self.floor != floor:
                 self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
 
@@ -985,6 +1006,11 @@ class MultiFloorManager:
                 self.restart_floor(local_pose)
 
         else:
+            # skip if not activated
+            if not rss_loc_params.failure_detection:
+                self.logger.info(F"rss_callback({rss_type}): skipping failure detection", throttle_duration_sec=5.0)
+                return
+
             # check localization failure
             try:
                 t = tfBuffer.lookup_transform(self.global_map_frame, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
@@ -2219,6 +2245,13 @@ if __name__ == "__main__":
     # update use_ble and use_wifi by map_config
     multi_floor_manager.use_ble = map_config.get("use_ble", multi_floor_manager.use_ble)
     multi_floor_manager.use_wifi = map_config.get("use_wifi", multi_floor_manager.use_wifi)
+    # update ble and wifi config by map_config
+    ble_config = map_config.get("ble", {})
+    wifi_config = map_config.get("wifi", {})
+    multi_floor_manager.ble_localization_parameters = RSSLocalizationParameters(**ble_config)
+    multi_floor_manager.wifi_localization_parameters = RSSLocalizationParameters(**wifi_config)
+    logger.info(f"ble config = {multi_floor_manager.ble_localization_parameters}")
+    logger.info(f"wifi config = {multi_floor_manager.wifi_localization_parameters}")
 
     # external localizer parameters
     use_gnss = node.declare_parameter("use_gnss", False).value
