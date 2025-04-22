@@ -187,6 +187,7 @@ private:
   {
     double inf = std::numeric_limits<double>::infinity();
     double speed_limit = max_speed_;
+    int logger_level = rcutils_logging_get_logger_level(get_logger().get_name());
 
     tf2::Transform robot_pose(tf2::Quaternion::getIdentity(), tf2::Vector3(0, 0, 0));
 
@@ -263,9 +264,11 @@ private:
 
         // Check if the point is in the front region
         if (point_in_robot_frame.x > 0.0 && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
-          double local_speed_limit = (point_in_robot_frame.x - min_distance_) / limit_factor_;
-          if (local_speed_limit < max_speed_) {
-            CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
+          if (logger_level == RCUTILS_LOG_SEVERITY_DEBUG) {
+            double local_speed_limit = (point_in_robot_frame.x - min_distance_) / limit_factor_;
+            if (local_speed_limit < max_speed_) {
+              CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
+            }
           }
 
           if (point_in_robot_frame.x < min_x_distance) {

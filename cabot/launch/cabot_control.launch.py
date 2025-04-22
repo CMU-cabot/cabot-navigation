@@ -187,7 +187,13 @@ def generate_launch_description():
             namespace='/cabot',
             name='lidar_speed_control_node',
             output=output,
-            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            parameters=[*param_files,
+                        {
+                            'use_sim_time': use_sim_time,
+                            'visualize_topic': 'lidar_speed_control_visualize'
+                        }
+            ],
+            # arguments=['--ros-args', '--log-level', 'cabot.lidar_speed_control_node:=debug']
         ),
         # Cabot Low Lidar Speed Control
         Node(
@@ -196,7 +202,13 @@ def generate_launch_description():
             namespace='/cabot',
             name='low_lidar_speed_control_node',
             output=output,
-            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            parameters=[*param_files,
+                        {
+                            'use_sim_time': use_sim_time,
+                            'visualize_topic': 'low_lidar_speed_control_visualize'
+                        }
+            ],
+            # arguments=['--ros-args', '--log-level', 'cabot.low_lidar_speed_control_node:=debug']
         ),
         # Cabot People Speed Control
         Node(
