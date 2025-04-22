@@ -141,7 +141,6 @@ class DataUtil(object):
         except:  # noqa: #722
             CaBotRclpyUtil.error(traceback.format_exc())
 
-
     def get_landmarks(self, filename=None):
         """get landmarks"""
         if filename is None:
