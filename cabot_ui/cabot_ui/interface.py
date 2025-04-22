@@ -94,6 +94,7 @@ class UserInterface(object):
         self.last_social_announce = None
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
 
+        self._enable_speaker = False
         self._audio_dir = os.path.join(get_package_share_directory('cabot_ui'), "audio")
         self._audio_file_path = None
         self._speaker_volume = 0.0
@@ -166,6 +167,10 @@ class UserInterface(object):
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")
 
+    def enable_speaker(self, enable_speaker: str):
+        self._enable_speaker = enable_speaker.lower() == "true"
+        self._activity_log("change speaker config", "enable speaker", self._enable_speaker, visualize=True)
+
     def set_audio_file(self, filename):
         self._audio_file_path = os.path.join(self._audio_dir, filename)
         self._activity_log("change speaker config", "audio file", self._audio_file_path, visualize=True)
@@ -175,6 +180,10 @@ class UserInterface(object):
         self._activity_log("change speaker config", "volume", self._speaker_volume, visualize=True)
 
     def speaker_alert(self):
+        if not self._enable_speaker:
+            CaBotRclpyUtil.error("Speaker is disabled")
+            return
+
         if not os.path.isfile(self._audio_file_path):
             CaBotRclpyUtil.error(F"Audio file not found: {self._audio_file_path}")
             return

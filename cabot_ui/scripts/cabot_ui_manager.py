@@ -536,6 +536,9 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "description_surround" and self._description.enabled:
             request_surround_description()
 
+        if event.subtype == "speaker_enable":
+            self._interface.enable_speaker(event.param)
+
         if event.subtype == "speaker_alert":
             self._interface.speaker_alert()
 
