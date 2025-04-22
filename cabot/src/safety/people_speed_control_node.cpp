@@ -563,7 +563,7 @@ private:
       double theta_right = normalizedAngle(rel_th - s);
       double theta_left = normalizedAngle(rel_th + s);
 
-      if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+      if (logger_level == RCUTILS_LOG_SEVERITY_DEBUG) {
         addVOMarker(dist, pvx, pvy, theta_right, theta_left, max_radius, map_to_robot_tf2);
       }
 
@@ -601,7 +601,7 @@ private:
 
     publishLimits(social_distance_speed_limit, pure_velocity_obstacle_speed_limit, combined_speed_limit, people_speed_limit);
 
-    if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
+    if (logger_level == RCUTILS_LOG_SEVERITY_DEBUG) {
       addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit, min_radius, max_radius);
       CaBotSafety::commit(vis_pub_);
     }

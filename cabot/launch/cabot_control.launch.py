@@ -217,7 +217,13 @@ def generate_launch_description():
             namespace='/cabot',
             name='people_speed_control_node',
             output=output,
-            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            parameters=[*param_files,
+                        {
+                            'use_sim_time': use_sim_time,
+                            'visualize_topic': 'people_speed_control_visualize'
+                        }
+            ],
+            # arguments=['--ros-args', '--log-level', 'cabot.people_speed_control_node:=debug']
         ),
         # Cabot TF Speed Control
         Node(
