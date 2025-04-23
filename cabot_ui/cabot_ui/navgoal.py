@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 from typing import List
 import math
 import inspect
@@ -431,6 +432,7 @@ class Goal(geoutil.TargetPlace):
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
         self._saved_params = Goal.default_params
+        self._changed_params = {}
         self._is_exiting_goal = False
 
     def reset(self):
@@ -476,20 +478,22 @@ class Goal(geoutil.TargetPlace):
                 callback()
 
     def _change_params(self, callback):
-        def done_change_parameters_callback(result):
-            CaBotRclpyUtil.info("done_change_parameters_callback is called")
-            callback()
         params = self.nav_params()
-        if self._saved_params:
+        if self._changed_params:
             for node, values in list(params.items()):
-                if node in self._saved_params:
+                if node in self._changed_params:
                     for key, value in list(values.items()):
-                        if key in self._saved_params[node] and self._saved_params[node][key] == value:
+                        if key in self._changed_params[node] and self._changed_params[node][key] == value:
                             del params[node][key]
                         if not params[node]:
                             del params[node]
         CaBotRclpyUtil.info(F"params to be chanegd: {params=}")
         if params:
+            def done_change_parameters_callback(result):
+                CaBotRclpyUtil.info("done_change_parameters_callback is called")
+                self._changed_params.update(copy.deepcopy(params))
+                CaBotRclpyUtil.info(F"changed_params = {self._changed_params}")
+                callback()
             self.delegate.change_parameters(params, done_change_parameters_callback)
         else:
             callback()
@@ -524,6 +528,7 @@ class Goal(geoutil.TargetPlace):
     def exit(self, callback):
         def done_change_parameters_callback(result):
             CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
+            self._changed_params = {}
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
         CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
@@ -570,6 +575,7 @@ class Goal(geoutil.TargetPlace):
             def done_change_parameters_callback(result):
                 CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel done_change_parameters_callback is called")
                 self._saved_params = None
+                self._changed_params = {}
                 self._cancel(callback)
             if self._saved_params:
                 self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
