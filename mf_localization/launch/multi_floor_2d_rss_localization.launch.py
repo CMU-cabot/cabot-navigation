@@ -59,6 +59,7 @@ def generate_launch_description():
     use_global_localizer = LaunchConfiguration('use_global_localizer')
     gnss_fix_topic = LaunchConfiguration('gnss_fix_topic')
     gnss_fix_velocity_topic = LaunchConfiguration('gnss_fix_velocity_topic')
+    gnss_navsat_topic = LaunchConfiguration('gnss_navsat_topic')
 
     publish_current_rate = LaunchConfiguration('publish_current_rate')
 
@@ -87,6 +88,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_global_localizer', default_value='false', description='Weather use global localizer or not'),
         DeclareLaunchArgument('gnss_fix_topic', default_value='gnss_fix', description='Specify GNSS fix topic name'),
         DeclareLaunchArgument('gnss_fix_velocity_topic', default_value='gnss_fix_velocity', description='Specify GNSS fix velocity topicname'),
+        DeclareLaunchArgument('gnss_navsat_topic', default_value='ublox/navsat', description='Specify NAVSAT topicname'),
 
         DeclareLaunchArgument('publish_current_rate', default_value='0', description='Specify the rate of publishing current location'),
 
@@ -141,7 +143,7 @@ def generate_launch_description():
                     ('gnss_fix', gnss_fix_topic),
                     ('gnss_fix_velocity', gnss_fix_velocity_topic),
                     # ublox_converter
-                    ('navsat', 'ublox/navsat'),
+                    ('navsat', gnss_navsat_topic),
                     ('num_active_sv', 'ublox_converter/num_active_sv'),
                     ('sv_status', 'ublox_converter/sv_status'),
                 ],

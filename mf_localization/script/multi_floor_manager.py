@@ -96,6 +96,7 @@ import std_msgs.msg
 from cabot_msgs.srv import LookupTransform
 from std_srvs.srv import Trigger
 
+from ublox_msgs.msg import NavSAT
 from ublox_converter import UbloxConverterNode
 
 
@@ -303,8 +304,13 @@ class TFAdjuster:
 class GNSSParameters:
     gnss_position_covariance_threshold: float = 0.2 * 0.2  # [meter^2]
     gnss_position_covariance_initial_threshold: float = 0.2 * 0.2  # [meters^2]
+    # fix filter
     gnss_status_threshold: int = NavSatStatus.STATUS_GBAS_FIX
     gnss_fix_motion_filter_distance: float = 0.1  # [meter]
+    gnss_fix_filter_min_cno: int = 30
+    gnss_fix_filter_min_elev: int = 45
+    gnss_fix_filter_num_sv: int = 15
+    # track error
     gnss_track_error_threshold: float = 5.0  # [meter]
     gnss_track_yaw_threshold: float = np.radians(30)
     gnss_track_error_adjust: float = 0.1
@@ -313,6 +319,7 @@ class GNSSParameters:
     gnss_odom_jump_threshold: float = 2.0
     gnss_odom_small_threshold: float = 0.5
     gnss_localization_interval: float = 10  # [s]
+    # navsat timeout
     gnss_navsat_timeout: float = 5.0  # [s]
     gnss_position_covariance_indoor_threshold: float = 3.0 * 3.0
     # parameter for floor estimation
@@ -445,6 +452,8 @@ class MultiFloorManager:
         # variables
         self.gnss_adjuster_dict = {}
         self.prev_navsat_msg = None
+        self.prev_navsat_status = False
+        self.prev_mf_navsat_msg = None
         self.indoor_outdoor_mode = IndoorOutdoorMode.INDOOR
         self.gnss_is_active = False
         self.prev_publish_map_frame_adjust_timestamp = None
@@ -1392,8 +1401,24 @@ class MultiFloorManager:
         except tf2_ros.TransformException:
             return None
 
-    def mf_navsat_callback(self, msg: MFNavSAT):
+    def navsat_callback(self, msg: NavSAT):
         self.prev_navsat_msg = msg
+
+        filtered_num_sv = 0
+        for s in msg.sv:
+            if self.gnss_params.gnss_fix_filter_min_cno <= s.cno \
+                    and self.gnss_params.gnss_fix_filter_min_elev <= s.elev:
+                filtered_num_sv += 1
+
+        if self.gnss_params.gnss_fix_filter_num_sv <= filtered_num_sv:
+            self.prev_navsat_status = True
+        else:
+            self.prev_navsat_status = False
+
+        self.logger.info(F"multi_floor_manager.navsat_callback: filtered_num_sv={filtered_num_sv}")
+
+    def mf_navsat_callback(self, msg: MFNavSAT):
+        self.prev_mf_navsat_msg = msg
 
     def estimateRt(self, X, Y):
         """
@@ -1512,8 +1537,8 @@ class MultiFloorManager:
         if self.gnss_navsat_time is None:
             self.gnss_navsat_time = now
         # update indoor / outdoor status by using navsat status
-        if self.prev_navsat_msg is not None:
-            sv_status = self.prev_navsat_msg.sv_status
+        if self.prev_mf_navsat_msg is not None:
+            sv_status = self.prev_mf_navsat_msg.sv_status
             if self.indoor_outdoor_mode == IndoorOutdoorMode.UNKNOWN:  # at start up
                 if sv_status == MFNavSAT.STATUS_INACTIVE:
                     self.indoor_outdoor_mode = IndoorOutdoorMode.INDOOR
@@ -1532,7 +1557,7 @@ class MultiFloorManager:
                 if sv_status == MFNavSAT.STATUS_INACTIVE:
                     self.indoor_outdoor_mode = IndoorOutdoorMode.INDOOR
                     self.logger.info("gnss_fix_callback: indoor_outdoor_mode = OUTDOOR -> INDOOR (STATUS_INACTIVE)")
-            self.prev_navsat_msg = None
+            self.prev_mf_navsat_msg = None
             self.gnss_navsat_time = now
 
         # disable gnss adjust in indoor invironments
@@ -1576,7 +1601,8 @@ class MultiFloorManager:
         # publish gnss fix to localizer node
         if self.floor is not None and self.area is not None and self.mode is not None:
             floor_manager = self.ble_localizer_dict[self.floor][self.area][self.mode]
-            if fix.status.status >= self.gnss_params.gnss_status_threshold:
+            if fix.status.status >= self.gnss_params.gnss_status_threshold \
+                    and self.prev_navsat_status:
                 fix_pub = floor_manager.fix_pub
                 fix.header.stamp = now.to_msg()  # replace gnss timestamp with ros timestamp for rough synchronization
 
@@ -2709,6 +2735,7 @@ if __name__ == "__main__":
         gnss_fix_velocity_sub = message_filters.Subscriber(node, TwistWithCovarianceStamped, "gnss_fix_velocity", callback_group=state_update_callback_group)
         time_synchronizer = message_filters.TimeSynchronizer([gnss_fix_sub, gnss_fix_velocity_sub], 10)
         time_synchronizer.registerCallback(multi_floor_manager.gnss_fix_callback)
+        navsat_sub = node.create_subscription(NavSAT, "navsat", multi_floor_manager.navsat_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         mf_navsat_sub = node.create_subscription(MFNavSAT, "mf_navsat", multi_floor_manager.mf_navsat_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         multi_floor_manager.gnss_fix_local_pub = node.create_publisher(PoseWithCovarianceStamped, "gnss_fix_local", 10, callback_group=MutuallyExclusiveCallbackGroup())
 

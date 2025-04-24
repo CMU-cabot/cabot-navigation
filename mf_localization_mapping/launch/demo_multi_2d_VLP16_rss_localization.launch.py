@@ -67,6 +67,7 @@ def generate_launch_description():
     use_global_localizer = LaunchConfiguration('use_global_localizer')
     gnss_fix = LaunchConfiguration('gnss_fix')
     gnss_fix_velocity = LaunchConfiguration('gnss_fix_velocity')
+    navsat = LaunchConfiguration('navsat')
     # cartographer
     scan = LaunchConfiguration('scan')
     imu = LaunchConfiguration('imu')
@@ -174,6 +175,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_global_localizer', default_value='false'),
         DeclareLaunchArgument('gnss_fix', default_value='gnss_fix'),
         DeclareLaunchArgument('gnss_fix_velocity', default_value='gnss_fix_velocity'),
+        DeclareLaunchArgument('navsat', default_value='ublox/navsat'),
         # cartographer
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
         DeclareLaunchArgument('imu', default_value='imu/data'),
@@ -318,7 +320,7 @@ def generate_launch_description():
                     ('gnss_fix', gnss_fix),
                     ('gnss_fix_velocity', gnss_fix_velocity),
                     # ublox_converter
-                    ('navsat', 'ublox/navsat'),
+                    ('navsat', navsat),
                     ('num_active_sv', 'ublox_converter/num_active_sv'),
                     ('sv_status', 'ublox_converter/sv_status')
                 ],
