@@ -363,9 +363,14 @@ class MultiFloorManager:
         self.optimization_detected = False  # state
         self.optimization_queue_length = None
         # for initial pose estimation timeout
-        self.init_time = None
-        self.init_timeout = 60  # seconds
-        self.init_timeout_detected = False
+        self.initial_localization_time = None
+        self.initial_localization_timeout_detected = False
+        self.initial_localization_timeout = 300  # seconds
+        self.initial_localization_timeout_auto_relocalization = True
+        # for gnss initial pose estimation timeout
+        self.gnss_init_time = None
+        self.gnss_init_timeout = 60  # seconds
+        self.gnss_init_timeout_detected = False
         # for loginfo
         self.spin_count = 0
         self.prev_spin_count = None
@@ -674,6 +679,7 @@ class MultiFloorManager:
 
             if self.mode == LocalizationMode.INIT:
                 self.localize_status = MFLocalizeStatus.LOCATING
+                self.initial_localization_time = self.clock.now()
             elif self.mode == LocalizationMode.TRACK:
                 self.localize_status = MFLocalizeStatus.TRACKING
 
@@ -708,6 +714,7 @@ class MultiFloorManager:
 
         if self.mode == LocalizationMode.INIT:
             self.localize_status = MFLocalizeStatus.LOCATING
+            self.initial_localization_time = self.clock.now()
         if self.mode == LocalizationMode.TRACK:
             self.localize_status = MFLocalizeStatus.TRACKING
 
@@ -1035,8 +1042,8 @@ class MultiFloorManager:
     # periodically check and update internal state variables (area and mode)
     def check_and_update_states(self):
         # check interval
+        now = self.clock.now()
         if self.previous_area_check_time is not None:
-            now = self.clock.now()
             if Duration(seconds=self.area_check_interval) <= now - self.previous_area_check_time:
                 self.previous_area_check_time = self.clock.now()
             else:
@@ -1046,6 +1053,16 @@ class MultiFloorManager:
 
         if self.verbose:
             self.logger.info(F"multi_floor_manager.check_and_update_states. (floor={self.floor}, mode={self.mode}")
+
+        # timeout detection
+        if self.initial_localization_time is not None:
+            if now - self.initial_localization_time > Duration(seconds=self.initial_localization_timeout):
+                self.initial_localization_timeout_detected = True
+        if self.initial_localization_timeout_detected:
+            if self.initial_localization_timeout_auto_relocalization:
+                self.restart_localization()
+                self.logger.warn("Auto-relocalization. (initial localization timeout detected)")
+                return
 
         if self.floor is not None and self.mode is not None:
             # get robot pose
@@ -1072,14 +1089,17 @@ class MultiFloorManager:
             # if area change detected, switch trajectory
             if self.area != area \
                     or (self.mode == LocalizationMode.INIT and self.optimization_detected) \
-                    or (self.mode == LocalizationMode.INIT and self.init_timeout_detected):
+                    or (self.mode == LocalizationMode.INIT and self.initial_localization_timeout_detected) \
+                    or (self.mode == LocalizationMode.INIT and self.gnss_init_timeout_detected):
 
                 if self.area != area:
                     self.logger.info(F"area change detected ({self.area} -> {area}).")
                 elif (self.mode == LocalizationMode.INIT and self.optimization_detected):
                     self.logger.info("optimization_detected. change localization mode init->track")
-                elif (self.mode == LocalizationMode.INIT and self.init_timeout_detected):
-                    self.logger.info("optimization timeout detected. change localization mode init->track")
+                elif (self.mode == LocalizationMode.INIT and self.initial_localization_timeout_detected):
+                    self.logger.info("initial localization timeout detected. change localization mode init->track")
+                elif (self.mode == LocalizationMode.INIT and self.gnss_init_timeout_detected):
+                    self.logger.info("gnss initial localization timeout detected. change localization mode init->track")
 
                 # set temporal variables
                 target_area = area
@@ -1097,11 +1117,10 @@ class MultiFloorManager:
                 # update the trajectory only when local_transform is available
                 if local_transform is not None:
 
-                    if self.optimization_detected:
-                        self.optimization_detected = False
-
-                    if self.init_timeout_detected:
-                        self.init_timeout_detected = False
+                    # update condition variables
+                    self.optimization_detected = False
+                    self.initial_localization_timeout_detected = False
+                    self.gnss_init_timeout_detected = False
 
                     # create local_pose instance
                     v3 = local_transform.transform.translation  # Vector3
@@ -1275,9 +1294,13 @@ class MultiFloorManager:
         self.map2odom = None
         self.optimization_detected = False
 
+        # timeout
+        self.initial_localization_time = None
+        self.initial_localization_timeout_detected = False
+
         # gnss
-        self.init_time = None
-        self.init_timeout_detected = False
+        self.gnss_init_time = None
+        self.gnss_init_timeout_detected = False
         self.gnss_localization_time = None
         self.gnss_navsat_time = None
         if self.gnss_is_active:
@@ -1595,10 +1618,10 @@ class MultiFloorManager:
                         floor_manager.previous_fix_local_published = fix_local
 
                 # check initial pose optimization timeout in reliable gnss fix loop
-                if self.init_time is not None:
-                    if now - self.init_time > Duration(seconds=self.init_timeout):
-                        self.init_time = None
-                        self.init_timeout_detected = True
+                if self.gnss_init_time is not None:
+                    if now - self.gnss_init_time > Duration(seconds=self.gnss_init_timeout):
+                        self.gnss_init_time = None
+                        self.gnss_init_timeout_detected = True
 
         # Forcibly prevent the tracked trajectory from going far away from the gnss position history
         track_error_detected = False
@@ -1795,7 +1818,7 @@ class MultiFloorManager:
         if self.mode is None:
             target_mode = LocalizationMode.INIT
             self.mode = target_mode
-            self.init_time = now
+            self.gnss_init_time = now
         elif self.mode == LocalizationMode.INIT \
                 and may_stable_Rt:  # change mode INIT -> TRACK if mode has not been updated by optimization
             target_mode = LocalizationMode.TRACK
@@ -2248,7 +2271,6 @@ if __name__ == "__main__":
     multi_floor_manager.global_position_frame = node.declare_parameter("global_position_frame", "base_link").value
     meters_per_floor = node.declare_parameter("meters_per_floor", 5).value
     multi_floor_manager.floor_queue_size = node.declare_parameter("floor_queue_size", 3).value  # [seconds]
-    multi_floor_manager.init_timeout = node.declare_parameter("initial_pose_optimization_timeout", 60).value  # [seconds]
 
     multi_floor_manager.initial_pose_variance = node.declare_parameter("initial_pose_variance", [3.0, 3.0, 0.1, 0.0, 0.0, 100.0]).value
     n_neighbors_floor = node.declare_parameter("n_neighbors_floor", 3).value
@@ -2259,6 +2281,19 @@ if __name__ == "__main__":
     min_beacons_local = node.declare_parameter("min_beacons_local", 3).value
     floor_localizer_type = node.declare_parameter("floor_localizer", "SimpleRSSLocalizer").value
     local_localizer_type = node.declare_parameter("local_localizer", "SimpleRSSLocalizer").value
+
+    # timeout
+    multi_floor_manager.initial_localization_timeout = node.declare_parameter("initial_localization_timeout", 300).value  # [seconds]
+    multi_floor_manager.initial_localization_timeout_auto_relocalization = node.declare_parameter("initial_localization_timeout_auto_relocalization", True).value
+    # gnss timeout
+    multi_floor_manager.gnss_init_timeout = node.declare_parameter("gnss_initial_pose_optimization_timeout", 60).value  # [seconds]
+    # update by map_config
+    multi_floor_manager.initial_localization_timeout = map_config.get("initial_localization_timeout",
+                                                                      multi_floor_manager.initial_localization_timeout)
+    multi_floor_manager.initial_localization_timeout_auto_relocalization = map_config.get("initial_localization_timeout_auto_relocalization",
+                                                                                          multi_floor_manager.initial_localization_timeout_auto_relocalization)
+    multi_floor_manager.gnss_init_timeout = map_config.get("gnss_initial_pose_optimization_timeout",
+                                                           multi_floor_manager.gnss_init_timeout)
 
     # update localizer parameters by map_config
     floor_localizer_type = map_config.get("floor_localizer", floor_localizer_type)
@@ -2739,6 +2774,7 @@ if __name__ == "__main__":
         if multi_floor_manager.is_optimized():
             tfBuffer.clear()  # clear outdated tf before optimization
             multi_floor_manager.optimization_detected = True
+            multi_floor_manager.initial_localization_time = None  # clear timeout count
 
         # detect area and mode switching
         multi_floor_manager.check_and_update_states()  # 1 Hz

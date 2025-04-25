@@ -24,6 +24,7 @@ import math
 import inspect
 import numpy
 import numpy.linalg
+import os
 import threading
 import time
 import traceback
@@ -238,7 +239,9 @@ class ControlBase(object):
         # self.buffer = tf2_ros.Buffer()
         # self.listener = tf2_ros.TransformListener(self.buffer, tf_node)
 
+        self.post_location_enabled = os.environ.get("CABOT_POST_LOCATION", "false").lower() == "true"
         self.current_pose = None
+        self.last_log_time = node.get_clock().now()
         self.current_odom_pose = None
         self.current_floor = node.declare_parameter("initial_floor", 1).value
         self.floor_is_changed_at = node.get_clock().now()
@@ -884,6 +887,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                                       current_floor=self.current_floor,
                                       global_frame=self._global_map_name
                                       )
+            if self.post_location_enabled:
+                if self._node.get_clock().now() - self.last_log_time > rclpy.duration.Duration(seconds=1.0):
+                    self._datautil.post_location(self.current_global_pose(), self.current_floor)
+                    self.last_log_time = self._node.get_clock().now()
             self._logger.debug(F"current pose {self.current_pose}", throttle_duration_sec=1)
             self.current_odom_pose = self.current_local_odom_pose()
         except RuntimeError:

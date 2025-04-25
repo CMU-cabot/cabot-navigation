@@ -61,6 +61,7 @@ services:
       - CABOT_INITY
       - CABOT_INITZ
       - CABOT_INITA
+      - CABOT_POST_LOCATION
       - CABOT_MAP_SERVER_HOST
       - CABOT_ROSBRIDGE_PORT
       - GAZEBO_MASTER_URI
@@ -412,6 +413,7 @@ services:
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb_ms:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
+      - 'EDITOR_AUDITOR_KEY=local-server-auditor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
       - 'SEARCH_BY_CATEGORY_ENABLED=true'
     command:
@@ -429,7 +431,7 @@ services:
       test: curl -f localhost:8080/map/login.jsp || exit 1
       interval: 3s
       timeout: 3s
-      retries: 10  # increased from 5, needs more time to launch on Jetson
+      retries: 20  # increased from 5, needs more time to launch on Jetson
 
   map_data:
     extends: map_server
@@ -459,7 +461,7 @@ services:
       test: echo 'db.runCommand("ping").ok' | mongo mongodb_ms:27017/test --quiet
       interval: 3s
       timeout: 3s
-      retries: 5
+      retries: 10
 
 
   location_tools:
@@ -490,7 +492,7 @@ services:
       test: curl -f localhost:9091/map/login.jsp || exit 1
       interval: 3s
       timeout: 3s
-      retries: 10  # increased from 5, needs more time to launch on Jetson
+      retries: 20  # increased from 5, needs more time to launch on Jetson
 
   mongodb_lt:
     image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
@@ -505,7 +507,7 @@ services:
       test: echo 'db.runCommand("ping").ok' | mongo mongodb_lt:27017/test --quiet
       interval: 3s
       timeout: 3s
-      retries: 5
+      retries: 10
 
 networks:
   mongodb_network:
