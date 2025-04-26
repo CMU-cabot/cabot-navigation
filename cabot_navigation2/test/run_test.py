@@ -650,6 +650,7 @@ class Tester:
         service_type = import_class(service_type_str)
         request = test_action['request']
         request_type = service_type.Request
+        callback = test_action['callback'] if 'callback' in test_action else None
         uuid = test_action['uuid']
         # optional parameters for wait_for_service
         wait_for_service = test_action.get('wait_for_service', False)
@@ -679,6 +680,8 @@ class Tester:
         def done_callback(future):
             case['done'] = True
             case['success'] = True
+            if callback:
+                callback(future.result())
 
         self.futures[uuid].add_done_callback(done_callback)
 
@@ -996,6 +999,12 @@ class Tester:
 
         timer = self.node.create_timer(seconds, timer_callback)
         self.timers[uuid] = timer
+
+    @wait_test()
+    def assert_true(self, case, test_action):
+        assert_condition = test_action['condition']
+        case['done'] = True
+        case['success'] = assert_condition
 
     def terminate(self, test_action):
         logger.debug(f"{callee_name()} {test_action}")
