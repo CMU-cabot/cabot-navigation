@@ -449,11 +449,9 @@ class Goal(geoutil.TargetPlace):
             return
         self.delegate.enter_goal(self)
 
-        def restore_callback():
-            def change_callback():
-                self._enter()
-            self._change_params(change_callback)
-        self._save_params(restore_callback)
+        def change_callback():
+            self._enter()
+        self._change_params(self.nav_params(), change_callback)
 
     def _enter(self):
         pass
@@ -475,11 +473,18 @@ class Goal(geoutil.TargetPlace):
             else:
                 callback()
 
-    def _change_params(self, callback):
-        def done_change_parameters_callback(result):
-            CaBotRclpyUtil.info("done_change_parameters_callback is called")
-            callback()
-        params = self.nav_params()
+    def _change_params(self, params, callback):
+        def done_change_parameters_callback(params):
+            def inner(result):
+                CaBotRclpyUtil.info(f"done_change_parameters_callback is called {params}")
+                # update saved_params by changed params
+                for node, values in list(params.items()):
+                    if node in self._saved_params:
+                        for key, value in list(values.items()):
+                            self._saved_params[node][key] = value
+                CaBotRclpyUtil.info(f"{self._saved_params=}")
+                callback()
+            return inner
         if self._saved_params:
             for node, values in list(params.items()):
                 if node in self._saved_params:
@@ -488,9 +493,9 @@ class Goal(geoutil.TargetPlace):
                             del params[node][key]
                         if not params[node]:
                             del params[node]
-        CaBotRclpyUtil.info(F"params to be chanegd: {params=}")
+        CaBotRclpyUtil.info(F"params to be changed: {params=}")
         if params:
-            self.delegate.change_parameters(params, done_change_parameters_callback)
+            self.delegate.change_parameters(params, done_change_parameters_callback(params))
         else:
             callback()
 
@@ -522,7 +527,7 @@ class Goal(geoutil.TargetPlace):
         return self._is_exiting_goal
 
     def exit(self, callback):
-        def done_change_parameters_callback(result):
+        def done_change_parameters_callback():
             CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
@@ -530,7 +535,7 @@ class Goal(geoutil.TargetPlace):
         self.delegate.exit_goal(self)
         if self._saved_params:
             self._is_exiting_goal = True
-            self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
+            self._change_params(Goal.default_params, done_change_parameters_callback)
         else:
             callback()
 
@@ -920,14 +925,16 @@ class NavGoal(Goal):
             CaBotRclpyUtil.info("Could not send goal")
         status = future.result().status if future is not None else None
 
-        # TODO(daisuke): needs to change test case conditions
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
-                self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
-            if self.mode == geojson.NavigationMode.Crosswalk:
-                self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
-
         if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
+            # TODO(daisuke): needs to change test case conditions
+            if status == GoalStatus.STATUS_SUCCEEDED:
+                if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
+                    self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
+                if self.mode == geojson.NavigationMode.Crosswalk:
+                    self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
+                if self.mode == geojson.NavigationMode.Standard:
+                    self.delegate.activity_log("cabot/navigation", "goal_completed", "NavGoal")
+
             self.route_index += 1
             self.enter()
         else:
