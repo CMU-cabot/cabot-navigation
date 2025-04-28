@@ -1208,9 +1208,14 @@ class MultiFloorManager:
             response.status.code = 1
             response.status.message = "Start localization failed. (localization is aleady started.)"
             return response
+        if request.floor == StartLocalization.Request.FLOOR_UNKNOWN:
+            response.status.message = "Starting localization."
+        else:
+            self.floor = int(request.floor)
+            response.status.message = f"Starting localization with floor={request.floor}."
         self.is_active = True
         response.status.code = 0
-        response.status.message = "Starting localization."
+
         return response
 
     def finish_trajectory(self):
@@ -1324,20 +1329,27 @@ class MultiFloorManager:
         tfBuffer.clear()  # clear buffered tf added by finished trajectories
         self.localize_status = MFLocalizeStatus.UNKNOWN
 
-    def restart_localization(self):
+    def restart_localization(self, floor_value=None):
         self.is_active = False
         self.finish_trajectory()
         self.reset_states()
+        if floor_value is not None:
+            self.floor = floor_value
         self.is_active = True
 
     def restart_localization_callback(self, request, response):
         try:
-            self.restart_localization()
             response.status.code = 0
-            response.status.message = "Restarting localization..."
-        except:  # noqa: E722
+            if request.floor == RestartLocalization.Request.FLOOR_UNKNOWN:
+                self.restart_localization()
+                response.status.message = "Restarting localization..."
+            else:
+                self.restart_localization(floor_value=int(request.floor))
+                response.status.message = f"Restarting localization with floor={request.floor}..."
+            response.status.code = 0
+        except Exception as e:  # noqa: E722
             response.status.code = 1
-            response.status.message = "Restart localization failed."
+            response.status.message = f"Restart localization failed with exception = {e}."
         return response
 
     def enable_relocalization_callback(self, request, response):
