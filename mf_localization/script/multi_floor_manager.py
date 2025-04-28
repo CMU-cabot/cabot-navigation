@@ -2274,6 +2274,9 @@ if __name__ == "__main__":
     with open(map_config_file) as map_config:
         map_config = yaml.safe_load(map_config)
 
+    # site compatibility level
+    site_compat_level = node.declare_parameter("site_compat_level", 0).value
+
     sub_topics = node.declare_parameter("topic_list", ['beacons', 'wireless/beacons', 'wireless/wifi']).value
 
     static_broadcaster = tf2_ros.StaticTransformBroadcaster(node)
@@ -2476,9 +2479,15 @@ if __name__ == "__main__":
         area = int(map_dict["area"]) if "area" in map_dict else 0
         area_str = str(area)
         height = map_dict.get("height", np.nan)
+        map_compat_level = map_dict.get("compat_level", 0)
         effective_radius = map_dict.get("effective_radius", np.nan)
         node_id = map_dict["node_id"]
         frame_id = map_dict["frame_id"]
+
+        if 0 < site_compat_level and site_compat_level < map_compat_level:
+            logger.info(f"skipped loading map (node_id={node_id})")
+            continue
+
         anchor = geoutil.Anchor(lat=map_dict["latitude"],
                                 lng=map_dict["longitude"],
                                 rotate=map_dict["rotate"]
@@ -2674,6 +2683,11 @@ if __name__ == "__main__":
         floor = float(map_dict["floor"])
         area = int(map_dict["area"]) if "area" in map_dict else 0
         node_id = map_dict["node_id"]
+
+        map_compat_level = map_dict.get("compat_level", 0)
+        if 0 < site_compat_level and site_compat_level < map_compat_level:
+            continue
+
         for mode in modes:
             floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
             # rospy service
