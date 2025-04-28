@@ -101,7 +101,7 @@ publish_current_rate=0
 
 : ${CABOT_GAZEBO:=0}
 : ${CABOT_SITE:=}
-: ${CABOT_SITE_COMPAT_LEVEL:=0}
+: ${CABOT_SITE_COMPAT_LEVEL:="v0.0"}
 : ${CABOT_MODEL:=}
 : ${CABOT_SHOW_LOC_RVIZ:=0}
 : ${CABOT_HEADLESS:=0}

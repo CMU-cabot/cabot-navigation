@@ -75,7 +75,7 @@ def generate_launch_description():
         DeclareLaunchArgument('rssi_offset', default_value='0.0', description='Set RSSI offset to estimate location'),
 
         DeclareLaunchArgument('map_config_file', default_value='', description='Specify map config file path'),
-        DeclareLaunchArgument('site_compat_level', default_value='0', description=''),
+        DeclareLaunchArgument('site_compat_level', default_value='v0.0', description=''),
         DeclareLaunchArgument('beacons_topic', default_value='beacons', description='Specify beacons topic name'),
         DeclareLaunchArgument('wifi_topic', default_value='wifi', description='Specify wifi topic name'),
         DeclareLaunchArgument('with_odom_topic', default_value='false', description='Weather odom topic is used to cartographer localization or not'),

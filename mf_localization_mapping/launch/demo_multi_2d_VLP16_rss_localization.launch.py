@@ -166,7 +166,7 @@ def generate_launch_description():
 
         # multi-floor manager
         DeclareLaunchArgument('map_config_file'),
-        DeclareLaunchArgument('site_compat_level', default_value="0"),
+        DeclareLaunchArgument('site_compat_level', default_value="v0.0"),
         DeclareLaunchArgument('beacon_topic', default_value='beacons'),
         DeclareLaunchArgument('wifi_topic', default_value='wifi'),
         DeclareLaunchArgument('rssi_offset', default_value=''),
