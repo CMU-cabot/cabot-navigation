@@ -27,6 +27,8 @@ from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
+from ament_index_python.packages import get_package_share_directory
+
 import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
@@ -36,6 +38,9 @@ from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
+
+from pydub import AudioSegment
+import pydub.playback
 
 
 class SpeechPriority:
@@ -88,6 +93,17 @@ class UserInterface(object):
 
         self.last_social_announce = None
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
+
+        self._enable_speaker = False
+        self._audio_dir = os.path.join(get_package_share_directory('cabot_ui'), "audio")
+        self._audio_file_path = None
+        self._speaker_volume = 0.0
+        wav_files = [
+            f
+            for f in os.listdir(self._audio_dir)
+            if f.endswith(".wav") and os.path.isfile(os.path.join(self._audio_dir, f))
+        ]
+        self.audio_files = ",".join(wav_files)
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
@@ -150,6 +166,36 @@ class UserInterface(object):
             CaBotRclpyUtil.info("speak requested")
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")
+
+    def enable_speaker(self, enable_speaker: str):
+        self._enable_speaker = enable_speaker.lower() == "true"
+        self._activity_log("change speaker config", "enable speaker", self._enable_speaker, visualize=True)
+
+    def set_audio_file(self, filename):
+        self._audio_file_path = os.path.join(self._audio_dir, filename)
+        self._activity_log("change speaker config", "audio file", self._audio_file_path, visualize=True)
+
+    def set_speaker_volume(self, volume):
+        self._speaker_volume = volume
+        self._activity_log("change speaker config", "volume", self._speaker_volume, visualize=True)
+
+    def speaker_alert(self):
+        if not self._enable_speaker:
+            CaBotRclpyUtil.error("Speaker is disabled")
+            return
+
+        if not os.path.isfile(self._audio_file_path):
+            CaBotRclpyUtil.error(F"Audio file not found: {self._audio_file_path}")
+            return
+
+        try:
+            sound = AudioSegment.from_wav(self._audio_file_path)
+            if self._speaker_volume != 0.0:
+                sound += self._speaker_volume
+            CaBotRclpyUtil.info(F"Playing {self._audio_file_path} at {self._speaker_volume} dB")
+            pydub.playback.play(sound)
+        except Exception as e:
+            CaBotRclpyUtil.error(F"Playback failed: {e}")
 
     def vibrate(self, pattern=vibration.UNKNOWN):
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)

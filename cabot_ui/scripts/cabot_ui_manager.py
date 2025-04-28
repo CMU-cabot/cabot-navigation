@@ -135,6 +135,8 @@ class CabotUIManager(NavigationInterface, object):
 
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
+        self.send_speaker_audio_files()
+
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
         msg = std_msgs.msg.String()
@@ -143,6 +145,12 @@ class CabotUIManager(NavigationInterface, object):
 
     def send_touchmode(self):
         e = NavigationEvent("gettouchmode", self.touchmode)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
+    def send_speaker_audio_files(self):
+        e = NavigationEvent("getspeakeraudiofiles", self._interface.audio_files)
         msg = std_msgs.msg.String()
         msg.data = str(e)
         self._eventPub.publish(msg)
@@ -394,6 +402,7 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "reqfeatures":
             self.send_handleside()
             self.send_touchmode()
+            self.send_speaker_audio_files()
             return
 
         if event.subtype == "handleside":
@@ -412,6 +421,8 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "gethandleside":
             return
         if event.subtype == "gettouchmode":
+            return
+        if event.subtype == "getspeakeraudiofiles":
             return
 
         if event.subtype == "speedup":
@@ -524,6 +535,18 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "description_surround" and self._description.enabled:
             request_surround_description()
+
+        if event.subtype == "speaker_enable":
+            self._interface.enable_speaker(event.param)
+
+        if event.subtype == "speaker_alert":
+            self._interface.speaker_alert()
+
+        if event.subtype == "speaker_audio_file":
+            self._interface.set_audio_file(event.param)
+
+        if event.subtype == "speaker_volume":
+            self._interface.set_speaker_volume(event.param)
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
@@ -826,6 +849,8 @@ class EventMapper2(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 description_length = min(event.count, 3)
                 return NavigationEvent(subtype="description_surround", param=description_length)
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="speaker_alert")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
                 return NavigationEvent(subtype="pause")
