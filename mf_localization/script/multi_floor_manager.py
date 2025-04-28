@@ -1815,6 +1815,11 @@ class MultiFloorManager:
             self.floor = floor
             reset_trajectory = True
             reset_zero_adjust_uncertainty = True
+        elif self.floor is not None and \
+                self.area is None:
+            # self.floor is specified but area and mode are unknown
+            reset_trajectory = True
+            reset_zero_adjust_uncertainty = True
         elif track_error_detected:
             reset_trajectory = True
             reset_zero_adjust_uncertainty = True
