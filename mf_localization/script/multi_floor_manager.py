@@ -2277,7 +2277,10 @@ if __name__ == "__main__":
         map_config = yaml.safe_load(map_config)
 
     # site compatibility level
-    site_compat_level = node.declare_parameter("site_compat_level", "v0").value
+    site_compat_level = node.declare_parameter("site_compat_level", "v0.0").value
+    default_compat_level = map_config.get("default_compat_level", "v0.0")
+    if Version(site_compat_level) == Version("0.0"):
+        site_compat_level = default_compat_level
 
     sub_topics = node.declare_parameter("topic_list", ['beacons', 'wireless/beacons', 'wireless/wifi']).value
 
