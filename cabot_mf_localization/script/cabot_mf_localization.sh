@@ -101,6 +101,7 @@ publish_current_rate=0
 
 : ${CABOT_GAZEBO:=0}
 : ${CABOT_SITE:=}
+: ${CABOT_SITE_TAGS:='\"\"'}
 : ${CABOT_MODEL:=}
 : ${CABOT_SHOW_LOC_RVIZ:=0}
 : ${CABOT_HEADLESS:=0}
@@ -480,6 +481,7 @@ if [ $navigation -eq 0 ]; then
     com="$command ros2 launch mf_localization $launch_file \
                     robot:=$robot \
                     map_config_file:=$map \
+                    tags:=$CABOT_SITE_TAGS \
                     with_odom_topic:=true \
                     beacons_topic:=$beacons_topic \
                     wifi_topic:=$wifi_topic \

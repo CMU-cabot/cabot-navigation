@@ -132,6 +132,7 @@ services:
       - CABOT_USE_GNSS=${CABOT_USE_GNSS:-0}
       - CABOT_MODEL
       - CABOT_SITE
+      - CABOT_SITE_TAGS
       - CABOT_SHOW_LOC_RVIZ=${CABOT_SHOW_LOC_RVIZ:-1}
       - CABOT_HEADLESS
       # ROS2/DDS

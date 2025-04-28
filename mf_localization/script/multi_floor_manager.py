@@ -29,6 +29,10 @@ import orjson
 import math
 from enum import Enum
 import numpy as np
+from packaging.specifiers import InvalidSpecifier
+from packaging.specifiers import Specifier
+from packaging.version import InvalidVersion
+from packaging.version import Version
 import sys
 import signal
 import threading
@@ -339,6 +343,47 @@ class RSSLocalizationParameters:
     initial_localization: bool = True
     continuous_localization: bool = True
     failure_detection: bool = True
+
+
+class TagUtil:
+    @staticmethod
+    def parse_version_tag_string(tags_string):
+        tags = tags_string.split(",")
+        tags2 = []
+        for tag in tags:
+            try:
+                tags2.append(Version(tag))
+            except InvalidVersion:
+                tags2.append(tag)
+        tags = tags2
+        return tags
+
+    @staticmethod
+    def parse_specifier_tag_string(tags_string):
+        tags = tags_string.split(",")
+        tags2 = []
+        for tag in tags:
+            try:
+                tags2.append(Specifier(tag))
+            except InvalidSpecifier:
+                tags2.append(tag)
+        tags = tags2
+        return tags
+
+    @staticmethod
+    def versions_in_specifiers(version_tags, specifier_tags):
+        match = False
+        for ver_tag in version_tags:
+            if ver_tag == "all":  # special string
+                match = True
+            for spec_tag in specifier_tags:
+                if type(spec_tag) is Specifier:
+                    if ver_tag in spec_tag:
+                        match = True
+                else:
+                    if ver_tag == spec_tag:
+                        match = True
+        return match
 
 
 @dataclass
@@ -2274,6 +2319,17 @@ if __name__ == "__main__":
     with open(map_config_file) as map_config:
         map_config = yaml.safe_load(map_config)
 
+    # site map tags
+    launch_tags = node.declare_parameter("tags", "").value
+    default_tags = map_config.get("tags", "all")
+    if launch_tags == "":
+        launch_tags = default_tags
+    else:
+        map_config["tags"] = launch_tags
+    # parse version tags
+    tags = TagUtil.parse_version_tag_string(launch_tags)
+    logger.info(f"launch tags = {tags}")
+
     sub_topics = node.declare_parameter("topic_list", ['beacons', 'wireless/beacons', 'wireless/wifi']).value
 
     static_broadcaster = tf2_ros.StaticTransformBroadcaster(node)
@@ -2470,7 +2526,6 @@ if __name__ == "__main__":
                 logger.error(F"No such parameter named {key}")
 
     for map_dict in map_list:
-
         floor = float(map_dict["floor"])
         floor_str = str(int(map_dict["floor"]))
         area = int(map_dict["area"]) if "area" in map_dict else 0
@@ -2479,6 +2534,17 @@ if __name__ == "__main__":
         effective_radius = map_dict.get("effective_radius", np.nan)
         node_id = map_dict["node_id"]
         frame_id = map_dict["frame_id"]
+
+        # parse specifier tags and compare with version tags
+        map_tags_str = map_dict.get("tags", ">=0")
+        map_tags = TagUtil.parse_specifier_tag_string(map_tags_str)
+        skip = not TagUtil.versions_in_specifiers(tags, map_tags)
+        map_dict["skip"] = skip
+
+        if skip:
+            logger.info(f"Skip loading map (node_id={node_id}) because tags ({tags}) and map_tags ({map_tags}) do not match.")
+            continue
+
         anchor = geoutil.Anchor(lat=map_dict["latitude"],
                                 lng=map_dict["longitude"],
                                 rotate=map_dict["rotate"]
@@ -2674,6 +2740,10 @@ if __name__ == "__main__":
         floor = float(map_dict["floor"])
         area = int(map_dict["area"]) if "area" in map_dict else 0
         node_id = map_dict["node_id"]
+
+        if map_dict["skip"]:
+            continue
+
         for mode in modes:
             floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
             # rospy service

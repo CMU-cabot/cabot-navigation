@@ -57,6 +57,7 @@ def generate_launch_description():
 
     # multi-floor manager
     map_config_file = LaunchConfiguration('map_config_file')
+    tags = LaunchConfiguration('tags')
     beacon_topic = LaunchConfiguration('beacon_topic')
     wifi_topic = LaunchConfiguration('wifi_topic')
     rssi_offset = LaunchConfiguration('rssi_offset')
@@ -165,6 +166,7 @@ def generate_launch_description():
 
         # multi-floor manager
         DeclareLaunchArgument('map_config_file'),
+        DeclareLaunchArgument('tags', default_value=''),
         DeclareLaunchArgument('beacon_topic', default_value='beacons'),
         DeclareLaunchArgument('wifi_topic', default_value='wifi'),
         DeclareLaunchArgument('rssi_offset', default_value=''),
@@ -301,6 +303,7 @@ def generate_launch_description():
                     {
                         'use_sim_time': use_sim_time,
                         'map_config_file': map_config_file,
+                        'tags': tags,
                         'configuration_directory': PathJoinSubstitution([mf_localization_dir, 'configuration_files', 'cartographer']),
                         'configuration_file_prefix': 'cartographer_2d',
                         'pressure_available': pressure_available,
