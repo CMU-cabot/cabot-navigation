@@ -21,9 +21,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import pytest
 import numpy as np
 import matplotlib.pyplot as plt
-from mf_localization.altitude_manager import AltitudeFloorEstimator, FloorHeightMapper
+from mf_localization.altitude_manager import AltitudeFloorEstimator
+from mf_localization.altitude_manager import BalancedSampler
+from mf_localization.altitude_manager import FloorHeightMapper
 
 
 class PressureSimulator:
@@ -516,3 +519,103 @@ def test_altitude_floor_estimator_irregular_pressure_pattern():
         print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
 
     assert floor == floor_est
+
+
+def test_balanced_sampler():
+    sampler = BalancedSampler()
+
+    # generate same values
+    values = [1.0]
+    probs = [1.0]
+    sampler.update(x=values, p=probs)
+    v = sampler.sample()
+    assert v == 1.0
+
+    # generate 1/2 - 1/2
+    values = [0.0, 1.0]
+    probs = [0.5, 0.5]
+    sampler.update(x=values, p=probs)
+    counts = {
+        0.0: 0,
+        1.0: 0
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 5000
+    assert counts[1.0] == 5000
+
+    # with array
+    sampler = BalancedSampler()
+    values = np.array([0.0, 1.0])
+    probs = np.array([0.5, 0.5])
+    sampler.update(x=values, p=probs)
+    counts = {
+        0.0: 0,
+        1.0: 0
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 5000
+    assert counts[1.0] == 5000
+
+    # check update
+    values2 = [0.0, 1.0]
+    probs2 = [0.5, 0.5]
+    sampler.update(x=values2, p=probs2)
+    assert not sampler._updated
+    assert len(sampler._reserved) == 0
+
+    # select
+    for i in range(10):
+        v = sampler.select(1.0)
+        assert v == 1.0
+        v = sampler.sample()
+        assert v == 0.0
+    for i in range(10):
+        v = sampler.select(0.0)
+        assert v == 0.0
+        v = sampler.sample()
+        assert v == 1.0
+
+    # not selectable
+    v = sampler.select(1.0)
+    v = sampler.select(1.0)
+    assert v is None
+
+    # exception
+    with pytest.raises(RuntimeError):
+        v = sampler.select(2.0)
+
+    # generate 1/10 - 9/10
+    values2 = [0.0, 1.0]
+    probs2 = [0.1, 0.9]
+    sampler.update(x=values2, p=probs2)
+    assert sampler._updated
+    counts = {
+        0.0: 0,
+        1.0: 0
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 1000
+    assert counts[1.0] == 9000
+
+    # generate
+    values2 = [0.0, 1.0, 2.0]
+    probs2 = [0.01, 0.39, 0.60]
+    sampler.update(x=values2, p=probs2)
+    assert sampler._updated
+    counts = {
+        0.0: 0,
+        1.0: 0,
+        2.0: 0,
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 100
+    assert counts[1.0] == 3900
+    assert counts[2.0] == 6000
