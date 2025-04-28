@@ -24,6 +24,7 @@
 from dataclasses import dataclass
 import bisect
 import math
+import random
 import numpy
 from rclpy.time import Time
 from rclpy.duration import Duration
@@ -278,6 +279,63 @@ class AltitudeFloorEstimator:
 
     def enabled(self):
         return self._enabled
+
+
+class BalancedSampler:
+    def __init__(self):
+        self._x: list = None
+        self._p: list = None
+        self._updated = False
+        self._reserved_init = []
+        self._reserved = []
+
+    def update(self, x, p):
+        _x = list(x)
+        _p = list(p)
+        if self._x == _x and self._p == _p:
+            self._updated = False
+        else:
+            self._x = _x
+            self._p = _p
+            self._updated = True
+
+        if self._updated:
+            min_p = numpy.min(self._p)
+            min_N = int(numpy.ceil(1.0/min_p))
+            counts = min_N * numpy.array(self._p)
+            reserved = []
+            for i in range(len(self._x)):
+                for j in range(int(counts[i])):
+                    reserved.append(self._x[i])
+            self._reserved_init = reserved
+            self._reserved = []
+
+    def sample(self):
+        if len(self._reserved) == 0:
+            self._reserved = self._reserved_init.copy()
+
+        selected = random.choice(self._reserved)
+        self._reserved.remove(selected)
+        return selected
+
+    def select(self, x):
+        if len(self._reserved) == 0:
+            self._reserved = self._reserved_init.copy()
+
+        if x not in self._reserved:
+            if x not in self._reserved_init:
+                raise RuntimeError(f"x = {x} is not in reserved_init {self._reserved_init}")
+            else:
+                return None
+        else:
+            self._reserved.remove(x)
+            return x
+
+    def selectable(self, x):
+        if len(self._reserved) == 0:
+            self._reserved = self._reserved_init.copy()
+
+        return x in self._reserved
 
 
 class FloorHeightMapper:

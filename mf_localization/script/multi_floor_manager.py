@@ -87,7 +87,11 @@ from mf_localization_msgs.srv import RestartLocalization
 from mf_localization_msgs.srv import StartLocalization
 from mf_localization_msgs.srv import StopLocalization
 
-from mf_localization.altitude_manager import AltitudeManager, AltitudeFloorEstimator, AltitudeFloorEstimatorParameters, FloorHeightMapper
+from mf_localization.altitude_manager import AltitudeManager
+from mf_localization.altitude_manager import AltitudeFloorEstimator
+from mf_localization.altitude_manager import AltitudeFloorEstimatorParameters
+from mf_localization.altitude_manager import BalancedSampler
+from mf_localization.altitude_manager import FloorHeightMapper
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
@@ -326,6 +330,8 @@ class GNSSParameters:
     gnss_use_floor_estimation: bool = False
     gnss_floor_search_radius: float = None  # [m]
     gnss_floor_estimation_probability_scale: float = 0.0  # p = exp(scale*(floor-max_floor))/Z  default: 0.0
+    gnss_status_floor_selection: bool = True
+    gnss_floor_selection_status_threhold: int = NavSatStatus.STATUS_GBAS_FIX
 
 
 @dataclass
@@ -460,6 +466,7 @@ class MultiFloorManager:
         self.gnss_fix_local_pub = None
         self.gnss_localization_time = None
         self.gnss_navsat_time = None
+        self.gnss_balanced_floor_sampler = BalancedSampler()
 
         self.updater = Updater(self.node)
 
@@ -1201,9 +1208,14 @@ class MultiFloorManager:
             response.status.code = 1
             response.status.message = "Start localization failed. (localization is aleady started.)"
             return response
+        if request.floor == StartLocalization.Request.FLOOR_UNKNOWN:
+            response.status.message = "Starting localization."
+        else:
+            self.floor = int(request.floor)
+            response.status.message = f"Starting localization with floor={request.floor}."
         self.is_active = True
         response.status.code = 0
-        response.status.message = "Starting localization."
+
         return response
 
     def finish_trajectory(self):
@@ -1317,20 +1329,27 @@ class MultiFloorManager:
         tfBuffer.clear()  # clear buffered tf added by finished trajectories
         self.localize_status = MFLocalizeStatus.UNKNOWN
 
-    def restart_localization(self):
+    def restart_localization(self, floor_value=None):
         self.is_active = False
         self.finish_trajectory()
         self.reset_states()
+        if floor_value is not None:
+            self.floor = floor_value
         self.is_active = True
 
     def restart_localization_callback(self, request, response):
         try:
-            self.restart_localization()
             response.status.code = 0
-            response.status.message = "Restarting localization..."
-        except:  # noqa: E722
+            if request.floor == RestartLocalization.Request.FLOOR_UNKNOWN:
+                self.restart_localization()
+                response.status.message = "Restarting localization..."
+            else:
+                self.restart_localization(floor_value=int(request.floor))
+                response.status.message = f"Restarting localization with floor={request.floor}..."
+            response.status.code = 0
+        except Exception as e:  # noqa: E722
             response.status.code = 1
-            response.status.message = "Restart localization failed."
+            response.status.message = f"Restart localization failed with exception = {e}."
         return response
 
     def enable_relocalization_callback(self, request, response):
@@ -1503,8 +1522,18 @@ class MultiFloorManager:
                     near_floor_array = np.array(near_floor_list)
                     probs_floor = np.exp(self.gnss_params.gnss_floor_estimation_probability_scale * (near_floor_array - max_floor))
                     probs_floor /= np.sum(probs_floor)
-                    floor = np.random.choice(near_floor_array, p=probs_floor)
-                    self.logger.info(f"gnss_fix_callback: floor_est={floor}, near_floor_list={near_floor_list}, probs_floor={probs_floor}")
+                    self.gnss_balanced_floor_sampler.update(near_floor_array, p=probs_floor)
+                    _floor_selected = False
+                    if self.gnss_params.gnss_status_floor_selection:
+                        if self.gnss_params.gnss_floor_selection_status_threhold <= fix.status.status and \
+                                self.gnss_balanced_floor_sampler.selectable(max_floor):
+                            floor = self.gnss_balanced_floor_sampler.select(max_floor)
+                            _floor_selected = True
+                        else:
+                            floor = self.gnss_balanced_floor_sampler.sample()
+                    else:
+                        floor = self.gnss_balanced_floor_sampler.sample()
+                    self.logger.info(f"gnss_fix_callback: floor_est={floor} (selected={_floor_selected}), near_floor_list={near_floor_list}, probs_floor={probs_floor}")
             else:
                 floor_raw = 0  # assume ground floor
                 idx_floor = np.abs(np.array(self.floor_list) - floor_raw).argmin()
@@ -1796,6 +1825,11 @@ class MultiFloorManager:
         if self.floor is None:  # run one time
             # set floor before initialize_with_global_pose
             self.floor = floor
+            reset_trajectory = True
+            reset_zero_adjust_uncertainty = True
+        elif self.floor is not None and \
+                self.area is None:
+            # self.floor is specified but area and mode are unknown
             reset_trajectory = True
             reset_zero_adjust_uncertainty = True
         elif track_error_detected:
