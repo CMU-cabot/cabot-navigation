@@ -574,7 +574,6 @@ class Goal(geoutil.TargetPlace):
         try:
             def done_change_parameters_callback(result):
                 CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel done_change_parameters_callback is called")
-                self._saved_params = None
                 self._cancel(callback)
             if self._saved_params:
                 self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
