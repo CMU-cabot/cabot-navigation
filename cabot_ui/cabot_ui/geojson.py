@@ -795,6 +795,10 @@ class Facility(Object):
 class POI(Facility, geoutil.TargetPlace):
     """POI class"""
 
+    class DistanceMode(enum.IntEnum):
+        Point = 1
+        Line = 2
+
     @classmethod
     def marshal(cls, dic):
         """marshal POI object"""
@@ -806,7 +810,7 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = DoorPOI
                 if category == '_nav_info_':
                     cls = InfoPOI
-                if category == '_cabot_speed_':
+                if category == '_cabot_speed_':  # default is _line_
                     cls = SpeedPOI
                 if category == '_nav_elevator_cab_':
                     cls = ElevatorCabPOI
@@ -827,10 +831,19 @@ class POI(Facility, geoutil.TargetPlace):
 
         super(POI, self).__init__(r=r, x=0, y=0, angle=angle, floor=self.floor, **dic)
 
-        self.sub_category = self.properties.hulop_sub_category \
-            if hasattr(self.properties, 'hulop_sub_category') else ""
-        self.minor_category = self.properties.hulop_minor_category \
-            if hasattr(self.properties, 'hulop_minor_category') else ""
+        self.sub_category = self.properties.hulop_sub_category or ""
+        self.minor_category = self.properties.hulop_minor_category or ""
+
+        # distance to the POI is calculated based on the mode
+        # Point mode: distance between a given pose and the POI location
+        # Line mode: the shortest distance between the given pose and the line perpendicular to the POI's heading
+        #
+        # Line mode is default for '_cabot_speed_' otherwise Point
+        # It can be overwritten by '_line_' or '_point_' in hulop_minor_category
+        self.distance_mode = POI.DistanceMode.Line if self.sub_category == "_cabot_speed_" else POI.DistanceMode.Point
+        self.distance_mode = POI.DistanceMode.Line if "_line_" in self.minor_category else self.distance_mode
+        self.distance_mode = POI.DistanceMode.Point if "_point_" in self.minor_category else self.distance_mode
+        CaBotRclpyUtil.info(f"{self._id}, {self.sub_category=}, {self.distance_mode=}")
 
         # backward compatibility
         self.local_pose = self
@@ -860,21 +873,23 @@ class POI(Facility, geoutil.TargetPlace):
     def reset(self):
         self.reset_target()
 
-    # distance is adjusted to by the TargetPoint orientation
+    # distance is adjusted to by the TargetPoint orientation if distance_mode is Line
     #                     <- T Target (orientation)
     #                        |
     #                        |
     # robot R ---distance--- o
     #
-    def distance_to(self, robot, adjusted=False):
+    def distance_to(self, robot):
         dist_TR = super(POI, self).distance_to(robot)
-        if not adjusted:
+        if self.distance_mode == POI.DistanceMode.Point:
             return dist_TR
-        pose_TR = geoutil.Pose.pose_from_points(self, robot)
-        yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
-        adjusted = dist_TR * math.cos(yaw)
-        # CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
-        return adjusted
+        if self.distance_mode == POI.DistanceMode.Line:
+            pose_TR = geoutil.Pose.pose_from_points(self, robot)
+            yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
+            adjusted = dist_TR * math.cos(yaw)
+            # CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+            return adjusted
+        raise RuntimeError("Should not happen")
 
 
 class DoorPOI(POI):
@@ -915,8 +930,14 @@ class InfoPOI(POI):
 
     def __init__(self, **dic):
         super(InfoPOI, self).__init__(**dic)
-        if self.minor_category not in ["_priority_low_", "_priority_high_", "_priority_normal_", "_priority_required_", "", None]:
-            CaBotRclpyUtil.error(f"Invalid value for hulop_minor_category: {self.minor_category}")
+        temp = self.minor_category
+        for known_key in ["_priority_low_", "_priority_high_", "_priority_normal_", "_priority_required_", "_line_", "_point_"]:
+            if known_key in temp:
+                temp = temp.replace(known_key, "")
+        temp = temp.replace(" ", "")
+        temp = temp.replace(",", "")
+        if temp:
+            CaBotRclpyUtil.error(f"Invalid value for {self._id=} hulop_minor_category: ({temp}) {self.minor_category}")
 
     def get_minor_category(self):
         return self.minor_category
