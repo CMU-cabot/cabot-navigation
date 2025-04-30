@@ -29,7 +29,9 @@ import orjson
 import math
 from enum import Enum
 import numpy as np
-from packaging.specifiers import SpecifierSet
+from packaging.specifiers import InvalidSpecifier
+from packaging.specifiers import Specifier
+from packaging.version import InvalidVersion
 from packaging.version import Version
 import sys
 import signal
@@ -341,6 +343,47 @@ class RSSLocalizationParameters:
     initial_localization: bool = True
     continuous_localization: bool = True
     failure_detection: bool = True
+
+
+class TagUtil:
+    @staticmethod
+    def parse_version_tag_string(tags_string):
+        tags = tags_string.split(",")
+        tags2 = []
+        for tag in tags:
+            try:
+                tags2.append(Version(tag))
+            except InvalidVersion:
+                tags2.append(tag)
+        tags = tags2
+        return tags
+
+    @staticmethod
+    def parse_specifier_tag_string(tags_string):
+        tags = tags_string.split(",")
+        tags2 = []
+        for tag in tags:
+            try:
+                tags2.append(Specifier(tag))
+            except InvalidSpecifier:
+                tags2.append(tag)
+        tags = tags2
+        return tags
+
+    @staticmethod
+    def versions_in_specifiers(version_tags, specifier_tags):
+        match = False
+        for ver_tag in version_tags:
+            if ver_tag == "all":  # special string
+                match = True
+            for spec_tag in specifier_tags:
+                if type(spec_tag) is Specifier:
+                    if ver_tag in spec_tag:
+                        match = True
+                else:
+                    if ver_tag == spec_tag:
+                        match = True
+        return match
 
 
 @dataclass
@@ -2276,11 +2319,16 @@ if __name__ == "__main__":
     with open(map_config_file) as map_config:
         map_config = yaml.safe_load(map_config)
 
-    # site compatibility level
-    site_compat_level = node.declare_parameter("site_compat_level", "v0.0").value
-    default_compat_level = map_config.get("default_compat_level", "v0.0")
-    if Version(site_compat_level) == Version("0.0"):
-        site_compat_level = default_compat_level
+    # site map tags
+    launch_tags = node.declare_parameter("tags", "").value
+    default_tags = map_config.get("tags", "all")
+    if launch_tags == "":
+        launch_tags = default_tags
+    else:
+        map_config["tags"] = launch_tags
+    # parse version tags
+    tags = TagUtil.parse_version_tag_string(launch_tags)
+    logger.info(f"launch tags = {tags}")
 
     sub_topics = node.declare_parameter("topic_list", ['beacons', 'wireless/beacons', 'wireless/wifi']).value
 
@@ -2478,19 +2526,23 @@ if __name__ == "__main__":
                 logger.error(F"No such parameter named {key}")
 
     for map_dict in map_list:
-
         floor = float(map_dict["floor"])
         floor_str = str(int(map_dict["floor"]))
         area = int(map_dict["area"]) if "area" in map_dict else 0
         area_str = str(area)
         height = map_dict.get("height", np.nan)
-        map_compat_level = SpecifierSet(map_dict.get("compat_level", ">=0"))
         effective_radius = map_dict.get("effective_radius", np.nan)
         node_id = map_dict["node_id"]
         frame_id = map_dict["frame_id"]
 
-        if Version(site_compat_level) != Version("0") and Version(site_compat_level) not in map_compat_level:
-            logger.info(f"skipped loading map (node_id={node_id})")
+        # parse specifier tags and compare with version tags
+        map_tags_str = map_dict.get("tags", ">=0")
+        map_tags = TagUtil.parse_specifier_tag_string(map_tags_str)
+        skip = not TagUtil.versions_in_specifiers(tags, map_tags)
+        map_dict["skip"] = skip
+
+        if skip:
+            logger.info(f"Skip loading map (node_id={node_id}) because tags ({tags}) and map_tags ({map_tags}) do not match.")
             continue
 
         anchor = geoutil.Anchor(lat=map_dict["latitude"],
@@ -2689,8 +2741,7 @@ if __name__ == "__main__":
         area = int(map_dict["area"]) if "area" in map_dict else 0
         node_id = map_dict["node_id"]
 
-        map_compat_level = SpecifierSet(map_dict.get("compat_level", ">=0"))
-        if Version(site_compat_level) != Version("0") and Version(site_compat_level) not in map_compat_level:
+        if map_dict["skip"]:
             continue
 
         for mode in modes:
