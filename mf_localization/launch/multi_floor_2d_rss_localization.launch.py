@@ -45,6 +45,7 @@ def generate_launch_description():
     rssi_offset = LaunchConfiguration('rssi_offset')
 
     map_config_file = LaunchConfiguration('map_config_file')
+    tags = LaunchConfiguration('tags')
     beacons_topic = LaunchConfiguration('beacons_topic')
     wifi_topic = LaunchConfiguration('wifi_topic')
     with_odom_topic = LaunchConfiguration('with_odom_topic')
@@ -74,6 +75,7 @@ def generate_launch_description():
         DeclareLaunchArgument('rssi_offset', default_value='0.0', description='Set RSSI offset to estimate location'),
 
         DeclareLaunchArgument('map_config_file', default_value='', description='Specify map config file path'),
+        DeclareLaunchArgument('tags', default_value='', description='Specify tags to select which maps to load (comma-separated string e.g. v0.2,demo)'),
         DeclareLaunchArgument('beacons_topic', default_value='beacons', description='Specify beacons topic name'),
         DeclareLaunchArgument('wifi_topic', default_value='wifi', description='Specify wifi topic name'),
         DeclareLaunchArgument('with_odom_topic', default_value='false', description='Weather odom topic is used to cartographer localization or not'),
@@ -123,6 +125,7 @@ def generate_launch_description():
                 name='multi_floor_manager',
                 parameters=[{
                     'map_config_file': map_config_file,
+                    'tags': tags,
                     'configuration_directory': pkg_dir+'/configuration_files/cartographer',
                     'configuration_file_prefix': 'cartographer_2d',
                     'robot': robot,
