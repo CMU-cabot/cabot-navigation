@@ -393,6 +393,8 @@ class TagUtil:
                     if ver_tag in spec_tag:
                         match = True
                 else:
+                    if spec_tag == "all":  # special string
+                        match = True
                     if ver_tag == spec_tag:
                         match = True
         return match
@@ -2548,7 +2550,7 @@ if __name__ == "__main__":
         frame_id = map_dict["frame_id"]
 
         # parse specifier tags and compare with version tags
-        map_tags_input = map_dict.get("tags", ">=0")
+        map_tags_input = map_dict.get("tags", "all")
         map_tags = TagUtil.parse_specifier_tags_input(map_tags_input)
         skip = not TagUtil.versions_in_specifiers(tags, map_tags)
         map_dict["skip"] = skip
