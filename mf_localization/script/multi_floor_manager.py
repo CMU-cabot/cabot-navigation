@@ -347,8 +347,14 @@ class RSSLocalizationParameters:
 
 class TagUtil:
     @staticmethod
-    def parse_version_tag_string(tags_string):
-        tags = tags_string.split(",")
+    def parse_version_tags_input(tags_input: list | str):
+        tags = []
+        if type(tags_input) is list:
+            for tag in tags_input:
+                tags_temp = [t.strip() for t in tag.split(",")]
+                tags.extend(tags_temp)
+        else:  # comma-separated str
+            tags = [t.strip() for t in tags_input.split(",")]
         tags2 = []
         for tag in tags:
             try:
@@ -359,8 +365,14 @@ class TagUtil:
         return tags
 
     @staticmethod
-    def parse_specifier_tag_string(tags_string):
-        tags = tags_string.split(",")
+    def parse_specifier_tags_input(tags_input: list | str):
+        tags = []
+        if type(tags_input) is list:
+            for tag in tags_input:
+                tags_temp = [t.strip() for t in tag.split(",")]
+                tags.extend(tags_temp)
+        else:  # comma-separated str
+            tags = [t.strip() for t in tags_input.split(",")]
         tags2 = []
         for tag in tags:
             try:
@@ -2327,7 +2339,7 @@ if __name__ == "__main__":
     else:
         map_config["tags"] = launch_tags
     # parse version tags
-    tags = TagUtil.parse_version_tag_string(launch_tags)
+    tags = TagUtil.parse_version_tags_input(launch_tags)
     logger.info(f"launch tags = {tags}")
 
     sub_topics = node.declare_parameter("topic_list", ['beacons', 'wireless/beacons', 'wireless/wifi']).value
@@ -2536,8 +2548,8 @@ if __name__ == "__main__":
         frame_id = map_dict["frame_id"]
 
         # parse specifier tags and compare with version tags
-        map_tags_str = map_dict.get("tags", ">=0")
-        map_tags = TagUtil.parse_specifier_tag_string(map_tags_str)
+        map_tags_input = map_dict.get("tags", ">=0")
+        map_tags = TagUtil.parse_specifier_tags_input(map_tags_input)
         skip = not TagUtil.versions_in_specifiers(tags, map_tags)
         map_dict["skip"] = skip
 
