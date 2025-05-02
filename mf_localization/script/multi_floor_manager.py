@@ -682,6 +682,7 @@ class MultiFloorManager:
                 self.initial_localization_time = self.clock.now()
             elif self.mode == LocalizationMode.TRACK:
                 self.localize_status = MFLocalizeStatus.TRACKING
+                self.initial_localization_time = None
 
             return status_code  # result of start_trajectory_with_pose
 
@@ -717,6 +718,7 @@ class MultiFloorManager:
             self.initial_localization_time = self.clock.now()
         if self.mode == LocalizationMode.TRACK:
             self.localize_status = MFLocalizeStatus.TRACKING
+            self.initial_localization_time = None
 
     # simple failure detection based on the root mean square error between tracked and estimated locations
     def check_localization_failure(self, loc_track, loc_est):
