@@ -278,6 +278,7 @@ RUN pip3 install --no-cache-dir \
     pydub \
     pyproj \
     pyserial \
+    python-can \
     requests \
     transforms3d==0.4.1
 # for pedestrian test
