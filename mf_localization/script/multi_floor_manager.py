@@ -36,6 +36,7 @@ from packaging.version import Version
 import sys
 import signal
 import threading
+from typing import Optional
 # import traceback
 import yaml
 from dataclasses import dataclass
@@ -877,8 +878,8 @@ class MultiFloorManager:
                 try:
                     # tf from the origin of the target floor to the robot pose
                     local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError:
-                    self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
+                except RuntimeError as e:
+                    self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}. error=RuntimeError({e})')
 
                 # update the trajectory only when local_transform is available
                 if local_transform is not None:
@@ -1243,8 +1244,8 @@ class MultiFloorManager:
             global_position.heading = heading
             global_position.speed = v_xy
             self.global_position_pub.publish(global_position)
-        except RuntimeError:
-            self.logger.info(F"LookupTransform Error {self.global_map_frame}-> {self.global_position_frame}")
+        except RuntimeError as e:
+            self.logger.info(F"LookupTransform Error {self.global_map_frame}-> {self.global_position_frame}. error=RuntimeError({e})")
         except tf2_ros.TransformException as e:
             self.logger.info(F"{e}")
 
@@ -1743,8 +1744,8 @@ class MultiFloorManager:
             tf_odom2gnss = tfBuffer.lookup_transform(self.odom_frame, gnss_frame, end_time)
 
             tf_available = True
-        except RuntimeError:
-            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}")
+        except RuntimeError as e:
+            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error=RuntimeError({e})")
         except tf2_ros.TransformException as e:
             self.logger.info(F"{e}")
 
@@ -2251,14 +2252,39 @@ class BufferProxy():
         self.countPub = node.create_publisher(std_msgs.msg.Int32, "transform_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.transformMap = {}
         self.min_interval = rclpy.duration.Duration(seconds=0.2)
-        self.lookup_transform_service_timeout_sec = 5.0
+        self.lookup_transform_service_call_timeout_sec = 1.0
+        self.lookup_transform_service_wait_timeout_sec = 5.0
+
+    def call(self, service, request, timeout_sec: Optional[float] = None):
+        # service call with timeout
+        event = threading.Event()
+
+        def unblock(future) -> None:
+            nonlocal event
+            event.set()
+
+        future = service.call_async(request)
+        future.add_done_callback(unblock)
+
+        if not future.done():
+            if not event.wait(timeout_sec):
+                service.remove_pending_request(future)
+                raise TimeoutError("service call timeout")
+
+        exception = future.exception()
+        if exception is not None:
+            raise exception
+        return future.result()
+
+    def lookup_transform_service_call(self, request, timeout_sec: Optional[float] = None):
+        return self.call(self.lookup_transform_service, request, timeout_sec)
 
     def clear(self):
         # clear local transform cache
         self.transformMap = {}
 
         # clear TF buffer in lookup transform node
-        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.lookup_transform_service_timeout_sec)
+        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.lookup_transform_service_wait_timeout_sec)
         if not service_available:
             self._logger.error("clear_transform_buffer_service timeout error")
             return
@@ -2291,10 +2317,13 @@ class BufferProxy():
         req = LookupTransform.Request()
         req.target_frame = target
         req.source_frame = source
-        lookup_transform_service_available = self.lookup_transform_service.wait_for_service(timeout_sec=self.lookup_transform_service_timeout_sec)
+        lookup_transform_service_available = self.lookup_transform_service.wait_for_service(timeout_sec=self.lookup_transform_service_wait_timeout_sec)
         if not lookup_transform_service_available:
-            raise RuntimeError("lookup_transform service timeout error")
-        result = self.lookup_transform_service.call(req)
+            raise RuntimeError("lookup_transform service unavailable (wait_for_service timeout).")
+        try:
+            result = self.lookup_transform_service_call(req, timeout_sec=self.lookup_transform_service_call_timeout_sec)
+        except TimeoutError as e:
+            raise RuntimeError(f"lookup_transform service call timeout. error=TimeoutError({e}).")
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
 
