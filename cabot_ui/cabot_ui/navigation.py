@@ -1495,10 +1495,13 @@ class NavigationParamManager:
     def get_client(self, node_name, service_type, service_name):
         key = f'{node_name}/{service_name}'
         if key not in self.clients:
-            self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
-        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=5.0):
-            self.node.get_logger().error(f'{key} is not available...')
-            self.clients[key] = False
+            for i in range(10):
+                client = self.node.create_client(service_type, key, callback_group=self.callback_group)
+                if client.wait_for_service(timeout_sec=1.0):
+                    self.node.get_logger().info(f'{key} is available')
+                    self.clients[key] = client
+                    break
+                self.node.get_logger().error(f'{key} is not available (retry {i+1})...')
         return self.clients[key]
 
     def change_parameter(self, node_name, param_dict, callback):
