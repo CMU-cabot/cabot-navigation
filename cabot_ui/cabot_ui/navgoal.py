@@ -925,16 +925,16 @@ class NavGoal(Goal):
             CaBotRclpyUtil.info("Could not send goal")
         status = future.result().status if future is not None else None
 
-        if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
-            # TODO(daisuke): needs to change test case conditions
-            if status == GoalStatus.STATUS_SUCCEEDED:
-                if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
-                    self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
-                if self.mode == geojson.NavigationMode.Crosswalk:
-                    self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
-                if self.mode == geojson.NavigationMode.Standard:
-                    self.delegate.activity_log("cabot/navigation", "goal_completed", "NavGoal")
+        # TODO(daisuke): needs to change test case conditions
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            if self.mode == geojson.NavigationMode.Narrow or self.mode == geojson.NavigationMode.Tight:
+                self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
+            if self.mode == geojson.NavigationMode.Crosswalk:
+                self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
+            if self.mode == geojson.NavigationMode.Standard:
+                self.delegate.activity_log("cabot/navigation", "goal_completed", "NavGoal")
 
+        if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
             self.route_index += 1
             self.enter()
         else:
