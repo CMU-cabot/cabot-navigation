@@ -22,6 +22,7 @@
 # SOFTWARE.
 
 import math
+import threading
 
 from python_qt_binding.QtWidgets import QWidget
 from rqt_gui_py.plugin import Plugin
@@ -42,6 +43,7 @@ class Handle(Plugin):
         self.servo_free = True
         self.servo_pos = 0
         self.servo_target_msg = None
+        self.lock = threading.Lock()
         self._context = context
         self._node = context.node
         self._logger = self._node.get_logger()
@@ -105,7 +107,8 @@ class Handle(Plugin):
                 self.servo_pos = self.servo_pos * 0.8 + self.servo_target_msg.data * 0.2
                 if abs(self.servo_pos - self.servo_target_msg.data) < 0.1:
                     self.servo_pos = self.servo_target_msg.data
-                    self.servo_target_msg = None
+                    with self.lock:
+                        self.servo_target_msg = None
                 self._logger.info(f'{self.servo_pos=}')
 
             length = 50
@@ -212,7 +215,8 @@ class Handle(Plugin):
     def servo_target_callback(self, msg):
         self.servo_free = False
         self.servo_free_label.setText(f'Free: {self.servo_free}')
-        self.servo_target_msg = msg
+        with self.lock:
+            self.servo_target_msg = msg
 
     def eventFilter(self, obj, event):
         # self._logger.info(f'eventFilter: {event=}')
