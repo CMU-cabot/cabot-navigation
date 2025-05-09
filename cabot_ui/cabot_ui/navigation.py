@@ -515,12 +515,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except:  # noqa: E722
             self._logger.info(traceback.format_exc())
         try:
+            start = time.time()
             self.turns = TurnDetector.detects(path, current_pose=self.current_pose)
+            end = time.time()
             self.visualizer.turns = self.turns
             if self.social_navigation is not None:
                 self.social_navigation.path = path
 
-            self._logger.info(F"turns: {self.turns}")
+            self._logger.info(F"turns: {self.turns}, it takes {(end - start)*1000:.0f}ms")
             """
             for i in range(len(self.turns)-1, 0, -1):
             t1 = self.turns[i]
