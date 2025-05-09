@@ -97,45 +97,43 @@ class TurnDetector:
     @staticmethod
     def detects(path, current_pose=None, visualize=False):
         start = 0
-        min_dist = 1000
 
         # requires more than or eqauls to 13 poses
         if len(path.poses) < 13:
             return []
-        if current_pose is not None:
-            for p in path.poses:
-                dx = p.pose.position.x - current_pose.x
-                dy = p.pose.position.y - current_pose.y
-                if math.sqrt(dx*dx+dy*dy) < min_dist:
-                    min_dist = math.sqrt(dx*dx+dy*dy)
-                    min_i = start
-                start += 1
-        start = min_i
-        length = len(path.poses)
 
-        x, y = np.zeros(length), np.zeros(length)
-        dx, dy = np.zeros(length), np.zeros(length)
-        yaw, dyaw = np.zeros(length), np.zeros(length)
+        length = len(path.poses)
+        dx = np.zeros(length)
+        dy = np.zeros(length)
+        yaw = np.zeros(length)
+        dyaw = np.zeros(length)
         # dist = np.zeros(length)
 
         dyaw2 = np.zeros(length)
         TurnStarts, TurnEnds, Angles, Types = [], [], [], []
         TurnB = []
 
-        for i in range(length):
-            x[i] = path.poses[i].pose.position.x
-            y[i] = path.poses[i].pose.position.y
+        x = np.array([pose.pose.position.x for pose in path.poses])
+        y = np.array([pose.pose.position.y for pose in path.poses])
+
+        if current_pose is not None:
+            dx = x - current_pose.x
+            dy = y - current_pose.y
+            distances = np.hypot(dx, dy)
+            min_i = int(np.argmin(distances))
+        start = min_i
 
         # get differential
-        dx[1:-1], dy[1:-1] = x[2:]-x[:-2], y[2:]-y[:-2]
-        dx[0], dy[0] = x[1]-x[0], y[1]-y[0]
-        dx[-1], dy[-1] = x[-1]-x[-2], y[-1]-y[-2]
-        for i in range(length):
-            yaw[i] = xy2angle(dx[i], dy[i])
-            yaw_last = yaw[max(0, i-1)]
-            yawi_candidates = (int(yaw_last/360)+np.array(range(-2, 3)))*360+yaw[i]
-            arg = np.argmin(abs(yawi_candidates-yaw_last))
-            yaw[i] = yawi_candidates[arg]
+        dx[1:-1] = x[2:]-x[:-2]
+        dy[1:-1] = y[2:]-y[:-2]
+        dx[0] = x[1]-x[0]
+        dy[0] = y[1]-y[0]
+        dx[-1] = x[-1]-x[-2]
+        dy[-1] = y[-1]-y[-2]
+
+        # Replace sequential yaw calculations with a vectorized version:
+        raw_yaw = np.mod(np.degrees(np.arctan2(dy, dx)), 360)
+        yaw = np.degrees(np.unwrap(np.radians(raw_yaw)))
 
         # for i in range(length-1):
         #     dist = getDist(x[i], y[i], x[i+1], y[i+1])
@@ -207,24 +205,24 @@ class TurnDetector:
                     t_i += 1
                 i = k
 
-        i = 0
-        t_i = 0
-        while i < length-1:
-            j = int(min(length-1, i+lookAheadStepsB))
-            if getOffset(x[i], y[i], yaw[i], x[j], y[j]) < bandWidth/2:
-                i += 1
-                continue
-            else:
-                TurnB.append(j)
-                i = j
-                # t_i+=1
+        # i = 0
+        # t_i = 0
+        # while i < length-1:
+        #     j = int(min(length-1, i+lookAheadStepsB))
+        #     if getOffset(x[i], y[i], yaw[i], x[j], y[j]) < bandWidth/2:
+        #         i += 1
+        #         continue
+        #     else:
+        #         TurnB.append(j)
+        #         i = j
+        #         # t_i+=1
 
-        CaBotRclpyUtil.info("*******")
-        CaBotRclpyUtil.info(f"{TurnStarts}")
-        CaBotRclpyUtil.info(f"{TurnEnds}")
-        CaBotRclpyUtil.info(f"{Angles}")
-        CaBotRclpyUtil.info(f"{Types}")
-        CaBotRclpyUtil.info(f"{TurnB}")
+        CaBotRclpyUtil.debug("*******")
+        CaBotRclpyUtil.debug(f"{TurnStarts}")
+        CaBotRclpyUtil.debug(f"{TurnEnds}")
+        CaBotRclpyUtil.debug(f"{Angles}")
+        CaBotRclpyUtil.debug(f"{Types}")
+        CaBotRclpyUtil.debug(f"{TurnB}")
 
         turns = []
         for i, j, angle, turn_type in zip(TurnStarts, TurnEnds, Angles, Types):
@@ -236,10 +234,11 @@ class TurnDetector:
             turns.append(Turn(sp, angle, turn_type, ep))
 
         for turn in turns:
-            CaBotRclpyUtil.info(turn.text)
+            CaBotRclpyUtil.debug(turn.text)
 
         if visualize:
             TurnDetector._visualize(yaw, x, y, TurnStarts, TurnEnds, yawRaw, yawLP, dyaw, dyaw2)
+
         return turns
 
     @staticmethod
