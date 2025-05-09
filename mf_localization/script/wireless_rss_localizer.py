@@ -163,6 +163,8 @@ class SimpleRSSLocalizer(RSSLocalizer):
                     c_match += 1
                     max_rssi = np.max([max_rssi, rssi])
                     indices_active.append(index)
+                else:
+                    raise RuntimeError(f"unknown beacon is in active beacons. beacon={b}")
 
         # return if the input does not match the stored data
         if c_match == 0:

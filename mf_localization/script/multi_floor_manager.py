@@ -505,6 +505,8 @@ class MultiFloorManager:
         self.global_position_pub = self.node.create_publisher(MFGlobalPosition, "global_position", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.localize_status_pub = self.node.create_publisher(MFLocalizeStatus, "localize_status", latched_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self.localize_status = MFLocalizeStatus.UNKNOWN
+        self.ble_pose_pub = self.node.create_publisher(PoseWithCovarianceStamped, "ble_pose", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.wifi_pose_pub = self.node.create_publisher(PoseWithCovarianceStamped, "wifi_pose", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         # verbosity
         self.verbose = False
@@ -753,7 +755,7 @@ class MultiFloorManager:
 
             return status_code  # result of start_trajectory_with_pose
 
-    def restart_floor(self, local_pose: Pose):
+    def restart_floor(self, local_pose: Pose, pose_publisher=None):
         # set z = 0 to ensure 2D position on the local map
         local_pose.position.z = 0.0
 
@@ -771,6 +773,8 @@ class MultiFloorManager:
 
         # start trajectory with local_pose
         self.resetpose_pub.publish(pose_cov_stamped)  # publish local_pose for visualization
+        if pose_publisher is not None:
+            pose_publisher.publish(pose_cov_stamped)
         status_code_start_trajectory = self.start_trajectory_with_pose(local_pose)
         self.logger.info(F"called /{floor_manager.node_id}/{self.mode}/start_trajectory, code={status_code_start_trajectory}")
 
@@ -931,10 +935,13 @@ class MultiFloorManager:
 
         # detect floor
         floor_localizer = None
+        pose_publisher = None
         if rss_type == RSSType.iBeacon:
             floor_localizer = self.ble_floor_localizer
+            pose_publisher = self.ble_pose_pub
         elif rss_type == RSSType.WiFi:
             floor_localizer = self.wifi_floor_localizer
+            pose_publisher = self.wifi_pose_pub
 
         loc = floor_localizer.predict(beacons)  # [[x,y,z,floor]]
 
@@ -974,6 +981,7 @@ class MultiFloorManager:
         if self.floor is None:
             if self.gnss_is_active \
                     and self.indoor_outdoor_mode != IndoorOutdoorMode.INDOOR:
+                self.logger.info("skipped starting a trajectory (gnss_is_active=True and indoor_outdoor_model!=INDOOR)")
                 return
         else:
             # allow switch trajectories
@@ -1013,7 +1021,7 @@ class MultiFloorManager:
             orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)  # orientation is unknown.
             local_pose = Pose(position=position, orientation=orientation)
 
-            self.restart_floor(local_pose)
+            self.restart_floor(local_pose, pose_publisher)
 
             # reset altitude_floor_estimator in floor initialization process
             self.altitude_floor_estimator.reset(floor_est=floor)
@@ -1669,8 +1677,7 @@ class MultiFloorManager:
                 or fix_rejection_position_covariance < fix.position_covariance[0]:
             # log before gnss-based initial localization
             if self.gnss_localization_time is None:
-                self.logger.info(F"gnss_fix_callback: waiting for position_covariance convergence (cov[0]={fix.position_covariance[0]}, covariance_threshold={fix_rejection_position_covariance})",
-                                 throttle_duration_sec=1.0)
+                self.logger.info(F"gnss_fix_callback: waiting for position_covariance convergence (cov[0]={fix.position_covariance[0]}, covariance_threshold={fix_rejection_position_covariance})")
             # if navsat topic is timeout, use position covariance for indoor/outdoor mode instead
             if now - self.gnss_navsat_time > Duration(seconds=self.gnss_params.gnss_navsat_timeout):
                 if self.gnss_params.gnss_position_covariance_indoor_threshold < fix.position_covariance[0]:
