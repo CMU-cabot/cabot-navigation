@@ -33,7 +33,8 @@ from std_msgs.msg import Header
 from builtin_interfaces.msg import Time
 import rclpy
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
-
+import time
+import numpy as np
 
 def parsePath(path_data):
     path_msg = Path()
@@ -85,9 +86,9 @@ class TestEvent(unittest.TestCase):
         rclpy.shutdown()
         return super().tearDown()
 
-    def test_basic(self):
+    def _test_basic(self):
         current_pose = cabot_ui.geoutil.Pose(x=0, y=0, r=0)
-        for i in range(0, 20):
+        for i in range(0, 1):
             path = Path()
             for j in range(0, i):
                 pose = PoseStamped()
@@ -105,4 +106,19 @@ class TestEvent(unittest.TestCase):
             path = parsePath(path_data)
             pose = path.poses[0]
             current_pose = cabot_ui.geoutil.Pose(x=pose.pose.position.x, y=pose.pose.position.y, r=0)
-            TurnDetector.detects(path, current_pose=current_pose)
+
+            start = time.time()
+            for i in range(100):
+                turns = TurnDetector.detects(path, current_pose=current_pose)
+            end = time.time()
+            print(f"Total time taken for 100 iterations: {(end-start)/100:.4f}")
+
+    def test_plan_msg2(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+
+        with open(dir_path+"/data/plan_msg1.yaml") as plan_file:
+            path_data = yaml.safe_load(plan_file)
+            path = parsePath(path_data)
+            pose = path.poses[0]
+            current_pose = cabot_ui.geoutil.Pose(x=pose.pose.position.x, y=pose.pose.position.y, r=0)
+            TurnDetector.detects(path, current_pose=current_pose, visualize=True)

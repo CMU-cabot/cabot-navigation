@@ -32,13 +32,15 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui import geoutil
 
 smoothParam = 0.015
-lookAheadStepsA = int(2/0.02)
-thtAngle0 = 10
-thtAngle1 = 1
-thtMinimumTurn = 60
-thtMinimumDev = 20
+lookAheadStepsA = int(2 / 0.02)
+thtAngle0 = math.radians(10)
+thtAngle1 = math.radians(1)
+thtMinimumTurn = math.radians(60)
+thtMinimumTurnDev = math.radians(0.01)
+# thtMinimumDev = math.radians(20) / 57.32  # 57.32 is a magic number
+thtMinimumDev = math.radians(0.3)
 bandWidth = 1.0
-lookAheadStepsB = int(0.5/0.02)
+lookAheadStepsB = int(0.5 / 0.02)
 
 
 class Turn:
@@ -103,18 +105,14 @@ class TurnDetector:
             return []
 
         length = len(path.poses)
+        x = np.array([pose.pose.position.x for pose in path.poses])
+        y = np.array([pose.pose.position.y for pose in path.poses])
         dx = np.zeros(length)
         dy = np.zeros(length)
         yaw = np.zeros(length)
         dyaw = np.zeros(length)
-        # dist = np.zeros(length)
-
         dyaw2 = np.zeros(length)
         TurnStarts, TurnEnds, Angles, Types = [], [], [], []
-        TurnB = []
-
-        x = np.array([pose.pose.position.x for pose in path.poses])
-        y = np.array([pose.pose.position.y for pose in path.poses])
 
         if current_pose is not None:
             dx = x - current_pose.x
@@ -124,34 +122,31 @@ class TurnDetector:
         start = min_i
 
         # get differential
-        dx[1:-1] = x[2:]-x[:-2]
-        dy[1:-1] = y[2:]-y[:-2]
-        dx[0] = x[1]-x[0]
-        dy[0] = y[1]-y[0]
-        dx[-1] = x[-1]-x[-2]
-        dy[-1] = y[-1]-y[-2]
+        dx[1:-1] = x[2:] - x[:-2]
+        dy[1:-1] = y[2:] - y[:-2]
+        dx[0] = x[1] - x[0]
+        dy[0] = y[1] - y[0]
+        dx[-1] = x[-1] - x[-2]
+        dy[-1] = y[-1] - y[-2]
 
         # Replace sequential yaw calculations with a vectorized version:
-        raw_yaw = np.mod(np.degrees(np.arctan2(dy, dx)), 360)
-        yaw = np.degrees(np.unwrap(np.radians(raw_yaw)))
-
-        # for i in range(length-1):
-        #     dist = getDist(x[i], y[i], x[i+1], y[i+1])
+        yaw = np.unwrap(np.arctan2(dy, dx))
 
         # lowpass filtering
         B, A = signal.iirfilter(3, smoothParam, btype='lowpass')
-        yawLP = signal.filtfilt(B, A, yaw)
-        dyaw[0:-1] = yawLP[1:]-yawLP[:-1]
+        yaw, yawRaw = signal.filtfilt(B, A, yaw), yaw
+
+        # Calculate first-order derivatives of yaw
+        dyaw[0:-1] = yaw[1:] - yaw[:-1]
         N = 10
         for i in range(0, N):
-            dyaw2[0:-N] += abs(dyaw[i:-N+i])/N
-        yaw, yawRaw = yawLP, yaw
+            dyaw2[0:-N] += abs(dyaw[i:-N + i]) / N
 
         # find turns
         i = start
         t_i = 0
-        while (i < length-1):
-            j = int(min(length-1, i+lookAheadStepsA))
+        while (i < length - 1):
+            j = int(min(length - 1, i + lookAheadStepsA))
 
             # if angle difference is bigger than the threshold
             if abs(angDiff(yaw[i], yaw[j])) < thtAngle0:
@@ -169,7 +164,7 @@ class TurnDetector:
                 k = j
 
                 # find point that turning starts
-                while k > i and abs(dyaw2[k]) > 0.01:
+                while k > i and dyaw2[k] > thtMinimumTurnDev:
                     k -= 1
                 TurnStarts.append(k)
 
@@ -177,25 +172,20 @@ class TurnDetector:
                 k = j
 
                 # find point that turning ends
-                while k < length-1 and abs(dyaw2[k]) > 0.01:
+                while k < length - 1 and dyaw2[k] > thtMinimumTurnDev:
                     k += 1
                 TurnEnds.append(k)
 
-                # if differential is small than minimum turn, ignore
-
-                # ignore very beginning of the path
-                # if TurnStarts[-1] < lookAheadStepsA - start:
-                #     del TurnStarts[-1]
-                #     del TurnEnds[-1]
-
                 # smaller than minimum turn
-                if abs(yaw[TurnEnds[-1]]-yaw[TurnStarts[-1]]) < thtMinimumTurn:
-                    # smaller than minimum deviation
-                    if dyaw2[TurnStarts[-1]:TurnEnds[-1]].size > 0 and max(dyaw2[TurnStarts[-1]:TurnEnds[-1]]) < thtMinimumDev / 180 * math.pi:
+                if abs(yaw[TurnEnds[-1]] - yaw[TurnStarts[-1]]) < thtMinimumTurn:
+                    # ignore if smaller than minimum deviation
+                    if dyaw2[TurnStarts[-1]:TurnEnds[-1]].size > 0 and max(dyaw2[TurnStarts[-1]:TurnEnds[-1]]) < thtMinimumDev:
                         del TurnStarts[-1]
                         del TurnEnds[-1]
                     else:
-                        Angles.append(-RightTurn * 180 / 7)
+                        diff = max(yaw[TurnStarts[-1]:TurnEnds[-1]]) - min(yaw[TurnStarts[-1]:TurnEnds[-1]])
+                        Angles.append(-RightTurn * diff)
+                        # Angles.append(-RightTurn * math.pi / 7)
                         Types.append(Turn.Type.Avoiding)
                 else:
                     if TurnEnds[t_i] < TurnStarts[t_i]:
@@ -205,24 +195,11 @@ class TurnDetector:
                     t_i += 1
                 i = k
 
-        # i = 0
-        # t_i = 0
-        # while i < length-1:
-        #     j = int(min(length-1, i+lookAheadStepsB))
-        #     if getOffset(x[i], y[i], yaw[i], x[j], y[j]) < bandWidth/2:
-        #         i += 1
-        #         continue
-        #     else:
-        #         TurnB.append(j)
-        #         i = j
-        #         # t_i+=1
-
         CaBotRclpyUtil.debug("*******")
         CaBotRclpyUtil.debug(f"{TurnStarts}")
         CaBotRclpyUtil.debug(f"{TurnEnds}")
         CaBotRclpyUtil.debug(f"{Angles}")
         CaBotRclpyUtil.debug(f"{Types}")
-        CaBotRclpyUtil.debug(f"{TurnB}")
 
         turns = []
         for i, j, angle, turn_type in zip(TurnStarts, TurnEnds, Angles, Types):
@@ -230,20 +207,19 @@ class TurnDetector:
             sp.header.frame_id = path.header.frame_id
             ep = path.poses[j]
             ep.header.frame_id = path.header.frame_id
-            # ang = np.pi/180*(yaw[j]-yaw[i])
-            turns.append(Turn(sp, angle, turn_type, ep))
+            turns.append(Turn(sp, math.degrees(angle), turn_type, ep))
 
         for turn in turns:
             CaBotRclpyUtil.debug(turn.text)
 
         if visualize:
-            TurnDetector._visualize(yaw, x, y, TurnStarts, TurnEnds, yawRaw, yawLP, dyaw, dyaw2)
+            TurnDetector._visualize(yaw, x, y, TurnStarts, TurnEnds, yawRaw, yaw, dyaw, dyaw2)
 
         return turns
 
     @staticmethod
     def _visualize(yaw, x, y, TurnStarts, TurnEnds, yawRaw, yawLP, dyaw, dyaw2):
-        x_stp = np.array(range(len(yaw)))*0.02
+        x_stp = np.array(range(len(yaw))) * 0.02
 
         if 1:  # plot map
             plt.figure(1)
@@ -272,9 +248,9 @@ class TurnDetector:
 
         if 1:
             plt.figure(3)
-            # plt.plot(dyaw)
-            # plt.plot(TurnStarts,dyaw[TurnStarts],'ro',label='TurnStarts')
-            # plt.plot(TurnEnds,dyaw[TurnEnds],'go',label='TurnStarts')
+            plt.plot(dyaw)
+            plt.plot(TurnStarts, dyaw[TurnStarts], 'ro', label='TurnStarts')
+            plt.plot(TurnEnds, dyaw[TurnEnds], 'go', label='TurnStarts')
             plt.plot(dyaw2)
             plt.plot(TurnStarts, dyaw2[TurnStarts], 'rx', label='TurnStarts2')
             plt.plot(TurnEnds, dyaw2[TurnEnds], 'gx', label='TurnStarts2')
@@ -283,7 +259,7 @@ class TurnDetector:
 
         if 0:  # plot yaw in frequency domain
             yawFAmp = np.abs(np.fft.fft(yaw))
-            wn = 1.0*np.array(range(len(yaw)))/len(yaw)
+            wn = 1.0 * np.array(range(len(yaw))) / len(yaw)
             plt.plot(wn, yawFAmp, '.', label='.')
             plt.ylabel('amp')
             plt.xlabel('f(in unkown unit)')
@@ -292,32 +268,12 @@ class TurnDetector:
 
 
 def xy2angle(dx, dy):
-    if dx == 0:
-        dx = 1e-38
-    if dy == 0:
-        dy = 1e-38
-    tht = np.arctan(dy/dx)/np.pi*180
-    if dx < 0 and dy > 0:
-        tht = tht+180
-    if dx < 0 and dy < 0:
-        tht = tht+180
-    if dx > 0 and dy < 0:
-        tht = tht+360
-    return tht
+    return math.atan2(dy, dx)
 
 
 def getDist(x0, y0, x1, y1):
-    ans = np.sqrt((x1-x0)*(x1-x0) + (y1-y0)*(y1-y0))
-    # print '(',x0,y0,'), (',x1,y1,') -- ',ans
-    return ans
+    return np.hypot(x1 - x0, y1 - y0)
 
 
 def angDiff(a, b):
-    return (a-b+180) % 360 - 180
-
-
-def getOffset(x0, y0, tht, x1, y1):
-    if (tht+45) % 180 < 90:
-        return np.cos(np.pi/360*tht) * (y1-y0-(x1-x0)*np.tan(np.pi/360*tht))
-    else:
-        return np.sin(np.pi/360*tht) * (x1-x0-(y1-y0)/np.tan(np.pi/360*tht))
+    return (a - b + math.pi) % (2 * math.pi) - math.pi
