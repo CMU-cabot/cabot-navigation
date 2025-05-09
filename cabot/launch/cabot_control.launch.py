@@ -96,6 +96,8 @@ def generate_launch_description():
             name='speed_visualize_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         Node(
             package='cabot',
@@ -104,6 +106,8 @@ def generate_launch_description():
             name='wheelie_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
 
@@ -123,6 +127,8 @@ def generate_launch_description():
             name='clearing_tf_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
         # The diagram of Cabot Odometry Adapter & related nodes (*components)
@@ -170,6 +176,8 @@ def generate_launch_description():
                     'max_speed': max_speed
                 },
             ],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # for local odom navigation
         Node(
@@ -179,6 +187,8 @@ def generate_launch_description():
             name='odom_adapter_node2',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot Lidar Speed Control
         Node(
@@ -188,6 +198,8 @@ def generate_launch_description():
             name='lidar_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot Low Lidar Speed Control
         Node(
@@ -197,6 +209,8 @@ def generate_launch_description():
             name='low_lidar_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot People Speed Control
         Node(
@@ -206,6 +220,8 @@ def generate_launch_description():
             name='people_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot TF Speed Control
         Node(
@@ -215,6 +231,8 @@ def generate_launch_description():
             name='tf_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot Touch Speed Control
         Node(
@@ -224,6 +242,8 @@ def generate_launch_description():
             name='touch_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
         # Cabot Speed Control
@@ -244,6 +264,8 @@ def generate_launch_description():
             name=PythonExpression(['"speed_control_node_touch_', touch_enabled, '"']),
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
         # Sensor fusion for stabilizing odometry
@@ -254,5 +276,7 @@ def generate_launch_description():
             name='ekf_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
     ])

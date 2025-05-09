@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+set -m
+
 # change directory to where this script exists
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -41,30 +43,37 @@ source $scriptdir/cabot_util.sh
 trap signal INT TERM
 
 function signal() {
-    blue "trap cabot_ros2.sh "
+    blue "trap cabot_ros2.sh"
 
     # ps -Af
-    kill -INT -1
+    # kill -INT -1
     for pid in ${termpids[@]}; do
-	kill -TERM $pid
+        com="kill -TERM $pid"
+        red $com
+        eval $com
     done
     for pid in ${pids[@]}; do
-	count=0
+        com="kill -SIGINT $pid"
+        red $com
+        eval $com
+    done
+    for pid in ${pids[@]}; do
+        count=0
         while kill -0 $pid 2> /dev/null; do
-	    if [[ $count -eq 15 ]]; then
-		blue "escalate to SIGTERM $pid"
-		com="kill -TERM $pid"
-		eval $com
-	    fi
-	    if [[ $count -eq 30 ]]; then
-		blue "escalate to SIGKILL $pid"
-		com="kill -KILL $pid"
-		eval $com
-	    fi
+            if [[ $count -eq 15 ]]; then
+                blue "escalate to SIGTERM $pid"
+                com="kill -SIGTERM $pid"
+                eval $com
+            fi
+            if [[ $count -eq 30 ]]; then
+                blue "escalate to SIGKILL $pid"
+                com="kill -SIGKILL $pid"
+                eval $com
+            fi
             echo "waiting $0 $pid"
-	    # ps -Af
+            # ps -Af
             snore 1
-	    count=$((count+1))
+            count=$((count+1))
         done
     done
     
@@ -154,18 +163,18 @@ function usage {
 
 while getopts "hdw:" arg; do
     case $arg in
-	h)
-	    usage
-	    exit
-	    ;;
-	d)
-	    debug=1
-	    command_prefix="setsid xterm -e \""
-	    command_postfix=";read\"&"
-	    ;;
-	w)
-	    wait_sec=$OPTARG
-	    ;;
+        h)
+            usage
+            exit
+            ;;
+        d)
+            debug=1
+            command_prefix="setsid xterm -e \""
+            command_postfix=";read\"&"
+            ;;
+        w)
+            wait_sec=$OPTARG
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -185,13 +194,13 @@ if [ ! -z $CABOT_SITE ]; then
     echo $sitedir
     source $sitedir/config/config.sh
     if [ "$map" == "" ]; then
-	echo "Please check config/config.sh in site package ($sitedir) to set map and world"
-	exit
+        echo "Please check config/config.sh in site package ($sitedir) to set map and world"
+        exit
     fi
 else
     if [ "$map" == "" ]; then
-	echo "-T <site> or -m <map> should be specified"
-	exit
+        echo "-T <site> or -m <map> should be specified"
+        exit
     fi
 fi
 
@@ -204,7 +213,7 @@ echo "Use Sim Time              : $use_sim_time"
 echo "Use BLE                 : $use_ble"
 
 blue "bringup cabot control"
-com="$command_prefix ros2 launch cabot cabot_control.launch.py \
+com="$command_prefix ros2 launch -n cabot cabot_control.launch.py \
      use_sim_time:=$use_sim_time \
      $command_postfix"
 echo $com
@@ -214,7 +223,7 @@ pids+=($!)
 
 if [[ ! -z $CABOT_GAMEPAD ]]; then
     # launch gamepad teleop
-    eval "ros2 launch cabot_ui teleop_gamepad.launch.py gamepad:=$CABOT_GAMEPAD &"
+    eval "ros2 launch -n cabot_ui teleop_gamepad.launch.py gamepad:=$CABOT_GAMEPAD &"
     pids+=($!)
 fi
 
@@ -226,7 +235,7 @@ if [[ -n $CABOT_INIT_SPEED ]]; then
 fi
 
 blue "launch cabot handle menu"
-com="$command_prefix ros2 launch cabot_ui cabot_ui.launch.py \
+com="$command_prefix ros2 launch -n cabot_ui cabot_ui.launch.py \
         anchor_file:='$map' \
         use_sim_time:=$use_sim_time \
         $init_speed_option \
@@ -239,7 +248,7 @@ eval $com
 checks+=($!)
 pids+=($!)
 
-com="$command_prefix ros2 launch cabot_navigation2 bringup_launch.py \
+com="$command_prefix ros2 launch -n cabot_navigation2 bringup_launch.py \
     map:=$map \
     autostart:=true \
     use_sim_time:=$use_sim_time \
@@ -258,7 +267,7 @@ pids+=($!)
 #  record_bt_log:=$CABOT_RECORD_ROSBAG2 \
     
 echo "launch cabot diagnostic"
-com="$command_prefix ros2 launch cabot_ui cabot_diagnostic.launch.py \
+com="$command_prefix ros2 launch -n cabot_ui cabot_diagnostic.launch.py \
         $command_postfix"
 echo $com
 eval $com
@@ -266,7 +275,7 @@ termpids+=($!)
 
 if [ $use_ble -ne 0 ]; then
     echo "launch rosbridge for cabot BLE"
-    com="$command_prefix ros2 launch cabot_ui cabot_ext_ble.launch.xml \
+    com="$command_prefix ros2 launch -n cabot_ui cabot_ext_ble.launch.xml \
             $command_postfix"
     #com="$command ros2 run rosbridge_server rosbridge_websocket.py --ros-args -p port:=9091 > /dev/null 2>&1 $command_postfix"
     echo $com
@@ -286,7 +295,7 @@ if [[ -e $sitedir/queue ]]; then
     if [[ -e $queue_det_config_file ]]; then
         launch_file="queue_people_py detect_queue_people.launch"
         echo "launch $launch_file"
-        eval "$command ros2 launch $launch_file \
+        eval "$command ros2 launch -n $launch_file \
                        queue_annotation_list_file:=$queue_det_config_file \
                        $command_postfix"
         pids+=($!)
@@ -301,10 +310,10 @@ do
     # blue "snore"
     for pid in ${checks[@]}; do
         kill -0 $pid 2> /dev/null
-	if [[ $? -ne 0 ]]; then
-	    red "process (pid=$pid) is not running, please check logs"
-	    exit
-	fi
+        if [[ $? -ne 0 ]]; then
+            red "process (pid=$pid) is not running, please check logs"
+            exit
+        fi
     done
     snore 1
 done
