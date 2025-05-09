@@ -39,11 +39,8 @@ def filter_samples(samples, beacon_pattern=".", wifi_pattern="."):
             elif e["type"] == "WiFi":
                 if re.match(wifi_pattern, e["id"]):
                     s2_beacons.append(e)
-        if 0 < len(s2_beacons):
-            s2["data"]["beacons"] = s2_beacons
-            samples_new.append(s2)
-        else:
-            continue
+        s2["data"]["beacons"] = s2_beacons
+        samples_new.append(s2)
     return samples_new
 
 
