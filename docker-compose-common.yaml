@@ -434,7 +434,7 @@ services:
       test: curl -f localhost:8080/map/login.jsp || exit 1
       interval: 3s
       timeout: 3s
-      retries: 20  # increased from 5, needs more time to launch on Jetson
+      retries: 50  # increased from 5, needs more time to launch on Jetson
 
   map_data:
     extends: map_server
