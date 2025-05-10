@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+set -m
+
 # change directory to where this script exists
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -41,14 +43,18 @@ source $scriptdir/cabot_util.sh
 trap signal INT TERM
 
 function signal() {
-    blue "trap cabot_ros2.sh "
+    blue "trap cabot_gui.sh "
 
     # ps -Af
-    for pid in ${pids[@]}; do
-        kill -TERM $pid
-    done
     for pid in ${termpids[@]}; do
-        kill -TERM $pid
+        com="kill -TERM $pid"
+        red $com
+        eval $com
+    done
+    for pid in ${pids[@]}; do
+        com="kill -SIGINT $pid"
+        red $com
+        eval $com
     done
     for pid in ${pids[@]}; do
         count=0
@@ -135,7 +141,7 @@ fi
 if [[ -n $CABOT_ROS2_LOCAL_RVIZ_CONFIG ]]; then
     rviz_option+=" rviz_config_file2:=$CABOT_ROS2_LOCAL_RVIZ_CONFIG"
 fi
-com="$command_prefix ros2 launch cabot_ui cabot_gui.launch.py $rviz_option $command_postfix"
+com="$command_prefix ros2 launch -n cabot_ui cabot_gui.launch.py $rviz_option $command_postfix"
 eval $com
 checks+=($!)
 pids+=($!)
@@ -161,7 +167,7 @@ fi
 
 # launch teleop keyboard for both gazebo and physical robot
 blue "launch teleop"
-com="setsid xterm -e ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args --remap cmd_vel:=$CABOT_GUI_TELEOP_TWIST_TOPIC &"
+com="xterm -e ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args --remap cmd_vel:=$CABOT_GUI_TELEOP_TWIST_TOPIC &"
 echo $com
 eval $com
 pids+=($!)

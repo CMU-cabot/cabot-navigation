@@ -46,7 +46,6 @@ function signal() {
     blue "trap cabot_ros2.sh"
 
     # ps -Af
-    # kill -INT -1
     for pid in ${termpids[@]}; do
         com="kill -TERM $pid"
         red $com
@@ -223,7 +222,7 @@ pids+=($!)
 
 if [[ ! -z $CABOT_GAMEPAD ]]; then
     # launch gamepad teleop
-    eval "ros2 launch -n cabot_ui teleop_gamepad.launch.py gamepad:=$CABOT_GAMEPAD &"
+    eval "ros2 launch; -n cabot_ui teleop_gamepad.launch.py gamepad:=$CABOT_GAMEPAD &"
     pids+=($!)
 fi
 
@@ -271,7 +270,7 @@ com="$command_prefix ros2 launch -n cabot_ui cabot_diagnostic.launch.py \
         $command_postfix"
 echo $com
 eval $com
-termpids+=($!)
+pids+=($!)
 
 if [ $use_ble -ne 0 ]; then
     echo "launch rosbridge for cabot BLE"
@@ -281,7 +280,7 @@ if [ $use_ble -ne 0 ]; then
     echo $com
     eval $com
     checks+=($!)
-    termpids+=($!)
+    pids+=($!)
 fi
 
 ### launch queue detect

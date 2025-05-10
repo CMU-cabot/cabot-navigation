@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+set -m
 
 ## termination hook
 trap ctrl_c INT QUIT TERM
@@ -27,23 +28,27 @@ trap ctrl_c INT QUIT TERM
 function ctrl_c() {
     blue "trap cabot_mf_localization.sh "
 
-    kill -INT -1
     for pid in ${pids[@]}; do
-	count=0
+        com="kill -SIGINT $pid"
+        red $com
+        eval $com
+    done
+    for pid in ${pids[@]}; do
+        count=0
         while kill -0 $pid 2> /dev/null; do
-	    if [[ $count -eq 10 ]]; then
-		blue "escalate to SIGTERM $pid"
-		com="kill -TERM $pid"
-		eval $com
-	    fi
-	    if [[ $count -eq 20 ]]; then
-		blue "escalate to SIGKILL $pid"
-		com="kill -KILL $pid"
-		eval $com
-	    fi
+            if [[ $count -eq 10 ]]; then
+                blue "escalate to SIGTERM $pid"
+                com="kill -TERM $pid"
+                eval $com
+            fi
+            if [[ $count -eq 20 ]]; then
+                blue "escalate to SIGKILL $pid"
+                com="kill -KILL $pid"
+                eval $com
+            fi
             echo "waiting $0 $pid"
             snore 1
-	    count=$((count+1))
+            count=$((count+1))
         done
     done
     
@@ -215,17 +220,17 @@ while getopts "hdm:n:w:sOT:NMr:fR:XCpG" arg; do
         publish_current_rate=$OPTARG
         ;;
     X)
-	localization=0
-	;;
+        localization=0
+        ;;
     C)
-	cart_mapping=1
-	;;
+        cart_mapping=1
+        ;;
     p)
-	pressure_available=1
-	;;
+        pressure_available=1
+        ;;
     G)
-	use_gnss=1
-	;;
+        use_gnss=1
+        ;;
   esac
 done
 shift $((OPTIND-1))
@@ -280,7 +285,7 @@ if [ $gazebo -eq 1 ]; then
   else
     echo "launch gazebo helpers (ble_rss_simulator, floor_transition)"
     wireless_config=$(realpath $wireless_config)
-    com="$command ros2 launch mf_localization_gazebo gazebo_helper.launch.py \
+    com="$command ros2 launch -n mf_localization_gazebo gazebo_helper.launch.py \
                     beacons_topic:=$beacons_topic \
                     wifi_topic:=$wifi_topic \
                     wireless_config_file:=$wireless_config \
@@ -349,7 +354,7 @@ else
     # gnss.launch.py command
     cmd=""
     if [ ${NTRIP_CLIENT_START_AT_LAUNCH} -eq 1 ]; then
-        cmd="$command ros2 launch mf_localization gnss.launch.py \
+        cmd="$command ros2 launch -n mf_localization gnss.launch.py \
                 $ntrip_client_arg \
                 $gnss_arg \
                 host:=$NTRIP_HOST \
@@ -361,7 +366,7 @@ else
                 relay_back:=$NTRIP_STR2STR_RELAY_BACK \
                 $commandpost"
     else
-        cmd="$command ros2 launch mf_localization gnss.launch.py \
+        cmd="$command ros2 launch -n mf_localization gnss.launch.py \
                 $ntrip_client_arg \
                 $gnss_arg \
                 $commandpost"
@@ -376,7 +381,7 @@ gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\
 ### launch rviz
 if [ $show_rviz -eq 1 ]; then
    echo "launch rviz"
-   cmd="$command ros2 launch mf_localization view_multi_floor.launch.xml \
+   cmd="$command ros2 launch -n mf_localization view_multi_floor.launch.xml \
          use_sim_time:=$gazebo_bool $commandpost"
    echo $cmd
    eval $cmd
@@ -401,7 +406,7 @@ if [ $cart_mapping -eq 1 ]; then
                 model_for_lidar=cabot3-m2
             fi
             echo "launch node for $LIDAR_MODEL"
-            cmd="$command ros2 launch cabot_base hesai_lidar.launch.py \
+            cmd="$command ros2 launch -n cabot_base hesai_lidar.launch.py \
                 model:=$model_for_lidar \
                 pandar:=/velodyne_points \
                 $commandpost"
@@ -440,7 +445,7 @@ if [ $cart_mapping -eq 1 ]; then
 
     # build cmd
     cmd="$command"
-    cmd="$cmd ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
+    cmd="$cmd ros2 launch -n mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
           run_cartographer:=${RUN_CARTOGRAPHER:-true} \
           record_wireless:=true \
           save_samples:=true \
@@ -468,7 +473,7 @@ fi
 if [ $localization -eq 0 ]; then
     while [ 1 -eq 1 ];
     do
-	snore 1
+        snore 1
     done
     exit
 fi
@@ -478,7 +483,7 @@ if [ $navigation -eq 0 ]; then
     # run mf_localization only
     launch_file="multi_floor_2d_rss_localization.launch.py"
     echo "launch $launch_file"
-    com="$command ros2 launch mf_localization $launch_file \
+    com="$command ros2 launch -n mf_localization $launch_file \
                     robot:=$robot \
                     map_config_file:=$map \
                     tags:=$CABOT_SITE_TAGS \
@@ -505,7 +510,7 @@ if [ $navigation -eq 0 ]; then
     # launch multi-floor map server for visualization
 #    if [ $map_server -eq 1 ]; then
 #        echo "launch multi_floor_map_server.launch"
-#        com="$command ros2 launch mf_localization multi_floor_map_server.launch.xml \
+#        com="$command ros2 launch -n mf_localization multi_floor_map_server.launch.xml \
 #                        map_config_file:=$map \
 #                        $commandpost"
 #	echo $com
@@ -515,7 +520,7 @@ if [ $navigation -eq 0 ]; then
 else
     # run navigation (mf_localization + planning)
     echo "launch multicart_demo.launch"
-    com="$command ros2 launch cabot_mf_localization multicart_demo.launch.py \
+    com="$command ros2 launch -n cabot_mf_localization multicart_demo.launch.py \
                     map_file:=$map \
                     beacons_topic:=$beacons_topic \
                     points2_topic:=$points2_topic \

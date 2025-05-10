@@ -74,8 +74,7 @@ def generate_launch_description():
         ),
         # append prefix name to the log directory for convenience
         RegisterEventHandler(
-            OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot")]),
-            condition=UnlessCondition(use_sim_time)
+            OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot")])
         ),
         DeclareLaunchArgument(
             'touch_enabled',
