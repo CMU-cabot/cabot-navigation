@@ -27,6 +27,8 @@
   <arg name="param_file_dir"      default="$(find-pkg-share mf_localization)/configuration_files/ublox" />
   <arg name="output"              default="both" />
   <arg name="respawn"             default="true"/>
+  <!-- diagnostic error setting -->
+  <arg name="no_fix_error_level"  default="1"/>  <!-- ERROR -> WARN -->
 
   <!-- the following attributes are not available in ROS 2-->
   <!--
@@ -42,6 +44,7 @@
         respawn="$(var respawn)"
         respawn_delay="5">
     <param from="$(var param_file_dir)/$(var param_file_name).yaml" />
+    <param name="no_fix_error_level" value="$(var no_fix_error_level)"/>
     <!-- remapping because ROS 2 ublox node publishes navsat type messages to navstate topics. -->
     <remap from="navstate" to="ublox/navsat"/>
   </node>
