@@ -34,7 +34,6 @@ cd $scriptdir
 scriptdir=`pwd`
 
 pids=()
-termpids=()
 checks=()
 
 ## debug
@@ -51,11 +50,6 @@ function signal() {
     blue "trap cabot_gazebo.sh "
 
     # ps -Af
-    for pid in ${termpids[@]}; do
-        com="kill -TERM $pid"
-        red $com
-        eval $com
-    done
     for pid in ${pids[@]}; do
         com="kill -SIGINT $pid"
         red $com

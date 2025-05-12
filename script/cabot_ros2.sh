@@ -274,7 +274,7 @@ pids+=($!)
 
 if [ $use_ble -ne 0 ]; then
     echo "launch rosbridge for cabot BLE"
-    com="$command_prefix ros2 launch -n cabot_ui cabot_ext_ble.launch.xml \
+    com="$command_prefix ros2 launch -n cabot_ui cabot_ext_ble.launch.py \
             $command_postfix"
     #com="$command ros2 run rosbridge_server rosbridge_websocket.py --ros-args -p port:=9091 > /dev/null 2>&1 $command_postfix"
     echo $com
@@ -292,7 +292,7 @@ if [[ -e $sitedir/queue ]]; then
     fi
 
     if [[ -e $queue_det_config_file ]]; then
-        launch_file="queue_people_py detect_queue_people.launch"
+        launch_file="queue_people_py detect_queue_people.launch.py"
         echo "launch $launch_file"
         eval "$command ros2 launch -n $launch_file \
                        queue_annotation_list_file:=$queue_det_config_file \
