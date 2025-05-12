@@ -20,6 +20,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+set -m
+
 start=`date +%s.%N`
 
 trap ctrl_c INT QUIT TERM
@@ -38,13 +41,17 @@ function ctrl_c() {
             launched=$((launched+1))
         done
 
+        red "kill -INT $dcpid"
+        kill -INT $dcpid
+        while kill -0 $dcpid 2> /dev/null; do
+            snore 1
+        done
         red "$dccom down"
         if [ $verbose -eq 1 ]; then
             $dccom down
         else
             $dccom down > /dev/null 2>&1
         fi
-	# kill -s 9 $dcpid
     fi
     if [[ $run_test -eq 1 ]]; then
         # not sure but record_system_stat.launch.xml cannot
@@ -315,9 +322,9 @@ echo $com
 eval $com
 
 if [ $verbose -eq 0 ]; then
-    com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
+    com2="$dccom --ansi never up --no-build --abort-on-container-exit > $host_ros_log_dir/docker-compose.log &"
 else
-    com2="bash -c \"setsid $dccom up --no-build --abort-on-container-exit\" | tee $host_ros_log_dir/docker-compose.log &"
+    com2="$dccom up --no-build --abort-on-container-exit | tee $host_ros_log_dir/docker-compose.log &"
 fi
 if [ $verbose -eq 1 ]; then
     blue "$com2"
