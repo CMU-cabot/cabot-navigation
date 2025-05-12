@@ -45,6 +45,7 @@ function snore()
 : ${NTRIP_AUTHENTIFICATE:=}
 : ${NTRIP_USERNAME:=}
 : ${NTRIP_STR2STR_RELAY_BACK:=0}
+: ${CABOT_USE_GNSS:=0}
 
 # source local workspace
 source install/setup.bash
@@ -114,6 +115,10 @@ else
     gnss_arg=""
     if [ ${GNSS_NODE_START_AT_LAUNCH} -eq 0 ]; then
         gnss_arg="ublox_node:=true"
+    fi
+    # change error level of NO FIX status when GNSS is not used in localization
+    if [ ${CABOT_USE_GNSS} -eq 0 ]; then
+        gnss_arg="$gnss_arg no_fix_error_level:=0"
     fi
 
     com="ros2 launch mf_localization gnss.launch.py \

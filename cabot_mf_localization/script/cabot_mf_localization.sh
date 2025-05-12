@@ -345,6 +345,10 @@ else
     else
         gnss_arg="ublox_node_logger:=true"
     fi
+    # change error level of NO FIX status when GNSS is not used in localization
+    if [ ${CABOT_USE_GNSS} -eq 0 ]; then
+        gnss_arg="$gnss_arg no_fix_error_level:=0"
+    fi
 
     # gnss.launch.py command
     cmd=""
