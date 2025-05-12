@@ -35,6 +35,7 @@ from ament_index_python import get_package_share_directory
 
 from cabot_common.launch import AppendLogDirPrefix
 
+
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_ui')
     config_file = LaunchConfiguration('config_file')
