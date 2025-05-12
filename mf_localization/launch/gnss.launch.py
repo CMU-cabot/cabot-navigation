@@ -72,6 +72,7 @@ def generate_launch_description():
     nmea_request_cycle = LaunchConfiguration('nmea_request_cycle')
 
     # cabot use gnss
+    fix_warn_error_level = LaunchConfiguration('fix_warn_error_level')
     no_fix_error_level = LaunchConfiguration('no_fix_error_level')
 
     str2str_node_launch = IncludeLaunchDescription(
@@ -116,6 +117,7 @@ def generate_launch_description():
                             FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
                             launch_arguments={
                                 'node_name': 'ublox',
+                                'fix_warn_error_level': fix_warn_error_level,
                                 'no_fix_error_level': no_fix_error_level,
                             }.items(),
                             condition=IfCondition(AndSubstitution(ublox_node, NotSubstitution(str2str_node)))  # if ublox_node and (not str2str_node)
@@ -130,6 +132,7 @@ def generate_launch_description():
                                             FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
                                             launch_arguments={
                                                 'node_name': 'ublox',
+                                                'fix_warn_error_level': fix_warn_error_level,
                                                 'no_fix_error_level': no_fix_error_level,
                                             }.items()
                                         )
@@ -203,6 +206,7 @@ def generate_launch_description():
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
 
         # cabot use gnss
+        DeclareLaunchArgument('fix_warn_error_level', default_value='1', description='Error level for inaccurate FIX status. default: 1 (WARN)'),
         DeclareLaunchArgument('no_fix_error_level', default_value='1', description='Error level for NO FIX status. default: 1 (WARN)'),
 
         # node actions

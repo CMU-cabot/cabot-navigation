@@ -118,7 +118,7 @@ else
     fi
     # change error level of NO FIX status when GNSS is not used in localization
     if [ ${CABOT_USE_GNSS} -eq 0 ]; then
-        gnss_arg="$gnss_arg no_fix_error_level:=0"
+        gnss_arg="$gnss_arg fix_warn_error_level:=0 no_fix_error_level:=0"
     fi
 
     com="ros2 launch mf_localization gnss.launch.py \

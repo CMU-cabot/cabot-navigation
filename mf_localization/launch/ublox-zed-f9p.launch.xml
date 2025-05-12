@@ -28,6 +28,7 @@
   <arg name="output"              default="both" />
   <arg name="respawn"             default="true"/>
   <!-- diagnostic error setting -->
+  <arg name="fix_warn_error_level" default="1"/> <!-- WARN -->
   <arg name="no_fix_error_level"  default="1"/>  <!-- ERROR -> WARN -->
 
   <!-- the following attributes are not available in ROS 2-->
@@ -44,6 +45,9 @@
         respawn="$(var respawn)"
         respawn_delay="5">
     <param from="$(var param_file_dir)/$(var param_file_name).yaml" />
+    <param name="dead_reckoning_only_error_level" value="$(var fix_warn_error_level)"/>
+    <param name="fix_2d_error_level" value="$(var fix_warn_error_level)"/>
+    <param name="fix_not_ok_error_level" value="$(var fix_warn_error_level)"/>
     <param name="no_fix_error_level" value="$(var no_fix_error_level)"/>
     <!-- remapping because ROS 2 ublox node publishes navsat type messages to navstate topics. -->
     <remap from="navstate" to="ublox/navsat"/>
