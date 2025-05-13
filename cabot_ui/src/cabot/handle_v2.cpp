@@ -90,7 +90,7 @@ Handle::Handle(
   callbacks_[vib_keys::RIGHT_ABOUT_TURN] = std::bind(&Handle::vibrateAboutRightTurn, this);
   callbacks_[vib_keys::BUTTON_CLICK] = std::bind(&Handle::vibrateButtonClick, this);
   callbacks_[vib_keys::BUTTON_HOLDDOWN] = std::bind(&Handle::vibrateButtonHolddown, this);
-  
+
   vibration_timer_ = node->create_wall_timer(0.01s, std::bind(&Handle::timer_callback, this));
 }
 

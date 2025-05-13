@@ -206,7 +206,7 @@ private:
   void vibratePattern(
     const rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr & vibratorPub,
     unsigned int numberVibrations, unsigned int duration, unsigned int sleep);
-    std::weak_ptr<CaBotHandleV3Node> node_;  // Change to weak_ptr to avoid circular references
+  std::weak_ptr<CaBotHandleV3Node> node_;    // Change to weak_ptr to avoid circular references
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator2_pub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator3_pub_;
