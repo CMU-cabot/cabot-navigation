@@ -14,4 +14,19 @@
       <statustip>A plugin visualizing CaBot Handle</statustip>
     </qtgui>
   </class>
+  <class name="Battery" type="cabot_gazebo.battery.Battery" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      A plugin visualizing CaBot Battery
+    </description>
+    <qtgui>
+      <group>
+        <label>CaBot Battery</label>
+        <icon type="theme">folder</icon>
+        <statustip>Plugins related to CaBot.</statustip>
+      </group>
+      <label>Battery</label>
+      <icon type="theme">utilities-system-monitor</icon>
+      <statustip>A plugin visualizing CaBot Battery</statustip>
+    </qtgui>
+  </class>    
 </library>
