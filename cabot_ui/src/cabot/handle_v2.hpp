@@ -58,14 +58,14 @@ public:
     std::shared_ptr<CaBotHandleV2Node> node,  // Change to shared_ptr
     std::function<void(const std::map<std::string, int> &)> eventListener);
   void executeStimulus(int index);
-  static const char * stimuli_names[];
+  static const std::vector<std::string> stimuli_names;
   ~Handle();  // Add destructor declaration
 
 private:
   void timer_callback();
-  void buttonCallback(std_msgs::msg::Int8::UniquePtr & msg);
+  void buttonCallback(std_msgs::msg::Int8::SharedPtr msg);
   void buttonCheck(bool btn_push, int index);
-  void eventCallback(std_msgs::msg::String::UniquePtr msg);
+  void eventCallback(std_msgs::msg::String::SharedPtr msg);
   void vibrateLeftTurn();
   void vibrateRightTurn();
   void vibrateLeftDeviation();

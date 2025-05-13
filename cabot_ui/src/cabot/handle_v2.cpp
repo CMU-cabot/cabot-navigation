@@ -31,7 +31,7 @@
 
 using namespace std::chrono_literals;
 
-const char * Handle::stimuli_names[] =
+const std::vector<std::string> Handle::stimuli_names =
 {"unknown", "left_turn", "right_turn", "left_dev", "right_dev", "front",
   "left_about_turn", "right_about_turn", "button_click", "button_holddown"};
 const rclcpp::Duration Handle::double_click_interval_ = rclcpp::Duration(0, 250000000);  // 250 msec
@@ -65,13 +65,9 @@ Handle::Handle(
     btn_dwn[i] = false;
   }
   button_sub_ = node->create_subscription<std_msgs::msg::Int8>(
-    "pushed", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Int8::UniquePtr msg) {
-      buttonCallback(msg);
-    });
+    "pushed", rclcpp::SensorDataQoS(), std::bind(&Handle::buttonCallback, this, std::placeholders::_1));
   event_sub_ = node->create_subscription<std_msgs::msg::String>(
-    "event", rclcpp::SensorDataQoS(), [this](std_msgs::msg::String::UniquePtr msg) {
-      eventCallback(std::move(msg));
-    });
+    "event", rclcpp::SensorDataQoS(), std::bind(&Handle::eventCallback, this, std::placeholders::_1));
   duration_ = 150;
   duration_single_vibration_ = 400;
   duration_about_turn_ = 400;
@@ -137,7 +133,7 @@ void Handle::timer_callback()
   }
 }
 
-void Handle::buttonCallback(std_msgs::msg::Int8::UniquePtr & msg)
+void Handle::buttonCallback(std_msgs::msg::Int8::SharedPtr msg)
 {
   auto node = node_.lock();
   if (!node) {
@@ -202,17 +198,12 @@ void Handle::buttonCheck(bool btn_push, int index)
   }
 }
 
-void Handle::eventCallback(std_msgs::msg::String::UniquePtr msg)
+void Handle::eventCallback(std_msgs::msg::String::SharedPtr msg)
 {
-  if (!msg) {
-    RCLCPP_ERROR(logger_, "Received nullptr message in eventCallback");
-    return;
-  }
-  const size_t stimuli_names_size = std::size(Handle::stimuli_names);
   const std::string name = msg->data;
-  const char ** it = std::find(stimuli_names, stimuli_names + stimuli_names_size, name.c_str());
-  if (it != stimuli_names + stimuli_names_size) {
-    int index = std::distance(stimuli_names, it);
+  auto it = std::find(stimuli_names.begin(), stimuli_names.end(), name.c_str());
+  if (it != stimuli_names.end()) {
+    int index = std::distance(stimuli_names.begin(), it);
     executeStimulus(index);
   } else {
     RCLCPP_DEBUG(logger_, "Stimulus '%s' not found.", name.c_str());

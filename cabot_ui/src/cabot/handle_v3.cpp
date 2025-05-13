@@ -47,62 +47,41 @@ std::string Handle::get_name(int stimulus)
 }
 
 Handle::Handle(
-  CaBotHandleV3Node * node,
-  std::function<void(const std::map<std::string, std::string> &)> eventListener,
-  const std::vector<std::string> & buttonKeys, const int & vibratorType)
-: node_(node), eventListener_(std::move(eventListener)), buttonKeys_(buttonKeys),
+  std::shared_ptr<CaBotHandleV3Node> node,
+  std::function<void(const std::map<std::string, int> &)> eventListener,
+  const int & vibratorType)
+: node_(node), eventListener_(std::move(eventListener)),
   vibratorType_(vibratorType), logger_(rclcpp::get_logger("Handle_v3"))
 {
-  vibrator1_pub_ = node_->create_publisher<std_msgs::msg::UInt8>("vibrator1", 100);
-  vibrator2_pub_ = node_->create_publisher<std_msgs::msg::UInt8>("vibrator2", 100);
-  vibrator3_pub_ = node_->create_publisher<std_msgs::msg::UInt8>("vibrator3", 100);
-  vibrator4_pub_ = node_->create_publisher<std_msgs::msg::UInt8>("vibrator4", 100);
-  servo_free_pub_ = node_->create_publisher<std_msgs::msg::Bool>("servo_free", rclcpp::QoS(1));
-  servo_target_pub_ = node_->create_publisher<std_msgs::msg::Int16>("servo_target", rclcpp::QoS(10));
-  button_sub_ = node_->create_subscription<std_msgs::msg::Int8>(
-    "pushed", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Int8::UniquePtr msg) {
-      buttonCallback(msg);
-    });
-  event_sub_ = node_->create_subscription<std_msgs::msg::String>(
-    "event", rclcpp::SensorDataQoS(), [this](std_msgs::msg::String::UniquePtr msg) {
-      eventCallback(std::move(msg));
-    });
-  cmd_vel_sub_ = node_->create_subscription<geometry_msgs::msg::Twist>(
-    "cmd_vel", rclcpp::SensorDataQoS(), [this](geometry_msgs::msg::Twist::UniquePtr msg) {
-      cmdVelCallback(msg);
-    });
-  imu_sub_ = node_->create_subscription<sensor_msgs::msg::Imu>(
-    "imu/data", rclcpp::SensorDataQoS(), [this](sensor_msgs::msg::Imu::UniquePtr msg) {
-      handleImuCallback(msg);
-    });
-  servo_pos_sub_ = node_->create_subscription<std_msgs::msg::Int16>(
-    "servo_pos", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Int16::UniquePtr msg) {
-      servoPosCallback(msg);
-    });
-  turn_angle_sub_ = node_->create_subscription<std_msgs::msg::Float32>(
-    "turn_angle", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Float32::UniquePtr msg) {
-      turnAngleCallback(msg);
-    });
-  turn_type_sub_ = node_->create_subscription<std_msgs::msg::String>(
-    "turn_type", rclcpp::SensorDataQoS(), [this](std_msgs::msg::String::UniquePtr msg) {
-      turnTypeCallback(msg);
-    });
-  turn_end_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
-    "turn_end", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Bool::UniquePtr msg) {
-      turnEndCallback(msg);
-    });
-  change_di_control_mode_sub_ = node_->create_subscription<std_msgs::msg::String>(
-    "change_di_control_mode", rclcpp::SensorDataQoS(), [this](std_msgs::msg::String::UniquePtr msg) {
-      changeDiControlModeCallback(msg);
-    });
-  local_plan_sub_ = node_->create_subscription<nav_msgs::msg::Path>(
-    "/local_plan", rclcpp::SensorDataQoS(), [this](nav_msgs::msg::Path::UniquePtr msg) {
-      localPlanCallback(msg);
-    });
-  angular_distance_sub_ = node_->create_subscription<std_msgs::msg::Float64>(
-    "/angular_distance", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Float64::UniquePtr msg) {
-      angularDistanceCallback(msg);
-    });
+  vibrator1_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator1", 100);
+  vibrator2_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator2", 100);
+  vibrator3_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator3", 100);
+  vibrator4_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator4", 100);
+  servo_free_pub_ = node->create_publisher<std_msgs::msg::Bool>("servo_free", rclcpp::QoS(1));
+  servo_target_pub_ = node->create_publisher<std_msgs::msg::Int16>("servo_target", rclcpp::QoS(10));
+  button_sub_ = node->create_subscription<std_msgs::msg::Int8>(
+    "pushed", rclcpp::SensorDataQoS(), std::bind(&Handle::buttonCallback, this, std::placeholders::_1));
+  event_sub_ = node->create_subscription<std_msgs::msg::String>(
+    "event", rclcpp::SensorDataQoS(), std::bind(&Handle::eventCallback, this, std::placeholders::_1));
+  cmd_vel_sub_ = node->create_subscription<geometry_msgs::msg::Twist>(
+    "cmd_vel", rclcpp::SensorDataQoS(), std::bind(&Handle::cmdVelCallback, this, std::placeholders::_1));
+  imu_sub_ = node->create_subscription<sensor_msgs::msg::Imu>(
+    "imu/data", rclcpp::SensorDataQoS(), std::bind(&Handle::handleImuCallback, this, std::placeholders::_1));
+  servo_pos_sub_ = node->create_subscription<std_msgs::msg::Int16>(
+    "servo_pos", rclcpp::SensorDataQoS(), std::bind(&Handle::servoPosCallback, this, std::placeholders::_1));
+  turn_angle_sub_ = node->create_subscription<std_msgs::msg::Float32>(
+    "turn_angle", rclcpp::SensorDataQoS(), std::bind(&Handle::turnAngleCallback, this, std::placeholders::_1));
+  turn_type_sub_ = node->create_subscription<std_msgs::msg::String>(
+    "turn_type", rclcpp::SensorDataQoS(), std::bind(&Handle::turnTypeCallback, this, std::placeholders::_1));
+  turn_end_sub_ = node->create_subscription<std_msgs::msg::Bool>(
+    "turn_end", rclcpp::SensorDataQoS(), std::bind(&Handle::turnEndCallback, this, std::placeholders::_1));
+  change_di_control_mode_sub_ = node->create_subscription<std_msgs::msg::String>(
+    "change_di_control_mode", rclcpp::SensorDataQoS(), std::bind(&Handle::changeDiControlModeCallback, this, std::placeholders::_1));
+  local_plan_sub_ = node->create_subscription<nav_msgs::msg::Path>(
+    "/local_plan", rclcpp::SensorDataQoS(), std::bind(&Handle::localPlanCallback, this, std::placeholders::_1));
+  angular_distance_sub_ = node->create_subscription<std_msgs::msg::Float64>(
+    "/angular_distance", rclcpp::SensorDataQoS(), std::bind(&Handle::angularDistanceCallback, this, std::placeholders::_1));
+
   for (int i = 0; i < 9; ++i) {
     rclcpp::Time zerotime(0, 0, RCL_ROS_TIME);
     last_up[i] = zerotime;
@@ -128,45 +107,21 @@ Handle::Handle(
   q_.setRPY(0, 0, 0);
   m_.setRotation(q_);
 
-  callbacks_.resize(stimuli_names.size(), nullptr);
-  callbacks_[1] = [this]() {
-      vibrateLeftTurn();
-    };
-  callbacks_[2] = [this]() {
-      vibrateRightTurn();
-    };
-  callbacks_[3] = [this]() {
-      vibrateLeftDeviation();
-    };
-  callbacks_[4] = [this]() {
-      vibrateRightDeviation();
-    };
-  callbacks_[5] = [this]() {
-      vibrateFront();
-    };
-  callbacks_[6] = [this]() {
-      vibrateAboutLeftTurn();
-    };
-  callbacks_[7] = [this]() {
-      vibrateAboutRightTurn();
-    };
-  callbacks_[8] = [this]() {
-      vibrateButtonClick();
-    };
-  callbacks_[9] = [this]() {
-      vibrateButtonHolddown();
-    };
-  callbacks_[10] = [this]() {
-      vibrateCautionPattern();
-    };
-  callbacks_[11] = [this]() {
-      navigationStart();
-    };
-  callbacks_[12] = [this]() {
-      navigationArrived();
-    };
-  vibration_timer_ = node_->create_wall_timer(0.01s, std::bind(&Handle::timer_callback, this));
-  vib_waiting_timer_ = node_->create_wall_timer(1.0s, std::bind(&Handle::vib_waiting_timer_callback, this));
+  callbacks_[vib_keys::LEFT_TURN] = std::bind(&Handle::vibrateLeftTurn, this);
+  callbacks_[vib_keys::RIGHT_TURN] = std::bind(&Handle::vibrateRightTurn, this);
+  callbacks_[vib_keys::LEFT_DEV] = std::bind(&Handle::vibrateLeftDeviation, this);
+  callbacks_[vib_keys::RIGHT_DEV] = std::bind(&Handle::vibrateRightDeviation, this);
+  callbacks_[vib_keys::FRONT] = std::bind(&Handle::vibrateFront, this);
+  callbacks_[vib_keys::LEFT_ABOUT_TURN] = std::bind(&Handle::vibrateAboutLeftTurn, this);
+  callbacks_[vib_keys::RIGHT_ABOUT_TURN] = std::bind(&Handle::vibrateAboutRightTurn, this);
+  callbacks_[vib_keys::BUTTON_CLICK] = std::bind(&Handle::vibrateButtonClick, this);
+  callbacks_[vib_keys::BUTTON_HOLDDOWN] = std::bind(&Handle::vibrateButtonHolddown, this);
+  callbacks_[vib_keys::CAUTION] = std::bind(&Handle::vibrateCautionPattern, this);
+  callbacks_[vib_keys::NAVIGATION_START] = std::bind(&Handle::navigationStart, this);
+  callbacks_[vib_keys::NAVIGATION_ARRIVED] = std::bind(&Handle::navigationArrived, this);
+
+  vibration_timer_ = node->create_wall_timer(0.01s, std::bind(&Handle::timer_callback, this));
+  vib_waiting_timer_ = node->create_wall_timer(1.0s, std::bind(&Handle::vib_waiting_timer_callback, this));
 }
 
 float Handle::getEulerYawDegrees(const double & x, const double & y, const double & z, const double & w)
@@ -255,38 +210,40 @@ void Handle::vib_waiting_timer_callback()
   }
 }
 
-void Handle::buttonCallback(std_msgs::msg::Int8::UniquePtr & msg)
+void Handle::buttonCallback(std_msgs::msg::Int8::SharedPtr msg)
 {
+  auto node = node_.lock();
+  if (!node) {
+    RCLCPP_ERROR(logger_, "node_ is null in buttonCallback");
+    return;
+  }
   for (int index = 1; index <= 5; ++index) {
-    if (index >= 1 && index <= static_cast<int>(ButtonType::BUTTON_CENTER)) {
-      buttonCheck(msg, index);
-    }
+    buttonCheck((msg->data >> (index - 1)) & 0x01, index);
   }
 }
 
-void Handle::buttonCheck(std_msgs::msg::Int8::UniquePtr & msg, int index)
+void Handle::buttonCheck(bool btn_push, int index)
 {
-  event.clear();
-  int bit = 1 << (index - 1);
-  bool btn_push = (msg->data & bit) != 0;
-  rclcpp::Time now = node_->get_clock()->now();
+  auto node = node_.lock();
+  if (!node) {
+    RCLCPP_ERROR(logger_, "node_ is null in buttonCallback");
+    return;
+  }
+  std::map<std::string, int> event;
+
+  rclcpp::Time now = node->get_clock()->now();
   rclcpp::Time zerotime(0, 0, RCL_ROS_TIME);
   if (btn_push && !btn_dwn[index] &&
     !(last_up[index] != zerotime && now - last_up[index] < ignore_interval_))
   {
-    event.insert(std::pair<std::string, std::string>("button", std::to_string(button_keys(index))));
-    event.insert(std::pair<std::string, std::string>("up", "False"));
+    event["button"] = index;
+    event["up"] = false;  // 0
     btn_dwn[index] = true;
     last_dwn[index] = now;
   }
   if (!btn_push && btn_dwn[index]) {
-    event.insert(std::pair<std::string, std::string>("button", std::to_string(button_keys(index))));
-    event.insert(std::pair<std::string, std::string>("up", "True"));
-    if (last_holddwn[index] == zerotime) {
-      event.insert(std::pair<std::string, std::string>("was_hold", "False"));
-    } else {
-      event.insert(std::pair<std::string, std::string>("was_hold", "True"));
-    }
+    event["button"] = index;
+    event["up"] = true;  // 1
     up_count[index]++;
     last_up[index] = now;
     btn_dwn[index] = false;
@@ -296,8 +253,8 @@ void Handle::buttonCheck(std_msgs::msg::Int8::UniquePtr & msg, int index)
     now - last_up[index] > double_click_interval_)
   {
     if (last_holddwn[index] == zerotime) {
-      event.insert(std::pair<std::string, std::string>("buttons", std::to_string(button_keys(index))));
-      event.insert(std::pair<std::string, std::string>("count", std::to_string(up_count[index])));
+      event["buttons"] = index;
+      event["count"] = up_count[index];
     }
     last_up[index] = zerotime;
     last_holddwn[index] = zerotime;
@@ -309,9 +266,8 @@ void Handle::buttonCheck(std_msgs::msg::Int8::UniquePtr & msg, int index)
     now - last_holddwn[index] > holddown_interval_ &&
     now - last_dwn[index] < holddown_max_interval_))
   {
-    event.insert(std::pair<std::string, std::string>("holddown", std::to_string(button_keys(index))));
-    int duration = static_cast<int>((now - last_dwn[index]).seconds());
-    event.insert(std::pair<std::string, std::string>("duration", std::to_string(duration)));
+    event["holddown"] = index;
+    event["duration"] = static_cast<int>((now - last_dwn[index]).seconds());
     last_holddwn[index] = now;
   }
   if (!event.empty()) {
@@ -319,7 +275,7 @@ void Handle::buttonCheck(std_msgs::msg::Int8::UniquePtr & msg, int index)
   }
 }
 
-void Handle::eventCallback(std_msgs::msg::String::UniquePtr msg)
+void Handle::eventCallback(std_msgs::msg::String::SharedPtr msg)
 {
   const std::string name = msg->data;
   auto it = std::find(stimuli_names.begin(), stimuli_names.end(), name.c_str());
@@ -341,7 +297,7 @@ void Handle::executeStimulus(int index)
   }
 }
 
-void Handle::cmdVelCallback(geometry_msgs::msg::Twist::UniquePtr & msg)
+void Handle::cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg)
 {
   std::vector<double> linear = {msg->linear.x, msg->linear.y, msg->linear.z};
   std::vector<double> angular = {msg->angular.x, msg->angular.y, msg->angular.z};
@@ -352,12 +308,12 @@ void Handle::cmdVelCallback(geometry_msgs::msg::Twist::UniquePtr & msg)
   }
 }
 
-void Handle::handleImuCallback(sensor_msgs::msg::Imu::UniquePtr & msg)
+void Handle::handleImuCallback(sensor_msgs::msg::Imu::SharedPtr msg)
 {
   current_imu_yaw_ = getEulerYawDegrees(msg->orientation.x, msg->orientation.y, msg->orientation.z, msg->orientation.w);
 }
 
-void Handle::servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg)
+void Handle::servoPosCallback(std_msgs::msg::Int16::SharedPtr msg)
 {
   if (di.is_controlled_by_imu) {
     float turned_angle = current_imu_yaw_ - previous_imu_yaw_;  // Angle at which the Cabot has already turned
@@ -387,7 +343,7 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg)
   }
 }
 
-void Handle::turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg)
+void Handle::turnAngleCallback(std_msgs::msg::Float32::SharedPtr msg)
 {
   RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "turn_angle: %f", msg->data);
   if (std::abs(msg->data) >= 60.0f) {  // thtMinimumTurn = 60
@@ -402,7 +358,7 @@ void Handle::turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg)
   }
 }
 
-void Handle::turnTypeCallback(std_msgs::msg::String::UniquePtr & msg)
+void Handle::turnTypeCallback(std_msgs::msg::String::SharedPtr msg)
 {
   std::string turn_type = msg->data;
   if (turn_type == "Type.Normal") {
@@ -414,7 +370,7 @@ void Handle::turnTypeCallback(std_msgs::msg::String::UniquePtr & msg)
   }
 }
 
-void Handle::turnEndCallback(std_msgs::msg::Bool::UniquePtr & msg)
+void Handle::turnEndCallback(std_msgs::msg::Bool::SharedPtr msg)
 {
   bool is_turn_end = msg->data;
   if (is_turn_end) {
@@ -426,7 +382,7 @@ void Handle::turnEndCallback(std_msgs::msg::Bool::UniquePtr & msg)
   }
 }
 
-void Handle::localPlanCallback(nav_msgs::msg::Path::UniquePtr & msg)
+void Handle::localPlanCallback(nav_msgs::msg::Path::SharedPtr msg)
 {
   if (di.control_mode == "both" || di.control_mode == "local") {
     size_t local_plan_len = msg->poses.size();
@@ -461,7 +417,7 @@ void Handle::localPlanCallback(nav_msgs::msg::Path::UniquePtr & msg)
   }
 }
 
-void Handle::angularDistanceCallback(std_msgs::msg::Float64::UniquePtr & msg)
+void Handle::angularDistanceCallback(std_msgs::msg::Float64::SharedPtr msg)
 {
   if (di.control_mode == "both" || di.control_mode == "local") {
     double angular_data = msg->data;
@@ -473,7 +429,7 @@ void Handle::angularDistanceCallback(std_msgs::msg::Float64::UniquePtr & msg)
   }
 }
 
-void Handle::changeDiControlModeCallback(std_msgs::msg::String::UniquePtr & msg)
+void Handle::changeDiControlModeCallback(std_msgs::msg::String::SharedPtr msg)
 {
   if (msg->data == "both" || msg->data == "global" || msg->data == "local" || msg->data == "none") {
     di.control_mode = msg->data;
