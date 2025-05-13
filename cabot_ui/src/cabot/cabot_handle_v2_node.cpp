@@ -30,49 +30,57 @@ std::shared_ptr<CaBotHandleV2Node> node_;
 
 CaBotHandleV2Node::CaBotHandleV2Node(const rclcpp::NodeOptions & options)
 : rclcpp::Node("cabot_handle_v2_node", rclcpp::NodeOptions(options).use_intra_process_comms(true)),
-  handle_(nullptr), button_keys_({}), event_pub_(nullptr)
+  handle_(nullptr), event_pub_(nullptr)
 {
   event_pub_ = create_publisher<std_msgs::msg::String>("/cabot/event", 10);
-  button_keys_ = declare_parameter("buttons", std::vector<std::string>{"BUTTON_UP", "BUTTON_DOWN", "BUTTON_LEFT", "BUTTON_RIGHT", "BUTTON_CENTER"});
-  std::string button_keys_str = std::accumulate(
-    button_keys_.begin(), button_keys_.end(), std::string(),
-    [](const std::string & result, const std::string & key) {
-      return result.empty() ? key : result + ", " + key;
-    });
-  eventListener_callback = [this](const std::map<std::string, std::string> & msg) {
-      this->eventListener(msg);
-    };
-  handle_ = std::make_unique<Handle>(this, eventListener_callback, button_keys_);
-  RCLCPP_INFO(get_logger(), "buttons: %s", button_keys_str.c_str());
   bool no_vibration = declare_parameter("no_vibration", false);
   RCLCPP_INFO(get_logger(), "no_vibration = %s", no_vibration ? "true" : "false");
-  notification_callback = [this](const std_msgs::msg::Int8::UniquePtr msg) {
-      this->notificationCallback(std::move(msg));
-    };
   if (!no_vibration) {
     notification_sub = create_subscription<std_msgs::msg::Int8>(
-      "/cabot/notification", 10, notification_callback);
+      "/cabot/notification", 10, std::bind(&CaBotHandleV2Node::notificationCallback, this, std::placeholders::_1));
   }
+
+  timer = create_wall_timer(
+    std::chrono::milliseconds(100),
+    [this]() {
+      initializeHandle();
+      timer->cancel();
+    });
 }
 
-void CaBotHandleV2Node::printStackTrace()
+void CaBotHandleV2Node::initializeHandle()
 {
-  void * array[10];
-  size_t size;
-  size = backtrace(array, 10);
-  char ** symbols = backtrace_symbols(array, size);
-  for (size_t i = 0; i < size; i++) {
-    RCLCPP_ERROR(rclcpp::get_logger("cabot_handle_v2_node"), "StackTrace[%zu]: %s", i, symbols[i]);
+  if (handle_) {
+    RCLCPP_WARN(get_logger(), "Handle is already initialized");
+    return;
   }
-  free(symbols);
+  handle_ = std::make_unique<Handle>(
+    std::static_pointer_cast<CaBotHandleV2Node>(shared_from_this()),
+    std::bind(&CaBotHandleV2Node::eventListener, this, std::placeholders::_1)
+  );
 }
 
-void CaBotHandleV2Node::notificationCallback(const std_msgs::msg::Int8::UniquePtr & msg)
+CaBotHandleV2Node::~CaBotHandleV2Node()
+{
+  RCLCPP_INFO(get_logger(), "Destroying CaBotHandleV2Node");
+  if (handle_) {
+    RCLCPP_INFO(get_logger(), "Resetting handle_");
+    handle_.reset();  // Explicitly reset the unique_ptr to release resources
+  } else {
+    RCLCPP_WARN(get_logger(), "handle_ is already null");
+  }
+}
+
+void CaBotHandleV2Node::notificationCallback(const std_msgs::msg::Int8::SharedPtr msg)
 {
   if (msg) {
     std::string log_msg_ = "Received notification: " + std::to_string(msg->data);
     RCLCPP_INFO(this->get_logger(), log_msg_.c_str());
-    this->handle_->executeStimulus(msg->data);
+    if (handle_) {
+      this->handle_->executeStimulus(msg->data);
+    } else {
+      RCLCPP_ERROR(this->get_logger(), "handle_ is null in notificationCallback");
+    }
   } else {
     RCLCPP_ERROR(this->get_logger(), "Received nullptr message in notificationCallback");
   }
@@ -81,12 +89,12 @@ void CaBotHandleV2Node::notificationCallback(const std_msgs::msg::Int8::UniquePt
     this->get_logger(), "Node clock type (in notificationCallback): %d", clock->get_clock_type());
 }
 
-void CaBotHandleV2Node::eventListener(const std::map<std::string, std::string> & msg)
+void CaBotHandleV2Node::eventListener(const std::map<std::string, int> & msg)
 {
   std::shared_ptr<BaseEvent> event = nullptr;
   std::string msg_str;
-  for (std::map<std::string, std::string>::const_iterator it = msg.begin(); it != msg.end(); ++it) {
-    msg_str += "'" + it->first + "': " + it->second;
+  for (auto it = msg.begin(); it != msg.end(); ++it) {
+    msg_str += "'" + it->first + "': " + std::to_string(it->second);
     if (std::next(it) != msg.end()) {
       msg_str += ", ";
     }
@@ -94,12 +102,12 @@ void CaBotHandleV2Node::eventListener(const std::map<std::string, std::string> &
   msg_str = "{" + msg_str + "}";
   RCLCPP_INFO(get_logger(), msg_str.c_str());
   if (msg_str.find("buttons") != std::string::npos) {
-    const int & buttons = std::stoi(msg.at("buttons"));
-    const int & count = std::stoi(msg.at("count"));
+    const int & buttons = msg.at("buttons");
+    const int & count = msg.at("count");
     event = std::make_shared<ClickEvent>(buttons, count);
   } else if (msg_str.find("button") != std::string::npos) {
-    const int & button = std::stoi(msg.at("button"));
-    const bool & up = (msg.at("up") == "True") ? true : false;
+    const int & button = msg.at("button");
+    const bool & up = (msg.at("up") == 1);
     const bool & hold = (msg.find("hold") != msg.end()) ? true : false;
     std::shared_ptr<ButtonEvent> buttonEvent = std::make_shared<ButtonEvent>(button, up, hold);
     event = buttonEvent;
@@ -108,8 +116,8 @@ void CaBotHandleV2Node::eventListener(const std::map<std::string, std::string> &
       this->handle_->executeStimulus(8);
     }
   } else if (msg_str.find("holddown") != std::string::npos) {
-    const int & hold = std::stoi(msg.at("holddown"));
-    const int & duration = std::stoi(msg.at("duration"));
+    const int & hold = msg.at("holddown");
+    const int & duration = msg.at("duration");
     std::shared_ptr<HoldDownEvent> holdDownEvent = std::make_shared<HoldDownEvent>(hold, duration);
     event = holdDownEvent;
     // button hold down confirmation
