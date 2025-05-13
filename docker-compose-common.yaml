@@ -205,7 +205,7 @@ services:
     stop_grace_period: 30s
     command:
       - "/launch.sh"
-      # - "-c"                  # core dump
+      - "-c"                  # core dump
       - "navigation"
 
 
