@@ -82,6 +82,7 @@ RUN apt update && \
     libomp-dev \
     libpcl-dev \
     libasound2 \
+    pulseaudio-utils \
     python3-pykdl \
     python3-sklearn \
     python3-venv \
@@ -236,6 +237,7 @@ RUN apt update && \
     libomp-dev \
     libpcl-dev \
     libasound2 \
+    pulseaudio-utils \
     python3-pykdl \
     python3-sklearn \
     python3-venv \

@@ -188,9 +188,12 @@ class UserInterface(object):
         self._speaker_volume = speaker_volume
 
         try:
-            subprocess.run(["amixer", "sset", "Master", f"{int(speaker_volume)}%"], check=True)
+            subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(speaker_volume)}%"],
+                check=True
+            )
         except subprocess.CalledProcessError as e:
-            CaBotRclpyUtil.error(f"Failed to adjust volume via amixer: {e}")
+            CaBotRclpyUtil.error(f"Failed to adjust volume via pactl: {e}")
             return
 
         self._activity_log("change speaker config", "volume (%)", str(self._speaker_volume), visualize=True)
@@ -205,7 +208,7 @@ class UserInterface(object):
             return
 
         if self._speaker_volume == 0:
-            CaBotRclpyUtil.info("Speaker volume is 0%")
+            CaBotRclpyUtil.info("Speaker is muted")
             return
 
         try:
