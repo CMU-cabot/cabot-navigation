@@ -188,10 +188,20 @@ class UserInterface(object):
         self._speaker_volume = speaker_volume
 
         try:
-            subprocess.run(
-                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(speaker_volume)}%"],
-                check=True
-            )
+            if speaker_volume == 0:
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "on"],
+                    check=True
+                )
+            else:
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "off"],
+                    check=True
+                )
+                subprocess.run(
+                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(speaker_volume)}%"],
+                    check=True
+                )
         except subprocess.CalledProcessError as e:
             CaBotRclpyUtil.error(f"Failed to adjust volume via pactl: {e}")
             return
