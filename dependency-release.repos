@@ -6,7 +6,7 @@ repositories:
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
-    version: 12e472d5c70b6e6149b962cf52e084e1f1f379a2
+    version: c213fe046716aa10248548ef26727ef0aa890cf4
   docker/localization/RTKLIB:
     type: git
     url: https://github.com/tomojitakasu/RTKLIB.git
