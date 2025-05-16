@@ -42,6 +42,8 @@ from cabot_common import vibration
 from pydub import AudioSegment
 import pydub.playback
 
+import subprocess
+
 
 class SpeechPriority:
     REQUIRED = 90
@@ -169,15 +171,42 @@ class UserInterface(object):
 
     def enable_speaker(self, enable_speaker: str):
         self._enable_speaker = enable_speaker.lower() == "true"
-        self._activity_log("change speaker config", "enable speaker", self._enable_speaker, visualize=True)
+        self._activity_log("change speaker config", "enable speaker", str(self._enable_speaker), visualize=True)
 
     def set_audio_file(self, filename):
         self._audio_file_path = os.path.join(self._audio_dir, filename)
-        self._activity_log("change speaker config", "audio file", self._audio_file_path, visualize=True)
+        self._activity_log("change speaker config", "audio file", str(self._audio_file_path), visualize=True)
 
     def set_speaker_volume(self, volume):
-        self._speaker_volume = volume
-        self._activity_log("change speaker config", "volume", self._speaker_volume, visualize=True)
+        try:
+            speaker_volume = float(volume)
+        except Exception:
+            CaBotRclpyUtil.error(f"Invalid volume value: {volume}")
+            return
+
+        speaker_volume = max(0, min(100, speaker_volume))
+        self._speaker_volume = speaker_volume
+
+        try:
+            if speaker_volume == 0:
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "on"],
+                    check=True
+                )
+            else:
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "off"],
+                    check=True
+                )
+                subprocess.run(
+                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(speaker_volume)}%"],
+                    check=True
+                )
+        except subprocess.CalledProcessError as e:
+            CaBotRclpyUtil.error(f"Failed to adjust volume via pactl: {e}")
+            return
+
+        self._activity_log("change speaker config", "volume (%)", str(self._speaker_volume), visualize=True)
 
     def speaker_alert(self):
         if not self._enable_speaker:
@@ -188,11 +217,13 @@ class UserInterface(object):
             CaBotRclpyUtil.error(F"Audio file not found: {self._audio_file_path}")
             return
 
+        if self._speaker_volume == 0:
+            CaBotRclpyUtil.info("Speaker is muted")
+            return
+
         try:
             sound = AudioSegment.from_wav(self._audio_file_path)
-            if self._speaker_volume != 0.0:
-                sound += self._speaker_volume
-            CaBotRclpyUtil.info(F"Playing {self._audio_file_path} at {self._speaker_volume} dB")
+            CaBotRclpyUtil.info(F"Playing {self._audio_file_path} (volume: {self._speaker_volume}%)")
             pydub.playback.play(sound)
         except Exception as e:
             CaBotRclpyUtil.error(F"Playback failed: {e}")
