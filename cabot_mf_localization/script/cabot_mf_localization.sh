@@ -97,6 +97,8 @@ odom_topic='/cabot/odometry/filtered'
 pressure_topic='/cabot/pressure'
 gnss_fix_topic='/ublox/fix'
 gnss_fix_velocity_topic='/ublox/fix_velocity'
+fix_filtered_topic='/ublox/fix_filtered'
+fix_status_threshold=2
 publish_current_rate=0
 
 : ${CABOT_GAZEBO:=0}
@@ -111,6 +113,10 @@ fi
 : ${CABOT_PRESSURE_AVAILABLE:=0}
 : ${CABOT_ROSBAG_COMPRESSION:='message'}
 : ${CABOT_USE_GNSS:=0}
+
+# mapping
+: ${MAPPING_USE_GNSS:=false}
+: ${MAPPING_RESOLUTION:=}
 
 # ntrip client parameters
 : ${GNSS_NODE_START_AT_LAUNCH:=1}
@@ -442,6 +448,42 @@ if [ $cart_mapping -eq 1 ]; then
         cabot_model=""
     fi
 
+    # show mapping variables
+    echo "MAPPING_USE_GNSS=$MAPPING_USE_GNSS"
+    echo "MAPPING_RESOLUTION=$MAPPING_RESOLUTION"
+
+    # pre process config file
+    bag_filename=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S`
+    work_dir=/home/developer/recordings
+    pkg_share_dir=`ros2 pkg prefix --share mf_localization_mapping`
+
+    # copy config file to a temp directory
+    configuration_directory=$pkg_share_dir/configuration_files/cartographer
+    configuration_directory_tmp=$configuration_directory/tmp
+    mkdir -p $configuration_directory_tmp
+    cp $configuration_directory/cartographer_2d_mapping.lua $configuration_directory_tmp
+
+    # read grid size from config file or update grid size with the environment variable
+    if [ "${MAPPING_RESOLUTION}" = "" ]; then
+        MAPPING_RESOLUTION=$(grep '^TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution' $configuration_directory/cartographer_2d_mapping.lua | sed -E 's/.*= ([0-9.]+).*/\1/')
+        if [ "${MAPPING_RESOLUTION}" != "" ]; then
+            echo "Read grid resolution from cartographer_2d_mapping.lua (grid_size=$MAPPING_RESOLUTION)"
+        else
+            MAPPING_RESOLUTION=0.05
+            echo "Failed to read grid resolution from cartographer_2d_mapping.lua. Use default grid_size=$MAPPING_RESOLUTION"
+        fi
+    else
+        sed -i 's/return options/TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution = '$MAPPING_RESOLUTION'\
+return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
+        echo "Update cartographer_2d_mapping.lua with grid_size=$MAPPING_RESOLUTION"
+    fi
+
+    # backup config file
+    cp $configuration_directory_tmp/cartographer_2d_mapping.lua \
+          $work_dir/${bag_filename}.cartographer_2d_mapping.lua
+    cp $pkg_share_dir/configuration_files/mapping_config.yaml \
+          $work_dir/${bag_filename}.mapping_config.yaml
+
     # build cmd
     cmd="$command"
     cmd="$cmd ros2 launch mf_localization_mapping realtime_cartographer_2d_VLP16.launch.py \
@@ -457,12 +499,31 @@ if [ $cart_mapping -eq 1 ]; then
           use_velodyne:=${USE_VELODYNE:-true} \
           imu_topic:=${imu_topic} \
           use_sim_time:=$gazebo_bool \
-          bag_filename:=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S`"
+          grid_resolution:=${MAPPING_RESOLUTION} \
+          configuration_directory:=$configuration_directory_tmp \
+          bag_filename:=$bag_filename"
     if [ $cabot_model != "" ]; then
         cmd="$cmd cabot_model:=$cabot_model"
     else
         cmd="$cmd robot:=$robot"
     fi
+
+    if [ "$MAPPING_USE_GNSS" = true ]; then
+        # backup config file
+        cp $configuration_directory/cartographer_2d_mapping_gnss.lua $configuration_directory_tmp
+        cp $configuration_directory_tmp/cartographer_2d_mapping_gnss.lua \
+              $work_dir/${bag_filename}.cartographer_2d_mapping_gnss.lua
+
+        cmd="$cmd \
+            save_pose:=true \
+            save_trajectory:=true \
+            fix_topic:=$fix_filtered_topic \
+            configuration_basename:=cartographer_2d_mapping_gnss.lua \
+            interpolate_samples_by_trajectory:=true \
+            mapping_use_gnss:=true \
+            "
+    fi
+
     cmd="$cmd $commandpost"
     echo $cmd
     eval $cmd
