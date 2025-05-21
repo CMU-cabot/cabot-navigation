@@ -64,6 +64,7 @@ def generate_launch_description():
     # - use_tf_static
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         DeclareLaunchArgument(

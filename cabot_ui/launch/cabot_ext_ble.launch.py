@@ -31,6 +31,7 @@ def generate_launch_description():
     port = LaunchConfiguration('port')
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
         # Save all log files in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # Append prefix name to the log directory for convenience

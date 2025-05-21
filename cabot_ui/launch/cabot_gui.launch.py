@@ -81,6 +81,7 @@ def generate_launch_description():
     use_sim_time_ = BooleanSubstitution(use_sim_time)
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
