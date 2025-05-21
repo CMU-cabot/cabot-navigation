@@ -381,7 +381,7 @@ gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\
 ### launch rviz
 if [ $show_rviz -eq 1 ]; then
    echo "launch rviz"
-   cmd="$command ros2 launch -n mf_localization view_multi_floor.launch.xml \
+   cmd="$command ros2 launch -n mf_localization view_multi_floor.launch.py \
          use_sim_time:=$gazebo_bool $commandpost"
    echo $cmd
    eval $cmd
