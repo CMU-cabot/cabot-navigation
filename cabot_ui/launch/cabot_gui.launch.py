@@ -138,7 +138,7 @@ def generate_launch_description():
             name='rviz2',
             arguments=['-d', rviz_config_file],
             parameters=[{'use_sim_time': use_sim_time_}],
-            output='log',
+            output={},
         ),
         Node(
             condition=IfCondition(show_local_rviz_),
@@ -148,7 +148,7 @@ def generate_launch_description():
             namespace='local',
             arguments=['-d', rviz_config_file2],
             parameters=[{'use_sim_time': use_sim_time_}],
-            output='log',
+            output={},
         ),
         Node(
             package="rqt_robot_monitor",

@@ -53,7 +53,7 @@ def generate_launch_description():
             package='mf_localization_gazebo',
             executable='floor_transition_node.py',
             name='floor_transition_node',
-            output='screen',
+            output={},
             parameters=[{
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose

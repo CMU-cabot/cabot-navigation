@@ -51,7 +51,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            output='log',
+            output={},
             arguments=['-d', rviz_config],
             parameters=[{'use_sim_time': use_sim_time}]
         )

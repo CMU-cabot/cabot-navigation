@@ -60,7 +60,7 @@ def generate_launch_description():
             executable='wireless_rss_simulator_node.py',
             name='wireless_rss_simulator_node',
             namespace=namespace,
-            output='screen',
+            output={},
             parameters=[{
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose
@@ -75,7 +75,7 @@ def generate_launch_description():
             executable='wireless_sample_simulator_node.py',
             name='wireless_sample_simulator_node',
             namespace=namespace,
-            output='screen',
+            output={},
             parameters=[{
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose

@@ -47,7 +47,7 @@ def generate_launch_description():
             package='rosbridge_server',
             executable='rosbridge_websocket',
             name='rosbridge_server',
-            output='log',
+            output={},
             parameters=[{'port': port, 'max_message_size': 128000000}]
         ),
         # Node for map viewing on smartphone device (roslibjs/ros3djs)
@@ -55,6 +55,6 @@ def generate_launch_description():
             package='tf2_web_republisher',
             executable='tf2_web_republisher',
             name='tf2_web_republisher',
-            output='log'
+            output={}
         ),
     ])

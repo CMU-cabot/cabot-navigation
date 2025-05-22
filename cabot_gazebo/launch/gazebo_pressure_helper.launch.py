@@ -60,7 +60,7 @@ def generate_launch_description():
             executable='pressure_simulator_node.py',
             name='pressure_simulator',
             namespace=namespace,
-            output='screen',
+            output={},
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'config_file': config_file,

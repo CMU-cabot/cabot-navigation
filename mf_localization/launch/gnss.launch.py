@@ -139,7 +139,7 @@ def generate_launch_description():
             parameters=[
                 {'target_node': 'str2str_node'}
             ],
-            output='log',
+            output={},
             condition=IfCondition(str2str_node_logger)
         )
 
@@ -150,7 +150,7 @@ def generate_launch_description():
             parameters=[
                 {'target_node': 'ntrip_client'}
             ],
-            output='log',
+            output={},
             condition=IfCondition(ntrip_client_logger)
         )
 
@@ -161,7 +161,7 @@ def generate_launch_description():
             parameters=[
                 {'target_node': 'ublox'}
             ],
-            output='log',
+            output={},
             condition=IfCondition(ublox_node_logger)
         )
 
