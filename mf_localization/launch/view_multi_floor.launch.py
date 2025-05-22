@@ -43,7 +43,7 @@ def generate_launch_description():
         # Append prefix name to the log directory for convenience
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("view_multi_floor")])),
         DeclareLaunchArgument(
-            'use_sim_time', 
+            'use_sim_time',
             default_value='false',
             description='Use simulation time if true'
         ),
