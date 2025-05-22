@@ -26,8 +26,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import scipy
 import scipy.interpolate
+import yaml
 
 from mf_localization import geoutil
+
+
+def load_node_options(yaml_file):
+    with open(yaml_file) as f:
+        config = yaml.safe_load(f)
+    latitude = config["options.nav_sat_predefined_enu_frame_latitude"]
+    longitude = config["options.nav_sat_predefined_enu_frame_longitude"]
+    return latitude, longitude
 
 
 def main():
@@ -39,6 +48,7 @@ def main():
     parser.add_argument("-p", "--plot", default=False, action="store_true", help="plot errors")
     parser.add_argument("--anchor_latitude", default=None, help="latitude of the anchor to define the local coordinate")
     parser.add_argument("--anchor_longitude", default=None, help="longitude of the anchor to define the local coordinate")
+    parser.add_argument("--node_options", default=None, type=str, help="node option yaml file to extract anchor information")
     args = parser.parse_args()
     print(args)
     status_threshold = args.gnss_status_threshold
@@ -55,7 +65,11 @@ def main():
         df_gnss = pd.read_csv(args.gnss)
         point = df_gnss.iloc[0]
 
-        if args.anchor_latitude is not None and args.anchor_longitude is not None:
+        if args.node_options is not None:
+            print("Loading latitude and longitude from node-options yaml file")
+            latitude, longitude = load_node_options(args.node_options)
+            gnss_anchor = geoutil.Anchor(lat=latitude, lng=longitude, rotate=0.0)
+        elif args.anchor_latitude is not None and args.anchor_longitude is not None:
             gnss_anchor = geoutil.Anchor(lat=args.anchor_latitude, lng=args.anchor_longitude, rotate=0.0)
         else:
             gnss_anchor = geoutil.Anchor(lat=point.latitude, lng=point.longitude, rotate=0.0)
