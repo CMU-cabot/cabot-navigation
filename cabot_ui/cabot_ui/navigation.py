@@ -450,6 +450,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         turn_end_output = node.declare_parameter("turn_end_topic", "/turn_end").value
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        end_pose_output = node.declare_parameter("end_pose_topic", "/cabot/end_pose").value
+        self.end_pose_pub = node.create_publisher(geometry_msgs.msg.Pose, end_pose_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
@@ -1313,6 +1315,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("turn_towards")
         self.delegate.activity_log("cabot/navigation", "turn_towards",
                                    str(geoutil.get_yaw(geoutil.q_from_msg(orientation))))
+        msg = geometry_msgs.msg.Pose()
+        msg.orientation = orientation
+        self.end_pose_pub.publish(msg)
+
         self.turn_towards_count = 0
         self.turn_towards_last_diff = None
         self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
