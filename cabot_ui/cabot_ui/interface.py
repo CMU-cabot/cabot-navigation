@@ -314,7 +314,7 @@ class UserInterface(object):
             msgs[0].data = str(Turn.Type.Avoiding)
             self._activity_log("cabot/turn_type", "Type.Avoiding")
         self.last_notify_turn[device] = self._node.get_clock().now()
-        if device == "directional_indicator" and turn.end != None:
+        if device == "directional_indicator" and turn.end is not None:
             msgs[1] = turn.end.pose
             self.end_pose_pub.publish(msgs[1])
         elif device == "vibrator":
