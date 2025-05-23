@@ -28,6 +28,7 @@ from launch_ros.descriptions import ParameterValue
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     urdf_file_name = 'robots/cabot2-gt1.urdf.xacro.xml'
@@ -49,7 +50,7 @@ def generate_launch_description():
             package='robot_state_publisher',
             executable='robot_state_publisher',
             name='robot_state_publisher',
-            output={},
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'robot_description': ParameterValue(

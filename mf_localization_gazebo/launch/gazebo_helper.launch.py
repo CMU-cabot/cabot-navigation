@@ -31,6 +31,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     wireless_config_file = LaunchConfiguration('wireless_config_file')
     verbose = LaunchConfiguration('verbose')
 
@@ -53,7 +54,7 @@ def generate_launch_description():
             package='mf_localization_gazebo',
             executable='floor_transition_node.py',
             name='floor_transition_node',
-            output={},
+            output=output,
             parameters=[{
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose

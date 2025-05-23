@@ -42,7 +42,7 @@ from cabot_common.launch import AppendLogDirPrefix
 def generate_launch_description():
     # Get the launch directory
     pkg_dir = get_package_share_directory('cabot_navigation2')
-    output = {}
+    output = {'stderr': {'log'}}
 
     # Create the launch configuration variables
     namespace = LaunchConfiguration('namespace')
@@ -105,7 +105,7 @@ def generate_launch_description():
         convert_types=True)
 
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience

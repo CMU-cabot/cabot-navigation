@@ -28,10 +28,11 @@ from launch.logging import launch_config
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     port = LaunchConfiguration('port')
 
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # Save all log files in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # Append prefix name to the log directory for convenience
@@ -47,7 +48,7 @@ def generate_launch_description():
             package='rosbridge_server',
             executable='rosbridge_websocket',
             name='rosbridge_server',
-            output={},
+            output=output,
             parameters=[{'port': port, 'max_message_size': 128000000}]
         ),
         # Node for map viewing on smartphone device (roslibjs/ros3djs)
@@ -55,6 +56,6 @@ def generate_launch_description():
             package='tf2_web_republisher',
             executable='tf2_web_republisher',
             name='tf2_web_republisher',
-            output={}
+            output=output
         ),
     ])

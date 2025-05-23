@@ -23,9 +23,18 @@
 
 
 import sys
+import signal
 
 from rqt_gui.main import Main
 from cabot_gazebo.handle import Handle
+
+
+#def receiveSignal(signal_num, frame):
+#    print("Received:", signal_num)
+#    sys.exit()
+
+
+#signal.signal(signal.SIGINT, receiveSignal)
 
 
 def main():
