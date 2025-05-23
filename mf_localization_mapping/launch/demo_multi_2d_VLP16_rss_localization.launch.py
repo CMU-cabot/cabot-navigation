@@ -327,7 +327,7 @@ def generate_launch_description():
                     ('num_active_sv', 'ublox_converter/num_active_sv'),
                     ('sv_status', 'ublox_converter/sv_status')
                 ],
-                output="both",
+                output={},
                 arguments=['--ros-args', '--log-level', PythonExpression(['"multi_floor_manager:=" + "', log_level, '"'])]
             ),
         ]),

@@ -572,11 +572,11 @@ class Goal(geoutil.TargetPlace):
     def cancel(self, callback=None):
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel is called")
         try:
-            def done_change_parameters_callback(result):
+            def done_change_parameters_callback():
                 CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel done_change_parameters_callback is called")
                 self._cancel(callback)
             if self._saved_params:
-                self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
+                self._change_params(Goal.default_params, done_change_parameters_callback)
             else:
                 self._cancel(callback)
         except:  # noqa: #722
@@ -753,8 +753,8 @@ class Nav2Params:
             # returns List[Tuple[node_name, namespace]]
             nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
             names = [name for name, ns in nodes]
-            for name in names:
-                CaBotRclpyUtil.info(f"{name}")
+            # for name in names:
+            #     CaBotRclpyUtil.info(f"{name}")
             if "speed_control_node_touch_false" in names:
                 params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
 

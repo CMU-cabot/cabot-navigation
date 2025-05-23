@@ -25,11 +25,15 @@ ulimit -S -c 0
 while getopts "c" arg; do
     case $arg in
         c)
-	    ulimit -c unlimited
-	    echo 1 | sudo tee /proc/sys/kernel/core_uses_pid
-	    echo "/home/developer/core" | sudo tee /proc/sys/kernel/core_pattern
-	    ulimit -s 65536
-	    ;;
+            ulimit -c unlimited
+            echo 1 | sudo tee /proc/sys/kernel/core_uses_pid
+            if [[ -n $ROS_LOG_DIR ]]; then
+                echo "$ROS_LOG_DIR/ros2-core" | sudo tee /proc/sys/kernel/core_pattern
+            else
+                echo "/home/developer/ros2-core" | sudo tee /proc/sys/kernel/core_pattern
+            fi
+            ulimit -s 65536
+            ;;
     esac
 done
 shift $((OPTIND-1))

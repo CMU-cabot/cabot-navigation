@@ -1,4 +1,4 @@
-# Copyright (c) 2023  Carnegie Mellon University
+# Copyright (c) 2025  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,44 +18,42 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, Command
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, RegisterEventHandler
+from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
-from launch_ros.descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
+from launch.logging import launch_config
+from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
     output = {'stderr': {'log'}}
-
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-    urdf_file_name = 'robots/cabot2-gt1.urdf.xacro.xml'
 
-    print("urdf_file_name : {}".format(urdf_file_name))
-
-    urdf = os.path.join(
-        get_package_share_directory('cabot_description'),
-        urdf_file_name)
+    rviz_config = PathJoinSubstitution([
+        FindPackageShare("mf_localization"),
+        "configuration_files/rviz/demo_2d_floors.rviz"
+    ])
 
     return LaunchDescription([
-
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
+        # Save all log files in the directory where the launch.log file is saved
+        SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
+        # Append prefix name to the log directory for convenience
+        RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("view_multi_floor")])),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use simulation (Gazebo) clock if true'),
-
+            description='Use simulation time if true'
+        ),
         Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
             output=output,
-            parameters=[{
-                'use_sim_time': use_sim_time,
-                'robot_description': ParameterValue(
-                    Command(['xacro ', str(urdf)]), value_type=str
-                )
-            }]
+            arguments=['-d', rviz_config],
+            parameters=[{'use_sim_time': use_sim_time}]
         )
     ])

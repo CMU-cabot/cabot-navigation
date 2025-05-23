@@ -25,6 +25,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     namespace = LaunchConfiguration('namespace')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
     beacons_topic = LaunchConfiguration('beacons_topic')
@@ -60,7 +61,7 @@ def generate_launch_description():
             executable='wireless_rss_simulator_node.py',
             name='wireless_rss_simulator_node',
             namespace=namespace,
-            output='screen',
+            output=output,
             parameters=[{
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose
@@ -75,7 +76,7 @@ def generate_launch_description():
             executable='wireless_sample_simulator_node.py',
             name='wireless_sample_simulator_node',
             namespace=namespace,
-            output='screen',
+            output=output,
             parameters=[{
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose

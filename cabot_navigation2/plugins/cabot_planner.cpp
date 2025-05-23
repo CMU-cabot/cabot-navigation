@@ -494,6 +494,7 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(
   const geometry_msgs::msg::PoseStamped & start,
   const geometry_msgs::msg::PoseStamped & goal)
 {
+  auto t0 = std::chrono::system_clock::now();
   if (path_debug_) {
     auto path = nav_msgs::msg::Path();
     path.header.frame_id = "map";
@@ -508,6 +509,10 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(
     RCLCPP_DEBUG(logger_, "navcog path is null");
     return nav_msgs::msg::Path();
   }
+  if (costmap_capture_ == nullptr) {
+    RCLCPP_DEBUG(logger_, "costmap capture is null");
+    return nav_msgs::msg::Path();
+  }
   if (static_costmap_capture_ == nullptr) {
     RCLCPP_DEBUG(logger_, "static layer capture is null");
     return nav_msgs::msg::Path();
@@ -516,8 +521,20 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(
   // lock while preparing data
   std::unique_lock<std::recursive_mutex> planner_lock(mutex_);
   std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> costmap_lock(*(costmap_ros_->getCostmap()->getMutex()));
-  costmap_capture_->capture();
-  static_costmap_capture_->capture();
+  auto t1 = std::chrono::system_clock::now();
+  auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  RCLCPP_INFO(logger_, "obtains locks duration: %ldms", ms1.count());
+
+  costmap_capture_->capture(start, options_.optimize_distance_from_start + 5.0);
+  t1 = std::chrono::system_clock::now();
+  ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  RCLCPP_INFO(logger_, "capture duration 1: %ldms", ms1.count());
+
+  static_costmap_capture_->capture(start, options_.optimize_distance_from_start + 5.0);
+  t1 = std::chrono::system_clock::now();
+  ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  RCLCPP_INFO(logger_, "capture duration 2: %ldms", ms1.count());
+
   costmap_lock.unlock();
 
   CaBotPlannerParam param(options_, pe_options_, start, goal, *navcog_path_, last_people_, last_obstacles_, last_queue_,
