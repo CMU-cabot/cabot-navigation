@@ -29,6 +29,7 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     queue_annotation_list_file = LaunchConfiguration('queue_annotation_list_file')
     debug_without_mf_localization = LaunchConfiguration('debug_without_mf_localization')
     debug_queue_annotation_map_frame = LaunchConfiguration('debug_queue_annotation_map_frame')
@@ -59,7 +60,7 @@ def generate_launch_description():
             package='queue_people_py',
             executable='detect_queue_people.py',
             name='detect_queue_people_py',
-            output='log',
+            output=output,
             parameters=[
                 f"{get_package_share_directory('queue_people_py')}/params/queue_detector.yaml",
                 {'queue_annotation_list_file': queue_annotation_list_file},

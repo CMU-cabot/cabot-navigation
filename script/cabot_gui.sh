@@ -167,6 +167,7 @@ fi
 
 # launch teleop keyboard for both gazebo and physical robot
 blue "launch teleop"
+export ROS_LOG_DIR=$ROS_LOG_DIR/teleop_twist_keyboard
 com="xterm -e ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args --remap cmd_vel:=$CABOT_GUI_TELEOP_TWIST_TOPIC &"
 echo $com
 eval $com

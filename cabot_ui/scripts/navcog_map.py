@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import sys
+import signal
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
@@ -174,6 +176,15 @@ def check_update():
 def initMenu():
     global navigate_menu
     navigate_menu = menu_handler.insert("Navigate to Here", callback=menu_callback)
+
+
+def receiveSignal(signal_num, frame):
+    print("Received:", signal_num)
+    node.destroy_node()
+    sys.exit()
+
+
+signal.signal(signal.SIGINT, receiveSignal)
 
 
 if __name__ == "__main__":

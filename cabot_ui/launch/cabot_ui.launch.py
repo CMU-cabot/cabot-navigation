@@ -37,6 +37,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     use_sim_time = LaunchConfiguration('use_sim_time')
     init_speed = LaunchConfiguration('init_speed')
     anchor_file = LaunchConfiguration('anchor_file')
@@ -73,7 +74,7 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
@@ -141,7 +142,7 @@ def generate_launch_description():
             package="cabot_ui",
             executable="cabot_ui_manager.py",
             name="cabot_ui_manager",
-            output={},
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'init_speed': init_speed,
@@ -163,7 +164,7 @@ def generate_launch_description():
             executable='navcog_map.py',
             namespace='cabot',
             name='navcog_map',
-            output={},
+            output=output,
             parameters=[{
                 'anchor_file': anchor_file,
             }, NamespaceParameterFile('cabot/navcog_map', config_path)],
@@ -176,14 +177,14 @@ def generate_launch_description():
                 '--allow-declare', 'false',
                 '--file-path', '/home/developer/ros2_ws/persistent_params.yaml',
             ],
-            output={},
+            output=output,
             parameters=[default_param_file],
         ),
         Node(
             package="cabot_ui",
             executable="stop_reasons_node",
             name="stop_reasons_node",
-            output={},
+            output=output,
             parameters=[{
                 'announce_no_touch': announce_no_touch
             }],
@@ -192,14 +193,14 @@ def generate_launch_description():
             package="cabot_common",
             executable="lookup_transform_service_node",
             name="lookup_transform_service_node",
-            output={},
+            output=output,
         ),
         Node(
             package='cabot_ui',
             executable='cabot_handle_v2_node',
             namespace='/cabot',
             name='cabot_handle_v2_node',
-            output={},
+            output=output,
             parameters=[
                 default_param_file,
                 {
@@ -213,7 +214,7 @@ def generate_launch_description():
             executable='cabot_handle_v3_node',
             namespace='/cabot',
             name='cabot_handle_v3_node',
-            output={},
+            output=output,
             parameters=[
                 default_param_file,
                 {

@@ -29,6 +29,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
 
     rviz_config = PathJoinSubstitution([
@@ -37,7 +38,7 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # Save all log files in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # Append prefix name to the log directory for convenience
@@ -51,7 +52,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            output={},
+            output=output,
             arguments=['-d', rviz_config],
             parameters=[{'use_sim_time': use_sim_time}]
         )

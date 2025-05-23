@@ -91,7 +91,7 @@ class AddStatePlugin(Substitution):
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_gazebo')
-    output = {}
+    output = {'stderr': {'log'}}
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_name = LaunchConfiguration('model')
@@ -152,7 +152,7 @@ def generate_launch_description():
     modified_world = AddStatePlugin(world_file)
 
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience

@@ -39,6 +39,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     pkg_dir = get_package_share_directory('mf_localization')
     use_sim_time = LaunchConfiguration('use_sim_time')
     robot = LaunchConfiguration('robot')
@@ -108,7 +109,7 @@ def generate_launch_description():
                 package='mf_localization',
                 executable='multi_floor_topic_proxy',
                 name='multi_floor_topic_proxy',
-                output={},
+                output=output,
                 parameters=[{
                     'map_config_file': map_config_file,
                     'verbose': True,
@@ -124,7 +125,7 @@ def generate_launch_description():
                 package='mf_localization',
                 executable='multi_floor_manager.py',
                 name='multi_floor_manager',
-                output={},
+                output=output,
                 parameters=[{
                     'map_config_file': map_config_file,
                     'tags': tags,

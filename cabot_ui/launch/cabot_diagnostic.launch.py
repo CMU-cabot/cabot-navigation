@@ -37,6 +37,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     pkg_dir = get_package_share_directory('cabot_ui')
     config_file = LaunchConfiguration('config_file')
     model_name = LaunchConfiguration('model')
@@ -52,7 +53,7 @@ def generate_launch_description():
         return [LogInfo(msg=f"Config file {config_file} found.")]
 
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='30'),
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
@@ -66,6 +67,7 @@ def generate_launch_description():
             package="diagnostic_aggregator",
             executable="aggregator_node",
             name="diagnostic_aggregator",
-            parameters=[config_file, {'use_sim_time': True}]
+            parameters=[config_file, {'use_sim_time': True}],
+            output=output,
         ),
     ])

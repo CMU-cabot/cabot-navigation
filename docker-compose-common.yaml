@@ -78,6 +78,7 @@ services:
       - CABOT_USE_DIRECTIONAL_INDICATOR
       - CABOT_VIBRATOR_TYPE
 # ROS2/DDS
+      - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
       - RMW_IMPLEMENTATION
       - CYCLONEDDS_URI
@@ -212,8 +213,9 @@ services:
   navigation-dev-base:
     extends: navigation-base
     environment: &dev-environment
+      - RCUTILS_LOGGING_USE_STDOUT=0
       - OVERRIDE_LAUNCH_PROCESS_OUTPUT=screen
-      - RCUTILS_CONSOLE_OUTPUT_FORMAT={time}	[{severity}]	[{file_name}#L{line_number}][{name}]	{message}
+      - RCUTILS_CONSOLE_OUTPUT_FORMAT=[{severity}]	{time}	[{name}({file_name}#L{line_number})]	{message}
     volumes:
 # code
       - ./cabot:/home/developer/ros2_ws/src/cabot
