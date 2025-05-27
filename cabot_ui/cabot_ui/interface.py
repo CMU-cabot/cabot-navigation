@@ -30,7 +30,6 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from ament_index_python.packages import get_package_share_directory
 
 import std_msgs.msg
-import geometry_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
 import cabot_ui.geojson
