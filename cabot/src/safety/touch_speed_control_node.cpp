@@ -78,7 +78,7 @@ void TouchSpeedControlNode::signalHandler(int signal)
 
 void TouchSpeedControlNode::touch_callback(std_msgs::msg::Int16::SharedPtr msg)
 {
-  RCLCPP_INFO(get_logger(), "touch callback %d", msg->data);
+  RCLCPP_DEBUG(get_logger(), "touch callback %d", msg->data);
   std::unique_ptr<std_msgs::msg::Float32> touch_speed_msg =
     std::make_unique<std_msgs::msg::Float32>();
   if (touch_speed_active_mode_) {

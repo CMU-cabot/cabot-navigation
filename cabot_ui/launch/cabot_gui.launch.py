@@ -80,7 +80,10 @@ def generate_launch_description():
     show_robot_monitor_ = BooleanSubstitution(show_robot_monitor)
     use_sim_time_ = BooleanSubstitution(use_sim_time)
 
+    output = {'stderr': {'log'}}
+
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
@@ -137,7 +140,7 @@ def generate_launch_description():
             name='rviz2',
             arguments=['-d', rviz_config_file],
             parameters=[{'use_sim_time': use_sim_time_}],
-            output='log',
+            output=output,
         ),
         Node(
             condition=IfCondition(show_local_rviz_),
@@ -147,12 +150,13 @@ def generate_launch_description():
             namespace='local',
             arguments=['-d', rviz_config_file2],
             parameters=[{'use_sim_time': use_sim_time_}],
-            output='log',
+            output=output,
         ),
         Node(
             package="rqt_robot_monitor",
             executable="rqt_robot_monitor",
             name="rqt_robot_monitor",
-            condition=IfCondition(show_robot_monitor_)
+            condition=IfCondition(show_robot_monitor_),
+            output=output,
         ),
     ])

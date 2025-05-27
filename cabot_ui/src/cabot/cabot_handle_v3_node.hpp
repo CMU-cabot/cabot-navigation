@@ -44,19 +44,15 @@ class CaBotHandleV3Node : public rclcpp::Node
 {
 public:
   explicit CaBotHandleV3Node(const rclcpp::NodeOptions & options);
+  ~CaBotHandleV3Node();
+  void initializeHandle();  // Declare the method to initialize Handle
   std::unique_ptr<Handle> handle_ = nullptr;
-  std::function<void(const std::map<std::string, std::string> &)> eventListener_callback = nullptr;
-  std::function<void(const std_msgs::msg::Int8::UniquePtr)> notification_callback = nullptr;
-  std::vector<std::string> button_keys_ = {};
   int vibrator_type_;
-  void eventListener(const std::map<std::string, std::string> & msg);
-  void notificationCallback(const std_msgs::msg::Int8::UniquePtr & msg);
-  void printStackTrace();
+  void eventListener(const std::map<std::string, int> & msg);
+  void notificationCallback(const std_msgs::msg::Int8::SharedPtr msg);
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr event_pub_;
   rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr notification_sub;
-
-private:
-  int main();
+  rclcpp::TimerBase::SharedPtr timer;
 };
 
 #endif  // CABOT__CABOT_HANDLE_V3_NODE_HPP_

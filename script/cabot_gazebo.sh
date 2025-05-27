@@ -23,7 +23,9 @@
 #
 # cabot_gazebo.sh
 # This script runs gazebo server and related nodes, and spawn the robot
-# 
+#
+
+set -m
 
 # change directory to where this script exists
 pwd=`pwd`
@@ -32,7 +34,6 @@ cd $scriptdir
 scriptdir=`pwd`
 
 pids=()
-termpids=()
 checks=()
 
 ## debug
@@ -46,12 +47,13 @@ source $scriptdir/cabot_util.sh
 trap signal INT TERM
 
 function signal() {
-    blue "trap cabot_ros2.sh "
+    blue "trap cabot_gazebo.sh "
 
     # ps -Af
-    kill -INT -1
-    for pid in ${termpids[@]}; do
-	kill -TERM $pid
+    for pid in ${pids[@]}; do
+        com="kill -SIGINT $pid"
+        red $com
+        eval $com
     done
     for pid in ${pids[@]}; do
 	count=0
@@ -72,7 +74,7 @@ function signal() {
 	    count=$((count+1))
         done
     done
-    
+    snore 3
     exit
 }
 
@@ -169,7 +171,7 @@ echo "CABOT_SITE                : $CABOT_SITE"
 echo "Map                       : $map"
 
 blue "launch gazebo"
-com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
+com="$command_prefix ros2 launch -n cabot_gazebo cabot2_gazebo.launch.py \
         gdb:=$gdb \
         model:=$CABOT_MODEL \
         world_file:=$world \
@@ -180,7 +182,7 @@ com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
 echo $com
 eval $com
 checks+=($!)
-termpids+=($!)
+pids+=($!)
 
 ## wait until it is terminated by the user
 while [ 1 -eq 1 ];

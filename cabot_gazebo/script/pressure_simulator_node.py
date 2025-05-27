@@ -22,6 +22,9 @@
 # SOFTWARE.
 
 import yaml
+import signal
+import sys
+
 
 import rclpy
 from rclpy.node import Node
@@ -133,12 +136,17 @@ class PressureSimulator():
         self._model_message = message
 
 
-def main():
+def receiveSignal(signal_num, frame):
+    print("Received:", signal_num)
+    node.destroy_node()
+    sys.exit()
+
+
+signal.signal(signal.SIGINT, receiveSignal)
+
+
+if __name__ == "__main__":
     rclpy.init()
     node = rclpy.node.Node('pressure_simulator')
     _ = PressureSimulator(node)
     rclpy.spin(node)
-
-
-if __name__ == "__main__":
-    main()
