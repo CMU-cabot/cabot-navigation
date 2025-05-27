@@ -687,7 +687,7 @@ class Nav2Params:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
+    complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -716,7 +716,7 @@ class Nav2Params:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
+    complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         if mode == geojson.NavigationMode.Crosswalk:
             params = """
@@ -745,7 +745,7 @@ class Nav2Params:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
+    complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         # if simualtion, check if 'speed_control_node_touch_true' or 'speed_control_node_touch_false' is used
         if CaBotRclpyUtil.instance().use_sim_time:
