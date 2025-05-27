@@ -79,9 +79,9 @@ Handle::Handle(
     "servo_pos", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Int16::UniquePtr msg) {
       servoPosCallback(msg);
     });
-  end_pose_sub_ = node_->create_subscription<geometry_msgs::msg::Pose>(
-    "end_pose", rclcpp::SensorDataQoS(), [this](geometry_msgs::msg::Pose::UniquePtr msg) {
-      turnEndPoseCallback(msg);
+  turn_angle_sub_ = node_->create_subscription<std_msgs::msg::Float32>(
+    "turn_angle", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Float32::UniquePtr msg) {
+      turnAngleCallback(msg);
     });
   turn_type_sub_ = node_->create_subscription<std_msgs::msg::String>(
     "turn_type", rclcpp::SensorDataQoS(), [this](std_msgs::msg::String::UniquePtr msg) {
@@ -392,16 +392,10 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg)
   }
 }
 
-void Handle::turnEndPoseCallback(geometry_msgs::msg::Pose::UniquePtr & msg)
+void Handle::turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg)
 {
-  float _end_pose_angle = getEulerYawDegrees(msg->orientation.x, msg->orientation.y, msg->orientation.z, msg->orientation.w);
-  float _rotation_amount = _end_pose_angle - current_imu_yaw_;
-  if (_rotation_amount >= 180.0f) {
-    _rotation_amount -= 360.f;
-  } else if (_rotation_amount < -180.0f) {
-    _rotation_amount += 360.0f;
-  }
-  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "target_angle: %f, current_angle: %f, amount_of_rotation: %f", _end_pose_angle, current_imu_yaw_, _rotation_amount);
+  float _rotation_amount = msg->data * 180.0f / M_PI;
+  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation: %f", _rotation_amount);
   if (std::abs(_rotation_amount) >= 60.0f) {  // thtMinimumTurn = 60
     if (di.control_mode == "both" || di.control_mode == "global") {
       di.target_turn_angle = _rotation_amount;

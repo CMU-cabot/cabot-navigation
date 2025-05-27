@@ -179,7 +179,7 @@ private:
   void cmdVelCallback(geometry_msgs::msg::Twist::UniquePtr & msg);
   void handleImuCallback(sensor_msgs::msg::Imu::UniquePtr & msg);
   void servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg);
-  void turnEndPoseCallback(geometry_msgs::msg::Pose::UniquePtr & msg);
+  void turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg);
   void turnTypeCallback(std_msgs::msg::String::UniquePtr & msg);
   void turnEndCallback(std_msgs::msg::Bool::UniquePtr & msg);
   void localPlanCallback(nav_msgs::msg::Path::UniquePtr & msg);
@@ -220,7 +220,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Subscription<std_msgs::msg::Int16>::SharedPtr servo_pos_sub_;
-  rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr end_pose_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr turn_angle_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr turn_type_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr turn_end_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr change_di_control_mode_sub_;

@@ -450,8 +450,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         turn_end_output = node.declare_parameter("turn_end_topic", "/cabot/turn_end").value
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        end_pose_output = node.declare_parameter("end_pose_topic", "/cabot/end_pose").value
-        self.end_pose_pub = node.create_publisher(geometry_msgs.msg.Pose, end_pose_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
+        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
@@ -1315,10 +1315,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("turn_towards")
         self.delegate.activity_log("cabot/navigation", "turn_towards",
                                    str(geoutil.get_yaw(geoutil.q_from_msg(orientation))))
-        msg = geometry_msgs.msg.Pose()
-        msg.orientation = orientation
-        self.end_pose_pub.publish(msg)
-
         self.turn_towards_count = 0
         self.turn_towards_last_diff = None
         self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
@@ -1335,6 +1331,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             diff = diff - clockwise * math.pi * 2
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
+
+        msg = std_msgs.msg.Float32()
+        msg.data = geoutil.normalize_angle(turn_yaw)
+        self.turn_angle_pub.publish(msg)
 
         future = self._spin_client.send_goal_async(goal)
         future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
