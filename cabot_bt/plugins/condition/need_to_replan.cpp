@@ -106,7 +106,8 @@ public:
       return;
     }
 
-    double range = 0.70;
+    double min_range = 0.65;
+    getInput("min_range", min_range);
     if (last_people_) {
       for (auto person = last_people_->people.begin(); person != last_people_->people.end(); person++) {
         if (std::find(person->tags.begin(), person->tags.end(), "stationary") == person->tags.end()) {
@@ -117,10 +118,11 @@ public:
           double dx = pose->pose.position.x - person->position.x;
           double dy = pose->pose.position.y - person->position.y;
           double dist = std::hypot(dx, dy);
-          if (dist < range) {
+          if (dist < min_range) {
             need_to_replan_ = true;
             person->tagnames.push_back("avoiding person");
-            RCLCPP_INFO(node_->get_logger(), "avoiding person (%.2f, %.2f)", person->position.x, person->position.y);
+            RCLCPP_INFO(node_->get_logger(), "avoiding person (%.2f, %.2f) dist=%.2f min_range=%.2f",
+              person->position.x, person->position.y, dist, min_range);
             replan_reason_pub_->publish(*person);
             break;
           }
@@ -154,10 +156,11 @@ public:
           double dx = pose->pose.position.x - obstacle->position.x;
           double dy = pose->pose.position.y - obstacle->position.y;
           double dist = std::hypot(dx, dy);
-          if (dist < range) {
+          if (dist < min_range) {
             need_to_replan_ = true;
             obstacle->tagnames.push_back("avoiding obstacle");
-            RCLCPP_INFO(node_->get_logger(), "avoiding obstacle (%.2f, %.2f)", obstacle->position.x, obstacle->position.y);
+            RCLCPP_INFO(node_->get_logger(), "avoiding obstacle[%s] (%.2f, %.2f) dist=%.2f min_range=%.2f",
+              obstacle->name.c_str(), obstacle->position.x, obstacle->position.y, dist, min_range);
             replan_reason_pub_->publish(*obstacle);
             break;
           }
@@ -193,7 +196,11 @@ public:
 
       total += dist;
     }
-    if (total > 5.0) {
+    min_dist = 5.0;
+    getInput("min_dist", min_dist);
+    RCLCPP_INFO(node_->get_logger(), "path.poses[0].position (%2.f, %.2f) total = %.2f (min_dist=%.2f)",
+      path.poses[0].pose.position.x, path.poses[0].pose.position.y, total, min_dist);
+    if (total > min_dist) {
       need_to_replan_ = true;
     }
   }
@@ -229,7 +236,9 @@ public:
   {
     return BT::PortsList{
       BT::InputPort<nav_msgs::msg::Path>("path", "path to be checked"),
-      BT::InputPort<geometry_msgs::msg::PoseStamped>("current_pose", "The current pose")
+      BT::InputPort<geometry_msgs::msg::PoseStamped>("current_pose", "The current pose"),
+      BT::InputPort<double>("min_range", "Min range to check for replan"),
+      BT::InputPort<double>("min_dist", "Min dist to check for replan")
     };
   }
 

@@ -54,7 +54,7 @@
               <Sequence>
                 <CurrentPose global_frame="map" robot_base_frame="base_footprint"
                   pose="{current_pose}" />
-                <NeedToReplan path="{path}" current_pose="{current_pose}" />
+                <NeedToReplan path="{path}" current_pose="{current_pose}" min_range="0.6" min_dist="5.0"/>
                 <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}"
                   planner_id="CaBot" />
                 <PublishTopicPath topic="plan" value="{path}" />

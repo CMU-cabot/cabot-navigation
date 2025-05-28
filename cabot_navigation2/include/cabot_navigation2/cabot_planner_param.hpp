@@ -65,6 +65,7 @@ struct CaBotPlannerOptions
   int min_iteration_count = 500;
   int max_iteration_count = 1000;
   bool ignore_people = false;
+  bool always_use_navcog_path = false;
 
   // private params
   float iteration_scale_min = 0.0001;

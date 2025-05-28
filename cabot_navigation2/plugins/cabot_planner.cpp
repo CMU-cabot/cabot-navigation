@@ -184,6 +184,11 @@ void CaBotPlanner::configure(
     rclcpp::ParameterValue(defaultValue.ignore_people));
   node->get_parameter(name + ".ignore_people", options_.ignore_people);
 
+  declare_parameter_if_not_declared(
+    node, name + ".always_use_navcog_path",
+    rclcpp::ParameterValue(defaultValue.always_use_navcog_path));
+  node->get_parameter(name + ".always_use_navcog_path", options_.always_use_navcog_path);
+
   declare_parameter_if_not_declared(node, name + ".static_layer_name", rclcpp::ParameterValue("static_layer"));
   node->get_parameter(name + ".static_layer_name", static_layer_name_);
 
@@ -431,6 +436,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
     if (param.get_name() == name_ + ".ignore_people") {
       options_.ignore_people = param.as_bool();
     }
+    if (param.get_name() == name_ + ".always_use_navcog_path") {
+      options_.always_use_navcog_path = param.as_bool();
+    }
 
     // private
     if (param.get_name() == name_ + ".private.iteration_scale_min") {
@@ -657,6 +665,10 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
   }
   auto planned_path = plan->getPlan(true);
   RCLCPP_INFO(logger_, "plan size = %ld, nodes size = %ld", planned_path.poses.size(), plan->nodes.size());
+  if (!param.options.always_use_navcog_path) {
+    RCLCPP_INFO(logger_, "navcog_path is updated by the new plan");
+    navcog_path_ = std::make_shared<nav_msgs::msg::Path>(planned_path);
+  }
   return planned_path;
 }
 
