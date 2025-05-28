@@ -584,8 +584,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         goal.nav_params_keys = dummy_nav_params_key
 
         def done_callback():
-            self._logger.info(f"done_callback f{goal._saved_params}")
-            navgoal.Goal.default_params = goal._saved_params
+            self._logger.info(f"done_callback f{goal._current_params}")
+            navgoal.Goal.default_params = copy.deepcopy(goal._current_params)
         goal._save_params(done_callback)
 
     # public interfaces

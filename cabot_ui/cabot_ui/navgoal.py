@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 from typing import List
 import math
 import inspect
@@ -430,7 +431,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
-        self._saved_params = Goal.default_params
+        self._current_params = copy.deepcopy(Goal.default_params)
         self._is_exiting_goal = False
 
     def reset(self):
@@ -461,11 +462,11 @@ class Goal(geoutil.TargetPlace):
 
         def done_request_parameters_callback(result):
             CaBotRclpyUtil.info("done_request_parameters_callback is called")
-            self._saved_params = result
-            CaBotRclpyUtil.info(F"{self.__class__.__name__}._saved_params = {self._saved_params}")
+            self._current_params = result
+            CaBotRclpyUtil.info(F"{self.__class__.__name__}._current_params = {self._current_params}")
             callback()
-        if self._saved_params:
-            done_request_parameters_callback(self._saved_params)
+        if self._current_params:
+            done_request_parameters_callback(self._current_params)
         else:
             if self.nav_params_keys():
                 CaBotRclpyUtil.info(f"call request_parameters {self.nav_params_keys()}")
@@ -479,21 +480,25 @@ class Goal(geoutil.TargetPlace):
                 CaBotRclpyUtil.info(f"done_change_parameters_callback is called {params}")
                 # update saved_params by changed params
                 for node, values in list(params.items()):
-                    if node in self._saved_params:
+                    if node in self._current_params:
                         for key, value in list(values.items()):
-                            self._saved_params[node][key] = value
-                CaBotRclpyUtil.info(f"{self._saved_params=}")
+                            self._current_params[node][key] = value
+                CaBotRclpyUtil.info(f"{self._current_params=}")
                 callback()
             return inner
-        if self._saved_params:
+        CaBotRclpyUtil.info(F"params to be changed full: {params=}")
+        params = copy.deepcopy(params)
+        if self._current_params:
             for node, values in list(params.items()):
-                if node in self._saved_params:
+                if node in self._current_params:
                     for key, value in list(values.items()):
-                        if key in self._saved_params[node] and self._saved_params[node][key] == value:
-                            del params[node][key]
-                        if not params[node]:
-                            del params[node]
-        CaBotRclpyUtil.info(F"params to be changed: {params=}")
+                        if key in self._current_params[node]:
+                            CaBotRclpyUtil.debug(f"{node=}, {key=}, {value=}, {self._current_params[node][key]}, {self._current_params[node][key] == value}")
+                            if self._current_params[node][key] == value:
+                                del params[node][key]
+                    if not params[node]:
+                        del params[node]
+        CaBotRclpyUtil.info(F"params to be changed opt.: {params=}")
         if params:
             self.delegate.change_parameters(params, done_change_parameters_callback(params))
         else:
@@ -531,9 +536,9 @@ class Goal(geoutil.TargetPlace):
             CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
-        CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
+        CaBotRclpyUtil.info(F"saved_params = {self._current_params}")
         self.delegate.exit_goal(self)
-        if self._saved_params:
+        if self._current_params:
             self._is_exiting_goal = True
             self._change_params(Goal.default_params, done_change_parameters_callback)
         else:
@@ -572,11 +577,11 @@ class Goal(geoutil.TargetPlace):
     def cancel(self, callback=None):
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel is called")
         try:
-            def done_change_parameters_callback(result):
+            def done_change_parameters_callback():
                 CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel done_change_parameters_callback is called")
                 self._cancel(callback)
-            if self._saved_params:
-                self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
+            if self._current_params:
+                self._change_params(Goal.default_params, done_change_parameters_callback)
             else:
                 self._cancel(callback)
         except:  # noqa: #722
@@ -659,6 +664,8 @@ class Nav2Params:
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
     social_distance_y: 0.5
+/cabot/speed_control_node_touch_true:
+    complete_stop: [false,false,false,false,true,true,false,true,true]
 """
         if mode == geojson.NavigationMode.Narrow:
             params = """
@@ -753,8 +760,6 @@ class Nav2Params:
             # returns List[Tuple[node_name, namespace]]
             nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
             names = [name for name, ns in nodes]
-            for name in names:
-                CaBotRclpyUtil.info(f"{name}")
             if "speed_control_node_touch_false" in names:
                 params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
 
@@ -785,7 +790,19 @@ class Nav2Params:
 
     @classmethod
     def all_keys(cls):
-        return cls.aggregate_nested_keys([cls.get_parameters_for(mode) for mode in geojson.NavigationMode])
+        keys = cls.aggregate_nested_keys([cls.get_parameters_for(mode) for mode in geojson.NavigationMode])
+
+        if CaBotRclpyUtil.instance().use_sim_time:
+            CaBotRclpyUtil.info("parameters simulation mode")
+            # returns List[Tuple[node_name, namespace]]
+            nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
+            names = [name for name, ns in nodes]
+            if "speed_control_node_touch_false" in names:
+                if "/cabot/speed_control_node_touch_true" in keys:
+                    keys["/cabot/speed_control_node_touch_false"] = keys["/cabot/speed_control_node_touch_true"]
+                    del keys["/cabot/speed_control_node_touch_true"]
+        CaBotRclpyUtil.debug(f"{keys=}")
+        return keys
 
 
 if __name__ == "__main__":
