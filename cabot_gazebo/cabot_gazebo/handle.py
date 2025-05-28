@@ -194,28 +194,32 @@ class Handle(Plugin):
 
     def vibrator_callback(self, index):
         def inner_function(msg):
-            self.vibrator_labels[index].setText(f'Vib {index + 1}: {msg.data}')
-            self.vibrator_labels[index].setStyleSheet('background-color: red; padding: 10px;')
+            with self.lock:
+                self.vibrator_labels[index].setText(f'Vib {index + 1}: {msg.data}')
+                self.vibrator_labels[index].setStyleSheet('background-color: red; padding: 10px;')
 
             def callback():
                 self.vibrator_timer.cancel()
-                self.vibrator_labels[index].setStyleSheet('background-color: none; padding: 10px;')
+                with self.lock:
+                    self.vibrator_labels[index].setStyleSheet('background-color: none; padding: 10px;')
             self.vibrator_timer = self._node.create_timer((10 * msg.data) / 1000.0, callback)
 
             def callback2():
                 self.vibrator_timer2.cancel()
-                self.vibrator_labels[index].setText(f'Vib {index + 1}: 0')
+                with self.lock:
+                    self.vibrator_labels[index].setText(f'Vib {index + 1}: 0')
             self.vibrator_timer2 = self._node.create_timer(2.0, callback2)
         return inner_function
 
     def servo_free_callback(self, msg):
-        self.servo_free = msg.data
-        self.servo_free_label.setText(f'Free: {self.servo_free}')
+        with self.lock:
+            self.servo_free = msg.data
+            self.servo_free_label.setText(f'Free: {self.servo_free}')
 
     def servo_target_callback(self, msg):
-        self.servo_free = False
-        self.servo_free_label.setText(f'Free: {self.servo_free}')
         with self.lock:
+            self.servo_free = False
+            self.servo_free_label.setText(f'Free: {self.servo_free}')
             self.servo_target_msg = msg
 
     def eventFilter(self, obj, event):
