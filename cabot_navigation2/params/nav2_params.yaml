@@ -359,7 +359,8 @@ local_costmap:
       width: 8
       height: 8
       resolution: 0.05
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["inflation_layer"]
+      #plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
       robot_radius: 0.45
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
