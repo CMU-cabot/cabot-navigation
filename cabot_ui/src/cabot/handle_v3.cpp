@@ -91,6 +91,10 @@ Handle::Handle(
     "turn_end", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Bool::UniquePtr msg) {
       turnEndCallback(msg);
     });
+  rotation_complete_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+    "rotation_complete", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Bool::UniquePtr msg) {
+      rotationCompleteCallback(msg);
+    });
   change_di_control_mode_sub_ = node_->create_subscription<std_msgs::msg::String>(
     "change_di_control_mode", rclcpp::SensorDataQoS(), [this](std_msgs::msg::String::UniquePtr msg) {
       changeDiControlModeCallback(msg);
@@ -391,7 +395,7 @@ void Handle::turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg)
 {
   float _rotation_amount = msg->data * 180.0f / M_PI;
   RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation: %f", _rotation_amount);
-  if (std::abs(_rotation_amount) >= 60.0f) {  // thtMinimumTurn = 60
+  if (std::abs(_rotation_amount) >= 20.0f) {  // control dial when turn/rotation angle is greater than or equal to 20[deg]
     if (di.control_mode == "both" || di.control_mode == "global") {
       di.target_turn_angle = _rotation_amount;
       previous_imu_yaw_ = current_imu_yaw_;
@@ -424,6 +428,15 @@ void Handle::turnEndCallback(std_msgs::msg::Bool::UniquePtr & msg)
     } else {
       resetServoPosition();
     }
+  }
+}
+
+void Handle::rotationCompleteCallback(std_msgs::msg::Bool::UniquePtr & msg)
+{
+  bool is_completed_rotation = msg->data;
+  if (is_completed_rotation) {
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "rotation completed");
+    resetServoPosition();
   }
 }
 
@@ -506,12 +519,16 @@ void Handle::navigationArrived()
   is_navigating_ = false;
   wma_data_buffer_.clear();
   resetServoPosition();
-  setServoFree(true);
   if (vibratorType_ == vibrator_type_::ERM) {
     vibratePattern(vibrator1_pub_, VibConst::ERM::NumVibrations::HAS_ARRIVED, VibConst::ERM::Duration::HAS_ARRIVED, VibConst::ERM::Sleep::DEFAULT);
   } else if (vibratorType_ == vibrator_type_::LRA) {
     vibratePattern(vibrator1_pub_, VibConst::LRA::NumVibrations::HAS_ARRIVED, VibConst::LRA::Duration::HAS_ARRIVED, VibConst::LRA::Sleep::DEFAULT);
   }
+  for (uint8_t i=0; i<5; i++) {
+    RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset of dial position");
+    changeServoPos(0);
+  }
+  setServoFree(true);
 }
 
 void Handle::navigationStart()
