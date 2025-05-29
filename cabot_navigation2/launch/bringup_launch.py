@@ -172,7 +172,7 @@ def generate_launch_description():
             description='publish ground to detect low obstacles only for debug purpose'),
 
         DeclareLaunchArgument(
-            'bond_timeout', default_value='30.0',
+            'bond_timeout', default_value='90.0',
             description='bond timeout for lifecycle managers'),
 
         # default navigator
