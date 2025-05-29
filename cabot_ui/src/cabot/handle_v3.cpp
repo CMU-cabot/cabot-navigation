@@ -498,7 +498,7 @@ void Handle::planCallback(nav_msgs::msg::Path::UniquePtr & msg)
     recalculation_cnt_of_path += 1;
     if (recalculation_cnt_of_path >= 2) {
       di.is_controlled_by_imu = false;
-      RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "change di control mode because plan calcurated repeatedly");
+      RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "change di control mode because plan calculated repeatedly");
     }
   }
 }

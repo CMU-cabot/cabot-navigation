@@ -450,7 +450,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         turn_end_output = node.declare_parameter("turn_end_topic", "/cabot/turn_end").value
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        rotation_complete_output = node.declare_parameter("rotation_coplete_topic", "/cabot/rotation_complete").value
+        rotation_complete_output = node.declare_parameter("rotation_complete_topic", "/cabot/rotation_complete").value
         self.rotation_complete_pub = node.create_publisher(std_msgs.msg.Bool, rotation_complete_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
         self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
