@@ -448,7 +448,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
-        turn_end_output = node.declare_parameter("turn_end_topic", "/turn_end").value
+        turn_end_output = node.declare_parameter("turn_end_topic", "/cabot/turn_end").value
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._process_queue = []
