@@ -40,6 +40,9 @@ class Handle(Plugin):
         super(Handle, self).__init__(context)
         self.setObjectName('Handle')
 
+        self.vibrator_timer = None
+        self.vibrator_timer2 = None
+
         self.servo_free = True
         self.servo_pos = 0
         self.servo_target_msg = None
@@ -177,20 +180,21 @@ class Handle(Plugin):
         self._widget.installEventFilter(self)
 
     def publish_topics(self):
-        msg_pushed = Int8()
-        msg_pushed.data = 0  # Default value indicating no button pressed
-        for i, button in enumerate(self.buttons):
-            if button.isDown():
-                msg_pushed.data |= (1 << i)
-        self.publisher_pushed.publish(msg_pushed)
+        with self.lock:
+            msg_pushed = Int8()
+            msg_pushed.data = 0  # Default value indicating no button pressed
+            for i, button in enumerate(self.buttons):
+                if button.isDown():
+                    msg_pushed.data |= (1 << i)
+            self.publisher_pushed.publish(msg_pushed)
 
-        msg_touch = Int16()
-        msg_touch.data = 1 if self.touch_button.isDown() else 0
-        self.publisher_touch.publish(msg_touch)
+            msg_touch = Int16()
+            msg_touch.data = 1 if self.touch_button.isDown() else 0
+            self.publisher_touch.publish(msg_touch)
 
-        msg_servo = Int16()
-        msg_servo.data = int(self.servo_pos)
-        self.publisher_servo.publish(msg_servo)
+            msg_servo = Int16()
+            msg_servo.data = int(self.servo_pos)
+            self.publisher_servo.publish(msg_servo)
 
     def vibrator_callback(self, index):
         def inner_function(msg):
@@ -198,15 +202,32 @@ class Handle(Plugin):
                 self.vibrator_labels[index].setText(f'Vib {index + 1}: {msg.data}')
                 self.vibrator_labels[index].setStyleSheet('background-color: red; padding: 10px;')
 
-            def callback():
-                self.vibrator_timer.cancel()
+            if self.vibrator_timer is not None:
                 with self.lock:
+                    self.vibrator_timer.cancel()
+                    self.vibrator_timer.destroy()
+                    self.vibrator_timer = None
+            if self.vibrator_timer2 is not None:
+                with self.lock:
+                    self.vibrator_timer2.cancel()
+                    self.vibrator_timer2.destroy()
+                    self.vibrator_timer2 = None
+
+            def callback():
+                with self.lock:
+                    if self.vibrator_timer is not None:
+                        self.vibrator_timer.cancel()
+                        self.vibrator_timer.destroy()
+                        self.vibrator_timer = None
                     self.vibrator_labels[index].setStyleSheet('background-color: none; padding: 10px;')
             self.vibrator_timer = self._node.create_timer((10 * msg.data) / 1000.0, callback)
 
             def callback2():
-                self.vibrator_timer2.cancel()
                 with self.lock:
+                    if self.vibrator_timer2 is not None:
+                        self.vibrator_timer2.cancel()
+                        self.vibrator_timer2.destroy()
+                        self.vibrator_timer2 = None
                     self.vibrator_labels[index].setText(f'Vib {index + 1}: 0')
             self.vibrator_timer2 = self._node.create_timer(2.0, callback2)
         return inner_function
@@ -225,31 +246,32 @@ class Handle(Plugin):
             self.servo_target_msg = msg
 
     def eventFilter(self, obj, event):
-        # self._logger.info(f'eventFilter: {event=}')
-        if event.type() == QEvent.KeyPress and not event.isAutoRepeat():
-            if event.key() == Qt.Key_I:
-                self.buttons[0].setDown(True)
-            elif event.key() == Qt.Key_Comma:
-                self.buttons[1].setDown(True)
-            elif event.key() == Qt.Key_J:
-                self.buttons[2].setDown(True)
-            elif event.key() == Qt.Key_L:
-                self.buttons[3].setDown(True)
-            elif event.key() == Qt.Key_K:
-                self.buttons[4].setDown(True)
-            elif event.key() == Qt.Key_T:
-                self.touch_button.setDown(not self.touch_button.isDown())
-        elif event.type() == QEvent.KeyRelease and not event.isAutoRepeat():
-            if event.key() == Qt.Key_I:
-                self.buttons[0].setDown(False)
-            elif event.key() == Qt.Key_Comma:
-                self.buttons[1].setDown(False)
-            elif event.key() == Qt.Key_J:
-                self.buttons[2].setDown(False)
-            elif event.key() == Qt.Key_L:
-                self.buttons[3].setDown(False)
-            elif event.key() == Qt.Key_K:
-                self.buttons[4].setDown(False)
+        with self.lock:
+            # self._logger.info(f'eventFilter: {event=}')
+            if event.type() == QEvent.KeyPress and not event.isAutoRepeat():
+                if event.key() == Qt.Key_I:
+                    self.buttons[0].setDown(True)
+                elif event.key() == Qt.Key_Comma:
+                    self.buttons[1].setDown(True)
+                elif event.key() == Qt.Key_J:
+                    self.buttons[2].setDown(True)
+                elif event.key() == Qt.Key_L:
+                    self.buttons[3].setDown(True)
+                elif event.key() == Qt.Key_K:
+                    self.buttons[4].setDown(True)
+                elif event.key() == Qt.Key_T:
+                    self.touch_button.setDown(not self.touch_button.isDown())
+            elif event.type() == QEvent.KeyRelease and not event.isAutoRepeat():
+                if event.key() == Qt.Key_I:
+                    self.buttons[0].setDown(False)
+                elif event.key() == Qt.Key_Comma:
+                    self.buttons[1].setDown(False)
+                elif event.key() == Qt.Key_J:
+                    self.buttons[2].setDown(False)
+                elif event.key() == Qt.Key_L:
+                    self.buttons[3].setDown(False)
+                elif event.key() == Qt.Key_K:
+                    self.buttons[4].setDown(False)
         return super(Handle, self).eventFilter(obj, event)
 
     def add_arguments(parser):
