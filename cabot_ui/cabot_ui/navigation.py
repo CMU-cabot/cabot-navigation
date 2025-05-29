@@ -448,8 +448,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
-        turn_end_output = node.declare_parameter("turn_end_topic", "/turn_end").value
+        turn_end_output = node.declare_parameter("turn_end_topic", "/cabot/turn_end").value
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        rotation_complete_output = node.declare_parameter("rotation_complete_topic", "/cabot/rotation_complete").value
+        self.rotation_complete_pub = node.create_publisher(std_msgs.msg.Bool, rotation_complete_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
+        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
@@ -1330,6 +1334,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
 
+        msg = std_msgs.msg.Float32()
+        msg.data = geoutil.normalize_angle(turn_yaw)
+        self.turn_angle_pub.publish(msg)
+
         future = self._spin_client.send_goal_async(goal)
         future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
         return future
@@ -1360,6 +1368,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
             else:
                 self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
+                msg = std_msgs.msg.Bool()
+                msg.data = True
+                self.rotation_complete_pub.publish(msg)
                 callback(True)
         get_result_future.add_done_callback(done_callback)
 
