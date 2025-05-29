@@ -107,6 +107,10 @@ Handle::Handle(
     "/angular_distance", rclcpp::SensorDataQoS(), [this](std_msgs::msg::Float64::UniquePtr msg) {
       angularDistanceCallback(msg);
     });
+  plan_sub_ = node_->create_subscription<nav_msgs::msg::Path>(
+    "/plan", rclcpp::SensorDataQoS(), [this](nav_msgs::msg::Path::UniquePtr msg) {
+      planCallback(msg);
+    });
   for (int i = 0; i < 9; ++i) {
     rclcpp::Time zerotime(0, 0, RCL_ROS_TIME);
     last_up[i] = zerotime;
@@ -119,6 +123,7 @@ Handle::Handle(
   is_servo_free_ = true;
   is_waiting_ = true;
   is_waiting_cnt_ = 0;
+  recalculation_cnt_of_path = 0;
   last_turn_type_ = turn_type_::NORMAL;
   current_imu_yaw_ = 0.0f;
   previous_imu_yaw_ = 0.0f;  // yaw angle at turn start position
@@ -487,6 +492,17 @@ void Handle::angularDistanceCallback(std_msgs::msg::Float64::UniquePtr & msg)
   }
 }
 
+void Handle::planCallback(nav_msgs::msg::Path::UniquePtr & msg)
+{
+  if (di.is_controlled_by_imu && (di.control_mode == "both" || di.control_mode == "global")) {
+    recalculation_cnt_of_path += 1;
+    if (recalculation_cnt_of_path >= 2) {
+      di.is_controlled_by_imu = false;
+      RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "change di control mode because plan calcurated repeatedly");
+    }
+  }
+}
+
 void Handle::changeDiControlModeCallback(std_msgs::msg::String::UniquePtr & msg)
 {
   if (msg->data == "both" || msg->data == "global" || msg->data == "local" || msg->data == "none") {
@@ -544,6 +560,7 @@ void Handle::resetServoPosition()
   di.is_controlled_by_imu = false;
   di.target_turn_angle = 0.0f;
   di.target_pos_global = 0.0f;
+  recalculation_cnt_of_path = 0;
   changeServoPos(0);
 }
 
