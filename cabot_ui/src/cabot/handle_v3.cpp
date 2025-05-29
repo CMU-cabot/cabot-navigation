@@ -518,6 +518,7 @@ void Handle::changeServoPos(int16_t target_pos)
   setServoFree(false);
   std::unique_ptr<std_msgs::msg::Int16> msg = std::make_unique<std_msgs::msg::Int16>();
   msg->data = -1 * target_pos;
+  RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "send to servo: %d", msg->data);
   servo_target_pub_->publish(std::move(msg));
 }
 
@@ -526,12 +527,13 @@ void Handle::setServoFree(bool is_free)
   std::unique_ptr<std_msgs::msg::Bool> msg = std::make_unique<std_msgs::msg::Bool>();
   msg->data = is_free;
   is_servo_free_ = is_free;
-  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "servo_free: %d", msg->data);
+  RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "servo_free: %d", msg->data);
   servo_free_pub_->publish(std::move(msg));
 }
 
 void Handle::navigationArrived()
 {
+  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Navigation arrived");
   is_navigating_ = false;
   wma_data_buffer_.clear();
   resetServoPosition();
