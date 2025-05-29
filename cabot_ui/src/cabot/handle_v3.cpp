@@ -389,10 +389,11 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg)
 
 void Handle::turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg)
 {
-  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "turn_angle: %f", msg->data);
-  if (std::abs(msg->data) >= 60.0f) {  // thtMinimumTurn = 60
+  float _rotation_amount = msg->data * 180.0f / M_PI;
+  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation: %f", _rotation_amount);
+  if (std::abs(_rotation_amount) >= 60.0f) {  // thtMinimumTurn = 60
     if (di.control_mode == "both" || di.control_mode == "global") {
-      di.target_turn_angle = msg->data;
+      di.target_turn_angle = _rotation_amount;
       previous_imu_yaw_ = current_imu_yaw_;
       di.is_controlled_by_imu = true;
       changeServoPos(static_cast<int16_t>(di.target_turn_angle));
