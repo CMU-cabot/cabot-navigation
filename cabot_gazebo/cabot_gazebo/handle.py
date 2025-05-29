@@ -102,21 +102,21 @@ class Handle(Plugin):
 
         # timer to draw the indicator
         def update_plot():
-            pen = QPen(Qt.lightGray if self.servo_free else Qt.black, 5)
-            if self.servo_target_msg and not self.servo_free:
-                self.servo_pos = self.servo_pos * 0.8 + self.servo_target_msg.data * 0.2
-                if abs(self.servo_pos - self.servo_target_msg.data) < 0.1:
-                    self.servo_pos = self.servo_target_msg.data
-                    with self.lock:
+            with self.lock:
+                pen = QPen(Qt.lightGray if self.servo_free else Qt.black, 5)
+                if self.servo_target_msg and not self.servo_free:
+                    self.servo_pos = self.servo_pos * 0.8 + self.servo_target_msg.data * 0.2
+                    if abs(self.servo_pos - self.servo_target_msg.data) < 0.1:
+                        self.servo_pos = self.servo_target_msg.data
                         self.servo_target_msg = None
-                self._logger.info(f'{self.servo_pos=}')
+                    self._logger.info(f'{self.servo_pos=}')
 
-            length = 50
-            x = 50 + length * math.sin(math.radians(self.servo_pos))
-            y = 50 - length * math.cos(math.radians(self.servo_pos))
-            self.circle.setPen(pen)
-            self.line.setLine(50, 50, x, y)
-            self.line.setPen(pen)
+                length = 50
+                x = 50 + length * math.sin(math.radians(self.servo_pos))
+                y = 50 - length * math.cos(math.radians(self.servo_pos))
+                self.circle.setPen(pen)
+                self.line.setLine(50, 50, x, y)
+                self.line.setPen(pen)
 
         self._update_plot_timer = QTimer(self._widget)
         self._update_plot_timer.setInterval(20)
@@ -212,11 +212,13 @@ class Handle(Plugin):
         return inner_function
 
     def servo_free_callback(self, msg):
+        self._logger.info(f'servo_free_callback: {msg.data}')
         with self.lock:
             self.servo_free = msg.data
             self.servo_free_label.setText(f'Free: {self.servo_free}')
 
     def servo_target_callback(self, msg):
+        self._logger.info(f'servo_target_callback: {msg.data}')
         with self.lock:
             self.servo_free = False
             self.servo_free_label.setText(f'Free: {self.servo_free}')
