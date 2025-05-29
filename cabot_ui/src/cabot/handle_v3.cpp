@@ -542,7 +542,7 @@ void Handle::navigationArrived()
   } else if (vibratorType_ == vibrator_type_::LRA) {
     vibratePattern(vibrator1_pub_, VibConst::LRA::NumVibrations::HAS_ARRIVED, VibConst::LRA::Duration::HAS_ARRIVED, VibConst::LRA::Sleep::DEFAULT);
   }
-  for (uint8_t i=0; i<5; i++) {
+  for (uint8_t i = 0; i < 5; i++) {
     RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset of dial position");
     changeServoPos(0);
   }
