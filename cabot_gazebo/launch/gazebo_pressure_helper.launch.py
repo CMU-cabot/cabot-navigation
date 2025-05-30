@@ -28,6 +28,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     use_sim_time = LaunchConfiguration('use_sim_time')
     namespace = LaunchConfiguration('namespace')
     config_file = LaunchConfiguration('config_file')
@@ -60,7 +61,7 @@ def generate_launch_description():
             executable='pressure_simulator_node.py',
             name='pressure_simulator',
             namespace=namespace,
-            output='screen',
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'config_file': config_file,

@@ -20,6 +20,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+set -m
+
 start=`date +%s.%N`
 
 trap ctrl_c INT QUIT TERM
@@ -38,41 +41,18 @@ function ctrl_c() {
             launched=$((launched+1))
         done
 
+        red "kill -INT $dcpid"
+        kill -INT $dcpid
+        while kill -0 $dcpid 2> /dev/null; do
+            snore 1
+        done
         red "$dccom down"
         if [ $verbose -eq 1 ]; then
             $dccom down
         else
             $dccom down > /dev/null 2>&1
         fi
-        kill -s 9 $dcpid
     fi
-
-    for pid in ${pids[@]}; do
-        signal=2
-        if [[ "${termpids[*]}" =~ "$pid" ]]; then
-            signal=15
-        fi
-        if [ $verbose -eq 1 ]; then
-            echo "killing $0 $pid"
-            kill -s $signal $pid
-        else
-            echo "killing $0 $pid"
-            kill -s $signal $pid > /dev/null 2>&1
-        fi
-    done
-    for pid in ${pids[@]}; do
-        if [ $verbose -eq 1 ]; then
-            while kill -0 $pid; do
-                echo "waiting $0 $pid"
-                snore 1
-            done
-        else
-            echo "waiting $0 $pid"
-            while kill -0 $pid > /dev/null 2>&1; do
-                snore 1
-            done
-        fi
-    done
     if [[ $run_test -eq 1 ]]; then
         # not sure but record_system_stat.launch.xml cannot
         # terminate child processes when running with run_test
@@ -224,8 +204,6 @@ done
 shift $((OPTIND-1))
 
 ## private variables
-pids=()
-termpids=()
 
 if [[ $unittest -eq 1 ]]; then
     code=0
@@ -313,8 +291,6 @@ fi
 if [[ $log_dmesg -eq 1 ]]; then
     blue "Logging dmesg"
     dmesg --time-format iso -w > $host_ros_log_dir/dmesg.log &
-    termpids+=($!)
-    pids+=($!)
 fi
 
 if [[ $terminating -eq 1 ]]; then
@@ -346,9 +322,9 @@ echo $com
 eval $com
 
 if [ $verbose -eq 0 ]; then
-    com2="bash -c \"setsid $dccom --ansi never up --no-build --abort-on-container-exit\" > $host_ros_log_dir/docker-compose.log &"
+    com2="$dccom --ansi never up --no-build --abort-on-container-exit > $host_ros_log_dir/docker-compose.log &"
 else
-    com2="bash -c \"setsid $dccom up --no-build --abort-on-container-exit\" | tee $host_ros_log_dir/docker-compose.log &"
+    com2="$dccom up --no-build --abort-on-container-exit | tee $host_ros_log_dir/docker-compose.log &"
 fi
 if [ $verbose -eq 1 ]; then
     blue "$com2"

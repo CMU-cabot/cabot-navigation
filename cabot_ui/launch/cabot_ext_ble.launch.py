@@ -1,4 +1,4 @@
-#  Copyright (c) 2021, 2022  IBM Corporation and Carnegie Mellon University
+# Copyright (c) 2025  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,45 +19,43 @@
 # SOFTWARE.
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, RegisterEventHandler
 from launch_ros.actions import Node
-
-from launch.logging import launch_config
-from launch.actions import SetEnvironmentVariable
-from launch.actions import RegisterEventHandler
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch.event_handlers import OnShutdown
 from cabot_common.launch import AppendLogDirPrefix
+from launch.logging import launch_config
 
 
 def generate_launch_description():
     output = {'stderr': {'log'}}
-    wireless_config_file = LaunchConfiguration('wireless_config_file')
-    verbose = LaunchConfiguration('verbose')
+    port = LaunchConfiguration('port')
 
     return LaunchDescription([
-        # save all log file in the directory where the launch.log file is saved
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
+        # Save all log files in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
-        # append prefix name to the log directory for convenience
-        RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("gazebo_helper")])),
+        # Append prefix name to the log directory for convenience
+        RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot_ext_ble")])),
 
         DeclareLaunchArgument(
-            'wireless_config_file',
-            description='Wireless config file'),
-
-        DeclareLaunchArgument(
-            'verbose',
-            default_value='false',
-            description='True if output more'),
-
+            'port',
+            default_value=EnvironmentVariable('CABOT_ROSBRIDGE_PORT', default_value='9091'),
+            description='Port for rosbridge server'
+        ),
+        # rosbridge for external BLE server
         Node(
-            package='mf_localization_gazebo',
-            executable='floor_transition_node.py',
-            name='floor_transition_node',
+            package='rosbridge_server',
+            executable='rosbridge_websocket',
+            name='rosbridge_server',
             output=output,
-            parameters=[{
-                'wireless_config_file': wireless_config_file,
-                'verbose': verbose
-            }]
+            parameters=[{'port': port, 'max_message_size': 128000000}]
+        ),
+        # Node for map viewing on smartphone device (roslibjs/ros3djs)
+        Node(
+            package='tf2_web_republisher',
+            executable='tf2_web_republisher',
+            name='tf2_web_republisher',
+            output=output
         ),
     ])
