@@ -208,7 +208,7 @@ local_costmap:
           inf_is_valid: True # default: False
           data_type: "LaserScan"
       low_obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
+        plugin: "cabot_navigation2::LimitFovObstacleLayer"
         enabled: True
         min_obstacle_height: -2.0
         max_obstacle_height: 2.0
@@ -266,7 +266,7 @@ global_costmap:
           inf_is_valid: True # default: False
           data_type: "LaserScan"
       low_obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
+        plugin: "cabot_navigation2::LimitFovObstacleLayer"
         enabled: True
         min_obstacle_height: -2.0
         max_obstacle_height: 2.0

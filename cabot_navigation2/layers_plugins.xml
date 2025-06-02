@@ -22,6 +22,9 @@
 
 <class_libraries>
   <library path="cabot_layers">
+    <class type="cabot_navigation2::LimitFovObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
+      <description>Obstacle layer for limit FOV sensors</description>
+    </class>
     <class type="cabot_navigation2::NavCogPathLayer"  base_class_type="nav2_costmap_2d::Layer">
       <description>Cost for NavCog path</description>
     </class>
