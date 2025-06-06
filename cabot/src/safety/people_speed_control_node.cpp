@@ -102,6 +102,9 @@ public:
   double delay_;
   double social_distance_x_;
   double social_distance_y_;
+  double last_social_dist_;
+  bool social_distance_speed_limit_in_last_frame_;
+  double urgent_max_acc_;
   double social_distance_min_radius_;
   double social_distance_min_angle_;  // [rad]
   double social_distance_max_angle_;  // [rad]
@@ -165,6 +168,9 @@ public:
     delay_(0.5),
     social_distance_x_(2.0),
     social_distance_y_(1.0),
+    last_social_dist_(100),
+    social_distance_speed_limit_in_last_frame_(false),
+    urgent_max_acc_(1.2),
     social_distance_min_radius_(0.45),
     social_distance_min_angle_(-M_PI_2),
     social_distance_max_angle_(M_PI_2),
@@ -420,7 +426,6 @@ public:
 private:
   void peopleCallback(const people_msgs::msg::People::SharedPtr input)
   {
-    last_people_message_time_ = this->get_clock()->now();
     if (last_plan_.poses.size() == 0) {
       auto & clk = *this->get_clock();
       RCLCPP_INFO_THROTTLE(get_logger(), clk, 1000, "PeopleSpeedControl no plan");
@@ -501,34 +506,55 @@ private:
           min_path_dist = dist;
         }
       }
+      double temp_social_distance_speed_limit;
       if (min_path_dist > social_distance_y_) {
-        social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
+        temp_social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
       } else {
-        social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
+        temp_social_distance_speed_limit = std::min(social_distance_speed_limit, max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_));
       }
 
-      if (social_distance_speed_limit < sd_min_speed_) {
-        social_distance_speed_limit = 0;
+      if (temp_social_distance_speed_limit < sd_min_speed_) {
+        temp_social_distance_speed_limit = 0;
       }
 
+      double frame_period = (this->get_clock()->now() - last_people_message_time_).seconds();
       RCLCPP_INFO(
-        get_logger(), "PeopleSpeedControl people_limit %s, %.2f %.2f (%.2f %.2f) - %.2f (%.2f)",
-        person.name.c_str(), min_path_dist, dist, social_distance_x_, social_distance_y_, social_distance_speed_limit,
-        max_v(std::max(0.0, dist - social_distance_y_), max_acc_, delay_));
+        get_logger(), "PeopleSpeedControl people_limit name=%s, min_path_dist=%.2f dist=%.2f "
+        "last_social_dist=%.2f social_distance(%.2f %.2f) - temp=%.2f, limit=%.2f, (flag=%s)",
+        person.name.c_str(), min_path_dist, dist, last_social_dist_, social_distance_x_, social_distance_y_,
+        temp_social_distance_speed_limit, social_distance_speed_limit, social_distance_speed_limit_in_last_frame_ ? "true" : "false");
+      if (temp_social_distance_speed_limit < max_speed_) {
+        if (social_distance_speed_limit_in_last_frame_) {
+          if (last_social_dist_ < dist) {
+            // wait for the next frame, because object may be relatively moving away
+            // social_distance_speed_limit = temp_social_distance_speed_limit;
+          } else {
+            // critical
+            social_distance_speed_limit = std::max(
+              temp_social_distance_speed_limit,
+              last_odom_.twist.twist.linear.x - urgent_max_acc_ * frame_period);
 
-      if (social_distance_speed_limit < max_speed_) {
-        std_msgs::msg::String msg;
+            std_msgs::msg::String msg;
 
-        if (fabs(social_distance_speed_limit) < 0.01) {
-          msg.data = "navigation;event;people_speed_stopped";
-        } else if (vx > 0.25 && social_distance_speed_limit < max_speed_ * 0.75) {
-          msg.data = "navigation;event;people_speed_following";
+            if (fabs(social_distance_speed_limit) < 0.01) {
+              msg.data = "navigation;event;people_speed_stopped";
+            } else if (vx > 0.25 && social_distance_speed_limit < max_speed_ * 0.75) {
+              msg.data = "navigation;event;people_speed_following";
+            }
+
+            if (!msg.data.empty()) {
+              RCLCPP_INFO(get_logger(), "PeopleSpeedControl %s", msg.data.c_str());
+              event_pub_->publish(msg);
+            }
+          }
+        } else {
+          // noop, wait for the next frame
         }
-
-        if (!msg.data.empty()) {
-          RCLCPP_INFO(get_logger(), "PeopleSpeedControl %s", msg.data.c_str());
-          event_pub_->publish(msg);
-        }
+        social_distance_speed_limit_in_last_frame_ = true;
+        last_social_dist_ = dist;
+      } else {
+        social_distance_speed_limit_in_last_frame_ = false;
+        last_social_dist_ = 100;
       }
     }
 
@@ -605,6 +631,7 @@ private:
       addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit, min_radius, max_radius);
       CaBotSafety::commit(vis_pub_);
     }
+    last_people_message_time_ = this->get_clock()->now();
   }
 
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr input)
