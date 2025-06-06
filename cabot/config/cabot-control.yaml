@@ -53,7 +53,7 @@ cabot:
 
   low_lidar_speed_control_node: # old name cabot_e_lidar_speed
     ros__parameters:
-      laser_topic: /livox_scan
+      laser_topic: /livox_scan_expand
       visualize_topic: visualize
       limit_topic: /cabot/low_lidar_speed
       # front obstacle detection
