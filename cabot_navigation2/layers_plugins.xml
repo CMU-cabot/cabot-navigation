@@ -28,5 +28,8 @@
     <class type="cabot_navigation2::PeopleObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
       <description>Obstacle layer dealing with People</description>
     </class>
+    <class type="cabot_navigation2::TemporalObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
+      <description>Temporal Obstacle layer</description>
+    </class>
   </library>
 </class_libraries>
