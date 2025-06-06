@@ -119,6 +119,7 @@ ament_target_dependencies(cabot_goals
 
 ### costmap layers
 add_library(cabot_layers SHARED
+  plugins/temporal_obstacle_layer.cpp
   plugins/navcog_path_layer.cpp
   plugins/people_obstacle_layer.cpp
   plugins/navcog_path_util.cpp
