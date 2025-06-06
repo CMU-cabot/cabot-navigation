@@ -108,19 +108,23 @@ public:
 
     double range = 0.70;
     if (last_people_) {
+      auto people_transform = tf_buffer_->lookupTransform(
+        path.header.frame_id, last_people_->header.frame_id, last_people_->header.stamp, rclcpp::Duration(1s));
       for (auto person = last_people_->people.begin(); person != last_people_->people.end(); person++) {
         if (std::find(person->tags.begin(), person->tags.end(), "stationary") == person->tags.end()) {
           continue;
         }
+        geometry_msgs::msg::Point transformed_person_position;
+        tf2::doTransform(person->position, transformed_person_position, people_transform);
 
         for (auto pose = path.poses.begin(); pose != path.poses.end(); pose++) {
-          double dx = pose->pose.position.x - person->position.x;
-          double dy = pose->pose.position.y - person->position.y;
+          double dx = pose->pose.position.x - transformed_person_position.x;
+          double dy = pose->pose.position.y - transformed_person_position.y;
           double dist = std::hypot(dx, dy);
           if (dist < range) {
             need_to_replan_ = true;
             person->tagnames.push_back("avoiding person");
-            RCLCPP_INFO(node_->get_logger(), "avoiding person (%.2f, %.2f)", person->position.x, person->position.y);
+            RCLCPP_INFO(node_->get_logger(), "avoiding person (%.2f, %.2f)", transformed_person_position.x, transformed_person_position.y);
             replan_reason_pub_->publish(*person);
             break;
           }
@@ -129,16 +133,24 @@ public:
       }
     }
     if (last_obstacles_) {
+      auto people_transform = tf_buffer_->lookupTransform(
+        path.header.frame_id, last_people_->header.frame_id, last_people_->header.stamp, rclcpp::Duration(1s));
+      auto obstacle_transform = tf_buffer_->lookupTransform(
+        path.header.frame_id, last_obstacles_->header.frame_id, last_obstacles_->header.stamp, rclcpp::Duration(1s));
       for (auto obstacle = last_obstacles_->people.begin(); obstacle != last_obstacles_->people.end(); obstacle++) {
         if (std::find(obstacle->tags.begin(), obstacle->tags.end(), "stationary") == obstacle->tags.end()) {
           continue;
         }
-
+        geometry_msgs::msg::Point transformed_obstacle_position;
+        tf2::doTransform(obstacle->position, transformed_obstacle_position, obstacle_transform);
         bool flag_person = false;
         if (last_people_) {
           for (auto person = last_people_->people.begin(); person != last_people_->people.end(); person++) {
-            auto dx = obstacle->position.x - person->position.x;
-            auto dy = obstacle->position.y - person->position.y;
+            geometry_msgs::msg::Point transformed_person_position;
+            tf2::doTransform(person->position, transformed_person_position, people_transform);
+
+            auto dx = transformed_obstacle_position.x - transformed_person_position.x;
+            auto dy = transformed_obstacle_position.y - transformed_person_position.y;
             auto dist = sqrt(dx * dx + dy * dy);
             if (dist < 1.0) {
               flag_person = true;
@@ -151,13 +163,13 @@ public:
         }
 
         for (auto pose = path.poses.begin(); pose != path.poses.end(); pose++) {
-          double dx = pose->pose.position.x - obstacle->position.x;
-          double dy = pose->pose.position.y - obstacle->position.y;
+          double dx = pose->pose.position.x - transformed_obstacle_position.x;
+          double dy = pose->pose.position.y - transformed_obstacle_position.y;
           double dist = std::hypot(dx, dy);
           if (dist < range) {
             need_to_replan_ = true;
             obstacle->tagnames.push_back("avoiding obstacle");
-            RCLCPP_INFO(node_->get_logger(), "avoiding obstacle (%.2f, %.2f)", obstacle->position.x, obstacle->position.y);
+            RCLCPP_INFO(node_->get_logger(), "avoiding obstacle (%.2f, %.2f)", transformed_obstacle_position.x, transformed_obstacle_position.y);
             replan_reason_pub_->publish(*obstacle);
             break;
           }
