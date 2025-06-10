@@ -974,6 +974,7 @@ class MultiFloorManager:
         if self.floor is None:
             if self.gnss_is_active \
                     and self.indoor_outdoor_mode != IndoorOutdoorMode.INDOOR:
+                self.logger.info("skip start trajectory (gnss_is_active and indoor_outdoor_mode!=INDOOR)")
                 return
         else:
             # allow switch trajectories
