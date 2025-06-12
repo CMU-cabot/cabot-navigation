@@ -50,19 +50,16 @@ while getopts "ds" arg; do
 done
 shift $((OPTIND-1))
 
+build_option=
 if [[ $debug -eq 1 ]]; then
-    if [[ $sequential -eq 1 ]]; then
-        colcon build --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install --executor sequential $@
-    else
-        colcon build --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install $@
-    fi
+    build_option+=" --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install"
 else
-    if [[ $sequential -eq 1 ]]; then
-        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --executor sequential $@
-    else
-        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo $@
-    fi
+    build_option+=" --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 fi
+if [[ $sequential -eq 1 ]]; then
+    build_option+=" --executor sequential"
+fi
+colcon build $build_option
 
 if [[ $? -ne 0 ]]; then exit 1; fi
 
