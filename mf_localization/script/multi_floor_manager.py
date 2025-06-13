@@ -634,17 +634,26 @@ class MultiFloorManager:
                 t.header.frame_id = self.current_frame
                 transform_list = self.transforms + [t]  # to keep self.transforms in static transform
                 static_broadcaster.sendTransform(transform_list)
-        else:
+
+    # dummy tf to prevent timeout error before localization starts
+    # global_map_frame -> local_map_frame(map) -> published_frame
+    def send_dummy_local_map_tf(self):
+        if self.current_frame is None:
             # dummy transform to prevent navigation2 errors
-            t1 = TransformStamped()
-            t1.child_frame_id = "map"
-            t1.header.frame_id = self.global_map_frame
-            t1.header.stamp = self.clock.now().to_msg()
+            stamp = self.clock.now().to_msg()
+            dummy_transforms = []
+            if self.local_map_frame != self.global_map_frame:
+                t1 = TransformStamped()
+                t1.child_frame_id = self.local_map_frame
+                t1.header.frame_id = self.global_map_frame
+                t1.header.stamp = stamp
+                dummy_transforms.append(t1)
             t2 = TransformStamped()
-            t2.child_frame_id = "odom"
-            t2.header.frame_id = "map"
-            t2.header.stamp = self.clock.now().to_msg()
-            transform_list = self.transforms + [t1, t2]  # to keep self.transforms in static transform
+            t2.child_frame_id = self.published_frame
+            t2.header.frame_id = self.local_map_frame
+            t2.header.stamp = stamp
+            dummy_transforms.append(t2)
+            transform_list = self.transforms + dummy_transforms  # to keep self.transforms in static transform
             self.logger.info(f"{transform_list=}")
             static_broadcaster.sendTransform(transform_list)
 
@@ -655,7 +664,7 @@ class MultiFloorManager:
     @localize_status.setter
     def localize_status(self, value):
         self.__localize_status = value
-        if value and self.localize_status_pub:
+        if value and self.localize_status_pub:  # unknown=0 is not published
             msg = MFLocalizeStatus()
             msg.status = value
             self.localize_status_pub.publish(msg)
@@ -2043,7 +2052,6 @@ class MultiFloorManager:
     def is_optimized(self):
         if self.mode != LocalizationMode.INIT:
             self.logger.info(f"localization mode is not init. mode={self.mode}")
-            self.send_local_map_tf()
             return False
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
@@ -2918,6 +2926,8 @@ if __name__ == "__main__":
 
     # publish global_map->local_map by /tf_static
     multi_floor_manager.send_static_transforms()
+    # publish dummy tf to prevent map_global -> map -> published_frame connection timeout
+    multi_floor_manager.send_dummy_local_map_tf()
 
     # global position
     global_position_timer = node.create_timer(global_position_interval, multi_floor_manager.global_position_callback, callback_group=state_update_callback_group)
