@@ -20,7 +20,7 @@ repositories:
     # added topic name fix
     type: git
     url: https://github.com/CMU-cabot/ublox.git
-    version: ros2-fix-topic-name
+    version: ros2-cabot
   docker/localization/ntrip_client:
     type: git
     url: https://github.com/cmu-cabot/ntrip_client.git
