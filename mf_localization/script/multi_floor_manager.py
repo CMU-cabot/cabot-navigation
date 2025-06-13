@@ -106,6 +106,7 @@ from cabot_msgs.srv import LookupTransform
 from std_srvs.srv import Trigger
 
 from ublox_msgs.msg import NavSAT
+from ublox_msgs.srv import SendCfgRST
 from ublox_converter import UbloxConverterNode
 
 
@@ -1438,6 +1439,46 @@ class MultiFloorManager:
         self.auto_relocalization = False
         response.status.code = 0
         response.status.message = "Disabled auto relocalization."
+        return response
+
+    def reset_gnss_callback(self, request, response):
+        self.logger.info("reset_gnss_callback")
+
+        send_cfg_rst_req = SendCfgRST.Request(
+            nav_bbr_mask=0,
+            reset_mode=2,
+        )
+
+        # service call with timeout
+        timeout_sec = 1.0
+        event = threading.Event()
+
+        def unblock(future) -> None:
+            nonlocal event
+            event.set()
+
+        future = reset_gnss_client.call_async(send_cfg_rst_req)
+        future.add_done_callback(unblock)
+
+        if not future.done():
+            if not event.wait(timeout_sec):
+                reset_gnss_client.remove_pending_request(future)
+                response.status.code = 1
+                response.status.message = "Failed to reset GNSS (Timeout)."
+                return response
+
+        exception = future.exception()
+        if exception is not None:
+            raise exception
+
+        success = future.result().success
+        if success:
+            response.status.code = 0
+            response.status.message = "Succeeeded to reset GNSS."
+        else:
+            response.status.code = 1
+            response.status.message = "Failed to reset GNSS."
+
         return response
 
     def set_current_floor_callback(self, request, response):
@@ -2887,6 +2928,9 @@ if __name__ == "__main__":
     disable_relocalization_service = node.create_service(MFTrigger, "disable_auto_relocalization", multi_floor_manager.disable_relocalization_callback, callback_group=MutuallyExclusiveCallbackGroup())
     set_current_floor_service = node.create_service(MFSetInt, "set_current_floor", multi_floor_manager.set_current_floor_callback, callback_group=state_update_callback_group)
     convert_local_to_global_service = node.create_service(ConvertLocalToGlobal, "convert_local_to_global", multi_floor_manager.convert_local_to_global_callback, callback_group=state_update_callback_group)
+
+    reset_gnss_client = node.create_client(SendCfgRST, "/ublox/send_cfg_rst", callback_group=MutuallyExclusiveCallbackGroup())
+    reset_gnss_service = node.create_service(MFTrigger, "reset_gnss", multi_floor_manager.reset_gnss_callback, callback_group=MutuallyExclusiveCallbackGroup())
 
     # external localizer
     if gnss_config is not None:
