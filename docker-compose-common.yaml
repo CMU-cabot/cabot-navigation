@@ -73,11 +73,13 @@ services:
       - CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT
       - CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT
       - CABOT_IMAGE_DESCRIPTION_API_KEY
+      - CABOT_IMAGE_DESCRIPTION_TIMEOUT
       - CABOT_HANDLE_BUTTON_MAPPING
       - CABOT_USE_GNSS
       - CABOT_USE_DIRECTIONAL_INDICATOR
       - CABOT_VIBRATOR_TYPE
 # ROS2/DDS
+      - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
       - RMW_IMPLEMENTATION
       - CYCLONEDDS_URI
@@ -207,12 +209,16 @@ services:
     stop_grace_period: 30s
     command:
       - "/launch.sh"
-      # - "-c"                  # core dump
+      - "-c"                  # core dump
       - "navigation"
 
 
   navigation-dev-base:
     extends: navigation-base
+    environment: &dev-environment
+      - RCUTILS_LOGGING_USE_STDOUT=0
+      - OVERRIDE_LAUNCH_PROCESS_OUTPUT=screen
+      - RCUTILS_CONSOLE_OUTPUT_FORMAT=[{severity}]	{time}	[{name}({file_name}#L{line_number})]	{message}
     volumes:
 # code
       - ./cabot:/home/developer/ros2_ws/src/cabot
@@ -257,6 +263,7 @@ services:
 
   gazebo-dev-base:
     extends: navigation-dev-base
+    environment: *dev-environment
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -284,6 +291,7 @@ services:
 
   gui-dev-base:
     extends: navigation-dev-base
+    environment: *dev-environment
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -308,6 +316,7 @@ services:
 
   localization-dev-base:
     extends: localization-base
+    environment: *dev-environment
     volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
@@ -359,6 +368,7 @@ services:
     extends:
       service: localization-dev-base
     environment:
+      - <*dev-environment
       # rtklib
       - RTK_STR_IN
       - CABOT_SITE # if RTK_STR_IN is not specified, RTK_STR_IN will be loaded from CABOT_SITE

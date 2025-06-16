@@ -33,7 +33,7 @@ import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
 import cabot_ui.geojson
-from cabot_ui import visualizer, i18n
+from cabot_ui import visualizer, geoutil, i18n
 from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
@@ -346,9 +346,10 @@ class UserInterface(object):
                 text = "slight left"
             msgs[0].data = str(Turn.Type.Avoiding)
             self._activity_log("cabot/turn_type", "Type.Avoiding")
-        msgs[1].data = turn.angle
         self.last_notify_turn[device] = self._node.get_clock().now()
-        if device == "directional_indicator":
+        if device == "directional_indicator" and turn.end is not None:
+            angle_diff = geoutil.diff_angle(self.last_pose['ros_pose'].orientation, turn.end.pose.orientation)
+            msgs[1].data = geoutil.normalize_angle(angle_diff)
             self.turn_angle_pub.publish(msgs[1])
         elif device == "vibrator":
             self._activity_log("cabot/interface", "turn angle", str(turn.angle))

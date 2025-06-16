@@ -634,6 +634,19 @@ class MultiFloorManager:
                 t.header.frame_id = self.current_frame
                 transform_list = self.transforms + [t]  # to keep self.transforms in static transform
                 static_broadcaster.sendTransform(transform_list)
+        else:
+            # dummy transform to prevent navigation2 errors
+            t1 = TransformStamped()
+            t1.child_frame_id = "map"
+            t1.header.frame_id = self.global_map_frame
+            t1.header.stamp = self.clock.now().to_msg()
+            t2 = TransformStamped()
+            t2.child_frame_id = "odom"
+            t2.header.frame_id = "map"
+            t2.header.stamp = self.clock.now().to_msg()
+            transform_list = self.transforms + [t1, t2]  # to keep self.transforms in static transform
+            self.logger.info(f"{transform_list=}")
+            static_broadcaster.sendTransform(transform_list)
 
     @property
     def localize_status(self):
@@ -974,6 +987,7 @@ class MultiFloorManager:
         if self.floor is None:
             if self.gnss_is_active \
                     and self.indoor_outdoor_mode != IndoorOutdoorMode.INDOOR:
+                self.logger.info("skip start trajectory (gnss_is_active and indoor_outdoor_mode!=INDOOR)")
                 return
         else:
             # allow switch trajectories
@@ -2029,6 +2043,7 @@ class MultiFloorManager:
     def is_optimized(self):
         if self.mode != LocalizationMode.INIT:
             self.logger.info(f"localization mode is not init. mode={self.mode}")
+            self.send_local_map_tf()
             return False
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]

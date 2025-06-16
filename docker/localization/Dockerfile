@@ -1,6 +1,7 @@
 ARG BASE_IMAGE=cabot-base
 ARG FROM_IMAGE=cmucal/${BASE_IMAGE}:humble-desktop-custom-mesa
 
+########## cache ##########
 FROM ${FROM_IMAGE} as cache
 
 ENV CARTO_WS=/opt/cartographer_ws
@@ -38,6 +39,11 @@ RUN src/cartographer/scripts/install_abseil.sh && rm -rf /var/lib/apt/lists/*
 RUN . /opt/custom_ws/install/setup.sh && \
 	colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
+# protoc
+RUN mkdir -p /opt/cartographer_proto
+RUN protoc -I./src/cartographer --python_out=/opt/cartographer_proto $(find src/cartographer/ -name '*.proto')
+
+########## build ##########
 FROM $FROM_IMAGE as build
 
 ARG TZ=UTC
@@ -170,6 +176,7 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_rviz src/mf_
 
 RUN /ros_entrypoint.sh /launch.sh build
 
+########## final ##########
 FROM $FROM_IMAGE as final
 
 ARG TZ=UTC
@@ -192,6 +199,10 @@ RUN apt update && rosdep update && rosdep install -q -y \
 ARG ROS_DISTRO
 RUN sed -i 's:custom_ws:cartographer_ws:' /ros_entrypoint.sh
 
+# protoc
+RUN mkdir -p /opt/cartographer_proto
+COPY --from=cache /opt/cartographer_proto /opt/cartographer_proto
+ENV PYTHONPATH /opt/cartographer_proto:$PYTHONPATH
 
 # TODO replace with rosdep install
 RUN apt update && \
@@ -254,8 +265,12 @@ RUN (cd RTKLIB/lib/iers/gcc/; make) && \
 
 # TODO merge
 RUN pip install --no-cache-dir \
-	transforms3d==0.4.1 \
-	pyserial
+    transforms3d==0.4.1 \
+    pyserial \
+    # pbstream edit
+    imageio \
+    tifffile \
+    protobuf==3.20.3
 RUN apt update && \
     apt-get install -y \
     ros-${ROS_DISTRO}-navigation2 \

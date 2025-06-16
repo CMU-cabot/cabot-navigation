@@ -31,6 +31,7 @@
 #include <vector>
 
 #include <nav2_costmap_2d/layered_costmap.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <opencv2/imgproc.hpp>
 
 namespace cabot_navigation2
@@ -39,7 +40,7 @@ class CostmapLayerCapture
 {
 public:
   CostmapLayerCapture(nav2_costmap_2d::LayeredCostmap * layered_costmap, std::vector<std::string> layer_names);
-  bool capture();
+  bool capture(const geometry_msgs::msg::PoseStamped & start, const double & distance);
   nav2_costmap_2d::Costmap2D * getCostmap();
 
 private:

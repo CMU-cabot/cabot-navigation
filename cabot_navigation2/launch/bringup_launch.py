@@ -42,6 +42,7 @@ from cabot_common.launch import AppendLogDirPrefix
 def generate_launch_description():
     # Get the launch directory
     pkg_dir = get_package_share_directory('cabot_navigation2')
+    output = {'stderr': {'log'}}
 
     # Create the launch configuration variables
     namespace = LaunchConfiguration('namespace')
@@ -104,6 +105,7 @@ def generate_launch_description():
         convert_types=True)
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
@@ -172,7 +174,7 @@ def generate_launch_description():
             description='publish ground to detect low obstacles only for debug purpose'),
 
         DeclareLaunchArgument(
-            'bond_timeout', default_value='30.0',
+            'bond_timeout', default_value='90.0',
             description='bond timeout for lifecycle managers'),
 
         # default navigator
@@ -182,9 +184,10 @@ def generate_launch_description():
             name='controller_server',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params],
-            remappings=remappings),
+            remappings=remappings,
+        ),
 
         Node(
             package='nav2_planner',
@@ -192,7 +195,7 @@ def generate_launch_description():
             name='planner_server',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params],
             remappings=remappings+[('/plan', '/plan_temp')],
             # arguments=["--ros-args", "--log-level", "debug"]
@@ -203,9 +206,10 @@ def generate_launch_description():
             name='behavior_server',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params],
-            remappings=remappings),
+            remappings=remappings,
+        ),
 
         Node(
             package='nav2_bt_navigator',
@@ -213,7 +217,7 @@ def generate_launch_description():
             name='bt_navigator',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params],
             remappings=remappings,
             # arguments=['--ros-args', '--log-level', 'debug']
@@ -226,7 +230,7 @@ def generate_launch_description():
                     package='nav2_lifecycle_manager',
                     executable='lifecycle_manager',
                     name='lifecycle_manager_navigation',
-                    output='log',
+                    output=output,
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
                                 {'bond_timeout': bond_timeout},
@@ -235,7 +239,7 @@ def generate_launch_description():
                                                 'behavior_server',
                                                 'bt_navigator',
                                                 ]},
-                                ]
+                                ],
                 ),
             ]
         ),
@@ -248,7 +252,7 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=["--ros-args", "--log-level", "debug"]
@@ -261,7 +265,7 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=["--ros-args", "--log-level", "debug"]
@@ -274,9 +278,10 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params2],
-            remappings=remappings2),
+            remappings=remappings2,
+        ),
 
         Node(
             package='nav2_bt_navigator',
@@ -285,7 +290,7 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output='log',
+            output=output,
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=['--ros-args', '--log-level', 'debug']
@@ -298,7 +303,7 @@ def generate_launch_description():
                     package='nav2_lifecycle_manager',
                     executable='lifecycle_manager',
                     name='lifecycle_manager_local_navigation',
-                    output='log',
+                    output=output,
                     namespace='local',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
@@ -316,21 +321,21 @@ def generate_launch_description():
             package='nav2_map_server',
             executable='map_server',
             name='map_server',
-            output='log',
+            output=output,
             parameters=[configured_params],
-            remappings=remappings
+            remappings=remappings,
         ),
 
         Node(
             package='nav2_lifecycle_manager',
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
-            output='log',
+            output=output,
             parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': autostart},
                         {'bond_timeout': bond_timeout},
                         {'node_names': ['map_server']},
-                        ]
+                        ],
         ),
 
         # low obstacle detection
@@ -339,6 +344,7 @@ def generate_launch_description():
             executable='pointcloud_to_laserscan_node',
             namespace='',
             name='livox_pointcloud_to_laserscan_node',
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -370,6 +376,7 @@ def generate_launch_description():
             executable='clip_ground_filter_node',
             namespace='',
             name='clip_ground_filter_node',
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -394,6 +401,7 @@ def generate_launch_description():
             executable='ransac_ground_filter_node',
             namespace='',
             name='ransac_ground_filter_node',
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -424,6 +432,7 @@ def generate_launch_description():
             executable='grid_map_ground_filter_node',
             namespace='',
             name='grid_map_ground_filter_node',
+            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -470,6 +479,7 @@ def generate_launch_description():
             executable='grid_map_visualization',
             namespace='',
             name='grid_map_visualization',
+            output=output,
             parameters=[configured_params],
             condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 3 and '", publish_low_obstacle_ground, "' == 'true'"]))
         ),
@@ -479,36 +489,41 @@ def generate_launch_description():
             package='cabot_common',
             executable='map_loader.py',
             name='map_loader',
-            output='log',
-            parameters=[configured_params]),
+            output=output,
+            parameters=[configured_params],
+        ),
 
         Node(
             package='cabot_common',
             executable='footprint_publisher',
             name='footprint_publisher',
+            output=output,
             parameters=[configured_params],
-            output='log'),
+        ),
 
         Node(
             package='cabot_common',
             executable='people_vis_node',
             name='people_vis',
+            output=output,
             parameters=[configured_params],
-            output='log'),
+        ),
 
         Node(
             package='cabot_navigation2',
             executable='cabot_scan',
             name='cabot_scan',
+            output=output,
             parameters=[configured_params],
-            output='log'),
+        ),
 
         Node(
             package='cabot_navigation2',
             executable='cabot_scan',
             name='cabot_livox_scan',
+            output=output,
             parameters=[configured_params],
-            output='log',
-            condition=IfCondition(use_low_obstacle_detect)),
+            condition=IfCondition(use_low_obstacle_detect)
+        ),
 
     ])

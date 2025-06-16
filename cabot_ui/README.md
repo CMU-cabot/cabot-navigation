@@ -130,6 +130,3 @@ Key Mapping
   - *while navigating: Describe stop reason
 - Down Click: Start conversation interface
 - Up Click: Describe the surroundings
-  - Single click: Short analysis
-  - Double click: Medium-length analysis
-  - Triple click: Detailed analysis

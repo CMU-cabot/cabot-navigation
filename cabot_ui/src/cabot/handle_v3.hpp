@@ -145,15 +145,15 @@ typedef struct directionalIndicator
 class Handle : public std::enable_shared_from_this<Handle>
 {
 public:
-  enum button_keys
+  enum vib_keys
   {
     UNKNOWN = 0, LEFT_TURN = 1, RIGHT_TURN = 2, LEFT_DEV = 3, RIGHT_DEV = 4, FRONT = 5,
     LEFT_ABOUT_TURN = 6, RIGHT_ABOUT_TURN = 7, BUTTON_CLICK = 8, BUTTON_HOLDDOWN = 9,
     CAUTION = 10, NAVIGATION_START = 11, NAVIGATION_ARRIVED = 12, STIMULI_COUNT = 13
   };
   Handle(
-    CaBotHandleV3Node * node, std::function<void(const std::map<std::string,
-    std::string> &)> eventListener, const std::vector<std::string> & buttonKeys,
+    std::shared_ptr<CaBotHandleV3Node> node,  // Change to shared_ptr
+    std::function<void(const std::map<std::string, int> &)> eventListener,
     const int & vibratorType);
   void executeStimulus(int index);
   static const std::vector<std::string> stimuli_names;
@@ -172,20 +172,22 @@ private:
   float getMedian(const std::vector<float> & data);
   void timer_callback();
   void vib_waiting_timer_callback();
-  void buttonCallback(std_msgs::msg::Int8::UniquePtr & msg);
-  void buttonCheck(std_msgs::msg::Int8::UniquePtr & msg, int index);
-  void eventCallback(std_msgs::msg::String::UniquePtr msg);
-  void cmdVelCallback(geometry_msgs::msg::Twist::UniquePtr & msg);
-  void handleImuCallback(sensor_msgs::msg::Imu::UniquePtr & msg);
-  void servoPosCallback(std_msgs::msg::Int16::UniquePtr & msg);
-  void turnAngleCallback(std_msgs::msg::Float32::UniquePtr & msg);
-  void turnTypeCallback(std_msgs::msg::String::UniquePtr & msg);
-  void turnEndCallback(std_msgs::msg::Bool::UniquePtr & msg);
-  void localPlanCallback(nav_msgs::msg::Path::UniquePtr & msg);
-  void angularDistanceCallback(std_msgs::msg::Float64::UniquePtr & msg);
-  void changeDiControlModeCallback(std_msgs::msg::String::UniquePtr & msg);
-  void startVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr & vibratorPub);
-  void stopVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr & vibratorPub);
+  void buttonCallback(std_msgs::msg::Int8::SharedPtr msg);
+  void buttonCheck(bool btn_push, int index);
+  void eventCallback(std_msgs::msg::String::SharedPtr msg);
+  void cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg);
+  void handleImuCallback(sensor_msgs::msg::Imu::SharedPtr msg);
+  void servoPosCallback(std_msgs::msg::Int16::SharedPtr msg);
+  void turnAngleCallback(std_msgs::msg::Float32::SharedPtr msg);
+  void turnTypeCallback(std_msgs::msg::String::SharedPtr msg);
+  void turnEndCallback(std_msgs::msg::Bool::SharedPtr msg);
+  void rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg);
+  void localPlanCallback(nav_msgs::msg::Path::SharedPtr msg);
+  void angularDistanceCallback(std_msgs::msg::Float64::SharedPtr msg);
+  void changeDiControlModeCallback(std_msgs::msg::String::SharedPtr msg);
+  void planCallback(nav_msgs::msg::Path::SharedPtr msg);
+  void startVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr vibratorPub);
+  void stopVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr vibratorPub);
   void changeServoPos(int16_t target_pos);
   void setServoFree(bool is_free);
   void navigationArrived();
@@ -206,7 +208,7 @@ private:
   void vibratePattern(
     const rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr & vibratorPub,
     unsigned int numberVibrations, unsigned int duration, unsigned int sleep);
-  std::shared_ptr<CaBotHandleV3Node> node_;
+  std::weak_ptr<CaBotHandleV3Node> node_;    // Change to weak_ptr to avoid circular references
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator2_pub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator3_pub_;
@@ -221,8 +223,10 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr turn_angle_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr turn_type_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr turn_end_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr rotation_complete_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr change_di_control_mode_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr local_plan_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr angular_distance_sub_;
   rclcpp::Time last_up[9];
   rclcpp::Time last_dwn[9];
@@ -237,6 +241,7 @@ private:
   bool is_waiting_;
   unsigned char is_waiting_cnt_;
   uint16_t servo_pos_callback_cnt_;
+  uint8_t recalculation_cnt_of_path;
   uint8_t last_turn_type_;
   uint8_t wma_window_size_;
   float current_imu_yaw_;
@@ -244,10 +249,9 @@ private:
   float wma_filter_coef_;
   std::vector<float> wma_data_buffer_;
   std::map<std::string, std::string> event;
-  std::function<void(const std::map<std::string, std::string> &)> eventListener_;
-  std::vector<std::string> buttonKeys_;
+  std::function<void(const std::map<std::string, int> &)> eventListener_;
   rclcpp::Logger logger_;
-  std::vector<std::function<void()>> callbacks_;
+  std::function<void()> callbacks_[13];
   int button[10];
   static const rclcpp::Duration double_click_interval_;
   static const rclcpp::Duration ignore_interval_;

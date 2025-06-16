@@ -541,15 +541,19 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speaker_enable":
             self._interface.enable_speaker(event.param)
+            return
 
         if event.subtype == "speaker_alert":
             self._interface.speaker_alert()
+            return
 
         if event.subtype == "speaker_audio_file":
             self._interface.set_audio_file(event.param)
+            return
 
         if event.subtype == "speaker_volume":
             self._interface.set_speaker_volume(event.param)
+            return
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
