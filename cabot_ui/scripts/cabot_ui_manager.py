@@ -37,6 +37,7 @@ Author: Daisuke Sato<daisuke@cmu.edu>
 import signal
 import sys
 import threading
+import time
 import traceback
 import yaml
 
@@ -96,6 +97,10 @@ class CabotUIManager(NavigationInterface, object):
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
+        self._last_speed_speak_time = 0
+        self._pending_speed_speak = None
+        self._speed_speak_interval = 1.1  # seconds
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -425,9 +430,22 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "getspeakeraudiofiles":
             return
 
+        if event.subtype == "speed_button_hold_release":
+            if self._pending_speed_speak:
+                self._interface.speed_changed(speed=self._pending_speed_speak)
+                self._last_speed_speak_time = time.time()
+                self._pending_speed_speak = None
+            
         if event.subtype == "speedup":
             self.speed_menu.prev()
-            self._interface.speed_changed(speed=self.speed_menu.description)
+            speed = self.speed_menu.description
+            now = time.time()
+            if now - self._last_speed_speak_time > self._speed_speak_interval:
+                self._interface.speed_changed(speed=speed)
+                self._last_speed_speak_time = now
+                self._pending_speed_speak = None
+            else:
+                self._pending_speed_speak = speed
             e = NavigationEvent("sound", "SpeedUp")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -837,6 +855,8 @@ class EventMapper2(object):
         if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
             self.button_hold_down_duration = 0
             self.button_hold_down_duration_prev = 0
+            if event.button in {cabot_common.button.BUTTON_UP, cabot_common.button.BUTTON_DOWN}:
+                return NavigationEvent(subtype="speed_button_hold_release")
             return None
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
