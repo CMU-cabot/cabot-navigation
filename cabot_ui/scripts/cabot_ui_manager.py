@@ -435,7 +435,7 @@ class CabotUIManager(NavigationInterface, object):
                 self._interface.speed_changed(speed=self._pending_speed_speak)
                 self._last_speed_speak_time = time.time()
                 self._pending_speed_speak = None
-            
+
         if event.subtype == "speedup":
             self.speed_menu.prev()
             speed = self.speed_menu.description
