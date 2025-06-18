@@ -100,7 +100,7 @@ class CabotUIManager(NavigationInterface, object):
 
         self._last_speed_speak_time = 0
         self._pending_speed_speak = None
-        self._speed_speak_interval = 1.1  # seconds
+        self._speed_speak_interval = 1.5  # seconds
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -453,7 +453,14 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speeddown":
             self.speed_menu.next()
-            self._interface.speed_changed(speed=self.speed_menu.description)
+            speed = self.speed_menu.description
+            now = time.time()
+            if now - self._last_speed_speak_time > self._speed_speak_interval:
+                self._interface.speed_changed(speed=speed)
+                self._last_speed_speak_time = now
+                self._pending_speed_speak = None
+            else:
+                self._pending_speed_speak = speed
             e = NavigationEvent("sound", "SpeedDown")
             msg = std_msgs.msg.String()
             msg.data = str(e)
