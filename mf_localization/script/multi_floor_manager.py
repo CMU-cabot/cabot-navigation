@@ -1814,8 +1814,10 @@ class MultiFloorManager:
             tf_available = True
         except RuntimeError as e:
             self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error=RuntimeError({e})")
-        except tf2_ros.TransformException as e:
-            self.logger.info(F"{e}")
+        except tf2_ros.TransformException as error:
+            self.logger.info(F"{error=}")
+        except KeyError as error:
+            self.logger.info(F"{error=}")
 
         if tf_available:
             # robot pose
