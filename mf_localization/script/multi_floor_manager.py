@@ -1487,7 +1487,7 @@ class MultiFloorManager:
         success = future.result().success
         if success:
             response.status.code = 0
-            response.status.message = "Succeeeded to reset GNSS."
+            response.status.message = "Succeeded to reset GNSS."
         else:
             response.status.code = 1
             response.status.message = "Failed to reset GNSS."
