@@ -35,6 +35,8 @@ from enum import Enum
 import requests
 import threading
 
+from cabot_ui.local_vlm import Sarashina
+from PIL import Image
 
 class DescriptionMode(Enum):
     SURROUND = 'surround'
@@ -57,6 +59,10 @@ class Description:
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
         self.api_key = os.environ.get("CABOT_IMAGE_DESCRIPTION_API_KEY", "")
+        self.use_local = (os.environ.get("USE_LOCAL", "false").lower() == "true")
+        if self.use_local:
+            self.enabled = True  # Local VLM is always enabled if USE_LOCAL is true
+        
         if self.enabled:
             # handle modes (default=surround,stop_reason)
             modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", "surround,stop-reason").split(",")
@@ -76,6 +82,7 @@ class Description:
         self._logger.info(F"Description surround: {self.surround_enabled}")
         self._logger.info(F"Description stop reason: {self.stop_reason_enabled}")
         self._logger.info(F"Description stop reason data collect: {self.stop_reason_data_collect_enabled}")
+        self._logger.info(F"Use local images: {self.use_local}")
 
         self.subscriptions = {
             'left': self.node.create_subscription(
@@ -97,6 +104,9 @@ class Description:
                 10
             )
         }
+
+        if self.use_local:
+            self.local_vlm = Sarashina(logger=self._logger)
 
         # rotate modes
         rotate_left = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT", "false").lower() == "true")
@@ -137,6 +147,60 @@ class Description:
             dist += math.sqrt(dx * dx + dy * dy)
             prev = pose
         self.last_plan_distance = dist
+
+    def request_description_with_images_local(self, param=None,callback=None):
+        if not self._requesting_lock.acquire(blocking=False):
+            self._logger.debug("Description is requesting")
+            return None
+
+        if not self.use_local:
+            self._logger.error("Local VLM is not enabled")
+            self._requesting_lock.release()
+            return None
+
+        try:
+            position = "front"
+            img_msg = self.last_images.get(position)
+            img = self.bridge.compressed_imgmsg_to_cv2(img_msg)
+            if self.image_rotate_modes[position] is not None:
+                img = cv2.rotate(img, self.image_rotate_modes[position])
+            height, width = img.shape[:2]
+            if height > width:
+                new_height = self.max_size
+                new_width = int(width * new_height / height)
+            else:
+                new_width = self.max_size
+                new_height = int(height * new_width / width)
+            img = cv2.resize(img, (new_width, new_height))
+            img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        except Exception as e:
+            self._logger.error(f'Error processing front image: {e}')
+            self._requesting_lock.release()
+            callback(None)
+            return None
+
+        try:
+            length_index = param
+            if length_index == 1:
+                prompt="この画像を簡潔に説明してください。"
+            elif length_index == 2:
+                prompt="この画像を説明してください。"
+            elif length_index == 3:
+                prompt="この画像の詳しく説明してください。"
+
+            self._logger.info(f"Requesting local VLM inference with prompt: {prompt}, length_index: {length_index}")
+
+            response = self.local_vlm.inference(
+                image=img_pil,
+                prompt=prompt,
+                add_message=False
+            )
+            callback(response)
+        except Exception as e:
+            self._logger.error(f'Error processing local VLM request: {e}')
+            callback(None)
+        finally:
+            self._requesting_lock.release()
 
     # for EventMapper1()
     def request_description_with_images1(self, global_position, current_floor, lang, length_index=0, callback=None):

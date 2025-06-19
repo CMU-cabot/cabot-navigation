@@ -89,6 +89,8 @@ services:
       - __GLX_VENDOR_LIBRARY_NAME
       - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
       - PULSE_COOKIE=${XDG_RUNTIME_DIR}/pulse/cookie
+# For using local vlm
+      - USE_LOCAL
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm

@@ -465,7 +465,10 @@ class CabotUIManager(NavigationInterface, object):
             try:
                 if result:
                     self._logger.info(f"description - {result=}")
-                    self._interface.describe_surround(result['translated'])
+                    if type(result) is dict:
+                        self._interface.describe_surround(result['translated'])
+                    elif type(result) is str:
+                        self._interface.describe_surround(result)
                 else:
                     self._logger.info("description - Error")
                     self._interface.describe_error()
@@ -534,7 +537,10 @@ class CabotUIManager(NavigationInterface, object):
             request_stop_reason_description()
 
         if event.subtype == "description_surround" and self._description.enabled:
-            request_surround_description()
+            if self._description.use_local:
+                self._description.request_description_with_images_local(param=event.param,callback=description_callback)
+            else:
+                request_surround_description()
 
         if event.subtype == "speaker_enable":
             self._interface.enable_speaker(event.param)

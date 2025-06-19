@@ -286,6 +286,9 @@ RUN pip3 install --no-cache-dir \
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
+RUN pip3 install -U transformers==4.47.0 torch torchvision pillow protobuf sentencepiece accelerate
+RUN pip3 install -U "huggingface_hub[cli]"
+RUN huggingface-cli download "sbintuitions/sarashina2-vision-8b"
 
 # for debug
 # RUN apt update && \
