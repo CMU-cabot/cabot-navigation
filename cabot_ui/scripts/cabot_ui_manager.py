@@ -37,7 +37,6 @@ Author: Daisuke Sato<daisuke@cmu.edu>
 import signal
 import sys
 import threading
-import time
 import traceback
 import yaml
 
