@@ -148,7 +148,7 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
-    def request_description_with_images_local(self, param=None,callback=None):
+    def request_description_with_images_local(self, param=None, prompt=None, callback=None):
         if not self._requesting_lock.acquire(blocking=False):
             self._logger.debug("Description is requesting")
             return None
@@ -179,16 +179,17 @@ class Description:
             callback(None)
             return None
 
-        try:
-            length_index = param
-            if length_index == 1:
-                prompt="この画像を簡潔に説明してください。"
-            elif length_index == 2:
-                prompt="この画像を説明してください。"
-            elif length_index == 3:
-                prompt="この画像の詳しく説明してください。"
+        try:            
+            if prompt is None and param is not None:
+                length_index = param
+                if length_index == 1:
+                    prompt="この画像を簡潔に説明してください。"
+                elif length_index == 2:
+                    prompt="この画像を説明してください。"
+                elif length_index == 3:
+                    prompt="この画像の詳しく説明してください。"
 
-            self._logger.info(f"Requesting local VLM inference with prompt: {prompt}, length_index: {length_index}")
+            self._logger.info(f"Requesting local VLM inference with prompt: {prompt}")
 
             response = self.local_vlm.inference(
                 image=img_pil,
