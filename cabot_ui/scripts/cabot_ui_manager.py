@@ -98,9 +98,7 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
-        self._last_speed_speak_time = 0
         self._pending_speed_speak = None
-        self._speed_speak_interval = 1.5  # seconds
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -200,6 +198,14 @@ class CabotUIManager(NavigationInterface, object):
     def i_am_ready(self):
         self._status_manager.set_state(State.idle)
         self._interface.i_am_ready()
+
+    def update_speed_speak(self):
+        scaled_speed = round(self.speed_menu.value*10, 1)
+        if scaled_speed % 1 == 0:
+            self._interface.speed_changed(speed=str(int(scaled_speed)))
+            self._pending_speed_speak = None
+        else:
+            self._pending_speed_speak = str(scaled_speed)
 
     def start_navigation(self):
         self._logger.info("self._interface.start_navigation()")
@@ -433,19 +439,11 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "speed_button_hold_release":
             if self._pending_speed_speak:
                 self._interface.speed_changed(speed=self._pending_speed_speak)
-                self._last_speed_speak_time = time.time()
                 self._pending_speed_speak = None
 
         if event.subtype == "speedup":
             self.speed_menu.prev()
-            speed = self.speed_menu.description
-            now = time.time()
-            if now - self._last_speed_speak_time > self._speed_speak_interval:
-                self._interface.speed_changed(speed=speed)
-                self._last_speed_speak_time = now
-                self._pending_speed_speak = None
-            else:
-                self._pending_speed_speak = speed
+            self.update_speed_speak()
             e = NavigationEvent("sound", "SpeedUp")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -453,14 +451,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speeddown":
             self.speed_menu.next()
-            speed = self.speed_menu.description
-            now = time.time()
-            if now - self._last_speed_speak_time > self._speed_speak_interval:
-                self._interface.speed_changed(speed=speed)
-                self._last_speed_speak_time = now
-                self._pending_speed_speak = None
-            else:
-                self._pending_speed_speak = speed
+            self.update_speed_speak()
             e = NavigationEvent("sound", "SpeedDown")
             msg = std_msgs.msg.String()
             msg.data = str(e)
