@@ -97,6 +97,8 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
+        self._pending_speed_speak = None
+
         # request language
         e = NavigationEvent("getlanguage", None)
         msg = std_msgs.msg.String()
@@ -195,6 +197,14 @@ class CabotUIManager(NavigationInterface, object):
     def i_am_ready(self):
         self._status_manager.set_state(State.idle)
         self._interface.i_am_ready()
+
+    def update_speed_speak(self):
+        scaled_speed = round(self.speed_menu.value*10, 1)
+        if scaled_speed % 1 == 0:
+            self._interface.speed_changed(speed=str(int(scaled_speed)))
+            self._pending_speed_speak = None
+        else:
+            self._pending_speed_speak = str(scaled_speed)
 
     def start_navigation(self):
         self._logger.info("self._interface.start_navigation()")
@@ -425,9 +435,14 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "getspeakeraudiofiles":
             return
 
+        if event.subtype == "speed_button_hold_release":
+            if self._pending_speed_speak:
+                self._interface.speed_changed(speed=self._pending_speed_speak)
+                self._pending_speed_speak = None
+
         if event.subtype == "speedup":
             self.speed_menu.prev()
-            self._interface.speed_changed(speed=self.speed_menu.description)
+            self.update_speed_speak()
             e = NavigationEvent("sound", "SpeedUp")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -435,7 +450,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "speeddown":
             self.speed_menu.next()
-            self._interface.speed_changed(speed=self.speed_menu.description)
+            self.update_speed_speak()
             e = NavigationEvent("sound", "SpeedDown")
             msg = std_msgs.msg.String()
             msg.data = str(e)
@@ -837,6 +852,8 @@ class EventMapper2(object):
         if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
             self.button_hold_down_duration = 0
             self.button_hold_down_duration_prev = 0
+            if event.button in {cabot_common.button.BUTTON_UP, cabot_common.button.BUTTON_DOWN}:
+                return NavigationEvent(subtype="speed_button_hold_release")
             return None
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
