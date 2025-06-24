@@ -40,10 +40,10 @@ class BaseLocalVLM:
 class Sarashina(BaseLocalVLM):
     def __init__(self, logger=None):
         super().__init__(model_name="sbintuitions/sarashina2-vision-8b", logger=logger)
-        self.processor = AutoProcessor.from_pretrained(self.model_name, trust_remote_code=True)
+        self.processor=AutoProcessor.from_pretrained(self.model_name,trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            device_map="cuda",
+            device_map="cpu",
             torch_dtype="auto",
             trust_remote_code=True,
         )
@@ -57,7 +57,8 @@ class Sarashina(BaseLocalVLM):
 
         if image is None or prompt is None:
             self.logger.error("Image and prompt must be provided for inference.")
-            return 
+            
+        
 
         self.message.append({"role": "user", "content": prompt})
         text_prompt = self.processor.apply_chat_template(self.message, add_generation_prompt=True)
@@ -68,7 +69,9 @@ class Sarashina(BaseLocalVLM):
             padding=True,
             return_tensors="pt",
         )
-        inputs = inputs.to("cuda")
+        #inputs = inputs.to("cuda")
+        inputs = inputs.to("cpu")
+       
         stopping_criteria = self.processor.get_stopping_criteria(["\n###"])
 
         # Inference: Generation of the output

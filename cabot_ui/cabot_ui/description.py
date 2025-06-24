@@ -195,6 +195,7 @@ class Description:
                 prompt=prompt,
                 add_message=False
             )
+            self._logger.info(f"Outputting response: {response}")
             callback(response)
         except Exception as e:
             self._logger.error(f'Error processing local VLM request: {e}')
