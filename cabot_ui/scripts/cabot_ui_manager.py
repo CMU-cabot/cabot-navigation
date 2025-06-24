@@ -51,6 +51,7 @@ from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import std_msgs.msg
 import std_srvs.srv
 
+import cabot_msgs.msg
 import cabot_common.button
 from cabot_common.event import BaseEvent, ButtonEvent, ClickEvent, HoldDownEvent
 from cabot_ui.event import MenuEvent, NavigationEvent, ExplorationEvent
@@ -95,6 +96,7 @@ class CabotUIManager(NavigationInterface, object):
         self._retry_count = 0
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._node.create_subscription(cabot_msgs.msg.StopReason, "/stop_reason", self._stop_reason_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         # request language
@@ -389,6 +391,20 @@ class CabotUIManager(NavigationInterface, object):
             # self.cancel_pub.publish(True)
             self._navigation.pause_navigation()
 
+    def description_callback(self,result):
+        try:
+            if result:
+                self._logger.info(f"description - {result=}")
+                if type(result) is dict:
+                    self._interface.describe_surround(result['translated'])
+                elif type(result) is str:
+                    self._interface.describe_surround(result)
+            else:
+                self._logger.info("description - Error")
+                self._interface.describe_error()
+        except:   # noqa: #722
+            self._logger.error(traceback.format_exc())
+
     def _process_navigation_event(self, event):
         if event.type != NavigationEvent.TYPE:
             return
@@ -461,20 +477,6 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
-        def description_callback(result):
-            try:
-                if result:
-                    self._logger.info(f"description - {result=}")
-                    if type(result) is dict:
-                        self._interface.describe_surround(result['translated'])
-                    elif type(result) is str:
-                        self._interface.describe_surround(result)
-                else:
-                    self._logger.info("description - Error")
-                    self._interface.describe_error()
-            except:   # noqa: #722
-                self._logger.error(traceback.format_exc())
-
         if event.subtype == "description" and self._description.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
@@ -491,7 +493,7 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
-                self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
+                self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=self.description_callback)
 
         # request description internal functions
         def request_stop_reason_description():
@@ -506,7 +508,7 @@ class CabotUIManager(NavigationInterface, object):
                             "stop_reason",
                             self._interface.lang,
                             length_index=0,
-                            callback=description_callback):
+                            callback=self.description_callback):
                         self._interface.requesting_describe_surround_stop_reason()
                     else:
                         self._interface.requesting_please_wait()
@@ -526,7 +528,7 @@ class CabotUIManager(NavigationInterface, object):
                             "surround",
                             self._interface.lang,
                             length_index=length_index,
-                            callback=description_callback):
+                            callback=self.description_callback):
                         self._interface.requesting_describe_surround()
                     else:
                         self._interface.requesting_please_wait()
@@ -538,7 +540,7 @@ class CabotUIManager(NavigationInterface, object):
 
         if event.subtype == "description_surround" and self._description.enabled:
             if self._description.use_local:
-                self._description.request_description_with_images_local(param=event.param,callback=description_callback)
+                self._description.request_description_with_images_local(param=event.param,callback=self.description_callback)
             else:
                 request_surround_description()
 
@@ -716,6 +718,16 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.start_exploration()
             self._exploration.start_exploration()
 
+    def _stop_reason_callback(self, msg):
+        """
+        Callback for stop reason.
+        """
+        self._logger.info(f"Received stop reason: {msg}")
+        reason = msg.reason
+        if self._description.use_local:
+            if reason == "UNKNOWN" or reason == "THERE_ARE_PEOPLE_IN_THE_PATH":
+                prompt = "私が今前に進めない理由を教えてください。"
+                self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback)
 
 class EventMapper1(object):
     def __init__(self):
