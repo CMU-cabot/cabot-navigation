@@ -274,20 +274,31 @@ RUN apt update && \
 
 
 
-ARG CUDA_V=12-2
-
-
-RUN apt-get update && \
-	apt-get install -y --no-install-recommends \
-	cuda-nvcc-${CUDA_V} \
-	libcunit1-dev \
-	libcublas-${CUDA_V} \
-	libcurand-${CUDA_V} \
-	libnpp-${CUDA_V} \
-	libcufft-${CUDA_V} \
-	nvidia-cudnn8 \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& apt-get clean
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        apt-get update && \
+            apt-get install -y --no-install-recommends \
+            cuda-nvcc-11-8 \
+            libcunit1-dev \
+            libcublas-11-8 \
+            libcurand-11-8 \
+            libnpp-11-8 \
+            libcufft-11-8 \
+            nvidia-cudnn8 \
+            && rm -rf /var/lib/apt/lists/* \
+            && apt-get clean ; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        apt-get update && \
+            apt-get install -y --no-install-recommends \
+            cuda-nvcc-12-2 \
+            libcunit1-dev \
+            libcublas-12-2 \
+            libcurand-12-2 \
+            libnpp-12-2 \
+            libcufft-12-2 \
+            nvidia-cudnn8 \
+            && rm -rf /var/lib/apt/lists/* \
+            && apt-get clean ; \
+    fi
 
 RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
