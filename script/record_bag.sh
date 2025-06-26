@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -m
+
 # change directory to where this script exists
 pwd=`pwd`
 scriptdir=`dirname $0`

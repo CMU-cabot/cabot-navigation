@@ -19,9 +19,13 @@
 # SOFTWARE.
 
 from launch import LaunchDescription
+from launch.logging import launch_config
 from launch.actions import DeclareLaunchArgument
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
+from launch.actions import SetEnvironmentVariable
+from launch.actions import RegisterEventHandler
+from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
@@ -29,8 +33,11 @@ from launch.substitutions import EnvironmentVariable
 from launch.substitutions import PythonExpression
 from ament_index_python import get_package_share_directory
 
+from cabot_common.launch import AppendLogDirPrefix
+
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     pkg_dir = get_package_share_directory('cabot_ui')
     config_file = LaunchConfiguration('config_file')
     model_name = LaunchConfiguration('model')
@@ -46,6 +53,11 @@ def generate_launch_description():
         return [LogInfo(msg=f"Config file {config_file} found.")]
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
+        # save all log file in the directory where the launch.log file is saved
+        SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
+        # append prefix name to the log directory for convenience
+        RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot_diagnostic")])),
         DeclareLaunchArgument('show_robot_monitor', default_value='true'),
         DeclareLaunchArgument('model', default_value=EnvironmentVariable('CABOT_MODEL'), description='CaBot model'),
         DeclareLaunchArgument('config_file', default_value=PathJoinSubstitution([pkg_dir, 'config', PythonExpression(['"', model_name, '_diagnostic.yaml"'])])),
@@ -55,6 +67,7 @@ def generate_launch_description():
             package="diagnostic_aggregator",
             executable="aggregator_node",
             name="diagnostic_aggregator",
-            parameters=[config_file, {'use_sim_time': True}]
+            parameters=[config_file, {'use_sim_time': True}],
+            output=output,
         ),
     ])
