@@ -1,3 +1,4 @@
+
 # Copyright (c) 2020, 2024  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -124,6 +125,7 @@ RUN pip3 install --no-cache-dir \
     odrive==0.6.5 \
     numpy==1.24.4 \
     pydub \
+    openai \
     pyproj \
     pyserial \
     python-can \
@@ -272,23 +274,55 @@ RUN apt update && \
     && \
     rm -rf /var/lib/apt/lists/*
 
+
+
+# FROM build as cuda
+# RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+#     apt-get update && \
+#     apt-get install -y --no-install-recommends \
+#         cuda-nvcc-12-2 \
+#         libcublas-12-2 \
+#         libcurand-12-2 \
+#         libnpp-12-2 \
+#         libcufft-12-2 \
+#         nvidia-cudnn8 \
+#     && rm -rf /var/lib/apt/lists/*; \
+#     elif [ "${TARGETARCH}" = "arm64" ]; then \
+#     apt-get update && \
+#     apt-get install -y --no-install-recommends \
+#         cuda-nvcc-12-2 \
+#         libcublas-12-2 \
+#         libcurand-12-2 \
+#         libnpp-12-2 \
+#         libcufft-12-2 \
+#         nvidia-cudnn8 \
+#     && rm -rf /var/lib/apt/lists/*; \
+#     fi
 RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
     ipython==8.0.1 \
     odrive==0.6.5 \
     numpy==1.24.4 \
+    openai \
     pydub \
     pyproj \
     pyserial \
     python-can \
     requests \
     transforms3d==0.4.1
+
+    
+# install torch with CUDA (example for CUDA 12.1, adjust if needed)
+# RUN pip3 install --no-cache-dir\
+#     torch==2.1.2+cu122 \
+#     torchvision==0.16.2+cu122 --index-url https://download.pytorch.org/whl/cu122
+
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
-RUN pip3 install -U transformers==4.47.0 torch torchvision pillow protobuf sentencepiece accelerate
-RUN pip3 install -U "huggingface_hub[cli]"
-RUN huggingface-cli download "sbintuitions/sarashina2-vision-8b"
+#RUN pip3 install -U transformers==4.47.0 torch torchvision pillow protobuf sentencepiece accelerate
+#RUN pip3 install -U "huggingface_hub[cli]"
+#RUN huggingface-cli download "sbintuitions/sarashina2-vision-8b"
 
 # for debug
 # RUN apt update && \
@@ -341,4 +375,3 @@ COPY --chown=$USERNAME:$USERNAME --from=build $HOME/ros2_ws/script $HOME/ros2_ws
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD [ "/launch.sh" ]
-

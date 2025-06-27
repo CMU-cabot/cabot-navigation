@@ -91,6 +91,7 @@ services:
       - PULSE_COOKIE=${XDG_RUNTIME_DIR}/pulse/cookie
 # For using local vlm
       - USE_LOCAL
+      - GPT_KEY
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm

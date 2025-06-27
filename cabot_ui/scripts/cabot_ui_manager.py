@@ -98,7 +98,8 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._node.create_subscription(cabot_msgs.msg.StopReason, "/stop_reason", self._stop_reason_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
-
+        #rayna edit
+        self._node.create_subscription( std_msgs.msg.String, "/line_occ",self.line_occ_callback,10,callback_group=MutuallyExclusiveCallbackGroup())
         # request language
         e = NavigationEvent("getlanguage", None)
         msg = std_msgs.msg.String()
@@ -411,6 +412,14 @@ class CabotUIManager(NavigationInterface, object):
         self._logger.info(f"_process_navigation_event {event}")
 
         # operations indepent from the navigation state
+
+        #rayna edit 
+        if event.subtype == "omakase": 
+        
+            robot_string = "すみません。どいてください"
+            self._logger.info(f"Request Omakase: {robot_string}")
+            pass
+
         if event.subtype == "language":
             self._interface.change_language(event.param)
             return
@@ -729,6 +738,11 @@ class CabotUIManager(NavigationInterface, object):
                 prompt = "私が今前に進めない理由を教えてください。"
                 self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback)
 
+    def line_occ_callback(self, msg):
+        self._logger.info(f"Received /line_occ trigger: {msg.data}")
+        # Say the message to the user
+        text = ("There is a crowd in front of us.Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
+        self.announce_social(text)
 class EventMapper1(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
@@ -797,6 +811,9 @@ class EventMapper1(object):
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 # image description is not triggered here, but when button is released
                 self.description_duration = event.duration
+            #Rayna edit 
+            if event.holddown == cabot_common.button.BUTTON_UP and event.duration == 3:
+                return NavigationEvent(subtype="omakase")
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
@@ -807,6 +824,12 @@ class EventMapper1(object):
                 return NavigationEvent(subtype="resume")
         '''
         return None
+    #rayna edit 
+    def line_occ_callback(self, msg):
+        self._logger.info(f"Received /line_occ trigger: {msg.data}")
+        # Say the message to the user
+        text = ("There is a crowd in front of us.Please press the up button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
+        self.announce_social(text)
 
 
 class EventMapper2(object):
@@ -878,11 +901,14 @@ class EventMapper2(object):
                 return NavigationEvent(subtype="pause")
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
+            if event.holddown ==  cabot_common.button.BUTTON_RIGHT and event.duration == 3:
+                return NavigationEvent(subtype="omakase")
             if event.holddown in {cabot_common.button.BUTTON_DOWN, cabot_common.button.BUTTON_UP}:
                 self.button_hold_down_duration = event.duration
                 if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
                     self.button_hold_down_duration_prev = self.button_hold_down_duration
                     return NavigationEvent(subtype="speeddown" if event.holddown == cabot_common.button.BUTTON_DOWN else "speedup")
+            
         return None
 
 

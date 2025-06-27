@@ -35,7 +35,7 @@ from enum import Enum
 import requests
 import threading
 
-from cabot_ui.local_vlm import Sarashina
+from cabot_ui.local_vlm import GPT4oVLM
 from PIL import Image
 
 class DescriptionMode(Enum):
@@ -59,6 +59,7 @@ class Description:
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
         self.api_key = os.environ.get("CABOT_IMAGE_DESCRIPTION_API_KEY", "")
+        self.gpt_key = os.environ.get("GPT_KEY")
         self.use_local = (os.environ.get("USE_LOCAL", "false").lower() == "true")
         if self.use_local:
             self.enabled = True  # Local VLM is always enabled if USE_LOCAL is true
@@ -106,7 +107,8 @@ class Description:
         }
 
         if self.use_local:
-            self.local_vlm = Sarashina(logger=self._logger)
+            #self.local_vlm = Sarashina(logger=self._logger)
+            self.local_vlm = GPT4oVLM(openai_api_key=self.gpt_key, logger=self._logger)
 
         # rotate modes
         rotate_left = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT", "false").lower() == "true")
@@ -196,6 +198,7 @@ class Description:
                 prompt=prompt,
                 add_message=False
             )
+            self._logger.info(f"Outputting response: {response}")
             callback(response)
         except Exception as e:
             self._logger.error(f'Error processing local VLM request: {e}')
