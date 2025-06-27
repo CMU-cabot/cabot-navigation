@@ -201,12 +201,15 @@ CaBotDWBLocalPlanner::transformGlobalPlan(
     });
   double nearest_distance = euclidean_distance(*nearest_point_from_robot, robot_pose.pose);
 
-  // Customized: Find the first pose less than double of nearset_distance - adhoc solution
-  auto search_start_point = std::find_if(
-    global_plan_.poses.begin(), global_plan_.poses.end(),
-    [&](const auto & pose) {
-      return euclidean_distance(pose, robot_pose.pose) < transform_start_threshold / 2;
-    });
+  // Customized: Find the first pose less than half of transform_start_threshold - adhoc solution
+  auto search_start_point = nearest_point_from_robot;
+  if (nearest_distance < transform_start_threshold / 2) {
+    search_start_point = std::find_if(
+      global_plan_.poses.begin(), global_plan_.poses.end(),
+      [&](const auto & pose) {
+        return euclidean_distance(pose, robot_pose.pose) < transform_start_threshold / 2;
+      });
+  }
 
   // Customized: Find the first pose in the end of the plan that's further than transform_end_threshold
   // from the robot using integrated distance
