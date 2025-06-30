@@ -1234,7 +1234,7 @@ class MultiFloorManager:
 
     # publish global position
     def global_position_callback(self):
-        if not self.floor:
+        if self.floor is None:
             return
         averaging_interval = self.global_position_averaging_interval
         try:
