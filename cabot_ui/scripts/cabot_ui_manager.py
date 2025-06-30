@@ -99,7 +99,7 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(cabot_msgs.msg.StopReason, "/stop_reason", self._stop_reason_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         #rayna edit
-        self._node.create_subscription( std_msgs.msg.String, "/line_occ",self.line_occ_callback,10,callback_group=MutuallyExclusiveCallbackGroup())
+        self._node.create_subscription( std_msgs.msg.String, "/crowd_occ",self.crowd_occ_callback,10,callback_group=MutuallyExclusiveCallbackGroup())
         # request language
         e = NavigationEvent("getlanguage", None)
         msg = std_msgs.msg.String()
@@ -415,9 +415,9 @@ class CabotUIManager(NavigationInterface, object):
 
         #rayna edit 
         if event.subtype == "omakase": 
-        
-            robot_string = "すみません。どいてください"
-            self._logger.info(f"Request Omakase: {robot_string}")
+            self._interface.speaker_alert()
+            #robot_string = "すみません。どいてください"
+            #self._logger.info(f"Request Omakase: {robot_string}")
             pass
 
         if event.subtype == "language":
@@ -731,15 +731,35 @@ class CabotUIManager(NavigationInterface, object):
         """
         Callback for stop reason.
         """
-        self._logger.info(f"Received stop reason: {msg}")
+        self._logger.info(f"Received stop reason: {msg.reason}")
         reason = msg.reason
         if self._description.use_local:
-            if reason == "UNKNOWN" or reason == "THERE_ARE_PEOPLE_IN_THE_PATH":
-                prompt = "私が今前に進めない理由を教えてください。"
-                self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback)
+            if reason == "THERE_ARE_PEOPLE_IN_THE_PATH" or reason == "AVOIDING_PEOPLE":
+                self._logger.info(f"Received /crowd_occ trigger: {reason}")
+                spoken_words = "There is a crowd in front of us. Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move"
+            elif reason == "UNKNOWN":
+                self._logger.info(f"Received /crowd_occ trigger: {reason}")
+                spoken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
+                
+            elif reason == "AVOIDING_OBSTACLE":  
+                self._logger.info(f"Received /crowd_occ trigger: {reason}")
+                spoken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
+           
+            self._logger.info(f"speaking out loud: {spoken_words}")
+            #self._interface.speak(spoken_words) #speaking through the phone speaker 
+                
+    
+    def trigger_monitor(self, msg):
+        """
+        Callback for trigger monitor.
+        """
+        self._logger.info(f"Monitor mode activated: {msg}")
+        prompt = "私が今前に進めない理由を教えてください。" 
+        self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback) 
+               
 
-    def line_occ_callback(self, msg):
-        self._logger.info(f"Received /line_occ trigger: {msg.data}")
+    def crowd_occ_callback(self, msg):
+        self._logger.info(f"Received /crowd_occ trigger: {msg.data}")
         # Say the message to the user
         text = ("There is a crowd in front of us.Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
         self.announce_social(text)
@@ -825,8 +845,8 @@ class EventMapper1(object):
         '''
         return None
     #rayna edit 
-    def line_occ_callback(self, msg):
-        self._logger.info(f"Received /line_occ trigger: {msg.data}")
+    def crowd_occ_callback(self, msg):
+        self._logger.info(f"Received /crowd_occ trigger: {msg.data}")
         # Say the message to the user
         text = ("There is a crowd in front of us.Please press the up button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
         self.announce_social(text)

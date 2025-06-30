@@ -276,6 +276,23 @@ RUN apt update && \
 
 
 
+ARG CUDA_V=12-2
+
+
+RUN apt-get update && \
+	apt-get install -y --no-install-recommends \
+	cuda-nvcc-${CUDA_V} \
+	libcunit1-dev \
+	libcublas-${CUDA_V} \
+	libcurand-${CUDA_V} \
+	libnpp-${CUDA_V} \
+	libcufft-${CUDA_V} \
+	nvidia-cudnn8 \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& apt-get clean
+
+
+
 # FROM build as cuda
 # RUN if [ "${TARGETARCH}" = "amd64" ]; then \
 #     apt-get update && \
@@ -310,6 +327,13 @@ RUN pip3 install --no-cache-dir \
     python-can \
     requests \
     transforms3d==0.4.1
+
+    
+# install torch with CUDA (example for CUDA 12.1, adjust if needed)
+# RUN pip3 install --no-cache-dir\
+#     torch==2.1.2+cu122 \
+#     torchvision==0.16.2+cu122 --index-url https://download.pytorch.org/whl/cu122
+
 
     
 # install torch with CUDA (example for CUDA 12.1, adjust if needed)
