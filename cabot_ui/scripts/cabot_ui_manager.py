@@ -415,10 +415,21 @@ class CabotUIManager(NavigationInterface, object):
 
         #rayna edit 
         if event.subtype == "omakase": 
+<<<<<<< Updated upstream
             self._interface.speaker_alert()
             #robot_string = "すみません。どいてください"
             #self._logger.info(f"Request Omakase: {robot_string}")
             pass
+=======
+            self._interface.enable_speaker("true")
+            self._interface.set_speaker_volume(99.9)
+            self._interface.set_audio_file("omakase.wav")
+            self._interface.speaker_alert()
+            
+            robot_string = "すみません。どいてください"
+            self._logger.info(f"Request Omakase: {robot_string}")
+            return
+>>>>>>> Stashed changes
 
         if event.subtype == "language":
             self._interface.change_language(event.param)

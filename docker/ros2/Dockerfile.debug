@@ -135,13 +135,13 @@ RUN pip3 install --no-cache-dir \
     # for test aggregation
     pandas
 
-# for debug
-RUN apt update && \
-    apt install -y --no-install-recommends \
-    gdb \
-    vim \
-    && \
-    rm -rf /var/lib/apt/lists/*
+# # for debug
+# RUN apt update && \
+#     apt install -y --no-install-recommends \
+#     gdb \
+#     vim \
+#     && \
+#     rm -rf /var/lib/apt/lists/*
 
 # set up venv for keeping compatibility
 RUN mkdir -p /opt/venv
