@@ -68,9 +68,15 @@ class UserInterface(object):
         self.note_pub = node.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.activity_log_pub = node.create_publisher(cabot_msgs.msg.Log, "/cabot/activity_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.pose_log_pub = node.create_publisher(cabot_msgs.msg.PoseLog, "/cabot/pose_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.pose_log2_pub = node.create_publisher(cabot_msgs.msg.PoseLog, "/cabot/pose_log2", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.event_pub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_angle", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_type_pub = node.create_publisher(std_msgs.msg.String, "/cabot/turn_type", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
+        # self.anchor_sub = node.create_subscription(cabot_msgs.msg.Anchor, "/anchor", self._anchor_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._anchor_lat = None
+        self._anchor_lng = None
+        self._anchor_rotate = None
 
         self.lang = node.declare_parameter("language", "en").value
         self.site = node.declare_parameter("site", '').value
@@ -120,6 +126,11 @@ class UserInterface(object):
             self.visualizer.spoken.append((self.last_pose['ros_pose'], F"{text}, {memo}", category))
             self.visualizer.visualize()
 
+    # def _anchor_callback(self, msg: Anchor):
+    #     self._anchor_lat = msg.lat
+    #     self._anchor_lng = msg.lng
+    #     self._anchor_rotate = msg.rotate
+
     def _pose_log(self):
         if not self.last_pose:
             return
@@ -131,6 +142,19 @@ class UserInterface(object):
         log.lng = self.last_pose['global_position'].lng
         log.floor = self.last_pose['current_floor']
         self.pose_log_pub.publish(log)
+
+        # log2 = cabot_msgs.msg.PoseLog2()
+        # log2.header.stamp = self._node.get_clock().now().to_msg()
+        # log2.header.frame_id = self.last_pose['global_frame']
+        # log2.pose = self.last_pose['ros_pose']
+        # log2.lat = self.last_pose['global_position'].lat
+        # log2.lng = self.last_pose['global_position'].lng
+        # log2.global_lotate = 0
+        # log2._anchor_lat = self._anchor_lat
+        # log2._anchor_lng = self._anchor_lng
+        # log2._anchor_rotate = self._anchor_rotate
+        # log2.floor = self.last_pose['current_floor']
+        # self.pose_log2_pub.publish(log2)
 
     def change_language(self, lang):
         self._activity_log("change language", lang, f"previous={self.lang}")
