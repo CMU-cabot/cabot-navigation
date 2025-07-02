@@ -248,14 +248,22 @@ def compute_relative_pose(pose1: Pose, pose2: Pose) -> Pose:
     return relative_pose
 
 
+@dataclass
+class FloorManagerParameters:
+    gnss_error_tolerance: float = 0.0  # [m]
+
+
 class FloorManager:
-    def __init__(self):
+    def __init__(self,
+                 parameters=FloorManagerParameters()):
         self.node_id = None
         self.frame_id = None
         self.localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
+        # parameters
         self.min_hist_count = 1
+        self.parameters: FloorManagerParameters = parameters
 
         # publisher
         self.initialpose_pub = None
@@ -1757,24 +1765,46 @@ class MultiFloorManager:
         if not self.gnss_is_active:
             return
 
+        # get gnss_frame pose on global_map_frame
+        transform_gnss = None
+        try:
+            transform_gnss = tfBuffer.lookup_transform(self.global_map_frame, gnss_frame)
+        except RuntimeError as e:
+            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error=RuntimeError({e})")
+
+        # compute distance between gnss fix position and gnss_frame pose
+        distance_gnss = None
+        if transform_gnss is not None:
+            distance_gnss = np.sqrt((fix_local[1] - transform_gnss.transform.translation.x)**2 + (fix_local[2] - transform_gnss.transform.translation.y)**2)
+            self.logger.info(F"distance (fix_local, transform_gnss) = {distance_gnss}")
+
         # publish gnss fix to localizer node
         if self.floor is not None and self.area is not None and self.mode is not None:
-            floor_manager = self.ble_localizer_dict[self.floor][self.area][self.mode]
+            floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
             if fix.status.status >= self.gnss_params.gnss_status_threshold \
                     and self.prev_navsat_status:
                 fix_pub = floor_manager.fix_pub
                 fix.header.stamp = now.to_msg()  # replace gnss timestamp with ros timestamp for rough synchronization
 
-                # publish fix topic only when the distance travelled exceeds a certain level to avoid adding too many constraints
-                if floor_manager.previous_fix_local_published is None:
-                    fix_pub.publish(fix)
-                    floor_manager.previous_fix_local_published = fix_local
-                else:
-                    prev_fix_local = floor_manager.previous_fix_local_published
-                    distance_fix_local = np.sqrt((fix_local[1] - prev_fix_local[1])**2 + (fix_local[2] - prev_fix_local[2])**2)
-                    if self.gnss_params.gnss_fix_motion_filter_distance <= distance_fix_local:
+                # publish fix topic only when distance_gnss exceeds the tolerance
+                if distance_gnss is not None and floor_manager.parameters.gnss_error_tolerance <= distance_gnss:
+                    # publish fix topic only when the distance travelled exceeds a certain level to avoid adding too many constraints
+                    if floor_manager.previous_fix_local_published is None:
+                        # first time
                         fix_pub.publish(fix)
                         floor_manager.previous_fix_local_published = fix_local
+                        self.logger.info(F"published fix topic: distance_gnss={distance_gnss}")
+                    else:
+                        prev_fix_local = floor_manager.previous_fix_local_published
+                        distance_fix_local = np.sqrt((fix_local[1] - prev_fix_local[1])**2 + (fix_local[2] - prev_fix_local[2])**2)
+                        if self.gnss_params.gnss_fix_motion_filter_distance <= distance_fix_local:
+                            fix_pub.publish(fix)
+                            floor_manager.previous_fix_local_published = fix_local
+                            self.logger.info(F"published fix topic: distance_gnss={distance_gnss} distance_travelled={distance_fix_local}")
+                        else:
+                            self.logger.info(F"skipped publishing fix topic: distance_travelled={distance_fix_local} motion_filter_distance={self.gnss_params.gnss_fix_motion_filter_distance}")
+                else:
+                    self.logger.info(F"skipped publishing fix topic: distance_gnss={distance_gnss} tolerance={floor_manager.parameters.gnss_error_tolerance}")
 
                 # check initial pose optimization timeout in reliable gnss fix loop
                 if self.gnss_init_time is not None:
@@ -2370,7 +2400,7 @@ class BufferProxy():
         self.countPub.publish(msg)
 
     # buffer interface
-    def lookup_transform(self, target, source, time=None, no_cache=False):
+    def lookup_transform(self, target, source, time=None, no_cache=False) -> TransformStamped:
         # find the latest saved transform first
         key = f"{target}-{source}"
         now = self._clock.now()
@@ -2675,6 +2705,13 @@ if __name__ == "__main__":
         environment = map_dict["environment"] if "environment" in map_dict else "indoor"
         use_gnss_adjust = map_dict["use_gnss_adjust"] if "use_gnss_adjust" in map_dict else False
         min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 1
+        # floor manager parameters
+        floor_manager_config = map_dict.get("floor_manager", None)
+        if floor_manager_config is None:
+            floor_manager_parameters = FloorManagerParameters()
+        else:
+            floor_manager_parameters = FloorManagerParameters(**floor_manager_config)
+            logger.info(f"floor_manager_config={floor_manager_config}")
 
         # check value
         if environment not in ["indoor", "outdoor"]:
@@ -2796,7 +2833,7 @@ if __name__ == "__main__":
             ]))
 
             # create floor_manager
-            floor_manager = FloorManager()
+            floor_manager = FloorManager(floor_manager_parameters)
             floor_manager.configuration_directory = configuration_directory
             floor_manager.configuration_basename = tmp_configuration_basename
             multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
