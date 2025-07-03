@@ -20,12 +20,14 @@
 # SOFTWARE.
 
 import os
+import math
 
 from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+from tf_transformations import euler_from_quaternion
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from ament_index_python.packages import get_package_share_directory
@@ -155,8 +157,11 @@ class UserInterface(object):
         log2.pose = self.last_pose['ros_pose']
         log2.lat = self.last_pose['global_position'].lat
         log2.lng = self.last_pose['global_position'].lng
-        log2.global_rotate = 0.0
         log2.anchor = self._anchor
+        orientation = self.last_pose['ros_pose'].orientation
+        (_roll, _pitch, yaw) = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
+        anchor_rotate = self._anchor.rotate
+        log2.global_rotate = -anchor_rotate - yaw / math.pi * 180
         log2.floor = self.last_pose['current_floor']
         self.pose_log2_pub.publish(log2)
         CaBotRclpyUtil.info("publish pose_log2 msg")
