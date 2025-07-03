@@ -744,12 +744,17 @@ class CabotUIManager(NavigationInterface, object):
         """
         Callback for stop reason using local VLM (text-only).
         """
+        current_time=time.time()
+    
+        self._logger.info(f"Time passed since last stop reason'{current_time - self._last_stop_reason_time }' ")
         if current_time - self._last_stop_reason_time < self._stop_reason_cooldown:
             self._logger.info(f"Stop reason '{msg.reason}' received but skipped due to cooldown ({self._stop_reason_cooldown}s)")
 
             # Optional: publish or speak an acknowledgement
             skip_msg = std_msgs.msg.String()
             skip_msg.data = f"Skipped stop reason: {msg.reason} (cooldown active)"
+
+
             # Uncomment this if you set up the publisher in __init__:
             # self._stopReasonSkipPub.publish(skip_msg)
 
