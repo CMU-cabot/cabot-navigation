@@ -160,8 +160,8 @@ class UserInterface(object):
         log2.anchor = self._anchor
         orientation = self.last_pose['ros_pose'].orientation
         (_roll, _pitch, yaw) = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
-        anchor_rotate = self._anchor.rotate
-        log2.global_rotate = -anchor_rotate - yaw / math.pi * 180
+        log2.global_rotate = self._anchor.rotate + 90 - yaw / math.pi * 180
+        log2.global_rotate = log2.global_rotate % 360
         log2.floor = self.last_pose['current_floor']
         self.pose_log2_pub.publish(log2)
         CaBotRclpyUtil.info("publish pose_log2 msg")
