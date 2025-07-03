@@ -31,12 +31,15 @@ import json
 import os
 import math
 from enum import Enum
+from cabot_ui.interface import UserInterface
+
 
 import requests
 import threading
 
 from cabot_ui.local_vlm import GPT4oVLM
 from PIL import Image
+
 
 class DescriptionMode(Enum):
     SURROUND = 'surround'
@@ -63,7 +66,8 @@ class Description:
         self.use_local = (os.environ.get("USE_LOCAL", "false").lower() == "true")
         if self.use_local:
             self.enabled = True  # Local VLM is always enabled if USE_LOCAL is true
-        
+        self._interface = UserInterface(self.node)
+        self._interface.delegate = self
         if self.enabled:
             # handle modes (default=surround,stop_reason)
             modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", "surround,stop-reason").split(",")
@@ -105,6 +109,8 @@ class Description:
                 10
             )
         }
+        
+
 
         if self.use_local:
             #self.local_vlm = Sarashina(logger=self._logger)
@@ -150,7 +156,9 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
-    def request_description_with_images_local(self, param=None, prompt=None, callback=None):
+    
+    
+    def request_description_with_images_local(self, param=None, prompt=None, callback=None, stop_reason=False):
         if not self._requesting_lock.acquire(blocking=False):
             self._logger.debug("Description is requesting")
             return None
@@ -198,8 +206,13 @@ class Description:
                 prompt=prompt,
                 add_message=False
             )
+            
             self._logger.info(f"Outputting response: {response}")
-            callback(response)
+            if stop_reason==True:
+                return response
+            else:
+                #self._interface.speak(response, priority=90)
+                callback(response)
         except Exception as e:
             self._logger.error(f'Error processing local VLM request: {e}')
             callback(None)

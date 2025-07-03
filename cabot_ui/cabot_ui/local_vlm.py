@@ -26,11 +26,11 @@ class BaseLocalVLM:
         return Image.open(requests.get(sample_image_url, stream=True).raw).convert("RGB")
     
     def heat_up(self):
-        self.logger.info("Heating up the model...")
-        sample_image = self.get_sample_image()
-        sample_inference = self.inference(sample_image, "Explain this image in concisely.")
-        self.logger.info(F"Local model sample inference: {sample_inference}")
-        self.logger.info(F"Local model loaded: {self.model_name}")
+        # self.logger.info("Heating up the model...")
+        # sample_image = self.get_sample_image()
+        # sample_inference = self.inference(sample_image, "Explain this image in concisely.")
+        # self.logger.info(F"Local model sample inference: {sample_inference}")
+        # self.logger.info(F"Local model loaded: {self.model_name}")
         self.ready = True
 
     def clear_message(self):
@@ -58,6 +58,7 @@ class GPT4oVLM(BaseLocalVLM):
             raise
         self.heat_up()
 
+
     def inference(self, image: Image.Image = None, prompt: str = None, add_message: bool = False) -> str:
         if image is None or prompt is None:
             if self.logger:
@@ -82,6 +83,7 @@ class GPT4oVLM(BaseLocalVLM):
         image_b64 = base64.b64encode(image_bytes).decode()
 
         try:
+            self.logger.info(f"requesting image")
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
@@ -103,10 +105,14 @@ class GPT4oVLM(BaseLocalVLM):
                 max_tokens=1024,
                 temperature=0.5,
             )
+            self.logger.info(f"got response")
             output = response.choices[0].message.content
+
 
             # Save GPT output to matching .txt file
             output_path = os.path.join(self.images_dir, f"gpt4o_image_{timestamp}.txt")
+
+            
             with open(output_path, "w") as f:
                 f.write(output)
             if self.logger:
@@ -119,6 +125,8 @@ class GPT4oVLM(BaseLocalVLM):
             return output
 
         except Exception as e:
+            import traceback 
+            self.logger.error(traceback.print_exc())
             if self.logger:
                 self.logger.error(f"Error calling GPT-4o: {e}")
             return None

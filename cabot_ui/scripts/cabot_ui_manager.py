@@ -39,7 +39,7 @@ import sys
 import threading
 import traceback
 import yaml
-
+import time 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
 import rclpy.client
@@ -65,6 +65,8 @@ from cabot_ui.description import Description
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 
+from cabot_ui.local_vlm import GPT4oVLM
+
 
 class CabotUIManager(NavigationInterface, object):
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
@@ -78,10 +80,10 @@ class CabotUIManager(NavigationInterface, object):
         self.reset()
 
         self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
-        if self._handle_button_mapping == 2:
-            self._event_mapper = EventMapper2()
-        else:
-            self._event_mapper = EventMapper1()
+        #if self._handle_button_mapping == 2:
+        self._event_mapper = EventMapper2()
+        #else:
+        #self._event_mapper = EventMapper1()
         self._event_mapper.delegate = self
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
@@ -92,14 +94,19 @@ class CabotUIManager(NavigationInterface, object):
         self._description = Description(desc_node)
         # self._exploration = Exploration()
         # self._exploration.delegate = self
+        self._last_stop_reason_time=0
+        self._stop_reason_cooldown= 30
 
+
+
+       
         self._retry_count = 0
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._node.create_subscription(cabot_msgs.msg.StopReason, "/stop_reason", self._stop_reason_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         #rayna edit
-        self._node.create_subscription( std_msgs.msg.String, "/crowd_occ",self.crowd_occ_callback,10,callback_group=MutuallyExclusiveCallbackGroup())
+        #self._node.create_subscription( std_msgs.msg.String, "/crowd_occ",self.crowd_occ_callback,10,callback_group=MutuallyExclusiveCallbackGroup())
         # request language
         e = NavigationEvent("getlanguage", None)
         msg = std_msgs.msg.String()
@@ -416,7 +423,7 @@ class CabotUIManager(NavigationInterface, object):
         #rayna edit 
         if event.subtype == "omakase": 
             self._interface.enable_speaker("true")
-            self._interface.set_speaker_volume(99.9)
+            self._interface.set_speaker_volume(50.0)
             self._interface.set_audio_file("omakase.wav")
             self._interface.speaker_alert()
             
@@ -731,27 +738,91 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.start_exploration()
             self._exploration.start_exploration()
 
+    
+
     def _stop_reason_callback(self, msg):
         """
-        Callback for stop reason.
+        Callback for stop reason using local VLM (text-only).
         """
+        if current_time - self._last_stop_reason_time < self._stop_reason_cooldown:
+            self._logger.info(f"Stop reason '{msg.reason}' received but skipped due to cooldown ({self._stop_reason_cooldown}s)")
+
+            # Optional: publish or speak an acknowledgement
+            skip_msg = std_msgs.msg.String()
+            skip_msg.data = f"Skipped stop reason: {msg.reason} (cooldown active)"
+            # Uncomment this if you set up the publisher in __init__:
+            # self._stopReasonSkipPub.publish(skip_msg)
+
+            return
+
+        self._last_stop_reason_time = current_time
         self._logger.info(f"Received stop reason: {msg.reason}")
         reason = msg.reason
+
         if self._description.use_local:
-            if reason == "THERE_ARE_PEOPLE_IN_THE_PATH" or reason == "AVOIDING_PEOPLE":
-                self._logger.info(f"Received /crowd_occ trigger: {reason}")
-                spoken_words = "There is a crowd in front of us. Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move"
-            elif reason == "UNKNOWN":
-                self._logger.info(f"Received /crowd_occ trigger: {reason}")
-                spoken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
+            prompt = None
+            add_instruction = False
+
+            if reason in {"THERE_ARE_PEOPLE_IN_THE_PATH", "AVOIDING_PEOPLE"}:
+                self._logger.info(f"Received stop reason trigger: {reason}")
+                prompt = "あなたは視覚障害者のために周囲の状況を説明するアシスタントです。現在、目の前に人がいるように見えます。文章は「今、周囲に人がいるため、私は立ち止まっています。」という一文から始め、その後、画像に映っている周囲の様子を1文で簡潔に説明してください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。"
+
+
+
+                add_instruction = True
+
+            elif reason in {"UNKNOWN", "AVOIDING_OBSTACLE"}:
+                self._logger.info(f"Received stop reason trigger: {reason}")
+                prompt = "あなたは視覚障害者のために周囲の状況を説明するアシスタントです。現在、前方に何かがあり、進路をふさいでいるように見えます。文章は「今、進路に何かがあり、通れません。」から始め、その後、画像に映っている周囲の様子を1文で簡潔に説明してください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。"
+
+            if prompt:
+                try:
+                    response = self._description.request_description_with_images_local(
+                        
+                        prompt=prompt,
+                        stop_reason=True
+                    
+                    )
+                    if add_instruction:
+                        response += " ロボットに「すみません」と言わせたい場合は、右のボタンを長押ししてください。言わせない場合は、自分で声をかけて人に動いてもらってください。"
+
+                    
+                    self._logger.info(f"Generated message for stop reason: {response}")
+                    self._interface.speak(response, priority=90)
+                except Exception as e:
+                    self._logger.error(f"Failed to get VLM response: {str(e)}")
+
+    
+    
+    # def _stop_reason_callback(self, msg):
+    #     """
+    #     Callback for stop reason.
+    #     """
+        
+        
+        
+
+    #     self._logger.info(f"Received stop reason: {msg.reason}")
+    #     reason = msg.reason
+    #     if self._description.use_local:
+    #         if reason == "THERE_ARE_PEOPLE_IN_THE_PATH" or reason == "AVOIDING_PEOPLE":
+    #             self._logger.info(f"Received /crowd_occ trigger: {reason}")
+    #             prompt ="ロボットが前方に人を検知しました。もう少し詳しく説明してください。"
+    #             self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback) 
+    #             spoken_words=
+    #             #spoken_words = "There is a crowd in front of us. Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move"
+    #         elif reason == "UNKNOWN":
+    #             self._logger.info(f"Received /crowd_occ trigger: {reason}")
+    #             #poken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
                 
-            elif reason == "AVOIDING_OBSTACLE":  
-                self._logger.info(f"Received /crowd_occ trigger: {reason}")
-                spoken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
+    #         elif reason == "AVOIDING_OBSTACLE":  
+    #             self._logger.info(f"Received /crowd_occ trigger: {reason}")
+    #             # spoken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
            
-            self._logger.info(f"speaking out loud: {spoken_words}")
-            #self._interface.speak(spoken_words) #speaking through the phone speaker 
-                
+    #         self._logger.info(f"speaking out loud: {spoken_words}")
+             
+        
+    #     self._interface.speak(spoken_words) #speaking through the phone speaker      
     
     def trigger_monitor(self, msg):
         """
@@ -762,11 +833,11 @@ class CabotUIManager(NavigationInterface, object):
         self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback) 
                
 
-    def crowd_occ_callback(self, msg):
-        self._logger.info(f"Received /crowd_occ trigger: {msg.data}")
-        # Say the message to the user
-        text = ("There is a crowd in front of us.Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
-        self.announce_social(text)
+    # def crowd_occ_callback(self, msg):
+    #     self._logger.info(f"Received /crowd_occ trigger: {msg.data}")
+    #     # Say the message to the user
+    #     text = ("There is a crowd in front of us.Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
+    #     self.announce_social(text)
 class EventMapper1(object):
     def __init__(self):
         self._manager = StatusManager.get_instance()
@@ -848,12 +919,12 @@ class EventMapper1(object):
                 return NavigationEvent(subtype="resume")
         '''
         return None
-    #rayna edit 
-    def crowd_occ_callback(self, msg):
-        self._logger.info(f"Received /crowd_occ trigger: {msg.data}")
-        # Say the message to the user
-        text = ("There is a crowd in front of us.Please press the up button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
-        self.announce_social(text)
+    # #rayna edit 
+    # def crowd_occ_callback(self, msg):
+    #     self._logger.info(f"Received /crowd_occ trigger: {msg.data}")
+    #     # Say the message to the user
+    #     text = ("There is a crowd in front of us.Please press the up button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move.")
+    #     self.announce_social(text)
 
 
 class EventMapper2(object):
