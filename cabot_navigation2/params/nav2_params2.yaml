@@ -214,7 +214,7 @@ local_costmap:
         max_obstacle_height: 2.0
         observation_sources: scan
         scan:
-          topic: /local/livox_scan
+          topic: /local/livox_scan_expand
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
           obstacle_min_range: 0.05
@@ -272,7 +272,7 @@ global_costmap:
         max_obstacle_height: 2.0
         observation_sources: scan
         scan:
-          topic: /local/livox_scan
+          topic: /local/livox_scan_expand
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
           obstacle_min_range: 0.05
