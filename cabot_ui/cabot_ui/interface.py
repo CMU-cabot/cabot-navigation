@@ -396,19 +396,19 @@ class UserInterface(object):
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
         if statement:
-            self.speak(statement, priority=self.get_speech_priority(poi))
+            #self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approaching")
 
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
         if statement:
-            self.speak(statement, priority=self.get_speech_priority(poi))
+            #self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
-            self.speak(statement, priority=self.get_speech_priority(poi))
+            #self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "passed")
 
     def could_not_get_current_location(self):
@@ -422,7 +422,7 @@ class UserInterface(object):
 
     def announce_social(self, message: SNMessage):
         self._activity_log("cabot/interface", message.type.name, message.code.name)
-        self.speak(i18n.localized_string(message.code.name))
+        #self.speak(i18n.localized_string(message.code.name))
 
     def request_sound(self, sound: SNMessage):
         self._activity_log("cabot/interface", sound.type.name, sound.code.name)
@@ -491,8 +491,8 @@ class UserInterface(object):
 
     def requesting_describe_surround_stop_reason(self):
         self._activity_log("cabot/interface", "requesting_describe_surround_stop_reason", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
+        #self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
 
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
-        self.speak(description, priority=SpeechPriority.MODERATE)
+        self.speak(description, priority=SpeechPriority.MODERATE) #do not comment out, will stop GPT response frm saying anything

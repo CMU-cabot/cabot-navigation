@@ -744,6 +744,21 @@ class CabotUIManager(NavigationInterface, object):
         """
         Callback for stop reason using local VLM (text-only).
         """
+
+        valid_reasons = {
+            "THERE_ARE_PEOPLE_IN_THE_PATH",
+            "AVOIDING_PEOPLE",
+            "UNKNOWN",
+            "AVOIDING_OBSTACLE"
+        }
+
+        self._logger.info(f"Received stop reason: {msg.reason}")
+        reason = msg.reason
+
+        if reason not in valid_reasons:
+            self._logger.info(f"Ignoring stop reason '{reason}'  not in target list.")
+            return
+        
         current_time=time.time()
     
         self._logger.info(f"Time passed since last stop reason'{current_time - self._last_stop_reason_time }' ")
@@ -761,8 +776,7 @@ class CabotUIManager(NavigationInterface, object):
             return
 
         self._last_stop_reason_time = current_time
-        self._logger.info(f"Received stop reason: {msg.reason}")
-        reason = msg.reason
+        
 
         if self._description.use_local:
             prompt = None
@@ -770,16 +784,14 @@ class CabotUIManager(NavigationInterface, object):
 
             if reason in {"THERE_ARE_PEOPLE_IN_THE_PATH", "AVOIDING_PEOPLE"}:
                 self._logger.info(f"Received stop reason trigger: {reason}")
-                prompt = "あなたは視覚障害者のために周囲の状況を説明するアシスタントです。現在、目の前に人がいるように見えます。文章は「今、周囲に人がいるため、私は立ち止まっています。」という一文から始め、その後、画像に映っている周囲の様子を1文で簡潔に説明してください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。"
-
+                prompt = "あなたは視覚障害者を案内するアシスタントです。現在、システムはロボットの前方に人がいると検知しています。画像を見て、ロボットの前にいる人についてのみ、以下の内容を1文で簡潔に説明してください:人数のおおよその数、列か人だかりか、そして人々がこちらを向いているか背を向けているか。その他の情報や描写は一切不要です。「わかりません」「判断できません」などの曖昧な表現や謝罪も使わないでください。例:「今、前に人だかりがあり、3人ほどいて、背を向けています。」"
 
 
                 add_instruction = True
 
             elif reason in {"UNKNOWN", "AVOIDING_OBSTACLE"}:
                 self._logger.info(f"Received stop reason trigger: {reason}")
-                prompt = "あなたは視覚障害者のために周囲の状況を説明するアシスタントです。現在、前方に何かがあり、進路をふさいでいるように見えます。文章は「今、進路に何かがあり、通れません。」から始め、その後、画像に映っている周囲の様子を1文で簡潔に説明してください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。"
-
+                prompt = "あなたは視覚障害者を案内するシステムです。現在、障害物のために停止しています。画像を見て、障害物が何であるかを1文で簡潔に説明してください。それ以外の情報は述べないでください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。例:「現在、障害物のために停止しています。前方にコーンがあります。」"
             if prompt:
                 try:
                     response = self._description.request_description_with_images_local(
@@ -789,7 +801,7 @@ class CabotUIManager(NavigationInterface, object):
                     
                     )
                     if add_instruction:
-                        response += " ロボットに「すみません」と言わせたい場合は、右のボタンを長押ししてください。言わせない場合は、自分で声をかけて人に動いてもらってください。"
+                        response += " ロボットに「すみません」と言わせたい場合は、下のボタンを押してください。言わせない場合は、自分で声をかけて人に動いてもらってください。"
 
                     
                     self._logger.info(f"Generated message for stop reason: {response}")
