@@ -401,7 +401,7 @@ local_costmap:
         max_obstacle_height: 2.0
         observation_sources: scan
         scan:
-          topic: /livox_scan
+          topic: /livox_scan_expand
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
           obstacle_min_range: 0.05
@@ -475,7 +475,7 @@ global_costmap:
         max_obstacle_height: 2.0
         observation_sources: scan
         scan:
-          topic: /livox_scan
+          topic: /livox_scan_expand
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
           obstacle_min_range: 0.05
@@ -590,6 +590,6 @@ cabot_scan:
 cabot_livox_scan:
   ros__parameters:
     use_sim_time: True
-    scan_topic: livox_scan
-    scan_out_topic: /local/livox_scan
+    scan_topic: livox_scan_expand
+    scan_out_topic: /local/livox_scan_expand
     scan_out_frame_prefix: local/
