@@ -150,10 +150,13 @@ class CabotUIManager(NavigationInterface, object):
         self._eventPub.publish(msg)
 
     def send_speaker_audio_files(self):
-        e = NavigationEvent("getspeakeraudiofiles", self._interface.audio_files)
-        msg = std_msgs.msg.String()
-        msg.data = str(e)
-        self._eventPub.publish(msg)
+        if self._interface.audio_files:
+            e = NavigationEvent("getspeakeraudiofiles", self._interface.audio_files)
+            msg = std_msgs.msg.String()
+            msg.data = str(e)
+            self._eventPub.publish(msg)
+        else:
+            return
 
     def create_menu(self):
         try:
