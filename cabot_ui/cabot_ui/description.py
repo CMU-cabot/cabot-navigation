@@ -193,7 +193,7 @@ class Description:
             if prompt is None and param is not None:
                 length_index = param
                 if length_index == 1:
-                    prompt="この画像を簡潔に説明してください。"
+                    prompt="この場面を説明してください。"
                 elif length_index == 2:
                     prompt="この画像を説明してください。"
                 elif length_index == 3:

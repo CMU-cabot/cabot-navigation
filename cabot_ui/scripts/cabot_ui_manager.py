@@ -50,6 +50,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import std_msgs.msg
 import std_srvs.srv
+from  geometry_msgs.msg import Twist
 
 import cabot_msgs.msg
 import cabot_common.button
@@ -96,6 +97,7 @@ class CabotUIManager(NavigationInterface, object):
         # self._exploration.delegate = self
         self._last_stop_reason_time=0
         self._stop_reason_cooldown= 30
+        self._robot_speed=0.0
 
 
 
@@ -105,6 +107,10 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._node.create_subscription(cabot_msgs.msg.StopReason, "/stop_reason", self._stop_reason_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
+        #TODO:Fix Topuc andf make callback
+        self._node.create_subscription(Twist, "/cmd_vel", self._robot_velocity_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+
         #rayna edit
         #self._node.create_subscription( std_msgs.msg.String, "/crowd_occ",self.crowd_occ_callback,10,callback_group=MutuallyExclusiveCallbackGroup())
         # request language
@@ -421,9 +427,10 @@ class CabotUIManager(NavigationInterface, object):
         # operations indepent from the navigation state
 
         #rayna edit 
+
         if event.subtype == "omakase": 
             self._interface.enable_speaker("true")
-            self._interface.set_speaker_volume(50.0)
+            self._interface.set_speaker_volume(100.0)
             self._interface.set_audio_file("omakase.wav")
             self._interface.speaker_alert()
             
@@ -715,7 +722,14 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.pausing_navigation()
                 else:
                     if event.subtype == "resume_or_stop_reason" and self._description.enabled:
-                        request_stop_reason_description()
+                        
+                        self._interface.enable_speaker("true")
+                        self._interface.set_speaker_volume(100.0)
+                        self._interface.set_audio_file("help.wav")
+                        self._interface.speaker_alert()
+                        
+                        self._logger.info("saying help")
+                        #request_stop_reason_description()
                     else:
                         self._logger.info("NavigationState: state is not in pause state")
             else:
@@ -738,7 +752,14 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.start_exploration()
             self._exploration.start_exploration()
 
-    
+    def _robot_velocity_callback(self,msg:Twist):
+        lin=msg.linear.x
+        ang=msg.angular.z
+        speed=abs(lin)+abs(ang)
+
+        self._robot_speed=speed
+        self._logger.info(f"Current velocity: {speed:.2f}")
+        
 
     def _stop_reason_callback(self, msg):
         """
@@ -780,66 +801,45 @@ class CabotUIManager(NavigationInterface, object):
 
         if self._description.use_local:
             prompt = None
-            add_instruction = False
+            #dd_instruction = False
 
-            if reason in {"THERE_ARE_PEOPLE_IN_THE_PATH", "AVOIDING_PEOPLE"}:
-                self._logger.info(f"Received stop reason trigger: {reason}")
-                prompt = "あなたは視覚障害者を案内するアシスタントです。現在、システムはロボットの前方に人がいると検知しています。画像を見て、ロボットの前にいる人についてのみ、以下の内容を1文で簡潔に説明してください:人数のおおよその数、列か人だかりか、そして人々がこちらを向いているか背を向けているか。その他の情報や描写は一切不要です。「わかりません」「判断できません」などの曖昧な表現や謝罪も使わないでください。例:「今、前に人だかりがあり、3人ほどいて、背を向けています。」"
+            #if reason in {"THERE_ARE_PEOPLE_IN_THE_PATH", "AVOIDING_PEOPLE","UNKNOWN", "AVOIDING_OBSTACLE"}:
+            self._logger.info(f"Received stop reason trigger: {reason}")
+            prompt = "あなたは視覚障害者を案内するアシスタントです。現在、ロボットは以下のいずれかの理由で停止しています：（1）前方に人がいる、（2）人を避けようとしている、または（3）障害物を検知したためです。画像を見て、以下のルールに従って、停止理由に応じた説明を1文で簡潔に述べてください。（1）前方に人がいる、または（2）人を避けようとしている場合：人数のおおよその数、列か人だかりか、そして人々がこちらを向いているか背を向けているかのみを述べてください。例：「今、前に人だかりがあり、3人ほどいて、背を向けています。」（3）障害物を検知した場合：障害物が何であるかを簡潔に述べてください。例：「現在、障害物のために停止しています。前方にコーンがあります。」以下のルールを厳守してください：・その他の情報や描写は一切述べないこと。・「わかりません」「判断できません」「申し訳ありません」などの曖昧な表現や謝罪は使わないこと。・意見や主観を含めず、客観的に述べること。・できるだけ短く、簡潔にすること。"
+
+                
 
 
-                add_instruction = True
+                #add_instruction = True
 
-            elif reason in {"UNKNOWN", "AVOIDING_OBSTACLE"}:
-                self._logger.info(f"Received stop reason trigger: {reason}")
-                prompt = "あなたは視覚障害者を案内するシステムです。現在、障害物のために停止しています。画像を見て、障害物が何であるかを1文で簡潔に説明してください。それ以外の情報は述べないでください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。例:「現在、障害物のために停止しています。前方にコーンがあります。」"
+            # elif reason in {"UNKNOWN", "AVOIDING_OBSTACLE"}:
+            #     self._logger.info(f"Received stop reason trigger: {reason}")
+            #     prompt = "あなたは視覚障害者を案内するシステムです。現在、障害物のために停止しています。画像を見て、障害物が何であるかを1文で簡潔に説明してください。それ以外の情報は述べないでください。説明はできるだけ短く、簡単にし、意見や主観は含めないでください。また、「わかりません」「申し訳ありません」などの曖昧な表現や謝罪は使わないでください。例:
             if prompt:
                 try:
                     response = self._description.request_description_with_images_local(
                         
                         prompt=prompt,
                         stop_reason=True
-                    
+                     
                     )
-                    if add_instruction:
-                        response += " ロボットに「すみません」と言わせたい場合は、下のボタンを押してください。言わせない場合は、自分で声をかけて人に動いてもらってください。"
+                    # if add_instruction:
+                        #response += " ロボットに「すみません」と言わせたい場合は、下のボタンを押してください。"
 
                     
                     self._logger.info(f"Generated message for stop reason: {response}")
-                    self._interface.speak(response, priority=90)
+                    #TODO
+                    #if velocity is 0 
+                    if self._robot_speed<0.3:
+                        self._interface.speak(response, priority=90)
+                    else:
+                        self._logger.info("Stop_reason: Skipped phrase due to robot moving")
+
                 except Exception as e:
                     self._logger.error(f"Failed to get VLM response: {str(e)}")
 
     
-    
-    # def _stop_reason_callback(self, msg):
-    #     """
-    #     Callback for stop reason.
-    #     """
-        
-        
-        
-
-    #     self._logger.info(f"Received stop reason: {msg.reason}")
-    #     reason = msg.reason
-    #     if self._description.use_local:
-    #         if reason == "THERE_ARE_PEOPLE_IN_THE_PATH" or reason == "AVOIDING_PEOPLE":
-    #             self._logger.info(f"Received /crowd_occ trigger: {reason}")
-    #             prompt ="ロボットが前方に人を検知しました。もう少し詳しく説明してください。"
-    #             self._description.request_description_with_images_local(prompt=prompt, callback=self.description_callback) 
-    #             spoken_words=
-    #             #spoken_words = "There is a crowd in front of us. Please press the right button for 3 seconds if you would like me to tell them to move. Otherwise, please tell them to move"
-    #         elif reason == "UNKNOWN":
-    #             self._logger.info(f"Received /crowd_occ trigger: {reason}")
-    #             #poken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
-                
-    #         elif reason == "AVOIDING_OBSTACLE":  
-    #             self._logger.info(f"Received /crowd_occ trigger: {reason}")
-    #             # spoken_words = "There is something in front of us. If you would like me to explain your surroundings, please press the up button."
-           
-    #         self._logger.info(f"speaking out loud: {spoken_words}")
-             
-        
-    #     self._interface.speak(spoken_words) #speaking through the phone speaker      
+ 
     
     def trigger_monitor(self, msg):
         """
@@ -914,18 +914,15 @@ class EventMapper1(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="speedup")
             if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="speeddown")
-            if event.buttons == cabot_common.button.BUTTON_CENTER:
-                return NavigationEvent(subtype="decision")
+                return NavigationEvent(subtype="omakase")
+           
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 # image description is not triggered here, but when button is released
                 self.description_duration = event.duration
-            #Rayna edit 
-            if event.holddown == cabot_common.button.BUTTON_UP and event.duration == 3:
-                return NavigationEvent(subtype="omakase")
+            
         '''
         if event.button == cabot_common.button.BUTTON_SELECT:
                 return NavigationEvent(subtype="pause")
@@ -993,15 +990,15 @@ class EventMapper2(object):
             return None
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="resume_or_stop_reason")
+                return NavigationEvent(subtype="resume_or_stop_reason") #this will trigger help 
             if event.buttons == cabot_common.button.BUTTON_LEFT:
-                return NavigationEvent(subtype="toggle_speak_state")
+                return NavigationEvent(subtype="omakase")
             if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="description_surround", param=event.count)
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="toggle_conversation")
-            if event.buttons == cabot_common.button.BUTTON_CENTER:
-                return NavigationEvent(subtype="decision")
+            # if event.buttons == cabot_common.button.BUTTON_DOWN:
+            #     return NavigationEvent(subtype="omakase")
+            # if event.buttons == cabot_common.button.BUTTON_CENTER:
+            #     return NavigationEvent(subtype="decision")
         if event.type == "click" and event.count > 1:
             if event.buttons == cabot_common.button.BUTTON_UP:
                 description_length = min(event.count, 3)
@@ -1013,8 +1010,8 @@ class EventMapper2(object):
                 return NavigationEvent(subtype="pause")
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
                 return NavigationEvent(subtype="idle")
-            if event.holddown ==  cabot_common.button.BUTTON_RIGHT and event.duration == 3:
-                return NavigationEvent(subtype="omakase")
+            # if event.holddown ==  cabot_common.button.BUTTON_RIGHT and event.duration == 3:
+            #     return NavigationEvent(subtype="omakase")
             if event.holddown in {cabot_common.button.BUTTON_DOWN, cabot_common.button.BUTTON_UP}:
                 self.button_hold_down_duration = event.duration
                 if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:

@@ -1,6 +1,6 @@
 
 import requests
-from PIL import Image
+from PIL import Image, ImageOps
 # from transformers import AutoModelForCausalLM, AutoProcessor
 from openai import OpenAI
 import io
@@ -66,7 +66,7 @@ class GPT4oVLM(BaseLocalVLM):
             return None
 
 
-
+        image = ImageOps.flip(image)
 
        
 
