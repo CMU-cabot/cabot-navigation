@@ -182,6 +182,7 @@ controller_server:
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
+    ## TODO: double check goal_checker_plugins to see if it needs updating 
     goal_checker_plugins: ["cabot_goal_checker"]
     controller_plugins: ["FollowPath", "FollowPathElevator"]
 
@@ -522,6 +523,7 @@ planner_server:
     expected_planner_frequency: 2.0
     use_sim_time: True
     planner_plugins: ["GridBased", "NavCog", "CaBot"]
+    #planner_plugins: ["GridBased", "NavCog", "CaBot", "MyPlanner"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
@@ -529,6 +531,9 @@ planner_server:
       allow_unknown: false
 #      cost_neutral: 8
 #      cost_factor: 0.97
+    # TODO: add MyPlanner code in plugins
+    #MyPlanner:
+    #  plugin: 
     NavCog:
       plugin: "cabot_navigation2/NavCogPathPlanner"
       path_width: 2.0
