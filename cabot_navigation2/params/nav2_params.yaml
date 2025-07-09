@@ -531,7 +531,7 @@ planner_server:
       allow_unknown: false
 #      cost_neutral: 8
 #      cost_factor: 0.97
-    # TODO: add MyPlanner code in plugins
+    # TODO TODO: add MyPlanner code in plugins
     #MyPlanner:
     #  plugin: 
     NavCog:
