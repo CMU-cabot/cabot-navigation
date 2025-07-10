@@ -35,7 +35,10 @@ _lang = "en"
 
 def set_language(language):
     global _lang
-    _lang = language
+    if language == "zh":
+        _lang = "zh-CN"
+    else:
+        _lang = language
 
 
 def localized_string(identifier, *args, **kwargs):
