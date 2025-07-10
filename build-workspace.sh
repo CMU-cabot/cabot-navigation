@@ -34,15 +34,17 @@ function help {
     echo ""
     echo "-h                    show this help"
     echo "-d                    debug build"
+    echo "-s                    sequential build"
 
     echo "Available services:"
     show_available_services dcfiles
 }
 
 debug_build=0
+sequential_build=0
 dcfiles=("docker-compose.yaml")
 
-while getopts "hd" arg; do
+while getopts "hds" arg; do
     case $arg in
     h)
         help
@@ -50,6 +52,9 @@ while getopts "hd" arg; do
         ;;
     d)
         debug_build=1
+        ;;
+    s)
+        sequential_build=1
         ;;
     esac
 done
@@ -62,5 +67,5 @@ if [ $arch != "x86_64" ] && [ $arch != "aarch64" ]; then
     exit 1
 fi
 
-build_workspace dcfiles targets arch debug_build
+build_workspace dcfiles targets arch debug_build sequential_build
 if [ $? != 0 ]; then exit 1; fi

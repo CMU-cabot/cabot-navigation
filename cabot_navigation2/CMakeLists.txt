@@ -231,6 +231,16 @@ target_link_libraries(grid_map_ground_filter_node
   ${OPENMP_LIBRARIES}
 )
 
+### limit fov scan expand
+add_executable(limit_fov_scan_expand
+  src/limit_fov_scan_expand.cpp
+)
+
+ament_target_dependencies(limit_fov_scan_expand
+  rclcpp
+  sensor_msgs
+)
+
 ### cabot lifecycle manager
 add_executable(cabot_lifecycle_manager
   src/cabot_lifecycle_manager.cpp
@@ -263,6 +273,7 @@ install(TARGETS
   clip_ground_filter_node
   ransac_ground_filter_node
   grid_map_ground_filter_node
+  limit_fov_scan_expand
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

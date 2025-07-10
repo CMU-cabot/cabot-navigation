@@ -371,6 +371,21 @@ def generate_launch_description():
             condition=IfCondition(use_low_obstacle_detect)
         ),
 
+
+        Node(
+            package='cabot_navigation2',
+            executable='limit_fov_scan_expand',
+            namespace='',
+            name='limit_fov_scan_expand_node',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'input_topic': '/livox_scan',
+                'output_topic': '/livox_scan_expand',
+                'expand_angle': 1.0
+            }],
+            condition=IfCondition(use_low_obstacle_detect)
+        ),
+
         Node(
             package='cabot_navigation2',
             executable='clip_ground_filter_node',
