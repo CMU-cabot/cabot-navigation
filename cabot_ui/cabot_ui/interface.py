@@ -26,7 +26,6 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from tf_transformations import euler_from_quaternion
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
@@ -76,18 +75,6 @@ class UserInterface(object):
         self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_angle", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_type_pub = node.create_publisher(std_msgs.msg.String, "/cabot/turn_type", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
-        transient_local_qos = QoSProfile(depth=1)
-        transient_local_qos.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
-
-        self.anchor_sub = node.create_subscription(
-            cabot_msgs.msg.Anchor,
-            "/anchor",
-            self._anchor_callback,
-            transient_local_qos,
-            callback_group=MutuallyExclusiveCallbackGroup()
-        )
-        self._anchor = None
-
         self.lang = node.declare_parameter("language", "en").value
         self.site = node.declare_parameter("site", '').value
 
@@ -136,9 +123,6 @@ class UserInterface(object):
             self.visualizer.spoken.append((self.last_pose['ros_pose'], F"{text}, {memo}", category))
             self.visualizer.visualize()
 
-    def _anchor_callback(self, msg: cabot_msgs.msg.Anchor):
-        self._anchor = msg
-
     def _pose_log(self):
         if not self.last_pose:
             return
@@ -152,19 +136,23 @@ class UserInterface(object):
         self.pose_log_pub.publish(log)
 
         log2 = cabot_msgs.msg.PoseLog2()
+        if 'anchor' not in self.last_pose:
+            return
+        else:
+            log2.anchor.lat = self.last_pose['anchor'].lat
+            log2.anchor.lng = self.last_pose['anchor'].lng
+            log2.anchor.rotate = self.last_pose['anchor'].rotate
         log2.header.stamp = self._node.get_clock().now().to_msg()
         log2.header.frame_id = self.last_pose['global_frame']
         log2.pose = self.last_pose['ros_pose']
         log2.lat = self.last_pose['global_position'].lat
         log2.lng = self.last_pose['global_position'].lng
-        log2.anchor = self._anchor
         orientation = self.last_pose['ros_pose'].orientation
         (_roll, _pitch, yaw) = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
-        log2.global_rotate = self._anchor.rotate + 90 - yaw / math.pi * 180
+        log2.global_rotate = log2.anchor.rotate + 90 - yaw / math.pi * 180
         log2.global_rotate = log2.global_rotate % 360
         log2.floor = self.last_pose['current_floor']
         self.pose_log2_pub.publish(log2)
-        CaBotRclpyUtil.info("publish pose_log2 msg")
 
     def change_language(self, lang):
         self._activity_log("change language", lang, f"previous={self.lang}")

@@ -891,7 +891,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                                       current_pose=self.current_pose,
                                       global_position=self.current_global_pose(),
                                       current_floor=self.current_floor,
-                                      global_frame=self._global_map_name
+                                      global_frame=self._global_map_name,
+                                      anchor=self._anchor
                                       )
             if self.post_location_enabled:
                 if self._node.get_clock().now() - self.last_log_time > rclpy.duration.Duration(seconds=1.0):
