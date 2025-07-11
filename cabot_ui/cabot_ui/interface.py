@@ -97,14 +97,17 @@ class UserInterface(object):
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
 
         self._enable_speaker = False
-        self._audio_dir = os.path.join(get_package_share_directory('cabot_ui'), "audio")
+        self._audio_dir = os.path.join(get_package_share_directory(os.environ.get("CABOT_SITE")), "sound")
         self._audio_file_path = None
         self._speaker_volume = 0.0
-        wav_files = [
-            f
-            for f in os.listdir(self._audio_dir)
-            if f.endswith(".wav") and os.path.isfile(os.path.join(self._audio_dir, f))
-        ]
+        if os.path.isdir(self._audio_dir):
+            wav_files = [
+                f
+                for f in os.listdir(self._audio_dir)
+                if f.endswith(".wav") and os.path.isfile(os.path.join(self._audio_dir, f))
+            ]
+        else:
+            wav_files = []
         self.audio_files = ",".join(wav_files)
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
