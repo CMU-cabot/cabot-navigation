@@ -20,6 +20,7 @@
 # SOFTWARE.
 
 import os
+import math
 
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -68,6 +69,7 @@ class UserInterface(object):
         self.note_pub = node.create_publisher(std_msgs.msg.Int8, "/cabot/notification", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.activity_log_pub = node.create_publisher(cabot_msgs.msg.Log, "/cabot/activity_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.pose_log_pub = node.create_publisher(cabot_msgs.msg.PoseLog, "/cabot/pose_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.pose_log2_pub = node.create_publisher(cabot_msgs.msg.PoseLog2, "/cabot/pose_log2", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.event_pub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_angle", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_type_pub = node.create_publisher(std_msgs.msg.String, "/cabot/turn_type", 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -134,6 +136,22 @@ class UserInterface(object):
         log.lng = self.last_pose['global_position'].lng
         log.floor = self.last_pose['current_floor']
         self.pose_log_pub.publish(log)
+
+        log2 = cabot_msgs.msg.PoseLog2()
+        if 'anchor' not in self.last_pose:
+            return
+        log2.anchor.lat = self.last_pose['anchor'].lat
+        log2.anchor.lng = self.last_pose['anchor'].lng
+        log2.anchor.rotate = self.last_pose['anchor'].rotate
+        log2.header.stamp = self._node.get_clock().now().to_msg()
+        log2.header.frame_id = self.last_pose['global_frame']
+        log2.pose = self.last_pose['ros_pose']
+        log2.lat = self.last_pose['global_position'].lat
+        log2.lng = self.last_pose['global_position'].lng
+        log2.global_rotate = -self.last_pose['global_position'].r / math.pi * 180
+        log2.global_rotate = log2.global_rotate % 360
+        log2.floor = self.last_pose['current_floor']
+        self.pose_log2_pub.publish(log2)
 
     def change_language(self, lang):
         self._activity_log("change language", lang, f"previous={self.lang}")
