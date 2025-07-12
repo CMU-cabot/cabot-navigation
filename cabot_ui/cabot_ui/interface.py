@@ -137,10 +137,9 @@ class UserInterface(object):
         log2 = cabot_msgs.msg.PoseLog2()
         if 'anchor' not in self.last_pose:
             return
-        else:
-            log2.anchor.lat = self.last_pose['anchor'].lat
-            log2.anchor.lng = self.last_pose['anchor'].lng
-            log2.anchor.rotate = self.last_pose['anchor'].rotate
+        log2.anchor.lat = self.last_pose['anchor'].lat
+        log2.anchor.lng = self.last_pose['anchor'].lng
+        log2.anchor.rotate = self.last_pose['anchor'].rotate
         log2.header.stamp = self._node.get_clock().now().to_msg()
         log2.header.frame_id = self.last_pose['global_frame']
         log2.pose = self.last_pose['ros_pose']
