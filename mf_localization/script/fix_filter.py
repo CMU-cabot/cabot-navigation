@@ -23,19 +23,25 @@
 
 import numpy as np
 import rclpy
+from rclpy.node import Node
 
 from sensor_msgs.msg import NavSatFix
+from mf_localization_msgs.msg import MFNavSAT
 
 
 class FixFilterNode:
-    def __init__(self, node, status_threshold, stdev_threshold, overwrite_time=True):
+    def __init__(self, node: Node, status_threshold, stdev_threshold, overwrite_time=True):
         self._node = node
         self._clock = node.get_clock()
+        self._logger = node.get_logger()
         self._status_threshold = status_threshold
         self._stdev_threshold = stdev_threshold
         self._overwrite_time = overwrite_time
         self._fix_sub = self._node.create_subscription(NavSatFix, "fix", self.fix_callback, 10)
         self._fix_pub = self._node.create_publisher(NavSatFix, "fix_filtered", 10)
+        self._mf_navsat_sub = self._node.create_subscription(MFNavSAT, "mf_navsat", self.mf_navsat_callback, 10)
+        # mf navsat
+        self._is_active = True
 
     def fix_callback(self, msg: NavSatFix):
         navsat_status = msg.status
@@ -43,11 +49,22 @@ class FixFilterNode:
         position_covariance = np.reshape(msg.position_covariance, (3, 3))
         stdev = np.sqrt(position_covariance[0, 0])
 
-        if self._status_threshold <= status and stdev <= self._stdev_threshold:
+        if self._status_threshold <= status and stdev <= self._stdev_threshold \
+                and self._is_active:
             if self._overwrite_time:
                 msg.header.stamp = self._clock.now().to_msg()
             msg.altitude = 0.0
             self._fix_pub.publish(msg)
+
+    def mf_navsat_callback(self, msg: MFNavSAT):
+        if msg.sv_status == MFNavSAT.STATUS_ACTIVE:
+            if not self._is_active:
+                self._is_active = True
+                self._logger.info("mf_navsat changed active status from False to True")
+        else:
+            if self._is_active:
+                self._is_active = False
+                self._logger.info("mf_navsat changed active status from True to False")
 
 
 def main():

@@ -1,4 +1,4 @@
-# Copyright (c) 2022  Carnegie Mellon University
+# Copyright (c) 2022, 2025  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -91,13 +91,16 @@ class AddStatePlugin(Substitution):
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_gazebo')
-    output = 'both'
+    output = {'stderr': {'log'}}
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_name = LaunchConfiguration('model')
     world_file = LaunchConfiguration('world_file')
+    use_gnss = LaunchConfiguration('use_gnss')
     wireless_config_file = LaunchConfiguration('wireless_config_file')
     gdb = LaunchConfiguration('gdb')
+    use_low_obstacle_detect = LaunchConfiguration('use_low_obstacle_detect')
+    use_directional_indicator = LaunchConfiguration('use_directional_indicator')
 
     gazebo_params = os.path.join(
         pkg_dir,
@@ -108,8 +111,6 @@ def generate_launch_description():
         executable='check_gazebo_ready.py',
         name='check_gazebo_ready_node',
     )
-
-    use_livox = PythonExpression(['"', model_name, '" in ["cabot3-i1", "cabot3-m1", "cabot3-m2"]'])
 
     # these models have lidar attached side way
     lidar_target_frame = PythonExpression([
@@ -151,6 +152,7 @@ def generate_launch_description():
     modified_world = AddStatePlugin(world_file)
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
@@ -171,6 +173,11 @@ def generate_launch_description():
             description='Gazebo world file to be open'
         ),
         DeclareLaunchArgument(
+            'use_gnss',
+            default_value='false',
+            description='use gnss'
+        ),
+        DeclareLaunchArgument(
             'wireless_config_file',
             default_value='',
             description='wireless config file'
@@ -179,6 +186,16 @@ def generate_launch_description():
             'gdb',
             default_value='false',
             description='use gdb'
+        ),
+        DeclareLaunchArgument(
+            'use_low_obstacle_detect',
+            default_value='false',
+            description='use low obstacle detection'
+        ),
+        DeclareLaunchArgument(
+            'use_directional_indicator',
+            default_value=EnvironmentVariable('CABOT_USE_DIRECTIONAL_INDICATOR', default_value='false'),
+            description='If true, the directional indicator on the handle is enabled'
         ),
 
         LogInfo(
@@ -200,7 +217,7 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time,
                     'publish_frequency': 100.0,
                     'robot_description': robot_description
-                }]
+                }],
             ),
             # publish **local** robot state for local map navigation (getting off elevators)
             Node(
@@ -213,7 +230,21 @@ def generate_launch_description():
                     'publish_frequency': 100.0,
                     'frame_prefix': 'local/',
                     'robot_description': robot_description
-                }]
+                }],
+            ),
+            Node(
+                package='cabot_gazebo',
+                executable='cabot_handle_simulator.py',
+                name='cabot_handle_simulator',
+                namespace='/cabot',
+                output=output,
+                parameters=[{
+                    'use_sim_time': use_sim_time,
+                    'use_directional_indicator': use_directional_indicator,
+                }],
+                arguments=[
+                    "--force-discover"
+                ]
             ),
 
             # launch velodyne lider related nodes
@@ -223,6 +254,7 @@ def generate_launch_description():
                 package='rclcpp_components',
                 executable='component_container',
                 composable_node_descriptions=[],
+                output=output,
             ),
 
             LoadComposableNodes(
@@ -239,7 +271,7 @@ def generate_launch_description():
                         }],
                         remappings=[
                             ('/cloud_in', '/velodyne_points')
-                        ]
+                        ],
                     ),
                     ComposableNode(
                         package='pcl_ros',
@@ -250,7 +282,7 @@ def generate_launch_description():
                         remappings=[
                             ('/input',  '/velodyne_points'),
                             ('/output', '/velodyne_points_cropped')
-                        ]
+                        ],
                     ),
                 ]
             ),
@@ -262,6 +294,7 @@ def generate_launch_description():
                 package='rclcpp_components',
                 executable='component_container',
                 composable_node_descriptions=[],
+                output=output,
             ),
             LoadComposableNodes(
                 target_container='/livox_container',
@@ -290,7 +323,7 @@ def generate_launch_description():
                         ]
                     ),
                 ],
-                condition=IfCondition(use_livox)
+                condition=IfCondition(use_low_obstacle_detect)
             ),
 
             IncludeLaunchDescription(
@@ -313,6 +346,18 @@ def generate_launch_description():
                 }.items(),
                 condition=LaunchConfigurationNotEquals('wireless_config_file', '')
             ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([pkg_dir,
+                                              '/launch/gazebo_pressure_helper.launch.py']),
+                launch_arguments={
+                    'verbose': 'true',
+                    'namespace': 'pressure_simulator',
+                    'pressure_topic': '/cabot/pressure',
+                    'config_file': wireless_config_file,
+                    'use_sim_time': use_sim_time,
+                }.items(),
+                condition=LaunchConfigurationNotEquals('wireless_config_file', '')
+            ),
 
             # cabot feature handleside (ad-hoc implementation)
             ExecuteProcess(
@@ -328,7 +373,7 @@ def generate_launch_description():
                     'std_msgs/msg/String',
                     'data: left,right',
                 ],
-                output='screen',
+                output=output,
             ),
             # cabot feature touchmode (ad-hoc implementation)
             ExecuteProcess(
@@ -344,7 +389,7 @@ def generate_launch_description():
                     'std_msgs/msg/String',
                     'data: cap,tof,dual',
                 ],
-                output='screen',
+                output=output,
             ),
 
             check_gazebo_ready,
@@ -370,5 +415,19 @@ def generate_launch_description():
                 PythonExpression(['"', model_name, '"==""']),
                 PythonExpression(['"', world_file, '"==""'])
             ))
+        ),
+        Node(
+            package='cabot_gazebo',
+            executable='gps_converter.py',
+            name='vector3_stamped_to_twist_covariance_stamped',
+            output=output,
+            parameters=[{
+                'use_sim_time': use_sim_time,
+            }],
+            remappings=[
+                ('/in', '/ublox/velocity'),
+                ('/out', '/ublox/fix_velocity')
+            ],
+            condition=IfCondition(use_gnss)
         )
     ])

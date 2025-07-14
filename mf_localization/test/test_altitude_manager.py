@@ -21,9 +21,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import pytest
 import numpy as np
 import matplotlib.pyplot as plt
-from mf_localization.altitude_manager import AltitudeFloorEstimator, FloorHeightMapper
+from mf_localization.altitude_manager import AltitudeFloorEstimator
+from mf_localization.altitude_manager import BalancedSampler
+from mf_localization.altitude_manager import FloorHeightMapper
 
 
 class PressureSimulator:
@@ -37,13 +40,13 @@ class PressureSimulator:
         return p
 
 
-def generate_samples(xmin, xmax, ymin, ymax, floor, area, height, dx=1.0, dy=1.0):
+def generate_samples(xmin, xmax, ymin, ymax, floor, area, height, effective_radius=np.nan, dx=1.0, dy=1.0):
     X = []
     for i in range(int((xmax-xmin)/dx)):
         for j in range(int((ymax-ymin)/dy)):
             x = xmin + i*dx
             y = ymin + j+dy
-            X.append([x, y, floor, area, height])
+            X.append([x, y, floor, area, height, effective_radius])
     return X
 
 
@@ -459,3 +462,160 @@ def test_altitude_floor_estimator_incomplete_floor_list():
         print(f"floor_est={floor_est}, height_est={height_est}")
 
     assert floor_est == target_floor
+
+
+def test_altitude_floor_estimator_irregular_pressure_pattern():
+    X = generate_all_samples()
+
+    floor_height_mapper = FloorHeightMapper(X)
+    altitude_floor_estimator = AltitudeFloorEstimator()
+    pressure_simulator = PressureSimulator()
+
+    x = [0, 0]
+    floor_est = 0
+    height_est = 0
+
+    altitude_floor_estimator.reset(floor_est=floor_est, height_est=height_est)
+
+    timestamp = 0
+    floor = 0
+    height = 0
+
+    dt = 0.5  # [s]
+    floor_list, height_list = floor_height_mapper.get_floor_height_list(x)
+    altitude_floor_estimator.set_floor_height_list(floor_list, height_list)
+    print(f"floor_list={floor_list}, height_list={height_list}")
+
+    # stable
+    for i in range(60):
+        timestamp += dt
+        pressure = pressure_simulator.simulate_pressure(height)
+        result = altitude_floor_estimator._put_pressure(timestamp, pressure)
+        floor_est, height_est, current_state = result.floor_est, result.height_est, result.current_state
+        print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
+
+    target_height = -2.0
+    vel_height = -1.0  # [m/s]
+
+    # decrease height to enter DOWN state
+    for i in range(int((target_height - height)/(vel_height*dt))):
+        timestamp += dt
+        height += vel_height*dt
+        pressure = pressure_simulator.simulate_pressure(height)
+        result = altitude_floor_estimator._put_pressure(timestamp, pressure)
+        floor_est, height_est, current_state = result.floor_est, result.height_est, result.current_state
+        print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
+
+    # rapidly increase height in DOWN state before floor change
+    height = 0.0
+    target_height = 1
+    vel_height = 0.5
+    for i in range(int((target_height - height)/(vel_height*dt))):
+        timestamp += dt
+        height += vel_height*dt
+        pressure = pressure_simulator.simulate_pressure(height)
+        result = altitude_floor_estimator._put_pressure(timestamp, pressure)
+        floor_est, height_est, current_state = result.floor_est, result.height_est, result.current_state
+        print(f"height={height}, floor_est={floor_est}, height_est={height_est}, current_state={current_state}")
+
+    assert floor == floor_est
+
+
+def test_balanced_sampler():
+    sampler = BalancedSampler()
+
+    # generate same values
+    values = [1.0]
+    probs = [1.0]
+    sampler.update(x=values, p=probs)
+    v = sampler.sample()
+    assert v == 1.0
+
+    # generate 1/2 - 1/2
+    values = [0.0, 1.0]
+    probs = [0.5, 0.5]
+    sampler.update(x=values, p=probs)
+    counts = {
+        0.0: 0,
+        1.0: 0
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 5000
+    assert counts[1.0] == 5000
+
+    # with array
+    sampler = BalancedSampler()
+    values = np.array([0.0, 1.0])
+    probs = np.array([0.5, 0.5])
+    sampler.update(x=values, p=probs)
+    counts = {
+        0.0: 0,
+        1.0: 0
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 5000
+    assert counts[1.0] == 5000
+
+    # check update
+    values2 = [0.0, 1.0]
+    probs2 = [0.5, 0.5]
+    sampler.update(x=values2, p=probs2)
+    assert not sampler._updated
+    assert len(sampler._reserved) == 0
+
+    # select
+    for i in range(10):
+        v = sampler.select(1.0)
+        assert v == 1.0
+        v = sampler.sample()
+        assert v == 0.0
+    for i in range(10):
+        v = sampler.select(0.0)
+        assert v == 0.0
+        v = sampler.sample()
+        assert v == 1.0
+
+    # not selectable
+    v = sampler.select(1.0)
+    v = sampler.select(1.0)
+    assert v is None
+
+    # exception
+    with pytest.raises(RuntimeError):
+        v = sampler.select(2.0)
+
+    # generate 1/10 - 9/10
+    values2 = [0.0, 1.0]
+    probs2 = [0.1, 0.9]
+    sampler.update(x=values2, p=probs2)
+    assert sampler._updated
+    counts = {
+        0.0: 0,
+        1.0: 0
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 1000
+    assert counts[1.0] == 9000
+
+    # generate
+    values2 = [0.0, 1.0, 2.0]
+    probs2 = [0.01, 0.39, 0.60]
+    sampler.update(x=values2, p=probs2)
+    assert sampler._updated
+    counts = {
+        0.0: 0,
+        1.0: 0,
+        2.0: 0,
+    }
+    for i in range(10000):
+        v = sampler.sample()
+        counts[v] += 1
+    assert counts[0.0] == 100
+    assert counts[1.0] == 3900
+    assert counts[2.0] == 6000

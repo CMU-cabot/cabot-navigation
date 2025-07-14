@@ -59,6 +59,7 @@ def generate_launch_description():
     authentificate = LaunchConfiguration('authentificate')
     username = LaunchConfiguration('username')
     password = LaunchConfiguration('password')
+    respawn_ntrip_client = LaunchConfiguration('respawn_ntrip_client')
 
     # str2str_node
     serial_port = LaunchConfiguration('serial_port')
@@ -69,6 +70,10 @@ def generate_launch_description():
     longitude = LaunchConfiguration('longitude')
     height = LaunchConfiguration('height')
     nmea_request_cycle = LaunchConfiguration('nmea_request_cycle')
+
+    # cabot use gnss
+    fix_warn_error_level = LaunchConfiguration('fix_warn_error_level')
+    no_fix_error_level = LaunchConfiguration('no_fix_error_level')
 
     str2str_node_launch = IncludeLaunchDescription(
                             PythonLaunchDescriptionSource([mf_localization_dir + "/launch/str2str.launch.py"]),
@@ -101,6 +106,8 @@ def generate_launch_description():
                                 'authentificate': authentificate,
                                 'username': username,
                                 'password': password,
+                                'reconnect_attempt_max': '10000',  # default: 10
+                                'respawn': respawn_ntrip_client,
                                 'nmea_max_length': '90',  # a large value to accept high precision mode
                             }.items(),
                             condition=IfCondition(ntrip_client)
@@ -110,6 +117,8 @@ def generate_launch_description():
                             FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
                             launch_arguments={
                                 'node_name': 'ublox',
+                                'fix_warn_error_level': fix_warn_error_level,
+                                'no_fix_error_level': no_fix_error_level,
                             }.items(),
                             condition=IfCondition(AndSubstitution(ublox_node, NotSubstitution(str2str_node)))  # if ublox_node and (not str2str_node)
                         )
@@ -123,6 +132,8 @@ def generate_launch_description():
                                             FrontendLaunchDescriptionSource([mf_localization_dir + "/launch/ublox-zed-f9p.launch.xml"]),
                                             launch_arguments={
                                                 'node_name': 'ublox',
+                                                'fix_warn_error_level': fix_warn_error_level,
+                                                'no_fix_error_level': no_fix_error_level,
                                             }.items()
                                         )
                                     ],
@@ -136,7 +147,7 @@ def generate_launch_description():
             parameters=[
                 {'target_node': 'str2str_node'}
             ],
-            output='log',
+            output={},
             condition=IfCondition(str2str_node_logger)
         )
 
@@ -147,7 +158,7 @@ def generate_launch_description():
             parameters=[
                 {'target_node': 'ntrip_client'}
             ],
-            output='log',
+            output={},
             condition=IfCondition(ntrip_client_logger)
         )
 
@@ -158,7 +169,7 @@ def generate_launch_description():
             parameters=[
                 {'target_node': 'ublox'}
             ],
-            output='log',
+            output={},
             condition=IfCondition(ublox_node_logger)
         )
 
@@ -182,6 +193,7 @@ def generate_launch_description():
         DeclareLaunchArgument('authentificate', default_value='false', description='Whether to authentificate with the server. If set to true, username and password must be supplied.'),
         DeclareLaunchArgument('username', default_value=''),
         DeclareLaunchArgument('password', default_value=''),
+        DeclareLaunchArgument('respawn_ntrip_client', default_value='true'),
 
         # str2str_node
         DeclareLaunchArgument('serial_port', default_value='ttyUBLOX'),
@@ -192,6 +204,10 @@ def generate_launch_description():
         DeclareLaunchArgument('longitude', default_value="0.0", description='longitude of -p option'),
         DeclareLaunchArgument('height', default_value="0.0", description='height of -p option'),
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
+
+        # cabot use gnss
+        DeclareLaunchArgument('fix_warn_error_level', default_value='1', description='Error level for inaccurate FIX status. default: 1 (WARN)'),
+        DeclareLaunchArgument('no_fix_error_level', default_value='1', description='Error level for NO FIX status. default: 1 (WARN)'),
 
         # node actions
         str2str_node_launch,

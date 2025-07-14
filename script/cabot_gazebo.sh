@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2023  Carnegie Mellon University
+# Copyright (c) 2023, 2025  Carnegie Mellon University and Miraikan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,9 @@
 #
 # cabot_gazebo.sh
 # This script runs gazebo server and related nodes, and spawn the robot
-# 
+#
+
+set -m
 
 # change directory to where this script exists
 pwd=`pwd`
@@ -32,7 +34,6 @@ cd $scriptdir
 scriptdir=`pwd`
 
 pids=()
-termpids=()
 checks=()
 
 ## debug
@@ -46,12 +47,13 @@ source $scriptdir/cabot_util.sh
 trap signal INT TERM
 
 function signal() {
-    blue "trap cabot_ros2.sh "
+    blue "trap cabot_gazebo.sh "
 
     # ps -Af
-    kill -INT -1
-    for pid in ${termpids[@]}; do
-	kill -TERM $pid
+    for pid in ${pids[@]}; do
+        com="kill -SIGINT $pid"
+        red $com
+        eval $com
     done
     for pid in ${pids[@]}; do
 	count=0
@@ -72,7 +74,7 @@ function signal() {
 	    count=$((count+1))
         done
     done
-    
+    snore 3
     exit
 }
 
@@ -81,12 +83,14 @@ function signal() {
 : ${CABOT_SIDE:=left}
 : ${CABOT_SITE:=}
 : ${CABOT_MODEL:=}
+: ${CABOT_USE_GNSS:=0}
 # variables with default value
 : ${CABOT_INITX:=0}
 : ${CABOT_INITY:=0}
 : ${CABOT_INITZ:=0}
 : ${CABOT_INITA:=0}  # in degree
 export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
+: ${CABOT_LOW_OBSTABLE_DETECT_VERSION:=0}
 
 # check required environment variables
 error_flag=0
@@ -100,6 +104,11 @@ if [[ -z $CABOT_MODEL ]]; then
 fi
 if [[ $error_flag -ne 0 ]]; then
     exit
+fi
+
+use_low_obstacle_detect=false
+if [[ $CABOT_LOW_OBSTABLE_DETECT_VERSION -gt 0 ]]; then
+    use_low_obstacle_detect=true
 fi
 
 # initialize local variables
@@ -162,16 +171,18 @@ echo "CABOT_SITE                : $CABOT_SITE"
 echo "Map                       : $map"
 
 blue "launch gazebo"
-com="$command_prefix ros2 launch cabot_gazebo cabot2_gazebo.launch.py \
+com="$command_prefix ros2 launch -n cabot_gazebo cabot2_gazebo.launch.py \
         gdb:=$gdb \
         model:=$CABOT_MODEL \
         world_file:=$world \
         wireless_config_file:=$wireless_config \
+        use_gnss:=$CABOT_USE_GNSS \
+        use_low_obstacle_detect:=$use_low_obstacle_detect \
         $command_postfix"
 echo $com
 eval $com
 checks+=($!)
-termpids+=($!)
+pids+=($!)
 
 ## wait until it is terminated by the user
 while [ 1 -eq 1 ];

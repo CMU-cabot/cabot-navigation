@@ -135,6 +135,8 @@ class CabotUIManager(NavigationInterface, object):
 
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
+        self.send_speaker_audio_files()
+
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
         msg = std_msgs.msg.String()
@@ -143,6 +145,12 @@ class CabotUIManager(NavigationInterface, object):
 
     def send_touchmode(self):
         e = NavigationEvent("gettouchmode", self.touchmode)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
+
+    def send_speaker_audio_files(self):
+        e = NavigationEvent("getspeakeraudiofiles", self._interface.audio_files)
         msg = std_msgs.msg.String()
         msg.data = str(e)
         self._eventPub.publish(msg)
@@ -286,6 +294,15 @@ class CabotUIManager(NavigationInterface, object):
 
     def request_sound(self, sound):
         self._interface.request_sound(sound)
+
+    def system_pause_navigation(self, callback):
+        def done_callback():
+            self._status_manager.set_state(State.in_pause)
+            self._logger.info("NavigationState: paused (system)")
+            callback()
+        self._status_manager.set_state(State.in_pausing)
+        self._navigation.pause_navigation(done_callback)
+
     # endregion NavigationInterface
 
     def _event_callback(self, msg):
@@ -385,6 +402,7 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "reqfeatures":
             self.send_handleside()
             self.send_touchmode()
+            self.send_speaker_audio_files()
             return
 
         if event.subtype == "handleside":
@@ -403,6 +421,8 @@ class CabotUIManager(NavigationInterface, object):
         if event.subtype == "gethandleside":
             return
         if event.subtype == "gettouchmode":
+            return
+        if event.subtype == "getspeakeraudiofiles":
             return
 
         if event.subtype == "speedup":
@@ -441,11 +461,23 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        def description_callback(result):
+            try:
+                if result:
+                    self._logger.info(f"description - {result=}")
+                    self._interface.describe_surround(result['translated'])
+                else:
+                    self._logger.info("description - Error")
+                    self._interface.describe_error()
+            except:   # noqa: #722
+                self._logger.error(traceback.format_exc())
+
         if event.subtype == "description" and self._description.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
             if self._interface.last_pose:
                 gp = self._interface.last_pose['global_position']
+                cf = self._interface.last_pose['current_floor']
                 length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
                 if self._description.stop_reason_enabled and self._description.surround_enabled:
                     if length_index <= 1:
@@ -456,30 +488,69 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
+                self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
 
-                result = self._description.request_description_with_images1(gp, length_index=length_index)
-                if result:
-                    self._interface.describe_surround(result['description'])
+        # request description internal functions
+        def request_stop_reason_description():
+            self._logger.info("description - Request Stop Reason Description")
+            try:
+                if self._interface.last_pose:
+                    gp = self._interface.last_pose['global_position']
+                    cf = self._interface.last_pose['current_floor']
+                    if self._description.request_description_with_images2(
+                            gp,
+                            cf,
+                            "stop_reason",
+                            self._interface.lang,
+                            length_index=0,
+                            callback=description_callback):
+                        self._interface.requesting_describe_surround_stop_reason()
+                    else:
+                        self._interface.requesting_please_wait()
+            except:  # noqa: #722
+                self._logger.error(traceback.format_exc())
+
+        def request_surround_description():
+            self._logger.info(F"description - Request Surround Description (Duration: {event.param})")
+            try:
+                if self._interface.last_pose:
+                    length_index = event.param
+                    gp = self._interface.last_pose['global_position']
+                    cf = self._interface.last_pose['current_floor']
+                    if self._description.request_description_with_images2(
+                            gp,
+                            cf,
+                            "surround",
+                            self._interface.lang,
+                            length_index=length_index,
+                            callback=description_callback):
+                        self._interface.requesting_describe_surround()
+                    else:
+                        self._interface.requesting_please_wait()
+            except:  # noqa: #722
+                self._logger.error(traceback.format_exc())
 
         if event.subtype == "description_stop_reason" and self._description.enabled:
-            self._logger.info("Request Stop Reason Description")
-            if self._interface.last_pose:
-                gp = self._interface.last_pose['global_position']
-                self._interface.requesting_describe_surround_stop_reason()
-                result = self._description.request_description_with_images2(gp, "stop_reason", length_index=0)
-                if result:
-                    self._interface.describe_surround(result['description'])
+            request_stop_reason_description()
 
         if event.subtype == "description_surround" and self._description.enabled:
-            # TODO: needs to reset last_plan_distance when arrived/paused
-            self._logger.info(F"Request Surround Description (Duration: {event.param})")
-            if self._interface.last_pose:
-                length_index = event.param
-                gp = self._interface.last_pose['global_position']
-                self._interface.requesting_describe_surround()
-                result = self._description.request_description_with_images2(gp, "surround", length_index=length_index)
-                if result:
-                    self._interface.describe_surround(result['description'])
+            request_surround_description()
+
+        if event.subtype == "speaker_enable":
+            self._interface.enable_speaker(event.param)
+            return
+
+        if event.subtype == "speaker_alert":
+            self._interface.speaker_alert()
+            return
+
+        if event.subtype == "speaker_audio_file":
+            self._interface.set_audio_file(event.param)
+            return
+
+        if event.subtype == "speaker_volume":
+            self._interface.set_speaker_volume(event.param)
+            return
 
         if event.subtype == "toggle_speak_state":
             self._logger.info("Request Toggle TTS State")
@@ -603,7 +674,7 @@ class CabotUIManager(NavigationInterface, object):
                 # force to pause state
                 self._logger.info("NavigationState: state is not in action state={}".format(self._status_manager.state))
 
-        if event.subtype == "resume":
+        if event.subtype in {"resume", "resume_or_stop_reason"}:
             if self.destination is not None:
                 self._logger.info("NavigationState: User Resume requested")
                 if self._status_manager.state == State.in_pause:
@@ -615,7 +686,10 @@ class CabotUIManager(NavigationInterface, object):
                 elif self._status_manager.state == State.in_pausing:
                     self._interface.pausing_navigation()
                 else:
-                    self._logger.info("NavigationState: state is not in pause state")
+                    if event.subtype == "resume_or_stop_reason" and self._description.enabled:
+                        request_stop_reason_description()
+                    else:
+                        self._logger.info("NavigationState: state is not in pause state")
             else:
                 self._logger.info("NavigationState: Next")
                 e = NavigationEvent("next", None)
@@ -766,7 +840,7 @@ class EventMapper2(object):
             return None
         if event.type == "click" and event.count == 1:
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="resume")
+                return NavigationEvent(subtype="resume_or_stop_reason")
             if event.buttons == cabot_common.button.BUTTON_LEFT:
                 return NavigationEvent(subtype="toggle_speak_state")
             if event.buttons == cabot_common.button.BUTTON_UP:
@@ -779,8 +853,8 @@ class EventMapper2(object):
             if event.buttons == cabot_common.button.BUTTON_UP:
                 description_length = min(event.count, 3)
                 return NavigationEvent(subtype="description_surround", param=description_length)
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
-                return NavigationEvent(subtype="description_stop_reason")
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="speaker_alert")
         if event.type == HoldDownEvent.TYPE:
             if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
                 return NavigationEvent(subtype="pause")

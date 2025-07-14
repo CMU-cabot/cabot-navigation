@@ -13,6 +13,15 @@ ublox:
 
     rate: 10.0 # Hz
 
+    ## diagnostics
+    ignore_fix_timestamp: true
+    # fix_frequency_tolerance: 0.15
+    # fix_frequency_window: 10
+    # timestamp_status_min: 0
+    ## diagnostics (error level)
+    # fix_not_ok_error_level: 1  # WARN
+    no_fix_error_level: 1  # ERROR -> WARN
+
     # message publishers
     publish:
       all: false

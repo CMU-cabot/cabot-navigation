@@ -34,6 +34,25 @@ set(dependencies
   tf2_ros
 )
 
+add_library(cabot_handle_v2_lib SHARED
+  src/cabot/cabot_handle_v2_node.cpp
+  src/cabot/handle_v2.cpp
+  src/cabot/event.cpp
+)
+
+add_library(cabot_handle_v3_lib SHARED
+  src/cabot/cabot_handle_v3_node.cpp
+  src/cabot/handle_v3.cpp
+  src/cabot/event.cpp
+)
+
+ament_target_dependencies(cabot_handle_v2_lib
+  ${dependencies}
+)
+
+ament_target_dependencies(cabot_handle_v3_lib
+  ${dependencies}
+)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_copyright REQUIRED)
@@ -87,10 +106,26 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+rclcpp_components_register_node(cabot_handle_v2_lib
+  PLUGIN "CaBotHandleV2Node"
+  EXECUTABLE cabot_handle_v2_node
+)
+rclcpp_components_register_node(cabot_handle_v3_lib
+  PLUGIN "CaBotHandleV3Node"
+  EXECUTABLE cabot_handle_v3_node
+)
+
+install(TARGETS
+  cabot_handle_v2_lib
+  cabot_handle_v3_lib
+  DESTINATION lib
+)
+
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch/)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config/)
 install(DIRECTORY rviz/ DESTINATION share/${PROJECT_NAME}/rviz/)
 install(DIRECTORY i18n/ DESTINATION share/${PROJECT_NAME}/i18n/)
+install(DIRECTORY audio/ DESTINATION share/${PROJECT_NAME}/audio/)
 install(DIRECTORY test/launch/ DESTINATION share/${PROJECT_NAME}/test/launch/)
 
 ament_package()

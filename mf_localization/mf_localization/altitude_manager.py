@@ -24,6 +24,7 @@
 from dataclasses import dataclass
 import bisect
 import math
+import random
 import numpy
 from rclpy.time import Time
 from rclpy.duration import Duration
@@ -240,9 +241,11 @@ class AltitudeFloorEstimator:
                 relative_height_array = self.height_array - self.height_array[index]
                 height_difference_array = self.calculate_height_difference(relative_height_array)
                 threshold_height_array = relative_height_array - height_difference_array * self.floor_threshold_height_coeff
-                if self.last_state == 1:  # up
+                # update floor only when floor change state and height_diff match
+                idx_new_floor = index
+                if self.last_state == 1 and height_diff > 0:  # up
                     idx_new_floor = bisect.bisect_right(threshold_height_array, height_diff) - 1
-                elif self.last_state == -1:  # down
+                elif self.last_state == -1 and height_diff < 0:  # down
                     idx_new_floor = bisect.bisect_left(threshold_height_array, height_diff)
                 floor_est = self.floor_array[idx_new_floor]
             else:
@@ -278,6 +281,63 @@ class AltitudeFloorEstimator:
         return self._enabled
 
 
+class BalancedSampler:
+    def __init__(self):
+        self._x: list = None
+        self._p: list = None
+        self._updated = False
+        self._reserved_init = []
+        self._reserved = []
+
+    def update(self, x, p):
+        _x = list(x)
+        _p = list(p)
+        if self._x == _x and self._p == _p:
+            self._updated = False
+        else:
+            self._x = _x
+            self._p = _p
+            self._updated = True
+
+        if self._updated:
+            min_p = numpy.min(self._p)
+            min_N = int(numpy.ceil(1.0/min_p))
+            counts = min_N * numpy.array(self._p)
+            reserved = []
+            for i in range(len(self._x)):
+                for j in range(int(counts[i])):
+                    reserved.append(self._x[i])
+            self._reserved_init = reserved
+            self._reserved = []
+
+    def sample(self):
+        if len(self._reserved) == 0:
+            self._reserved = self._reserved_init.copy()
+
+        selected = random.choice(self._reserved)
+        self._reserved.remove(selected)
+        return selected
+
+    def select(self, x):
+        if len(self._reserved) == 0:
+            self._reserved = self._reserved_init.copy()
+
+        if x not in self._reserved:
+            if x not in self._reserved_init:
+                raise RuntimeError(f"x = {x} is not in reserved_init {self._reserved_init}")
+            else:
+                return None
+        else:
+            self._reserved.remove(x)
+            return x
+
+    def selectable(self, x):
+        if len(self._reserved) == 0:
+            self._reserved = self._reserved_init.copy()
+
+        return x in self._reserved
+
+
 class FloorHeightMapper:
     def __init__(self, X, radius=5.0, logger=None):
         # X [x, y, floor, area, height]
@@ -305,20 +365,28 @@ class FloorHeightMapper:
 
     def get_floor_height_list(self, x, radius=None):
         _x = numpy.array(x).reshape(1, -1)
-        _radius = self._radius if radius is None else radius
+        radius_global = self._radius if radius is None else radius
 
         floor_list = []
         height_list = []
 
+        # search the closest sample for each floor
         for _floor in self._floors:
             nbrs = self.nbrs_dict[_floor]
             distances, indices = nbrs.kneighbors(_x)
             dist = distances[0]
             idx = indices[0]
+
+            # update radius for sample
+            radius_sample = self.X_dict[_floor][idx, 5].item()
+            if not numpy.isnan(radius_sample):
+                _radius = radius_sample
+            else:
+                _radius = radius_global
+
             if dist < _radius:
                 floor_list.append(_floor)
-                X_floor = self.X_dict[_floor]
-                height = X_floor[idx, 4].item()
+                height = self.X_dict[_floor][idx, 4].item()
                 height_list.append(height)
         return floor_list, height_list
 

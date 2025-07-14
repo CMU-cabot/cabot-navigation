@@ -97,6 +97,8 @@ RUN ./server create defaultServer
 
 COPY --from=build /home/$USERNAME/MapService/MapService/target/MapService-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
 COPY --from=build /home/$USERNAME/QueryService/QueryService/target/QueryService-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
+COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/MapService-version.json /home/$USERNAME/
+COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/QueryService-version.json /home/$USERNAME/
 COPY --chown=$USERNAME:$USERNAME server.xml /home/$USERNAME/wlp/usr/servers/defaultServer/
 COPY --chown=$USERNAME:$USERNAME server-data.sh /home/$USERNAME
 COPY --chown=$USERNAME:$USERNAME server-init.sh /home/$USERNAME

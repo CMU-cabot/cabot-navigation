@@ -1,4 +1,4 @@
-# Copyright (c) 2020, 2021  Carnegie Mellon University, IBM Corporation, and others
+# Copyright (c) 2020, 2025  Carnegie Mellon University, IBM Corporation, Miraikan, and others
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -61,6 +61,7 @@ services:
       - CABOT_INITY
       - CABOT_INITZ
       - CABOT_INITA
+      - CABOT_POST_LOCATION
       - CABOT_MAP_SERVER_HOST
       - CABOT_ROSBRIDGE_PORT
       - GAZEBO_MASTER_URI
@@ -71,8 +72,14 @@ services:
       - CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT
       - CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT
       - CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT
+      - CABOT_IMAGE_DESCRIPTION_API_KEY
+      - CABOT_IMAGE_DESCRIPTION_TIMEOUT
       - CABOT_HANDLE_BUTTON_MAPPING
+      - CABOT_USE_GNSS
+      - CABOT_USE_DIRECTIONAL_INDICATOR
+      - CABOT_VIBRATOR_TYPE
 # ROS2/DDS
+      - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
       - RMW_IMPLEMENTATION
       - CYCLONEDDS_URI
@@ -82,9 +89,13 @@ services:
       - ROS_DOMAIN_ID
       - __NV_PRIME_RENDER_OFFLOAD
       - __GLX_VENDOR_LIBRARY_NAME
+      - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
+      - PULSE_COOKIE=${XDG_RUNTIME_DIR}/pulse/cookie
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
+      - ${XDG_RUNTIME_DIR}/pulse/native:${XDG_RUNTIME_DIR}/pulse/native
+      - ${XDG_RUNTIME_DIR}/pulse/cookie:${XDG_RUNTIME_DIR}/pulse/cookie:ro
 # network
     privileged: true
     network_mode: host
@@ -121,9 +132,11 @@ services:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
       - CABOT_PRESSURE_AVAILABLE=${CABOT_PRESSURE_AVAILABLE:-0}
+      - CABOT_ROSBAG_COMPRESSION
       - CABOT_USE_GNSS=${CABOT_USE_GNSS:-0}
       - CABOT_MODEL
       - CABOT_SITE
+      - CABOT_SITE_TAGS
       - CABOT_SHOW_LOC_RVIZ=${CABOT_SHOW_LOC_RVIZ:-1}
       - CABOT_HEADLESS
       # ROS2/DDS
@@ -181,6 +194,8 @@ services:
       - CABOT_GAZEBO=1
       - CABOT_USE_SIM_TIME=1
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
+      - CABOT_ROS2_RVIZ_CONFIG
+      - CABOT_ROS2_LOCAL_RVIZ_CONFIG
     volumes:
 # device, bluetooth
       - /dev:/dev
@@ -194,12 +209,16 @@ services:
     stop_grace_period: 30s
     command:
       - "/launch.sh"
-      # - "-c"                  # core dump
+      - "-c"                  # core dump
       - "navigation"
 
 
   navigation-dev-base:
     extends: navigation-base
+    environment: &dev-environment
+      - RCUTILS_LOGGING_USE_STDOUT=0
+      - OVERRIDE_LAUNCH_PROCESS_OUTPUT=screen
+      - RCUTILS_CONSOLE_OUTPUT_FORMAT=[{severity}]	{time}	[{name}({file_name}#L{line_number})]	{message}
     volumes:
 # code
       - ./cabot:/home/developer/ros2_ws/src/cabot
@@ -244,6 +263,7 @@ services:
 
   gazebo-dev-base:
     extends: navigation-dev-base
+    environment: *dev-environment
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -271,6 +291,7 @@ services:
 
   gui-dev-base:
     extends: navigation-dev-base
+    environment: *dev-environment
     command:
       - "/launch.sh"
       # - "-c"                  # core dump
@@ -295,6 +316,7 @@ services:
 
   localization-dev-base:
     extends: localization-base
+    environment: *dev-environment
     volumes:
       - /dev:/dev
       - /sys/devices:/sys/devices
@@ -346,6 +368,7 @@ services:
     extends:
       service: localization-dev-base
     environment:
+      - <*dev-environment
       # rtklib
       - RTK_STR_IN
       - CABOT_SITE # if RTK_STR_IN is not specified, RTK_STR_IN will be loaded from CABOT_SITE
@@ -394,9 +417,8 @@ services:
           - linux/arm64
         output:
           - type=registry
-    env_file:
-      - path: ${CABOT_MAP_SERVER_ENV_FILE:-${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}/$CABOT_SITE/share/$CABOT_SITE/server_data/server.env}
-        required: false
+    volumes:
+      - ${CABOT_SITE_PKG_DIR:-./cabot_site_pkg}:/cabot_site_pkg
     environment:
       - HOST_UID
       - HOST_GID
@@ -406,8 +428,13 @@ services:
       - 'HULOP_MAP_SERVICE_USE_HTTP=true'
       - 'HULOP_VCAP_SERVICES={"mongodb": [{"credentials": {"url": "mongodb://mongodb_ms:27017/navi_db"}}]}'  # for local mongodb service
       - 'EDITOR_API_KEY=local-server-editor-api-key'
+      - 'EDITOR_AUDITOR_KEY=local-server-auditor-api-key'
       - 'SEARCH_BY_FLOOR_ENABLED=true'
       - 'SEARCH_BY_CATEGORY_ENABLED=true'
+    command:
+      - bash
+      - -c
+      - "set -a && source $(find /cabot_site_pkg -wholename \"*/$CABOT_SITE/server_data\" | head -1)/server.env && ./server run defaultServer"
     depends_on:
       mongodb_ms:
         condition: service_healthy
@@ -419,7 +446,7 @@ services:
       test: curl -f localhost:8080/map/login.jsp || exit 1
       interval: 3s
       timeout: 3s
-      retries: 10  # increased from 5, needs more time to launch on Jetson
+      retries: 50  # increased from 5, needs more time to launch on Jetson
 
   map_data:
     extends: map_server
@@ -449,7 +476,7 @@ services:
       test: echo 'db.runCommand("ping").ok' | mongo mongodb_ms:27017/test --quiet
       interval: 3s
       timeout: 3s
-      retries: 5
+      retries: 10
 
 
   location_tools:
@@ -480,7 +507,7 @@ services:
       test: curl -f localhost:9091/map/login.jsp || exit 1
       interval: 3s
       timeout: 3s
-      retries: 10  # increased from 5, needs more time to launch on Jetson
+      retries: 20  # increased from 5, needs more time to launch on Jetson
 
   mongodb_lt:
     image : mongo:4.4.25  # the latest v4 version as of Nov. 2023, works without server side modification
@@ -495,7 +522,7 @@ services:
       test: echo 'db.runCommand("ping").ok' | mongo mongodb_lt:27017/test --quiet
       interval: 3s
       timeout: 3s
-      retries: 5
+      retries: 10
 
 networks:
   mongodb_network:

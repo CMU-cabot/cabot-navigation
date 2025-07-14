@@ -72,7 +72,9 @@ function help()
 }
 
 if [[ -e .env ]]; then
+    set -a
     source .env
+    set +a
 fi
 
 pwd=`pwd`
@@ -267,8 +269,6 @@ if [ $error -eq 1 ] && [ $ignore_error -eq 0 ]; then
 fi
 
 
-export HOST_UID=$(id -u)
-export HOST_GID=$(id -g)
 export MAP_SERVER_PORT
 export CABOT_SITE
 export CABOT_SITE_PKG_DIR

@@ -36,20 +36,32 @@ cd ..
 ros2_ws=`pwd`
 
 debug=0
+sequential=0
 
-while getopts "d" arg; do
+while getopts "ds" arg; do
     case $arg in
-	d)
-	    debug=1
-	    ;;
+        d)
+            debug=1
+            ;;
+        s)
+            sequential=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
 
 if [[ $debug -eq 1 ]]; then
-    colcon build --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install --executor sequential $@
+    if [[ $sequential -eq 1 ]]; then
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install --executor sequential $@
+    else
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install $@
+    fi
 else
-    colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --executor sequential $@
+    if [[ $sequential -eq 1 ]]; then
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo --executor sequential $@
+    else
+        colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo $@
+    fi
 fi
 
 if [[ $? -ne 0 ]]; then exit 1; fi

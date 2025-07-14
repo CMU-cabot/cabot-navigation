@@ -18,5 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# constants
+int16 FLOOR_UNKNOWN=-32768
+
+# Floor
+int16 floor -32768
 ---
 StatusResponse status

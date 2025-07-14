@@ -150,12 +150,16 @@ def main():
     output = node.declare_parameter("output", '').value
     verbose = node.declare_parameter("verbose", True).value
 
+    map_frame = node.declare_parameter("map_frame", "map").value
+    tracking_frame = node.declare_parameter("tracking_frame", "base_link").value
+
     save_empty_beacon_sample = node.declare_parameter("save_empty_beacon_sample", True).value
     fingerprint_data_interval = node.declare_parameter("fingerprint_data_interval", 1.2).value  # should be larger than 1.0 s because beacon data interval is about 1.0 s.
     fingerprint_position_interval = node.declare_parameter("fingerprint_position_interval", 0.5).value  # to prevent the mapper from creating dummy fingerprint data at the same position
 
     # use trajectory recorder extention
     output_trajectory = node.declare_parameter("output_trajectory", '').value
+    trajectory_recorder_timer_period = node.declare_parameter("trajectory_recorder_timer_period", 10.0).value
     interpolate_by_trajectory = node.declare_parameter("interpolate_by_trajectory", False).value
     trajectory_recoder = None  # default
 
@@ -167,7 +171,7 @@ def main():
                           )
 
     if output_trajectory != '' or interpolate_by_trajectory:
-        trajectory_recoder = TrajectoryRecorder(node, output_trajectory)
+        trajectory_recoder = TrajectoryRecorder(node, output_trajectory, trajectory_recorder_timer_period)
 
     subscribers = []
     for sub_topic in sub_topics:
@@ -177,7 +181,7 @@ def main():
 
     def transform_check_loop():
         try:
-            t = tfBuffer.lookup_transform('map', 'base_link', rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=node.get_clock().clock_type))
+            t = tfBuffer.lookup_transform(map_frame, tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=node.get_clock().clock_type))
             mapper.set_current_position(t)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             node.get_logger().error('LookupTransform Error', throttle_duration_sec=5.0)

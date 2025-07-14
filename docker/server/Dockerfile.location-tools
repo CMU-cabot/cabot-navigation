@@ -87,6 +87,7 @@ WORKDIR /home/$USERNAME/wlp/bin
 RUN ./server create defaultServer
 
 COPY --from=build /home/$USERNAME/BLELocalization/LocationTools/target/LocationTools-0.0.1-SNAPSHOT.war /home/$USERNAME/wlp/usr/servers/defaultServer/apps
+COPY --from=build --chown=$USERNAME:$USERNAME /home/$USERNAME/BLELocalization-version.json /home/$USERNAME/
 
 COPY --chown=$USERNAME:$USERNAME server-location-tools.xml /home/$USERNAME/wlp/usr/servers/defaultServer/server.xml
 

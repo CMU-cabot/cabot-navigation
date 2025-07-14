@@ -19,6 +19,7 @@ install(PROGRAMS
   script/extract_floormap_info_from_yaml.py
   script/extract_node_options.py
   script/filter_rss_samples.py
+  script/pbstream_edit.py
   script/timeout_thread.py
   script/topic_checker.py
 

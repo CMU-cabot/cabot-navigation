@@ -27,7 +27,6 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
-from launch.conditions import UnlessCondition
 from launch.event_handlers import OnShutdown
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
@@ -40,7 +39,7 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
-    output = 'both'
+    output = {'stderr': {'log'}}
     pkg_dir = get_package_share_directory('cabot')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -65,6 +64,7 @@ def generate_launch_description():
     # - use_tf_static
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         DeclareLaunchArgument(
@@ -74,8 +74,7 @@ def generate_launch_description():
         ),
         # append prefix name to the log directory for convenience
         RegisterEventHandler(
-            OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot")]),
-            condition=UnlessCondition(use_sim_time)
+            OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot")])
         ),
         DeclareLaunchArgument(
             'touch_enabled',
@@ -96,7 +95,20 @@ def generate_launch_description():
             name='speed_visualize_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
+        Node(
+            package='cabot',
+            executable='wheelie_speed_control_node',
+            namespace='/cabot',
+            name='wheelie_speed_control_node',
+            output=output,
+            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
+        ),
+
 
         # Costmap clearing issue hacking
         # Some obstacle points in costmap can be laid between the line of sight of lasers.
@@ -114,6 +126,8 @@ def generate_launch_description():
             name='clearing_tf_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
         # The diagram of Cabot Odometry Adapter & related nodes (*components)
@@ -161,6 +175,8 @@ def generate_launch_description():
                     'max_speed': max_speed
                 },
             ],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # for local odom navigation
         Node(
@@ -170,6 +186,8 @@ def generate_launch_description():
             name='odom_adapter_node2',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot Lidar Speed Control
         Node(
@@ -179,6 +197,19 @@ def generate_launch_description():
             name='lidar_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
+        ),
+        # Cabot Low Lidar Speed Control
+        Node(
+            package='cabot',
+            executable='lidar_speed_control_node',
+            namespace='/cabot',
+            name='low_lidar_speed_control_node',
+            output=output,
+            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot People Speed Control
         Node(
@@ -188,6 +219,8 @@ def generate_launch_description():
             name='people_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot TF Speed Control
         Node(
@@ -197,6 +230,8 @@ def generate_launch_description():
             name='tf_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
         # Cabot Touch Speed Control
         Node(
@@ -206,11 +241,14 @@ def generate_launch_description():
             name='touch_speed_control_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
         # Cabot Speed Control
         # This node limit the speed from the move_base based on specified topics
         #   /cabot/lidar_speed           - control by lidar sensor
+        #   /cabot/low_lidar_speed       - control by low lidar sensor
         #   /cabot/map_speed             - control by map speed poi
         #   /cabot/people_speed          - control by surrounding people
         #   /cabot/queue_speed           - control by queue
@@ -225,6 +263,8 @@ def generate_launch_description():
             name=PythonExpression(['"speed_control_node_touch_', touch_enabled, '"']),
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
 
         # Sensor fusion for stabilizing odometry
@@ -235,5 +275,7 @@ def generate_launch_description():
             name='ekf_node',
             output=output,
             parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            respawn=True,
+            respawn_delay=1.0,
         ),
     ])

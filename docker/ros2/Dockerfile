@@ -72,13 +72,17 @@ ARG ROS_DISTRO
 # TODO replace with rosdep install
 RUN apt update && \
     apt install -y --no-install-recommends \
+    alsa-utils \
     bc \
+    ffmpeg \
     libqt5svg5-dev \
     libzmq3-dev \
     libdw-dev \
     libyaml-cpp-dev \
     libomp-dev \
     libpcl-dev \
+    libasound2 \
+    pulseaudio-utils \
     python3-pykdl \
     python3-sklearn \
     python3-venv \
@@ -119,8 +123,10 @@ RUN pip3 install --no-cache-dir \
     ipython==8.0.1 \
     odrive==0.6.5 \
     numpy==1.24.4 \
+    pydub \
     pyproj \
     pyserial \
+    python-can \
     requests \
     transforms3d==0.4.1
 # for pedestrian test
@@ -222,13 +228,17 @@ ARG ROS_DISTRO
 # TODO replace with rosdep install
 RUN apt update && \
     apt install -y --no-install-recommends \
+    alsa-utils \
     bc \
+    ffmpeg \
     libqt5svg5-dev \
     libzmq3-dev \
     libdw-dev \
     libyaml-cpp-dev \
     libomp-dev \
     libpcl-dev \
+    libasound2 \
+    pulseaudio-utils \
     python3-pykdl \
     python3-sklearn \
     python3-venv \
@@ -267,8 +277,10 @@ RUN pip3 install --no-cache-dir \
     ipython==8.0.1 \
     odrive==0.6.5 \
     numpy==1.24.4 \
+    pydub \
     pyproj \
     pyserial \
+    python-can \
     requests \
     transforms3d==0.4.1
 # for pedestrian test

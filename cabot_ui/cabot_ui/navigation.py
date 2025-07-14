@@ -19,10 +19,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 import math
 import inspect
 import numpy
 import numpy.linalg
+import os
 import threading
 import time
 import traceback
@@ -84,7 +86,7 @@ class NavigationInterface(object):
     def have_arrived(self, goal):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def have_completed(self, goal):
+    def have_completed(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def approaching_to_poi(self, poi=None):
@@ -136,6 +138,9 @@ class NavigationInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def request_sound(self, message: SNMessage):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def system_pause_navigation(self, callback):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
 
@@ -234,7 +239,9 @@ class ControlBase(object):
         # self.buffer = tf2_ros.Buffer()
         # self.listener = tf2_ros.TransformListener(self.buffer, tf_node)
 
+        self.post_location_enabled = os.environ.get("CABOT_POST_LOCATION", "false").lower() == "true"
         self.current_pose = None
+        self.last_log_time = node.get_clock().now()
         self.current_odom_pose = None
         self.current_floor = node.declare_parameter("initial_floor", 1).value
         self.floor_is_changed_at = node.get_clock().now()
@@ -344,7 +351,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     TURN_NEARBY_THRESHOLD = 2
 
     def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
-                 datautil_instance=None, anchor_file=None, wait_for_action=True):
+                 datautil_instance=None, anchor_file='', wait_for_action=True):
 
         self.current_floor = None
         self.current_frame = None
@@ -358,6 +365,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.queue_wait_pois = []
         self.speed_pois = []
         self.turns = []
+        self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
         self.i_am_ready = False
@@ -377,6 +385,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_msg.data = True
         self.pause_control_loop_handler = None
         self.lock = threading.Lock()
+
+        self.restart_navigation_threthold_sec = node.declare_parameter("restart_navigation_threthold_sec", 5.0).value
 
         self._max_speed = node.declare_parameter("max_speed", 1.1).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
@@ -404,6 +414,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_pub = node.create_publisher(std_msgs.msg.Bool, pause_control_output, 10, callback_group=MutuallyExclusiveCallbackGroup())
         map_speed_output = node.declare_parameter("map_speed_topic", "/cabot/map_speed").value
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -437,12 +448,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.initial_queue_interval = node.declare_parameter("initial_queue_interval", 1.0).value
         self.current_queue_interval = self.initial_queue_interval
 
-        turn_end_output = node.declare_parameter("turn_end_topic", "/turn_end").value
+        turn_end_output = node.declare_parameter("turn_end_topic", "/cabot/turn_end").value
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        rotation_complete_output = node.declare_parameter("rotation_complete_topic", "/cabot/rotation_complete").value
+        self.rotation_complete_pub = node.create_publisher(std_msgs.msg.Bool, rotation_complete_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
+        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
-        self._process_timer = act_node.create_timer(0.1, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+        self._process_timer = act_node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
         self._start_loop()
 
     def _localize_status_callback(self, msg):
@@ -485,23 +500,33 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"wait_for_restart_navigation {duration_in_sec:.2f}")
         if self._current_goal is None:
             return
-        if duration_in_sec > 1.0:
+        if duration_in_sec > self.restart_navigation_threthold_sec:
             self._stop_loop()
-            if self._current_goal:
-                self._current_goal.prevent_callback = True
 
             def done_callback():
                 self.resume_navigation()
-            self.pause_navigation(done_callback)
+            self.delegate.system_pause_navigation(done_callback)
 
     def _plan_callback(self, path):
         try:
+            msg = nav_msgs.msg.Path()
+            msg.header.frame_id = self._global_map_name
+            for pose in path.poses:
+                pose.header.frame_id = path.header.frame_id
+                msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+                # msg.poses[-1].pose.position.z = 0.0
+            path = msg
+        except:  # noqa: E722
+            self._logger.info(traceback.format_exc())
+        try:
+            start = time.time()
             self.turns = TurnDetector.detects(path, current_pose=self.current_pose)
+            end = time.time()
             self.visualizer.turns = self.turns
             if self.social_navigation is not None:
                 self.social_navigation.path = path
 
-            self._logger.info(F"turns: {self.turns}")
+            self._logger.info(F"turns: {self.turns}, it takes {(end - start)*1000:.0f}ms")
             """
             for i in range(len(self.turns)-1, 0, -1):
             t1 = self.turns[i]
@@ -549,6 +574,23 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _goal_updated_callback(self, msg):
         if self._current_goal:
             self._current_goal.update_goal(msg)
+
+    def request_defult_params(self):
+        with self._process_queue_lock:
+            self._process_queue.append((self._request_default_params, ))
+
+    def _request_default_params(self):
+        # dummy Goal instance
+        goal = navgoal.Goal(self, x=0, y=0, r=0, angle=0, floor=0)
+
+        def dummy_nav_params_key():
+            return navgoal.Nav2Params.all_keys()
+        goal.nav_params_keys = dummy_nav_params_key
+
+        def done_callback():
+            self._logger.info(f"done_callback f{goal._current_params}")
+            navgoal.Goal.default_params = copy.deepcopy(goal._current_params)
+        goal._save_params(done_callback)
 
     # public interfaces
 
@@ -637,39 +679,41 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
         self._goal_index = -1
 
-        # check facilities
-        self.nearby_facilities = []
-        links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
-        target = groute[-1]
-        if len(links) > 0:
-            kdtree = geojson.LinkKDTree()
-            kdtree.build(links)
+        def check_facilities_task():
+            # check facilities
+            self.nearby_facilities = []
+            links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))
+            target = groute[-1]
+            if len(links) > 0:
+                kdtree = geojson.LinkKDTree()
+                kdtree.build(links)
 
-            start = time.time()
-            facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
-            for facility in facilities:
-                # self._logger.debug(f"facility {facility._id}: {facility.name}")
-                if not facility.name:
-                    continue
-                if not facility.is_read:
-                    continue
+                start = time.time()
+                facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+                for facility in facilities:
+                    # self._logger.debug(f"facility {facility._id}: {facility.name}")
+                    if not facility.name:
+                        continue
+                    if not facility.is_read:
+                        continue
 
-                for ent in facility.entrances:
-                    min_link, min_dist = kdtree.get_nearest_link(ent.node)
-                    if min_link is None or min_dist >= 5.0:
-                        continue
-                    # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
-                    gp = ent.set_target(min_link)
-                    dist = target.geometry.distance_to(gp)
-                    if dist < 1.0:
-                        self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
-                        continue
-                    self.nearby_facilities.append({
-                        "facility": facility,
-                        "entrance": ent
-                    })
-            end = time.time()
-            self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+                    for ent in facility.entrances:
+                        min_link, min_dist = kdtree.get_nearest_link(ent.node)
+                        if min_link is None or min_dist >= 5.0:
+                            continue
+                        # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
+                        gp = ent.set_target(min_link)
+                        dist = target.geometry.distance_to(gp)
+                        if dist < 1.0:
+                            self._logger.info(f"{facility._id=}: {facility.name=} is close to the node {target._id=}, {dist=}")
+                            continue
+                        self.nearby_facilities.append({
+                            "facility": facility,
+                            "entrance": ent
+                        })
+                end = time.time()
+                self._logger.info(F"Check Facilities {end - start:.3f}.sec")
+        threading.Thread(target=check_facilities_task).start()
 
         # for dashboad
         (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
@@ -779,18 +823,20 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _navigate_sub_goal(self, goal):
         self._logger.info(F"navigation.{util.callee_name()} called")
         self.delegate.activity_log("cabot/navigation", "sub_goal")
-
+        self.visualizer.reset()
         if isinstance(goal, navgoal.NavGoal):
             self.visualizer.pois = goal.pois
             self.visualizer.visualize()
             self.speed_pois = [x for x in goal.pois if isinstance(x, geojson.SpeedPOI)]
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
+            self.gradient = goal.gradient
         else:
             self.visualizer.pois = []
             self.speed_poi = []
             self.info_pois = []
             self.queue_wait_pois = []
+            self.gradient = []
         self.turns = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
@@ -847,6 +893,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                                       current_floor=self.current_floor,
                                       global_frame=self._global_map_name
                                       )
+            if self.post_location_enabled:
+                if self._node.get_clock().now() - self.last_log_time > rclpy.duration.Duration(seconds=1.0):
+                    self._datautil.post_location(self.current_global_pose(), self.current_floor)
+                    self.last_log_time = self._node.get_clock().now()
             self._logger.debug(F"current pose {self.current_pose}", throttle_duration_sec=1)
             self.current_odom_pose = self.current_local_odom_pose()
         except RuntimeError:
@@ -871,6 +921,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.i_am_ready = True
             self._logger.debug("i am ready")
             self.delegate.i_am_ready()
+            self.request_defult_params()
 
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
@@ -882,6 +933,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         # isolate error handling
         try:
             self._check_info_poi(self.current_pose)
+        except:  # noqa: E722
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+        try:
+            self._check_gradient(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
@@ -926,6 +981,16 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
+
+    def _check_gradient(self, current_pose):
+        msg = std_msgs.msg.Float32()
+        msg.data = 0.0
+        for g in self.gradient:
+            if g.within_link(current_pose):
+                sign = 1.0 if g.gradient == geojson.Gradient.Up else -1.0
+                msg.data = sign * float(g.max_gradient if g.max_gradient else 5.0)
+                break
+        self.gradient_pub.publish(msg)
 
     def _check_nearby_facility(self, current_pose):
         if not self.nearby_facilities:
@@ -1205,7 +1270,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         self._logger.info("visualize goal")
-        self.visualizer.reset()
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
@@ -1246,7 +1310,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         get_result_future.add_done_callback(done_cb)
 
         self._logger.info("visualize goal")
-        self.visualizer.reset()
         self.visualizer.goal = goal
         self.visualizer.visualize()
 
@@ -1270,6 +1333,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             diff = diff - clockwise * math.pi * 2
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
+
+        msg = std_msgs.msg.Float32()
+        msg.data = geoutil.normalize_angle(turn_yaw)
+        self.turn_angle_pub.publish(msg)
 
         future = self._spin_client.send_goal_async(goal)
         future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
@@ -1301,6 +1368,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
             else:
                 self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
+                msg = std_msgs.msg.Bool()
+                msg.data = True
+                self.rotation_complete_pub.publish(msg)
                 callback(True)
         get_result_future.add_done_callback(done_callback)
 
@@ -1438,10 +1508,13 @@ class NavigationParamManager:
     def get_client(self, node_name, service_type, service_name):
         key = f'{node_name}/{service_name}'
         if key not in self.clients:
-            self.clients[key] = self.node.create_client(service_type, key, callback_group=self.callback_group)
-        if self.clients[key] and not self.clients[key].wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().error(f'{key} is not available...')
-            self.clients[key] = False
+            for i in range(10):
+                client = self.node.create_client(service_type, key, callback_group=self.callback_group)
+                if client.wait_for_service(timeout_sec=1.0):
+                    self.node.get_logger().info(f'{key} is available')
+                    self.clients[key] = client
+                    break
+                self.node.get_logger().error(f'{key} is not available (retry {i+1})...')
         return self.clients[key]
 
     def change_parameter(self, node_name, param_dict, callback):
@@ -1459,6 +1532,8 @@ class NavigationParamManager:
             done_callback(None)
 
     def change_parameters(self, params, callback):
+        params = copy.deepcopy(params)
+
         def sub_callback(node_name, future):
             del params[node_name]
             self.node.get_logger().info(f"change_parameter sub_callback {node_name} {len(params)} {future.result() if future else None}")

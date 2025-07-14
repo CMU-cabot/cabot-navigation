@@ -27,6 +27,7 @@ Author: Daisuke Sato<daisukes@cmu.edu>
 import time
 import json
 import os
+import traceback
 
 from rclpy.node import Node
 import requests
@@ -38,6 +39,7 @@ class DataUtil(object):
     """Data Utility class"""
 
     SEARCH_API = "routesearch"
+    LOG_API = "api/log"
 
     def __init__(self, node: Node):
         self._node = node
@@ -86,6 +88,12 @@ class DataUtil(object):
         CaBotRclpyUtil.info(url)
         return url
 
+    def get_log_url(self):
+        """get the URL for search api"""
+        url = F"{self._protocol}://{self._hostname}/{self.LOG_API}"
+        CaBotRclpyUtil.info(url)
+        return url
+
     def init_by_server(self, retry_count=100):
         """initialize server state for a user"""
         if self.is_ready:
@@ -112,6 +120,26 @@ class DataUtil(object):
         self.node_map = node_map
         self.features = features
         self.is_ready = True
+
+    def post_location(self, location, floor):
+        try:
+            log = [{
+                'event': 'location',
+                'timestamp': int(time.time() * 1000),  # milliseconds
+                'latitude': location.lat,
+                'longitude': location.lng,
+                'rotate': location.r,
+                'client': 'Cabot',
+                'floor': floor
+            }]
+            data = {
+                'action': 'insert',
+                'data': json.dumps(log)
+            }
+            req = requests.post(self.get_log_url(), data=data)
+            CaBotRclpyUtil.info(F"post_location {req.status_code} {req.text}")
+        except:  # noqa: #722
+            CaBotRclpyUtil.error(traceback.format_exc())
 
     def get_landmarks(self, filename=None):
         """get landmarks"""

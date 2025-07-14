@@ -30,8 +30,9 @@ CostmapLayerCapture::CostmapLayerCapture(nav2_costmap_2d::LayeredCostmap * layer
   layer_names_ = layer_names;
 }
 
-bool CostmapLayerCapture::capture()
+bool CostmapLayerCapture::capture(const geometry_msgs::msg::PoseStamped & start, const double & distance)
 {
+  auto t0 = std::chrono::system_clock::now();
   auto width = layered_costmap_->getCostmap()->getSizeInCellsX();
   auto height = layered_costmap_->getCostmap()->getSizeInCellsY();
   auto resolution = layered_costmap_->getCostmap()->getResolution();
@@ -40,15 +41,27 @@ bool CostmapLayerCapture::capture()
   costmap_.resizeMap(width, height, resolution, origin_x, origin_y);
   costmap_.resetMap(0, 0, width, height);
 
-  auto plugins = layered_costmap_->getPlugins();
   bool flag = false;
-  for (auto plugin = plugins->begin(); plugin != plugins->end(); plugin++) {
-    if (layer_names_.empty() ||
-      std::find(layer_names_.begin(), layer_names_.end(), plugin->get()->getName()) != layer_names_.end())
-    {
-      printf("plugin %s update\n", (*plugin)->getName().c_str());
+  if (layer_names_.empty()) {
+    costmap_ = *layered_costmap_->getCostmap();
+    auto t1 = std::chrono::system_clock::now();
+    auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+    RCLCPP_INFO(rclcpp::get_logger("planner_server.CostmapLayerCapture"), "setCharMap (%ld ms)", ms1.count());
+  } else {
+    int minx = std::max(0, static_cast<int>((start.pose.position.x - origin_x - distance) / resolution));
+    int miny = std::max(0, static_cast<int>((start.pose.position.y - origin_y - distance) / resolution));
+    int maxx = std::min(static_cast<int>(width), static_cast<int>((start.pose.position.x - origin_x + distance) / resolution));
+    int maxy = std::min(static_cast<int>(height), static_cast<int>((start.pose.position.y - origin_y + distance) / resolution));
+    RCLCPP_INFO(rclcpp::get_logger("planner_server.CostmapLayerCapture"), "copy costmap %d %d %d %d", minx, miny, maxx, maxy);
 
-      (*plugin)->updateCosts(costmap_, 0, 0, width, height);
+    auto plugins = layered_costmap_->getPlugins();
+    for (auto plugin = plugins->begin(); plugin != plugins->end(); plugin++) {
+      if (std::find(layer_names_.begin(), layer_names_.end(), plugin->get()->getName()) != layer_names_.end()) {
+        (*plugin)->updateCosts(costmap_, minx, miny, maxx, maxy);
+        auto t1 = std::chrono::system_clock::now();
+        auto ms1 = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+        RCLCPP_INFO(rclcpp::get_logger("planner_server.CostmapLayerCapture"), "plugin %s update (%ld ms)", (*plugin)->getName().c_str(), ms1.count());
+      }
     }
   }
   return flag;

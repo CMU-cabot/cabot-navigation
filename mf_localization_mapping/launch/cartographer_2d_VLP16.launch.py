@@ -31,6 +31,7 @@ from launch.conditions import LaunchConfigurationEquals
 from launch.conditions import LaunchConfigurationNotEquals
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command
+from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch.substitutions import PythonExpression
@@ -61,6 +62,7 @@ def generate_launch_description():
     convert_pbstream = LaunchConfiguration('convert_pbstream')
     save_state_directory = LaunchConfiguration('save_state_directory')
     save_state_filestem = LaunchConfiguration('save_state_filestem')
+    mapping_use_gnss = LaunchConfiguration('mapping_use_gnss')
 
     cartographer_sigterm_timeout = LaunchConfiguration('cartographer_sigterm_timeout', default=300.0)
     cartographer_sigkill_timeout = LaunchConfiguration('cartographer_sigkill_timeout', default=300.0)
@@ -105,13 +107,25 @@ def generate_launch_description():
                     ),
                     condition=IfCondition(convert_pbstream)
                 ),
+                RegisterEventHandler(
+                    OnProcessExit(
+                        target_action=convert_pgm_to_png,
+                        on_exit=[
+                            extract_node_options,
+                            export_gnss_from_bag
+                        ]
+                    ),
+                    condition=IfCondition(mapping_use_gnss)
+                ),
                 ]
 
     # post process commands
     convert_pbstream_to_pgm = ExecuteProcess(
        cmd=["ros2", "run", "cartographer_ros", "cartographer_pbstream_to_ros_map",
             "-pbstream_filename", [save_state_filestem, ".pbstream"],
-            '-map_filestem', save_state_filestem],
+            '-map_filestem', save_state_filestem,
+            '-resolution', grid_resolution,
+            ],
        cwd=save_state_directory
     )
 
@@ -131,6 +145,22 @@ def generate_launch_description():
              ],
         cwd=save_state_directory,
         shell=True
+    )
+
+    extract_node_options = ExecuteProcess(
+        cmd=["ros2", "run", "mf_localization_mapping", "extract_node_options.py",
+             "--input", [EnvironmentVariable('ROS_LOG_DIR'), "/docker-compose.log"],
+             "--output", [save_state_filestem, ".node-options.yaml"]
+             ],
+        cwd=save_state_directory
+    )
+
+    export_gnss_from_bag = ExecuteProcess(
+        cmd=["ros2", "run", "mf_localization_mapping", "export_gnss_fix.py",
+             "--input", [save_state_filestem],
+             "--output", [save_state_filestem, ".gnss.csv"]
+             ],
+        cwd=save_state_directory
     )
 
     return LaunchDescription([
@@ -155,6 +185,7 @@ def generate_launch_description():
         DeclareLaunchArgument('convert_pbstream', default_value='false'),
         DeclareLaunchArgument('save_state_directory', default_value=''),
         DeclareLaunchArgument('save_state_filestem', default_value=''),
+        DeclareLaunchArgument('mapping_use_gnss', default_value='false'),
 
         # sigterm/sigkill timeout
         DeclareLaunchArgument('cartographer_sigterm_timeout', default_value='300.0'),

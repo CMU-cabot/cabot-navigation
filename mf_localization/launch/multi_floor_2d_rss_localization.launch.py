@@ -33,16 +33,20 @@ from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
+from launch_ros.actions import SetParameter
 from launch_ros.actions import SetParametersFromFile
 from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
     pkg_dir = get_package_share_directory('mf_localization')
+    use_sim_time = LaunchConfiguration('use_sim_time')
     robot = LaunchConfiguration('robot')
     rssi_offset = LaunchConfiguration('rssi_offset')
 
     map_config_file = LaunchConfiguration('map_config_file')
+    tags = LaunchConfiguration('tags')
     beacons_topic = LaunchConfiguration('beacons_topic')
     wifi_topic = LaunchConfiguration('wifi_topic')
     with_odom_topic = LaunchConfiguration('with_odom_topic')
@@ -57,6 +61,7 @@ def generate_launch_description():
     use_global_localizer = LaunchConfiguration('use_global_localizer')
     gnss_fix_topic = LaunchConfiguration('gnss_fix_topic')
     gnss_fix_velocity_topic = LaunchConfiguration('gnss_fix_velocity_topic')
+    gnss_navsat_topic = LaunchConfiguration('gnss_navsat_topic')
 
     publish_current_rate = LaunchConfiguration('publish_current_rate')
 
@@ -65,11 +70,13 @@ def generate_launch_description():
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("mf_localization")])),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
 
         DeclareLaunchArgument('robot', default_value='', description='Robot type should be specified'),
         DeclareLaunchArgument('rssi_offset', default_value='0.0', description='Set RSSI offset to estimate location'),
 
         DeclareLaunchArgument('map_config_file', default_value='', description='Specify map config file path'),
+        DeclareLaunchArgument('tags', default_value='', description='Specify tags to select which maps to load (comma-separated string e.g. v0.2,demo)'),
         DeclareLaunchArgument('beacons_topic', default_value='beacons', description='Specify beacons topic name'),
         DeclareLaunchArgument('wifi_topic', default_value='wifi', description='Specify wifi topic name'),
         DeclareLaunchArgument('with_odom_topic', default_value='false', description='Weather odom topic is used to cartographer localization or not'),
@@ -84,6 +91,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_global_localizer', default_value='false', description='Weather use global localizer or not'),
         DeclareLaunchArgument('gnss_fix_topic', default_value='gnss_fix', description='Specify GNSS fix topic name'),
         DeclareLaunchArgument('gnss_fix_velocity_topic', default_value='gnss_fix_velocity', description='Specify GNSS fix velocity topicname'),
+        DeclareLaunchArgument('gnss_navsat_topic', default_value='ublox/navsat', description='Specify NAVSAT topicname'),
 
         DeclareLaunchArgument('publish_current_rate', default_value='0', description='Specify the rate of publishing current location'),
 
@@ -96,10 +104,12 @@ def generate_launch_description():
                 PathJoinSubstitution([pkg_dir, 'configuration_files', 'multi_floor', 'multi_floor_manager.yaml']),
                 condition=UnlessCondition(with_odom_topic),
             ),
+            SetParameter('use_sim_time', use_sim_time),
             Node(
                 package='mf_localization',
                 executable='multi_floor_topic_proxy',
                 name='multi_floor_topic_proxy',
+                output=output,
                 parameters=[{
                     'map_config_file': map_config_file,
                     'verbose': True,
@@ -115,8 +125,10 @@ def generate_launch_description():
                 package='mf_localization',
                 executable='multi_floor_manager.py',
                 name='multi_floor_manager',
+                output=output,
                 parameters=[{
                     'map_config_file': map_config_file,
+                    'tags': tags,
                     'configuration_directory': pkg_dir+'/configuration_files/cartographer',
                     'configuration_file_prefix': 'cartographer_2d',
                     'robot': robot,
@@ -137,7 +149,7 @@ def generate_launch_description():
                     ('gnss_fix', gnss_fix_topic),
                     ('gnss_fix_velocity', gnss_fix_velocity_topic),
                     # ublox_converter
-                    ('navsat', 'ublox/navsat'),
+                    ('navsat', gnss_navsat_topic),
                     ('num_active_sv', 'ublox_converter/num_active_sv'),
                     ('sv_status', 'ublox_converter/sv_status'),
                 ],

@@ -1,0 +1,129 @@
+# Copyright (c) 2022  Carnegie Mellon University
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+## Navigation messages
+MAIN_MENU: "主菜单"
+IN_PRERARATION: "正在准备中，请稍候。"
+I_AM_READY: "准备完毕"
+PAUSE_NAVIGATION: "已暂停。按右键继续。。"
+PAUSE_CONTROL: "自动行驶已暂停。按右键继续。"
+CANCEL_NAVIGATION: "已结束。"
+RESUME_NAVIGATION: "已继续。"
+START_EXPLORATION: "已启动探索模式。"
+YOU_HAVE_ARRIVED_WITH_NAME_AND_DESCRIPTION: "已到达{0}。{1}。"
+YOU_HAVE_ARRIVED_WITH_NAME: "已到达{0}。"
+YOU_HAVE_ARRIVED: "已到达。"
+
+## Social
+PERSON_AHEAD: "前方有人"
+AVOIDING_A_PERSON: "正在避开一个人。"
+AVOIDING_PEOPLE: "正在避开几个人。"
+AVOIDING_AN_OBSTACLE: "正在避开一个障碍物。"
+AVOIDING_OBSTACLES: "正在避开多个障碍物。"
+TRYING_TO_AVOID_PEOPLE: "正在尝试避开人群"
+TRYING_TO_AVOID_OBSTACLE: "正在尝试避开障碍物"
+PEOPLE_ARE_IN_MY_WAY: "前方有人无法前进"
+PLEASE_WAIT_FOR_A_SECOND: "请稍候"
+A_PERSON_IN_THE_WAY: "路线上有人。"
+PEOPLE_IN_THE_WAY: "路线上有人群。"
+FOLLOWING_A_PERSON: "正在跟随前方的人。"
+FOLLOWING_PEOPLE: "正在跟随前方的人群。"
+
+## queue
+GOING_TO_GET_IN_LINE: "正在排队。"
+
+
+## Elevator
+CALL_ELEVATOR_PLEASE: "请呼叫电梯"
+CALL_ELEVATOR_PLEASE_ON_YOUR: "请按{0}的按钮呼叫电梯"
+ELEVATOR_IS_OPENING: "请紧跟在后面。正在进入电梯。"
+GETTING_OFF_THE_ELEVATOR: "将走出电梯"
+
+
+FRONT_LEFT: "左前方"
+FRONT_RIGHT: "右前方"
+LEFT: "左方"
+RIGHT: "右方"
+FRONT: "前方"
+BACK: "后方"
+
+
+## POI
+AUTO_DOOR: "自动门"
+DOOR: "门"
+DOOR_POI_USER_ACTION: "请手动打开门后通过。"
+DOOR_POI_APPROACHING: "即将到达{0}"
+DOOR_POI_PASSED: "非常感谢。将继续自动运行。"
+
+
+## Menu
+MENU_NAVIGATE_USAGE: "使用上下按钮移动项目"
+MENU_ADJUST_USAGE: "使用上下按钮进行调整"
+MENU_ITEM_SELECTED: "已选择{0}"
+
+SELECT_DESTINATION: "选择目的地"
+
+LAUNCH_EXPLORATION_MODE: "开启探索模式"
+EXPLORATION_MODE_IS_LAUNCHED: "已开启探索模式"
+
+SPEECH_SPEED: "朗读速度"
+SPEECH_VOICE: "朗读语音"
+FEMALE: "女性"
+MALE: "男性"
+
+SYSTEM_VOLUME: "系统音量"
+MAXIMUM_VELOCITY: "最高速度"
+DEVELOPER_MENU: "开发者菜单"
+CLUTCH: "离合器"
+
+## Vibration Read Aloud
+HANDLE_START: "即将移动"
+HANDLE_RIGHT_ABOUT_TURN: "即将向右大转弯"
+HANDLE_RIGHT_TURN: "即将向右转"
+HANDLE_RIGHT_DEV: "即将稍微向右转"
+HANDLE_LEFT_ABOUT_TURN: "即将向左大转弯"
+HANDLE_LEFT_TURN: "即将向左转"
+HANDLE_LEFT_DEV: "即将稍微向左转"
+
+## Narrow
+FOLLOW_BEHIND_PLEASE_NARROW: "即将通过狭窄的道路。请紧跟在行李箱后面。"
+RETURN_TO_POSITION_PLEASE: "已穿过狭窄道路。请返回原位。"
+
+## Touch
+NOT_DETECT_TOUCH: "未检测到把手被触碰。"
+
+## Facility
+IN_FRONT: "正面"
+RIGHT_SIDE: "右侧"
+LEFT_SIDE: "左側"
+APPROACEHD_TO_FACILITY: "在{1}有{0}"
+
+## Describe Surround
+REQUESTING_PLEASE_WAIT: "正在确认"
+REQUESTING_ERROR: "发生错误，请稍后重试。"
+REQUESTING_DESCRIBE_SURROUND: "正在确认周围情况。"
+REQUESTING_DESCRIBE_FORWARD: "正在确认前方情况。"
+
+## Tour test
+START_NAVIGATION: "Start Navigation"
+ARRIVE_DESTINATON: "Arrive Destination"
+TAKE_ELEVATOR: "Taking Elevator"
+EXIT_ELEVATOR: "Exit Elevator"
+SYSTEM: "System"

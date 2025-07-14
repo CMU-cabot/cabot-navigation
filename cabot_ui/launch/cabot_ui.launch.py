@@ -24,6 +24,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
 from launch.conditions import IfCondition
+from launch.conditions import UnlessCondition
 from launch.event_handlers import OnShutdown
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
@@ -36,6 +37,8 @@ from cabot_common.launch import AppendLogDirPrefix
 
 
 def generate_launch_description():
+    output = {'stderr': {'log'}}
+    use_sim_time = LaunchConfiguration('use_sim_time')
     init_speed = LaunchConfiguration('init_speed')
     anchor_file = LaunchConfiguration('anchor_file')
     language = LaunchConfiguration('language')
@@ -46,6 +49,8 @@ def generate_launch_description():
     announce_no_touch = LaunchConfiguration('announce_no_touch')
     speed_poi_params = LaunchConfiguration('speed_poi_params')
     handle_button_mapping = LaunchConfiguration('handle_button_mapping')
+    vibrator_type = LaunchConfiguration('vibrator_type')
+    use_directional_indicator = LaunchConfiguration('use_directional_indicator')
 
     def hoge(text):
         return text
@@ -69,10 +74,16 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
         RegisterEventHandler(OnShutdown(on_shutdown=[AppendLogDirPrefix("cabot_ui")])),
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='false',
+            description='Whether the simulated time is used or not'
+        ),
         DeclareLaunchArgument(
             'init_speed', default_value='',
             description='Set the robot initial maximum speed. This will be capped by the max speed.'
@@ -114,14 +125,26 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'handle_button_mapping',
-            default_value=EnvironmentVariable('CABOT_HANDLE_BUTTON_MAPPING', default_value='1'),
+            default_value=EnvironmentVariable('CABOT_HANDLE_BUTTON_MAPPING', default_value='2'),
             description="Set the handle button mapping"
+        ),
+        DeclareLaunchArgument(
+            'vibrator_type',
+            default_value=EnvironmentVariable('CABOT_VIBRATOR_TYPE', default_value='1'),
+            description='1: ERM (Eccentric Rotating Mass), 2: LRA (Linear Resonant Actuator)'
+        ),
+        DeclareLaunchArgument(
+            'use_directional_indicator',
+            default_value=EnvironmentVariable('CABOT_USE_DIRECTIONAL_INDICATOR', default_value='false'),
+            description='If true, the directional indicator on the handle is enabled'
         ),
         Node(
             package="cabot_ui",
             executable="cabot_ui_manager.py",
             name="cabot_ui_manager",
+            output=output,
             parameters=[{
+                'use_sim_time': use_sim_time,
                 'init_speed': init_speed,
                 'anchor_file': anchor_file,
                 'language': language,
@@ -141,6 +164,7 @@ def generate_launch_description():
             executable='navcog_map.py',
             namespace='cabot',
             name='navcog_map',
+            output=output,
             parameters=[{
                 'anchor_file': anchor_file,
             }, NamespaceParameterFile('cabot/navcog_map', config_path)],
@@ -153,12 +177,14 @@ def generate_launch_description():
                 '--allow-declare', 'false',
                 '--file-path', '/home/developer/ros2_ws/persistent_params.yaml',
             ],
+            output=output,
             parameters=[default_param_file],
         ),
         Node(
             package="cabot_ui",
             executable="stop_reasons_node",
             name="stop_reasons_node",
+            output=output,
             parameters=[{
                 'announce_no_touch': announce_no_touch
             }],
@@ -167,5 +193,35 @@ def generate_launch_description():
             package="cabot_common",
             executable="lookup_transform_service_node",
             name="lookup_transform_service_node",
-        )
+            output=output,
+        ),
+        Node(
+            package='cabot_ui',
+            executable='cabot_handle_v2_node',
+            namespace='/cabot',
+            name='cabot_handle_v2_node',
+            output=output,
+            parameters=[
+                default_param_file,
+                {
+                    'use_sim_time': use_sim_time,
+                }
+            ],
+            condition=UnlessCondition(use_directional_indicator),
+        ),
+        Node(
+            package='cabot_ui',
+            executable='cabot_handle_v3_node',
+            namespace='/cabot',
+            name='cabot_handle_v3_node',
+            output=output,
+            parameters=[
+                default_param_file,
+                {
+                    'use_sim_time': use_sim_time,
+                    'vibrator_type': vibrator_type
+                }
+            ],
+            condition=IfCondition(use_directional_indicator),
+        ),
     ])

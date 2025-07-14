@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
 
@@ -43,8 +44,30 @@ ament_target_dependencies(multi_floor_topic_proxy
   yaml_cpp_vendor
 )
 
+add_executable(odometry_frame_converter_node
+  src/odometry_frame_converter_node.cpp
+)
+
+ament_target_dependencies(odometry_frame_converter_node
+  rclcpp
+  nav_msgs
+)
+
+add_executable(tf_selector_node
+  src/tf_selector_node.cpp
+)
+
+ament_target_dependencies(tf_selector_node
+  rclcpp
+  geometry_msgs
+  tf2_ros
+)
+
+
 install(TARGETS
   multi_floor_topic_proxy
+  odometry_frame_converter_node
+  tf_selector_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -30,6 +30,7 @@ find_package(std_srvs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 
 set(dependencies
   rclcpp
@@ -51,6 +52,7 @@ find_package(rclcpp REQUIRED)
 
 include_directories(
   include
+  ${tf2_INCLUDE_DIRS}
 )
 
 add_library(speed_visualize SHARED
@@ -78,6 +80,7 @@ add_library(safety_nodes SHARED
   src/safety/tf_speed_control_node.cpp
   src/safety/touch_speed_control_node.cpp
   src/safety/util.cpp
+  src/safety/wheelie_speed_control_node.cpp
 )
 
 ament_target_dependencies(cabot
@@ -123,6 +126,11 @@ rclcpp_components_register_node(
   safety_nodes
   PLUGIN "CaBotSafety::TouchSpeedControlNode"
   EXECUTABLE touch_speed_control_node
+)
+rclcpp_components_register_node(
+  safety_nodes
+  PLUGIN "CaBotSafety::WheelieControlNode"
+  EXECUTABLE wheelie_speed_control_node
 )
 
 if(BUILD_TESTING)

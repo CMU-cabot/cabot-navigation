@@ -34,7 +34,7 @@ cabot_planner_test:
     CaBot:
       path_width: 0.0
       optimize_distance_from_start: 100.0
-      initial_node_interval: 0.20
+      initial_node_interval_scale: 4.0
       gravity_factor: 0.5
       link_spring_factor: 0.3
       anchor_spring_factor: 0.01 # ignore

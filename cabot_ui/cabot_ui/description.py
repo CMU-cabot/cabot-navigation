@@ -27,11 +27,13 @@ from std_msgs.msg import String
 from cv_bridge import CvBridge
 import cv2
 import base64
-import requests
 import json
 import os
 import math
 from enum import Enum
+
+import requests
+import threading
 
 
 class DescriptionMode(Enum):
@@ -54,9 +56,11 @@ class Description:
         self.last_plan_distance = None
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
+        self.api_key = os.environ.get("CABOT_IMAGE_DESCRIPTION_API_KEY", "")
+        self.timeout = float(os.environ.get("CABOT_IMAGE_DESCRIPTION_TIMEOUT", 15))
         if self.enabled:
-            # handle modes (default=surround)
-            modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", DescriptionMode.SURROUND.value).split(",")
+            # handle modes (default=surround,stop_reason)
+            modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", "surround,stop-reason").split(",")
             self.surround_enabled = DescriptionMode.SURROUND.value in modes
             self.stop_reason_enabled = DescriptionMode.STOP_REASON.value in modes
             self.stop_reason_data_collect_enabled = DescriptionMode.STOP_REASON_DATA_COLLECT.value in modes
@@ -106,6 +110,14 @@ class Description:
         }
 
         self.plan_sub = self.node.create_subscription(Path, '/plan', self.plan_callback, 10)
+        self._requesting_lock = threading.Lock()
+
+    @property
+    def is_requesting(self):
+        if self._requesting_lock.acquire(blocking=False):
+            self._requesting_lock.release()
+            return True
+        return False
 
     def image_callback(self, position: str, msg: CompressedImage):
         try:
@@ -127,25 +139,16 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
-    def request_description(self, global_position):
-        self._logger.info(F"Request Description at {global_position}")
-        try:
-            req = requests.get(
-                F"{self.host}/{Description.DESCRIPTION_API}?lat={global_position.lat}&lng={global_position.lng}&rotation={global_position.r}&max_distance={self.max_distance}"
-            )
-            data = json.loads(req.text)
-            if req.status_code != requests.codes.ok:
-                self._logger.error(F"Request Error {data=}")
-                return
-            self._logger.info(F"Request result {data['description']=}")
-        except Exception as error:
-            self._logger.error(F"Request Error {error=}")
-
     # for EventMapper1()
-    def request_description_with_images1(self, global_position, length_index=0):
+    def request_description_with_images1(self, global_position, current_floor, lang, length_index=0, callback=None):
         if not self.enabled:
+            self._logger.debug("Description is not enabled")
             return None
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
+            self._logger.debug("mode is not enabled")
+            return None
+        if not self._requesting_lock.acquire(blocking=False):
+            self._logger.debug("Description is requesting")
             return None
 
         API_URL = None
@@ -171,6 +174,7 @@ class Description:
 
         if not API_URL:
             self._logger.error("API_URL is none")
+            self._requesting_lock.release()
             return None
 
         self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
@@ -213,33 +217,54 @@ class Description:
 
         # Send HTTP request with the image data
         try:
-            headers = {'Content-Type': 'application/json'}
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': self.api_key
+            }
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
             lat = global_position.lat
             lng = global_position.lng
             rotation = global_position.r
             max_distance = self.max_distance
-            response = requests.post(
-                F"{API_URL}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
-                headers=headers,
-                data=json_data
-            )
-            if response.status_code == 200:
-                response_json = response.json()
-                self._logger.info('Successfully sent images to server.')
-                return response_json
-            else:
-                self._logger.error(f'Failed to send images to server. Status code: {response.status_code}')
+            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
         except Exception as e:
             self._logger.error(f'Error sending HTTP request: {e}')
-        return None
+        return True
+
+    def post_request(self, API_URL, headers, json_data, lat, lng, floor, rotation, max_distance, lang, length_index, distance_to_travel, callback):
+        try:
+            response = requests.post(
+                F"{API_URL}?{lat=}&{lng=}&{floor=}&{rotation=}&{max_distance=}&{lang=}&{length_index=}&{distance_to_travel=}",
+                headers=headers,
+                timeout=self.timeout,
+                data=json_data
+            )
+            self._requesting_lock.release()
+        except requests.exceptions.RequestException as e:
+            self._logger.error(f"Request failed: {e}")
+            self._requesting_lock.release()
+            callback(None)
+            return
+
+        if response.status_code == 200:
+            response_json = response.json()
+            self._logger.info('Successfully sent images to server.')
+            callback(response_json)
+        else:
+            self._logger.error(f'Failed to send images to server. Status code: {response.status_code}')
+            callback(None)
 
     # for EventMapper2()
-    def request_description_with_images2(self, global_position, mode, length_index=0):
+    def request_description_with_images2(self, global_position, current_floor, mode, lang, length_index=0, callback=None):
         if not self.enabled:
+            self._logger.debug("Description is not enabled")
             return None
         if not self.surround_enabled and not self.stop_reason_enabled and not self.stop_reason_data_collect_enabled:
+            self._logger.debug("mode is not enabled")
+            return None
+        if not self._requesting_lock.acquire(blocking=False):
+            self._logger.debug("Description is requesting")
             return None
 
         API_URL = None
@@ -250,18 +275,24 @@ class Description:
             elif self.stop_reason_enabled:
                 API_URL = F"{self.host}/{Description.STOP_REASON_API}"
             else:
+                self._logger.debug("Unexpected mode: stop_reason, {self.stop_reason_enabled}, {self.stop_reason_data_collect_enabled}")
+                self._requesting_lock.release()
                 return None
         elif mode == "surround":
             if self.surround_enabled:
                 API_URL = F"{self.host}/{Description.DESCRIPTION_WITH_IMAGES_API}"
             else:
+                self._logger.debug("Unexpected mode: surround, {self.surround_enabled}")
+                self._requesting_lock.release()
                 return None
         else:
             self._logger.error(F"Undefined mode: {mode}")
+            self._requesting_lock.release()
             return None
 
         if not API_URL:
             self._logger.error("API_URL is none")
+            self._requesting_lock.release()
             return None
 
         self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
@@ -304,24 +335,19 @@ class Description:
 
         # Send HTTP request with the image data
         try:
-            headers = {'Content-Type': 'application/json'}
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': self.api_key
+            }
             json_data = json.dumps(image_data_list)
             self._logger.debug(F"Request data: {image_data_list}")
             lat = global_position.lat
             lng = global_position.lng
             rotation = global_position.r
             max_distance = self.max_distance
-            response = requests.post(
-                F"{API_URL}?{lat=}&{lng=}&{rotation=}&{max_distance=}&{length_index=}&{distance_to_travel=}",
-                headers=headers,
-                data=json_data
-            )
-            if response.status_code == 200:
-                response_json = response.json()
-                self._logger.info('Successfully sent images to server.')
-                return response_json
-            else:
-                self._logger.error(f'Failed to send images to server. Status code: {response.status_code}')
+            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
+        except requests.exceptions.Timeout:
+            self._logger.error("Request timed out. Skipping description processing.")
         except Exception as e:
             self._logger.error(f'Error sending HTTP request: {e}')
-        return None
+        return True

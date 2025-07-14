@@ -27,21 +27,29 @@ from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
+from ament_index_python.packages import get_package_share_directory
+
 import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
 import cabot_ui.geojson
-from cabot_ui import visualizer, i18n
+from cabot_ui import visualizer, geoutil, i18n
 from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
+
+from pydub import AudioSegment
+import pydub.playback
+
+import subprocess
 
 
 class SpeechPriority:
     REQUIRED = 90
     HIGH = 60
     NORMAL = 30
+    MODERATE = 25
     LOW = 10
 
 
@@ -87,6 +95,17 @@ class UserInterface(object):
 
         self.last_social_announce = None
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
+
+        self._enable_speaker = False
+        self._audio_dir = os.path.join(get_package_share_directory('cabot_ui'), "audio")
+        self._audio_file_path = None
+        self._speaker_volume = 0.0
+        wav_files = [
+            f
+            for f in os.listdir(self._audio_dir)
+            if f.endswith(".wav") and os.path.isfile(os.path.join(self._audio_dir, f))
+        ]
+        self.audio_files = ",".join(wav_files)
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
@@ -149,6 +168,65 @@ class UserInterface(object):
             CaBotRclpyUtil.info("speak requested")
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")
+
+    def enable_speaker(self, enable_speaker: str):
+        self._enable_speaker = enable_speaker.lower() == "true"
+        self._activity_log("change speaker config", "enable speaker", str(self._enable_speaker), visualize=True)
+
+    def set_audio_file(self, filename):
+        self._audio_file_path = os.path.join(self._audio_dir, filename)
+        self._activity_log("change speaker config", "audio file", str(self._audio_file_path), visualize=True)
+
+    def set_speaker_volume(self, volume):
+        try:
+            speaker_volume = float(volume)
+        except Exception:
+            CaBotRclpyUtil.error(f"Invalid volume value: {volume}")
+            return
+
+        speaker_volume = max(0, min(100, speaker_volume))
+        self._speaker_volume = speaker_volume
+
+        try:
+            if speaker_volume == 0:
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "on"],
+                    check=True
+                )
+            else:
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "off"],
+                    check=True
+                )
+                subprocess.run(
+                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(speaker_volume)}%"],
+                    check=True
+                )
+        except subprocess.CalledProcessError as e:
+            CaBotRclpyUtil.error(f"Failed to adjust volume via pactl: {e}")
+            return
+
+        self._activity_log("change speaker config", "volume (%)", str(self._speaker_volume), visualize=True)
+
+    def speaker_alert(self):
+        if not self._enable_speaker:
+            CaBotRclpyUtil.error("Speaker is disabled")
+            return
+
+        if not os.path.isfile(self._audio_file_path):
+            CaBotRclpyUtil.error(F"Audio file not found: {self._audio_file_path}")
+            return
+
+        if self._speaker_volume == 0:
+            CaBotRclpyUtil.info("Speaker is muted")
+            return
+
+        try:
+            sound = AudioSegment.from_wav(self._audio_file_path)
+            CaBotRclpyUtil.info(F"Playing {self._audio_file_path} (volume: {self._speaker_volume}%)")
+            pydub.playback.play(sound)
+        except Exception as e:
+            CaBotRclpyUtil.error(F"Playback failed: {e}")
 
     def vibrate(self, pattern=vibration.UNKNOWN):
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
@@ -265,9 +343,10 @@ class UserInterface(object):
                 text = "slight left"
             msgs[0].data = str(Turn.Type.Avoiding)
             self._activity_log("cabot/turn_type", "Type.Avoiding")
-        msgs[1].data = turn.angle
         self.last_notify_turn[device] = self._node.get_clock().now()
-        if device == "directional_indicator":
+        if device == "directional_indicator" and turn.end is not None:
+            angle_diff = geoutil.diff_angle(self.last_pose['ros_pose'].orientation, turn.end.pose.orientation)
+            msgs[1].data = geoutil.normalize_angle(angle_diff)
             self.turn_angle_pub.publish(msgs[1])
         elif device == "vibrator":
             self._activity_log("cabot/interface", "turn angle", str(turn.angle))
@@ -398,14 +477,22 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "navigation", "please_return_position")
         self.speak(i18n.localized_string("RETURN_TO_POSITION_PLEASE"), priority=SpeechPriority.REQUIRED)
 
+    def requesting_please_wait(self):
+        self._activity_log("cabot/interface", "requesting_please_wait", "")
+        self.speak(i18n.localized_string("REQUESTING_PLEASE_WAIT"), priority=SpeechPriority.MODERATE)
+
+    def describe_error(self):
+        self._activity_log("cabot/interface", "describe_error")
+        self.speak(i18n.localized_string("REQUESTING_ERROR"), priority=SpeechPriority.MODERATE)
+
     def requesting_describe_surround(self):
         self._activity_log("cabot/interface", "requesting_describe_surround", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.HIGH)
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.MODERATE)
 
     def requesting_describe_surround_stop_reason(self):
         self._activity_log("cabot/interface", "requesting_describe_surround_stop_reason", "")
-        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.HIGH)
+        self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
 
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
-        self.speak(description, priority=SpeechPriority.HIGH)
+        self.speak(description, priority=SpeechPriority.MODERATE)

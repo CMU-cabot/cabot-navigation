@@ -21,6 +21,7 @@
 
 services:
   debug:
+    image: cmucal/cabot-debug
     extends:
       file: docker-compose-common.yaml
       service: navigation-dev

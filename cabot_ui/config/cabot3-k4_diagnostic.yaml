@@ -1,0 +1,147 @@
+diagnostic_aggregator:
+  ros__parameters:
+    pub_rate: 1.0
+    path: CaBot
+    joy:
+      type: diagnostic_aggregator/DiscardAnalyzer
+      path: joy
+      startswith:
+        - "joy_node"
+
+    discard:
+      type: diagnostic_aggregator/DiscardAnalyzer
+      path: discard
+      contains:
+        - "Push Button 5"
+        - "PeoplePredict"
+        - "realsense2_camera_manager_aligned_depth_to_color: Frequency Status"
+
+    soft_cabot_ui:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Soft: UI Manager"
+      contains:
+        - "UI Manager"
+      remove_prefix:
+        - "cabot_ui cabot_ui_manager: "
+
+    soft_localize:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Soft: Localize"
+      contains:
+        - "Localize Status"
+      remove_prefix:
+        - "multi_floor_manager: "
+
+    soft_odometry:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Soft: Odometry"
+      contains:
+        - "ekf_node"
+      remove_prefix:
+        - "ekf_node: "
+
+    soft_people:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Soft: People_and_Obstacle"
+      contains:
+        - "People"
+        - "Obstacle"
+        - "Queue"
+      remove_prefix:
+        - "camera detect_darknet_opencv_node: "
+        - "camera realsense2_camera_manager: "
+        - "predict_kf_people_py: "
+        - "track_sort_3d_people_py: "
+        - "detect_queue_people_py: "
+        - "track_obstacle: "
+        - "predict_obstacle: "
+
+    soft_rs:
+      type: diagnostic_aggregator/AnalyzerGroup
+      path: "Camera"
+      analyzers:
+        front:
+          type: diagnostic_aggregator/GenericAnalyzer
+          path: "Front"
+          contains:
+            - "rs1"
+          remove_prefix:
+            - "detect_darknet_people_cpp: "
+        soft_rs2:
+          type: cabot_diagnostics/CabotAnalyzer
+          path: "Right"
+          contains:
+            - "rs2"
+          remove_prefix:
+            - "detect_darknet_people_cpp: "
+          treat_as_warning: true
+        soft_rs3:
+          type: cabot_diagnostics/CabotAnalyzer
+          path: "Left"
+          contains:
+            - "rs3"
+          remove_prefix:
+            - "detect_darknet_people_cpp: "
+          treat_as_warning: true
+
+    soft_ros2:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Soft: Navigation2"
+      contains:
+        - "ROS2"
+        - "Nav2"
+      remove_prefix:
+        - "lifecycle_manager_"
+
+    hard_wireless:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: Wireless"
+      timeout: 15.0
+      contains:
+        - "Beacon Scanner"
+        - "Beacon Converter"
+        - "esp32_wifi_scan_converter: "
+        # - "rosserial_esp32: "
+      remove_prefix:
+        - "dbus_ibeacon_scanner: "
+        - "ble_scan_converter: "
+        - "esp32_wifi_scan_converter: "
+        # - "rosserial_esp32: "
+
+    hard_can:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: CAN"
+      contains:
+        - "cabot_can"
+      remove_prefix:
+        - "cabot_can: "
+
+    hard_odrive:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: Odrive"
+      contains:
+        - "Motor Status"
+      remove_prefix:
+        - "odriver_can_adapter_node:"
+
+    hard_hesailidar:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: HesaiLidar"
+      contains:
+        - "hesai"
+      remove_prefix:
+        - "hesai_lidar: "
+
+    discard_ublox:
+      type: diagnostic_aggregator/DiscardAnalyzer
+      path: discard
+      contains:
+        - "ublox: TMODE3"
+        - "fix topic status"
+
+    hard_ublox:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: "Hard: ublox GNSS"
+      regex:
+        - "ublox: fix$"
+        - "ntrip_client.*"

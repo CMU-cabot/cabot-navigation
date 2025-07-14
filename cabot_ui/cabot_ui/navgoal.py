@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 from typing import List
 import math
 import inspect
@@ -108,7 +109,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     :rtype: [navgoal.Goal]
     """
     CaBotRclpyUtil.info(F"--make_goals-{len(groute)}--------------------")
-    CaBotRclpyUtil.info(F"{groute}")
+    CaBotRclpyUtil.debug(F"{groute}")
 
     if len(groute) == 0:
         CaBotRclpyUtil.error("groute length should not be 0")
@@ -299,7 +300,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
         goal_node = groute[-1]  # should be Node
         goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
-    CaBotRclpyUtil.info(F"goals: {goals}")
+    CaBotRclpyUtil.debug(F"goals: {goals}")
     return goals
 
 
@@ -311,16 +312,21 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
     if len(navcog_route) == 0:
         CaBotRclpyUtil.error("create_ros_path, navcog_route length should not be 0")
         return points
-    CaBotRclpyUtil.info(F"create_ros_path, {str(navcog_route)}")
-    last_index = len(navcog_route)-1
+    CaBotRclpyUtil.debug(F"create_ros_path, {str(navcog_route)}")
+    last_index = len(navcog_route) - 1
 
     def convert(g, a=anchor):
         return geoutil.global2local(g, a)
 
     for (index, item) in enumerate(navcog_route):
         if index == 0 and isinstance(item.geometry, geojson.LineString):
-            # if the first item is link, add the source node
-            points.append(convert(item.source_node.geometry))
+            if item.navigation_mode != geojson.NavigationMode.Standard:
+                # if the first item is link, add the source node
+                points.append(convert(item.source_node.geometry))
+            else:
+                sp = convert(item.source_node.geometry)
+                ep = convert(item.target_node.geometry)
+                points.append(sp.interpolate(ep, 0.5))
         elif index == last_index:
             if isinstance(item.geometry, geojson.Point):
                 # if navcog_route only has one Node
@@ -337,8 +343,8 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
         elif isinstance(item.geometry, geojson.LineString):
             points.append(convert(item.target_node.geometry))
         else:
-            CaBotRclpyUtil.info("geometry is not point or linestring {item.geometry}")
-        CaBotRclpyUtil.info(F"{index}: {str(points)}")
+            CaBotRclpyUtil.debug("geometry is not point or linestring {item.geometry}")
+        CaBotRclpyUtil.debug(F"{index}: {str(points)}")
 
     # make a path from points
     path = nav_msgs.msg.Path()
@@ -391,7 +397,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
             path.poses[-1].pose.position.x = last_pose.position.x
             path.poses[-1].pose.position.y = last_pose.position.y
 
-    CaBotRclpyUtil.info(F"path {path}")
+    CaBotRclpyUtil.debug(F"path {path}")
     return (path, path.poses[-1] if len(path.poses) > 0 else None, mode)
 
 
@@ -410,6 +416,7 @@ def estimate_next_goal(goals, current_pose, current_floor):
 class Goal(geoutil.TargetPlace):
     GOAL_XY_THRETHOLD = 0.5
     GOAL_ANGLE_THRETHOLD_IN_DEGREE = 15
+    default_params = {}
 
     def __init__(self, delegate, **kwargs):
         super(Goal, self).__init__(**kwargs)
@@ -424,7 +431,7 @@ class Goal(geoutil.TargetPlace):
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
         self._handles = []
-        self._saved_params = None
+        self._current_params = copy.deepcopy(Goal.default_params)
         self._is_exiting_goal = False
 
     def reset(self):
@@ -443,11 +450,9 @@ class Goal(geoutil.TargetPlace):
             return
         self.delegate.enter_goal(self)
 
-        def restore_callback():
-            def change_callback():
-                self._enter()
-            self._change_params(change_callback)
-        self._save_params(restore_callback)
+        def change_callback():
+            self._enter()
+        self._change_params(self.nav_params(), change_callback)
 
     def _enter(self):
         pass
@@ -457,11 +462,11 @@ class Goal(geoutil.TargetPlace):
 
         def done_request_parameters_callback(result):
             CaBotRclpyUtil.info("done_request_parameters_callback is called")
-            self._saved_params = result
-            CaBotRclpyUtil.info(F"{self.__class__.__name__}._saved_params = {self._saved_params}")
+            self._current_params = result
+            CaBotRclpyUtil.info(F"{self.__class__.__name__}._current_params = {self._current_params}")
             callback()
-        if self._saved_params:
-            done_request_parameters_callback(self._saved_params)
+        if self._current_params:
+            done_request_parameters_callback(self._current_params)
         else:
             if self.nav_params_keys():
                 CaBotRclpyUtil.info(f"call request_parameters {self.nav_params_keys()}")
@@ -469,20 +474,41 @@ class Goal(geoutil.TargetPlace):
             else:
                 callback()
 
-    def _change_params(self, callback):
-        def done_change_parameters_callback(result):
-            CaBotRclpyUtil.info("done_change_parameters_callback is called")
-            callback()
-        if self.nav_params():
-            self.delegate.change_parameters(self.nav_params(), done_change_parameters_callback)
+    def _change_params(self, params, callback):
+        def done_change_parameters_callback(params):
+            def inner(result):
+                CaBotRclpyUtil.info(f"done_change_parameters_callback is called {params}")
+                # update saved_params by changed params
+                for node, values in list(params.items()):
+                    if node in self._current_params:
+                        for key, value in list(values.items()):
+                            self._current_params[node][key] = value
+                CaBotRclpyUtil.info(f"{self._current_params=}")
+                callback()
+            return inner
+        CaBotRclpyUtil.info(F"params to be changed full: {params=}")
+        params = copy.deepcopy(params)
+        if self._current_params:
+            for node, values in list(params.items()):
+                if node in self._current_params:
+                    for key, value in list(values.items()):
+                        if key in self._current_params[node]:
+                            CaBotRclpyUtil.debug(f"{node=}, {key=}, {value=}, {self._current_params[node][key]}, {self._current_params[node][key] == value}")
+                            if self._current_params[node][key] == value:
+                                del params[node][key]
+                    if not params[node]:
+                        del params[node]
+        CaBotRclpyUtil.info(F"params to be changed opt.: {params=}")
+        if params:
+            self.delegate.change_parameters(params, done_change_parameters_callback(params))
         else:
             callback()
 
     def nav_params_keys(self):
-        pass
+        return []
 
     def nav_params(self):
-        pass
+        return {}
 
     def check(self, current_pose):
         pass
@@ -506,16 +532,15 @@ class Goal(geoutil.TargetPlace):
         return self._is_exiting_goal
 
     def exit(self, callback):
-        def done_change_parameters_callback(result):
+        def done_change_parameters_callback():
             CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit done_change_parameters_callback is called")
-            self._saved_params = None
             callback()
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.exit is called")
-        CaBotRclpyUtil.info(F"saved_params = {self._saved_params}")
+        CaBotRclpyUtil.info(F"saved_params = {self._current_params}")
         self.delegate.exit_goal(self)
-        if self._saved_params:
+        if self._current_params:
             self._is_exiting_goal = True
-            self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
+            self._change_params(Goal.default_params, done_change_parameters_callback)
         else:
             callback()
 
@@ -552,12 +577,11 @@ class Goal(geoutil.TargetPlace):
     def cancel(self, callback=None):
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel is called")
         try:
-            def done_change_parameters_callback(result):
+            def done_change_parameters_callback():
                 CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel done_change_parameters_callback is called")
-                self._saved_params = None
                 self._cancel(callback)
-            if self._saved_params:
-                self.delegate.change_parameters(self._saved_params, done_change_parameters_callback)
+            if self._current_params:
+                self._change_params(Goal.default_params, done_change_parameters_callback)
             else:
                 self._cancel(callback)
         except:  # noqa: #722
@@ -630,15 +654,18 @@ class Nav2Params:
     FollowPath.sim_time: 1.7
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: True
     inflation_layer.inflation_radius: 0.75
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
     min_distance: 1.0
+/cabot/low_lidar_speed_control_node:
+    min_distance: 1.0
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
     social_distance_y: 0.5
+/cabot/speed_control_node_touch_true:
+    complete_stop: [false,false,false,false,true,true,false,true,true]
 """
         if mode == geojson.NavigationMode.Narrow:
             params = """
@@ -656,19 +683,18 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.45
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
     min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
+    complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         if mode == geojson.NavigationMode.Tight:
             params = """
@@ -686,19 +712,18 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.25
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.25
 /cabot/lidar_speed_control_node:
     min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
+    complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         if mode == geojson.NavigationMode.Crosswalk:
             params = """
@@ -716,20 +741,28 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    people_obstacle_layer.people_enabled: False
     inflation_layer.inflation_radius: 0.45
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.45
 /cabot/lidar_speed_control_node:
     min_distance: 0.60
+/cabot/low_lidar_speed_control_node:
+    min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
     social_distance_y: 0.50
 /cabot/speed_control_node_touch_true:
-    complete_stop: [false,false,true,false,true,false,true]
-/cabot/speed_control_node_touch_false:
-    complete_stop: [false,false,true,false,true,false,true]
+    complete_stop: [false,false,false,true,true,true,false,true,true]
 """
+        # if simualtion, check if 'speed_control_node_touch_true' or 'speed_control_node_touch_false' is used
+        if CaBotRclpyUtil.instance().use_sim_time:
+            CaBotRclpyUtil.info("parameters simulation mode")
+            # returns List[Tuple[node_name, namespace]]
+            nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
+            names = [name for name, ns in nodes]
+            if "speed_control_node_touch_false" in names:
+                params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
+
         data = yaml.safe_load(params)
         return data
 
@@ -757,7 +790,19 @@ class Nav2Params:
 
     @classmethod
     def all_keys(cls):
-        return cls.aggregate_nested_keys([cls.get_parameters_for(mode) for mode in geojson.NavigationMode])
+        keys = cls.aggregate_nested_keys([cls.get_parameters_for(mode) for mode in geojson.NavigationMode])
+
+        if CaBotRclpyUtil.instance().use_sim_time:
+            CaBotRclpyUtil.info("parameters simulation mode")
+            # returns List[Tuple[node_name, namespace]]
+            nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
+            names = [name for name, ns in nodes]
+            if "speed_control_node_touch_false" in names:
+                if "/cabot/speed_control_node_touch_true" in keys:
+                    keys["/cabot/speed_control_node_touch_false"] = keys["/cabot/speed_control_node_touch_true"]
+                    del keys["/cabot/speed_control_node_touch_true"]
+        CaBotRclpyUtil.debug(f"{keys=}")
+        return keys
 
 
 if __name__ == "__main__":
@@ -779,9 +824,6 @@ class NavGoal(Goal):
             raise RuntimeError("navcog_route should have one more object")
         if anchor is None:
             raise RuntimeError("anchor should be provided")
-
-        # to prevent callback when doing cancel/resume for area change
-        self.prevent_callback = False
 
         # need init global_map_name for initialization
         self.global_map_name = delegate.global_map_name()
@@ -807,6 +849,7 @@ class NavGoal(Goal):
 
         last_pose = self.navcog_routes[-1][1]
         self.pois = self._extract_pois()
+        self.gradient = self._extract_gradient()
         self.handle = None
         self.mode = None
         self.route_index = 0
@@ -833,10 +876,19 @@ class NavGoal(Goal):
         temp = []
         for (_, item) in enumerate(self.navcog_route):
             if isinstance(item, geojson.RouteLink):
-                print(item._id)
+                CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    print("  ", type(poi), poi._id)
+                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
                 temp.extend(item.pois)
+        return temp
+
+    def _extract_gradient(self):
+        """extract gradient along the route"""
+        temp = []
+        for (_, item) in enumerate(self.navcog_route):
+            if isinstance(item, geojson.RouteLink):
+                if item.gradient in [geojson.Gradient.Up, geojson.Gradient.Down]:
+                    temp.append(item)
         return temp
 
     @util.setInterval(5, times=1)
@@ -883,10 +935,6 @@ class NavGoal(Goal):
         self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
-        if self.prevent_callback:
-            self.prevent_callback = False
-            return
-
         if future:
             CaBotRclpyUtil.info(F"NavGoal completed result={future.result()}, {self.route_index}/{len(self.navcog_routes)}")
         else:
@@ -899,6 +947,8 @@ class NavGoal(Goal):
                 self.delegate.activity_log("cabot/navigation", "goal_completed", "NarrowGoal")
             if self.mode == geojson.NavigationMode.Crosswalk:
                 self.delegate.activity_log("cabot/navigation", "goal_completed", "CrosswalkGoal")
+            if self.mode == geojson.NavigationMode.Standard:
+                self.delegate.activity_log("cabot/navigation", "goal_completed", "NavGoal")
 
         if status == GoalStatus.STATUS_SUCCEEDED and self.route_index + 1 < len(self.navcog_routes):
             self.route_index += 1
@@ -1067,7 +1117,8 @@ class ElevatorGoal(Goal):
 
     def nav_params_keys(self):
         return {
-            "/cabot/people_speed_control_node": ["social_distance_x", "social_distance_y"]
+            "/cabot/people_speed_control_node": ["social_distance_x", "social_distance_y"],
+            "/footprint_publisher": ["footprint_mode"],
         }
 
     def nav_params(self):
@@ -1075,6 +1126,9 @@ class ElevatorGoal(Goal):
             "/cabot/people_speed_control_node": {
                 "social_distance_x": ElevatorGoal.ELEVATOR_SOCIAL_DISTANCE_X,
                 "social_distance_y": ElevatorGoal.ELEVATOR_SOCIAL_DISTANCE_Y
+            },
+            "/footprint_publisher": {
+                "footprint_mode": 1
             }
         }
 

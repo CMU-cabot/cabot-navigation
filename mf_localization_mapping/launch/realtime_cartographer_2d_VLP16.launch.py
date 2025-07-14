@@ -41,13 +41,26 @@ from launch.substitutions import AndSubstitution
 from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import PythonExpression
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
+from launch_ros.descriptions import ParameterFile
 from launch.utilities import normalize_to_list_of_substitutions
 
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('mf_localization_mapping')
+
+    param_files = [
+        ParameterFile(PathJoinSubstitution([
+            pkg_dir,
+            'configuration_files',
+            'mapping_config.yaml'
+        ]),
+            allow_substs=True,
+        )
+    ]
+
     robot = LaunchConfiguration('robot')
     cabot_model = LaunchConfiguration('cabot_model')
     run_cartographer = LaunchConfiguration('run_cartographer')
@@ -55,12 +68,15 @@ def generate_launch_description():
     prefix = LaunchConfiguration('prefix')
     scan = LaunchConfiguration('scan')
     save_samples = LaunchConfiguration('save_samples')
+    save_trajectory = LaunchConfiguration('save_trajectory')
+    save_pose = LaunchConfiguration('save_pose')
     wireless_topics = LaunchConfiguration('wireless_topics')
     bag_filename = LaunchConfiguration('bag_filename')
     load_state_filename = LaunchConfiguration('load_state_filename')
     save_state_filename = LaunchConfiguration('save_state_filename')
     record_required = LaunchConfiguration('record_required')
     record_points = LaunchConfiguration('record_points')
+    compression_mode = LaunchConfiguration('compression_mode')
     configuration_basename = LaunchConfiguration('configuration_basename')
     # save_state_filename # todo
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
@@ -72,6 +88,7 @@ def generate_launch_description():
     use_velodyne = LaunchConfiguration('use_velodyne')
     use_sim_time = LaunchConfiguration('use_sim_time')
     imu_topic = LaunchConfiguration('imu_topic')
+    fix_topic = LaunchConfiguration('fix_topic')
 
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
 
@@ -81,10 +98,16 @@ def generate_launch_description():
     save_state_directory = LaunchConfiguration('save_state_directory')
     save_state_filestem = LaunchConfiguration('save_state_filestem')
 
+    fix_status_threshold = LaunchConfiguration('fix_status_threshold')
+    fix_overwrite_time = LaunchConfiguration('fix_overwrite_time')
+    interpolate_samples_by_trajectory = LaunchConfiguration('interpolate_samples_by_trajectory')
+
     def configure_ros2_bag_arguments(context, node):
         cmd = node.cmd.copy()
         if use_sim_time.perform(context) == 'true':
             cmd.extend(['--use-sim-time'])
+        if compression_mode.perform(context) != 'none':
+            cmd.extend(['--compression-mode', compression_mode, '--compression-format', 'zstd'])
         if record_required.perform(context) == 'true':
             if record_points.perform(context) == 'true':
                 cmd.extend(['-a', '-x', "'/map|(.*)points_cropped|/pandar_packets|(.*)/image_raw|(.*)/image_raw/(.*)'"])
@@ -125,12 +148,15 @@ def generate_launch_description():
         DeclareLaunchArgument('prefix', default_value='sensor'),
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
         DeclareLaunchArgument("save_samples", default_value="false"),
+        DeclareLaunchArgument('save_trajectory', default_value='false'),
+        DeclareLaunchArgument('save_pose', default_value='false'),
         DeclareLaunchArgument("wireless_topics", default_value="['/wireless/beacons','/wireless/wifi','/esp32/wifi']"),
 
         DeclareLaunchArgument("bag_filename", default_value=""),
         DeclareLaunchArgument("load_state_filename", default_value=""),
         DeclareLaunchArgument("record_required", default_value="false"),
         DeclareLaunchArgument("record_points", default_value="false"),
+        DeclareLaunchArgument("compression_mode", default_value="message", description="{none,file,message} compress bag"),
 
         DeclareLaunchArgument("configuration_basename", default_value="cartographer_2d_mapping.lua"),
         DeclareLaunchArgument("save_state_filename", default_value=""),
@@ -145,8 +171,13 @@ def generate_launch_description():
         DeclareLaunchArgument("use_velodyne", default_value="true"),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("imu_topic", default_value="imu/data"),
+        DeclareLaunchArgument('fix_topic', default_value='ublox/fix'),
 
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
+
+        DeclareLaunchArgument('fix_status_threshold', default_value='2'),
+        DeclareLaunchArgument('fix_overwrite_time', default_value='false'),
+        DeclareLaunchArgument('interpolate_samples_by_trajectory', default_value='false'),
 
         SetParameter('use_sim_time', use_sim_time),
 
@@ -210,11 +241,41 @@ def generate_launch_description():
                     "save_state_filename": save_state_filename,
                     "start_trajectory_with_default_topics": start_trajectory_with_default_topics,
                     "imu": imu_topic,
+                    "fix": fix_topic,
                     "convert_pbstream": "true",
                     "save_state_directory": save_state_directory,
                     "save_stete_filestem": save_state_filestem,
                 }.items(),
                 condition=IfCondition(run_cartographer)
+            ),
+
+            Node(
+                package='mf_localization',
+                executable='fix_filter.py',
+                name='ublox_fix_filter',
+                parameters=[
+                    *param_files,
+                    {
+                        'status_threshold': fix_status_threshold,
+                        'overwrite_time': fix_overwrite_time,
+                    }
+                ],
+                remappings=[
+                    ('fix', 'ublox/fix'),
+                    ('fix_filtered', 'ublox/fix_filtered')
+                ]
+            ),
+
+            Node(
+                package='mf_localization',
+                executable='ublox_converter.py',
+                name='ublox_converter',
+                parameters=[
+                    *param_files
+                ],
+                remappings=[
+                    ('navsat', 'ublox/navsat')
+                ]
             ),
 
             GroupAction([
@@ -225,11 +286,28 @@ def generate_launch_description():
                     name="tf2_beacons_listener",
                     parameters=[{
                         "topics": wireless_topics,
-                        'save_empty_beacon_sample': save_empty_beacon_sample
+                        'save_empty_beacon_sample': save_empty_beacon_sample,
+                        'output_trajectory': PythonExpression(['"', bag_filename_fullpath, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
+                        'trajectory_recorder_timer_period': 10.0,
+                        'interpolate_by_trajectory': interpolate_samples_by_trajectory,
                     }],
                     condition=IfCondition(save_samples)
                 ),
             ]),
+
+            # write pose to csv file
+            Node(
+                name="tracked_pose_listener",
+                package="mf_localization",
+                executable="tracked_pose_listener.py",
+                parameters=[
+                    *param_files,
+                    {
+                        "output": PythonExpression(['"', bag_filename_fullpath, '.tracked_pose.csv" if "', save_pose, '"=="true" else ""'])
+                    }
+                ],
+                condition=IfCondition(save_pose),
+            ),
 
             Node(
                 name="rviz2",

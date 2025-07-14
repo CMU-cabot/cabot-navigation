@@ -100,6 +100,12 @@ public:
       return;
     }
 
+    if (path.poses.size() < 2) {
+      RCLCPP_WARN(node_->get_logger(), "NeedToReplan: path has less than 2 poses");
+      need_to_replan_ = true;
+      return;
+    }
+
     double range = 0.70;
     if (last_people_) {
       for (auto person = last_people_->people.begin(); person != last_people_->people.end(); person++) {

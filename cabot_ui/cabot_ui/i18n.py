@@ -51,7 +51,7 @@ def localized_string(identifier, *args, **kwargs):
         format_str = format_str
 
     if args:
-        print(args)
+        CaBotRclpyUtil.info(f"{args}")
         try:
             return format_str.format(*args)
         except:  # noqa: E722
