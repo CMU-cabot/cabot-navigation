@@ -42,13 +42,17 @@ source $scriptdir/../install/setup.bash
 
 rate=1.0
 start=0.01
-while getopts "r:s:m:" arg; do
+robot=
+while getopts "r:s:m:R:" arg; do
     case $arg in
         r)
             rate=$OPTARG
             ;;
 	s)
 	    start=$OPTARG
+	    ;;
+	R)
+	    robot=$OPTARG
 	    ;;
     esac
 done
@@ -78,11 +82,20 @@ if (( $(echo "$start > 0.01" | bc -l) )); then
     map_path="map:=$prefix/share/$package/$path"
 
     tf_frame="frame:=$(ros2 run cabot_debug print_topics.py -f $bag -d $start -r -t /current_frame 2> /dev/null | tail -1)"
-    
-    temp_file="$(mktemp)"
-    ros2 run cabot_debug print_topics.py -f $bag -1 -r -t /robot_description > $temp_file
-    temp_file="robot:=$temp_file"
 fi
+
+temp_file="$(mktemp)"
+ros2 run cabot_debug print_topics.py -f $bag -1 -r -t /robot_description > $temp_file
+if [[ $(wc -n $temp_file) -eq 0 ]]; then
+    red "There is no robot_description in the $bag"
+    if [[ -n $robot ]]; then
+	xacro ../src/cabot_description/robots/$robot.urdf.xacro.xml > $temp_file
+    else
+	red "Use -R <robot_model> option can fix issue"
+	exit 1
+    fi
+fi
+temp_file="robot:=$temp_file"
 
 # republish uncompressed images to visualize in rviz2
 readarray -t compressed_image_topics < <(ros2 bag info $bag | grep -oP '(?<=Topic: ).*(?=/compressed )')
