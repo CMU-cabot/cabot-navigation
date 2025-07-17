@@ -57,7 +57,6 @@ def generate_launch_description():
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
-    bond_timeout = LaunchConfiguration('bond_timeout')
 
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
 
@@ -172,10 +171,6 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'publish_low_obstacle_ground', default_value='false',
             description='publish ground to detect low obstacles only for debug purpose'),
-
-        DeclareLaunchArgument(
-            'bond_timeout', default_value='90.0',
-            description='bond timeout for lifecycle managers'),
 
         # default navigator
         Node(
