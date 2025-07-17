@@ -231,15 +231,18 @@ def generate_launch_description():
                     executable='lifecycle_manager',
                     name='lifecycle_manager_navigation',
                     output=output,
-                    parameters=[{'use_sim_time': use_sim_time},
-                                {'autostart': autostart},
-                                {'bond_timeout': bond_timeout},
-                                {'node_names': ['controller_server',
-                                                'planner_server',
-                                                'behavior_server',
-                                                'bt_navigator',
-                                                ]},
-                                ],
+                    parameters=[
+                        configured_params,
+                        {
+                            'autostart': autostart,
+                            'node_names': [
+                                'controller_server',
+                                'planner_server',
+                                'behavior_server',
+                                'bt_navigator',
+                            ]
+                        },
+                    ],
                 ),
             ]
         ),
@@ -305,14 +308,19 @@ def generate_launch_description():
                     name='lifecycle_manager_local_navigation',
                     output=output,
                     namespace='local',
-                    parameters=[{'use_sim_time': use_sim_time},
-                                {'autostart': autostart},
-                                {'bond_timeout': bond_timeout},
-                                {'node_names': ['controller_server',
-                                                'planner_server',
-                                                'behavior_server',
-                                                'bt_navigator',
-                                                ]}]),
+                    parameters=[
+                        configured_params2,
+                        {
+                            'autostart': autostart,
+                            'node_names': [
+                                'controller_server',
+                                'planner_server',
+                                'behavior_server',
+                                'bt_navigator',
+                            ]
+                        },
+                    ],
+                )
             ]
         ),
 
@@ -331,11 +339,15 @@ def generate_launch_description():
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
             output=output,
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': autostart},
-                        {'bond_timeout': bond_timeout},
-                        {'node_names': ['map_server']},
-                        ],
+            parameters=[
+                configured_params,
+                {
+                    'autostart': autostart,
+                    'node_names': [
+                        'map_server'
+                    ]
+                },
+            ],
         ),
 
         # low obstacle detection
