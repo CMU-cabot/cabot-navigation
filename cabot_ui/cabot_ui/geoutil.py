@@ -529,7 +529,7 @@ def get_anchor(anchor_file=None):
     temp = data["anchor"]
     lat = temp["latitude"]
     lng = temp["longitude"]
-    rot = temp["rotate"]
+    rot = float(temp["rotate"])
     anchor = Anchor(lat=lat, lng=lng, rotate=rot)
     CaBotRclpyUtil.info(F"data={data['anchor']}")
     CaBotRclpyUtil.info(F"anchor={anchor}")
