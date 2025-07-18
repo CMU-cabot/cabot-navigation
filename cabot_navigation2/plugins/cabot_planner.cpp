@@ -160,6 +160,11 @@ void CaBotPlanner::configure(
   node->get_parameter(name + ".max_obstacle_scan_distance", options_.max_obstacle_scan_distance);
 
   declare_parameter_if_not_declared(
+    node, name + ".max_clear_scan_distance",
+    rclcpp::ParameterValue(defaultValue.max_clear_scan_distance));
+  node->get_parameter(name + ".max_clear_scan_distance", options_.max_clear_scan_distance);
+
+  declare_parameter_if_not_declared(
     node, name + ".kdtree_search_radius",
     rclcpp::ParameterValue(defaultValue.kdtree_search_radius));
   node->get_parameter(name + ".kdtree_search_radius", options_.kdtree_search_radius);
@@ -415,6 +420,9 @@ rcl_interfaces::msg::SetParametersResult CaBotPlanner::param_set_callback(const 
 
     if (param.get_name() == name_ + ".max_obstacle_scan_distance") {
       options_.max_obstacle_scan_distance = param.as_double();
+    }
+    if (param.get_name() == name_ + ".max_clear_scan_distance") {
+      options_.max_clear_scan_distance = param.as_double();
     }
     if (param.get_name() == name_ + ".kdtree_search_radius") {
       options_.kdtree_search_radius = param.as_double();

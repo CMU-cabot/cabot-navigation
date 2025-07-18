@@ -70,10 +70,12 @@
           </PipelineSequence>
           <RecoveryNode number_of_retries="99999999" name="ClearCostMapRecovery">
             <Sequence name="RecoveryActions">
+              <!--
               <ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000"
                                   service_name="/global_costmap/clear_entirely_global_costmap"/>
               <ClearEntireCostmap name="ClearLocalCostmap-Context" server_timeout="5000"
                                   service_name="/local_costmap/clear_entirely_local_costmap"/>
+              -->
               <Wait wait_duration="1.0"/>
             </Sequence>
             <AlwaysSuccess/>

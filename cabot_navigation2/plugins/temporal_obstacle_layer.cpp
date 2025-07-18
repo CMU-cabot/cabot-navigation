@@ -34,7 +34,8 @@ namespace cabot_navigation2
 
 TemporalObstacleLayer::TemporalObstacleLayer()
 : nav2_costmap_2d::ObstacleLayer(),
-  temp_costmap_(NULL)
+  temp_costmap_(NULL),
+  temp_costmap2_(NULL)
 {
 }
 
@@ -61,14 +62,16 @@ void TemporalObstacleLayer::initMaps(unsigned int size_x, unsigned int size_y)
   std::unique_lock<mutex_t> lock(*getMutex());
   Costmap2D::initMaps(size_x, size_y);
   delete[] temp_costmap_;
+  delete[] temp_costmap2_;
   temp_costmap_ = new unsigned char[size_x * size_y];
+  temp_costmap2_ = new unsigned char[size_x * size_y];
 }
 
 void TemporalObstacleLayer::resetMaps()
 {
+  auto node = node_.lock();
   std::unique_lock<mutex_t> lock(*getMutex());
   Costmap2D::resetMaps();
-  memset(temp_costmap_, 0, size_x_ * size_y_ * sizeof(unsigned char));
 }
 
 
@@ -100,17 +103,18 @@ TemporalObstacleLayer::updateBounds(
   current_ = current;
 
   auto node = node_.lock();
+
   // raytrace freespace
-  for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
-    RCLCPP_INFO(node->get_logger(), "Clearing obstacles");
-    raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
-  }
+  // for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
+  //   RCLCPP_INFO(node->get_logger(), "Clearing obstacles");
+  //   raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
+  // }
+  memset(temp_costmap_, 0, size_x_ * size_y_ * sizeof(unsigned char));
 
   // place the new obstacles into a priority queue... each with a priority of zero to begin with
   for (std::vector<Observation>::const_iterator it = observations.begin();
     it != observations.end(); ++it)
   {
-    RCLCPP_INFO(node->get_logger(), "Adding obstacle from observation");
     const Observation & obs = *it;
 
     const sensor_msgs::msg::PointCloud2 & cloud = *(obs.cloud_);
@@ -272,15 +276,17 @@ TemporalObstacleLayer::updateCosts(
   int max_i,
   int max_j)
 {
+  int j = 0;
   // update costmap_ based on the temporary costmap
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
   for (int i = 0; i < size_x_ * size_y_; ++i) {
     unsigned char & cost = temp_costmap_[i];
     if (cost == 0) {
-      costmap_[i] = std::max(static_cast<int>(costmap_[i]) - decaying_rate_, static_cast<int>(FREE_SPACE));
+      temp_costmap2_[i] = std::max(static_cast<int>(temp_costmap2_[i]) - decaying_rate_ / 2, static_cast<int>(FREE_SPACE));
     } else if (cost == 1) {
-      costmap_[i] = std::min(static_cast<int>(costmap_[i]) + rising_rate_, static_cast<int>(LETHAL_OBSTACLE));
+      temp_costmap2_[i] = std::min(static_cast<int>(temp_costmap2_[i]) + rising_rate_ / 2, static_cast<int>(LETHAL_OBSTACLE));
     }
+    costmap_[i] = std::min(static_cast<int>(temp_costmap2_[i]) * 2, static_cast<int>(LETHAL_OBSTACLE));
   }
   ObstacleLayer::updateCosts(master_grid, min_i, min_j, max_i, max_j);
 }

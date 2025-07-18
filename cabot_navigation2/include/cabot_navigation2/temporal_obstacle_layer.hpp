@@ -50,6 +50,7 @@ public:
 
 private:
   unsigned char * temp_costmap_;
+  unsigned char * temp_costmap2_;
   unsigned char decaying_rate_;
   unsigned char rising_rate_;
 };
