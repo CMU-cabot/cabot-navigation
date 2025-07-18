@@ -21,7 +21,7 @@
 lifecycle_manager_navigation:
   ros__parameters:
     use_sim_time: True
-    bond_timeout: 15.0
+    bond_timeout: 30.0
     bond_connect_timeout: 30.0
     bond_heartbeat_period: 1.0
     get_state_timeout: 30.0
@@ -30,8 +30,8 @@ lifecycle_manager_navigation:
 lifecycle_manager_localization:
   ros__parameters:
     use_sim_time: True
-    bond_timeout: 15.0
-    bond_connect_timeout: 30.0
+    bond_timeout: 60.0
+    bond_connect_timeout: 60.0
     bond_heartbeat_period: 1.0
     get_state_timeout: 30.0
     change_state_timeout: 30.0
@@ -132,7 +132,7 @@ amcl_rclcpp_node:
 
 bt_navigator:
   ros__parameters:
-    bond_timeout: 15.0
+    bond_timeout: 30.0
     bond_connect_timeout: 30.0
     bond_heartbeat_period: 1.0
     use_sim_time: True
@@ -197,7 +197,7 @@ bt_navigator_rclcpp_node:
 
 controller_server:
   ros__parameters:
-    bond_timeout: 15.0
+    bond_timeout: 30.0
     bond_connect_timeout: 30.0
     bond_heartbeat_period: 1.0
     use_sim_time: True
@@ -550,15 +550,15 @@ global_costmap:
 
 map_server:
   ros__parameters:
-    bond_timeout: 15.0
-    bond_connect_timeout: 30.0
+    bond_timeout: 60.0
+    bond_connect_timeout: 60.0
     bond_heartbeat_period: 1.0
     use_sim_time: True
     yaml_filename: ""  # needs to be blank string
 
 planner_server:
   ros__parameters:
-    bond_timeout: 15.0
+    bond_timeout: 30.0
     bond_connect_timeout: 30.0
     bond_heartbeat_period: 1.0
     expected_planner_frequency: 2.0
@@ -602,7 +602,7 @@ robot_state_publisher:
 
 behavior_server:
   ros__parameters:
-    bond_timeout: 15.0
+    bond_timeout: 30.0
     bond_connect_timeout: 30.0
     bond_heartbeat_period: 1.0
     costmap_topic: local_costmap/costmap_raw
