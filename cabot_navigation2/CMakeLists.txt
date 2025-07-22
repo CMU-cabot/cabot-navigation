@@ -223,6 +223,7 @@ add_library(cabot_controllers SHARED
   plugins/cabot_rotation_shim_controller.cpp
   plugins/cabot_dwb_local_planner.cpp
   plugins/cabot_sampling_MPC_controller.cpp
+  plugins/cabot_rl_controller.cpp
   plugins/util.cpp
 )
 ament_target_dependencies(cabot_controllers

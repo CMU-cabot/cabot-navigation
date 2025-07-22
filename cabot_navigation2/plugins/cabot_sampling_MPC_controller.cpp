@@ -71,7 +71,7 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".linear_sample_size", linear_sample_size_);
 
   declare_parameter_if_not_declared(
-    node, name_ + ".max_angular_velocity", rclcpp::ParameterValue(M_PI / 6)); // rad/s
+    node, name_ + ".max_angular_velocity", rclcpp::ParameterValue(1.0)); // rad/s
   node->get_parameter(name_ + ".max_angular_velocity", max_angular_velocity_);
 
   declare_parameter_if_not_declared(
@@ -258,15 +258,25 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
 
   nav_msgs::msg::Path best_trajectory;
 
+  // temporary code for goal handling! (DANGER!)
+  double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+  if (goal_dist < focus_goal_dist_) {
+    double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
+    double current_heading = tf2::getYaw(pose.pose.orientation);
+    best_control.linear.x = 1.0;
+    best_control.angular.z = std::min(1.0, desired_heading - current_heading);
+    return best_control;
+  }
+
   // Generate all the trajectories based on sampled velocities
-  std::vector<Trajectory> trajectories = generateTrajectoriesImproved(pose, velocity);
+  std::vector<Trajectory> trajectories = generateTrajectoriesSimple(pose, velocity);
 
   double prev_v;
   double prev_w;
   if (last_trajectory_.initialized) {
     prev_v = last_trajectory_.control.linear.x;
     prev_w = last_trajectory_.control.angular.z;
-  } else{
+  } else {
     prev_v = 0;
     prev_w = 0;
   }
@@ -289,8 +299,13 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   trajectory_visualization_pub_->publish(best_trajectory);
 
   // smooth the control with prior control
-  best_control.linear.x = (1 - smooth_wt_) * best_control.linear.x + smooth_wt_ * prev_v;
-  best_control.angular.z = (1 - smooth_wt_) * best_control.angular.z + smooth_wt_ * prev_w;
+  if (min_cost < std::numeric_limits<double>::infinity() - 100){
+    best_control.linear.x = (1 - smooth_wt_) * best_control.linear.x + smooth_wt_ * prev_v;
+    best_control.angular.z = (1 - smooth_wt_) * best_control.angular.z + smooth_wt_ * prev_w;
+  } else {
+    best_control.linear.x = 0.0;
+    best_control.angular.z = 0.0;
+  }
 
   return best_control;
 }
@@ -329,8 +344,16 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesSimple(
       for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
       {
         // Simulate robot dynamics
-        current_x += linear_vel * sampling_rate_ * cos(current_theta);
-        current_y += linear_vel * sampling_rate_ * sin(current_theta);
+        if (abs(angular_vel) < 0.0001)
+        {
+          current_x += linear_vel * sampling_rate_ * cos(current_theta);
+          current_y += linear_vel * sampling_rate_ * sin(current_theta);
+        } else{
+          current_x += linear_vel / angular_vel * (sin(current_theta + angular_vel * sampling_rate_) - sin(current_theta));
+          current_y += linear_vel / angular_vel * (-cos(current_theta + angular_vel * sampling_rate_) + cos(current_theta));
+        }
+        // current_x += linear_vel * sampling_rate_ * cos(current_theta);
+        // current_y += linear_vel * sampling_rate_ * sin(current_theta);
         current_theta += angular_vel * sampling_rate_;
 
         geometry_msgs::msg::PoseStamped predicted_pose;
@@ -360,63 +383,78 @@ std::vector<Trajectory> CaBotSamplingMPCController::generateTrajectoriesImproved
   std::vector<Trajectory> trajectories;
 
   double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
+  double angular_vel_lim = max_angular_velocity_;
+  double angular_sample_resolution = angular_vel_lim / angular_sample_size_;
 
   // Sample a set of linear velocities
-  for (double linear_vel = 0.0; linear_vel <= max_linear_velocity_; linear_vel += linear_sample_resolution)
+  for (double initial_linear_vel = 0.0; initial_linear_vel <= max_linear_velocity_; initial_linear_vel += linear_sample_resolution)
   {
-    double linear_portion = linear_vel / max_linear_velocity_;
-    // double angular_vel_lim = (1.0 - linear_portion) * max_angular_velocity_;
-    // double angular_sample_resolution = max_angular_velocity_ / angular_sample_size_;
-    double angular_vel_lim = max_angular_velocity_;
-    double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
-
-    // Sample initial and secondary angular velocities
-    for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
+    double secondary_max_linear_velocity;
+    if (abs(initial_linear_vel) < 0.001) {
+      secondary_max_linear_velocity = 0.001;
+    } else {
+      secondary_max_linear_velocity = max_linear_velocity_;
+    }
+    for (double secondary_linear_vel = 0.0; secondary_linear_vel <= secondary_max_linear_velocity; secondary_linear_vel += linear_sample_resolution)
     {
-      for (double secondary_angular_vel = -angular_vel_lim; secondary_angular_vel <= angular_vel_lim; secondary_angular_vel += angular_sample_resolution)
+      // Sample initial and secondary angular velocities
+      for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
       {
-        // Start with the current pose and initial control
-        geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
-        double current_x = current_pose_copy.pose.position.x;
-        double current_y = current_pose_copy.pose.position.y;
-        double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
-
-        std::vector<geometry_msgs::msg::PoseStamped> trajectory;
-        geometry_msgs::msg::Twist initial_control;
-        initial_control.linear.x = linear_vel;
-        initial_control.angular.z = initial_angular_vel;
-
-        // Determine the time at which to switch to the secondary angular velocity
-        double switch_time = prediction_horizon_ / 2.0;
-
-        // Predict the trajectory over the prediction horizon
-        for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+        for (double secondary_angular_vel = -angular_vel_lim; secondary_angular_vel <= angular_vel_lim; secondary_angular_vel += angular_sample_resolution)
         {
-          // Use initial angular velocity before switch time, secondary after
-          double angular_vel;
-          if (t < switch_time) {
-            angular_vel = initial_angular_vel;
-          } else {
-            angular_vel = secondary_angular_vel;
+          // Start with the current pose and initial control
+          geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+          double current_x = current_pose_copy.pose.position.x;
+          double current_y = current_pose_copy.pose.position.y;
+          double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
+
+          std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+          geometry_msgs::msg::Twist initial_control;
+          initial_control.linear.x = initial_linear_vel;
+          initial_control.angular.z = initial_angular_vel;
+
+          // Determine the time at which to switch to the secondary angular velocity
+          double switch_time = prediction_horizon_ / 2.0;
+
+          // Predict the trajectory over the prediction horizon
+          for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+          {
+            // Use initial angular velocity before switch time, secondary after
+            double angular_vel;
+            double linear_vel;
+            if (t < switch_time) {
+              angular_vel = initial_angular_vel;
+              linear_vel = initial_linear_vel;
+            } else {
+              angular_vel = secondary_angular_vel;
+              linear_vel = secondary_linear_vel;
+            }
+
+            // Simulate robot dynamics
+            if (abs(angular_vel) < 0.0001)
+            {
+              current_x += linear_vel * sampling_rate_ * cos(current_theta);
+              current_y += linear_vel * sampling_rate_ * sin(current_theta);
+            } else{
+              current_x += linear_vel / angular_vel * (sin(current_theta + angular_vel * sampling_rate_) - sin(current_theta));
+              current_y -= linear_vel / angular_vel * (cos(current_theta + angular_vel * sampling_rate_) - cos(current_theta));
+            }
+            current_theta += angular_vel * sampling_rate_;
+            
+
+            geometry_msgs::msg::PoseStamped predicted_pose;
+            predicted_pose.pose.position.x = current_x;
+            predicted_pose.pose.position.y = current_y;
+            tf2::Quaternion q;
+            q.setRPY(0, 0, current_theta);
+            predicted_pose.pose.orientation = tf2::toMsg(q);
+
+            trajectory.push_back(predicted_pose);
           }
 
-          // Simulate robot dynamics
-          current_x += linear_vel * sampling_rate_ * cos(current_theta);
-          current_y += linear_vel * sampling_rate_ * sin(current_theta);
-          current_theta += angular_vel * sampling_rate_;
-
-          geometry_msgs::msg::PoseStamped predicted_pose;
-          predicted_pose.pose.position.x = current_x;
-          predicted_pose.pose.position.y = current_y;
-          tf2::Quaternion q;
-          q.setRPY(0, 0, current_theta);
-          predicted_pose.pose.orientation = tf2::toMsg(q);
-
-          trajectory.push_back(predicted_pose);
+          // Store this trajectory with its initial control
+          trajectories.push_back(Trajectory(initial_control, trajectory));
         }
-
-        // Store this trajectory with its initial control
-        trajectories.push_back(Trajectory(initial_control, trajectory));
       }
     }
   }
@@ -499,36 +537,51 @@ double CaBotSamplingMPCController::calculateCost(
   // min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * prediction_horizon_);
 
   int idx = 0;
+
+    // Add group trajectory-related cost
+  double group_cost;
+  int hit_idx;
+  std::tie(group_cost, hit_idx) = calculateGroupTrajectoryCost(sampled_trajectory);
+
+  cost += group_cost_wt_ * group_cost;
+
   for (const auto & pose : sampled_trajectory)
   {
-    step_cost = getCostFromCostmap(pose.pose);
-    if (step_cost >= obstacle_costval_)
-    {
-      cost = std::numeric_limits<double>::infinity();
-      return cost;
-    }
-    discount *= discount_factor_;
-    cumulative_discount += discount;
-
+    // if (idx == 0)
+    // {
+      step_cost = getCostFromCostmap(pose.pose);
+      if (step_cost >= obstacle_costval_)
+      {
+        cost = std::numeric_limits<double>::infinity();
+        return cost;
+      }
+    // }
+    
     // calculate goal dist at the same time
-    goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
-    min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * (idx + 1));
-    goal_cost += discount * ((goal_dist - min_goal_dist) / (current_dist - min_goal_dist));
-
-    /*
+    if (idx == (hit_idx - 1)) {
+      goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+      //min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * (idx + 1));
+      goal_cost = goal_dist;
+      //goal_cost += discount * ((goal_dist - min_goal_dist) / (current_dist - min_goal_dist));
+      //goal_cost += discount * goal_dist;
+    }
+    
     if (last_trajectory_.initialized)
     {
       last_pose = last_trajectory_.trajectory[idx];
       energy_dist = pointDist(pose.pose.position, last_pose.pose.position);
       // max if going two opposite ways
-      max_energy_dist = 2 * max_linear_velocity_ * ((idx + 1) * sampling_rate_);
-      energy_cost += discount * energy_dist / max_energy_dist;
+      max_energy_dist = max_linear_velocity_ * ((idx + 1) * sampling_rate_);
+      energy_cost += discount * energy_dist; // / max_energy_dist;
     }
-    */
+    
+    cumulative_discount += discount;
+    discount *= discount_factor_;
     
     idx++;
   }
 
+  /*
   if (last_trajectory_.initialized)
   {
     geometry_msgs::msg::Twist curr_control = trajectory.control;
@@ -537,12 +590,14 @@ double CaBotSamplingMPCController::calculateCost(
     double angular_energy_cost = std::abs(curr_control.angular.z - prev_control.angular.z) / (2 * max_angular_velocity_);
     energy_cost = cumulative_discount * (linear_energy_cost + angular_energy_cost) / 2;
   }
+  */
+
+  if (hit_idx == 0) {
+    goal_cost = current_dist;
+  }
   
   cost += goal_cost_wt_ * goal_cost;
   cost += energy_cost_wt_ * energy_cost;
-
-  // Add group trajectory-related cost
-  cost += group_cost_wt_ * calculateGroupTrajectoryCost(sampled_trajectory);
 
   return cost;
 }
@@ -568,13 +623,14 @@ double CaBotSamplingMPCController::getCostFromCostmap(const geometry_msgs::msg::
   }
 }
 
-double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
+std::tuple<double, int> CaBotSamplingMPCController::calculateGroupTrajectoryCost(
   const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory)
 {
   // This function estimates the cost of a trajectory against the predicted group trajectories
 
   double group_cost = 0.0;
   size_t num_time_steps = sampled_trajectory.size();
+  int hit_idx = num_time_steps;
 
   // Iterate over each time step in the sampled trajectory
   for (size_t t = 0; t < num_time_steps; ++t)
@@ -617,6 +673,10 @@ double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
         double min_dist = std::min({d1, d2, d3, d4, d5});
         if (isPointInPentagon(robot_point, p1, p2, p3, p4, p5))
         {
+          hit_idx = std::min(hit_idx, (int)t);
+        }
+
+        if (t >= hit_idx) {
           min_dist = -min_dist;
         }
 
@@ -626,7 +686,7 @@ double CaBotSamplingMPCController::calculateGroupTrajectoryCost(
     }
   }
 
-  return group_cost;
+  return std::make_tuple(group_cost, hit_idx);
 }
 
 double CaBotSamplingMPCController::pointDist(

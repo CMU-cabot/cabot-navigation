@@ -37,6 +37,7 @@
           <WaitFloat wait_duration_float="0.5" />
           <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
           <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="PathForward" />
+          <!-- <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot" /> -->
           <PublishTopicPath topic="plan" value="{path}" />
           <!-- front vibration -->
           <PublishTopic topic="/cabot/event" value="navigation;event;navigation_start" />
@@ -55,8 +56,8 @@
                 <CurrentPose global_frame="map" robot_base_frame="base_footprint"
                   pose="{current_pose}" />
                 <NeedToReplan path="{path}" current_pose="{current_pose}" />
-                <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}"
-                  planner_id="PathForward" />
+                <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="PathForward" />
+                <!-- <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot" /> -->
                 <PublishTopicPath topic="plan" value="{path}" />
               </Sequence>
               <AlwaysSuccess />
@@ -64,7 +65,9 @@
           </RateController>
 
           <!-- follow path -->
-          <FollowPath path="{path}" controller_id="MPCFollowPath" goal_checker_id="cabot_goal_checker" />
+          <!-- <FollowPath path="{path}" controller_id="MPCFollowPath" goal_checker_id="cabot_goal_checker" /> -->
+          <FollowPath path="{path}" controller_id="RLFollowPath" goal_checker_id="cabot_goal_checker" />
+          <!-- <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="cabot_goal_checker" /> -->
         </PipelineSequence>
 
         <!-- if follow path is aborted, compute path and try again -->
@@ -78,6 +81,7 @@
             <Wait wait_duration="1.0" />
             <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
             <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="PathForward" />
+            <!-- <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="CaBot" /> -->
             <PublishTopicPath topic="plan" value="{path}" />
           </Sequence>
           <AlwaysSuccess />

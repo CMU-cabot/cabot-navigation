@@ -167,7 +167,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
-    controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath"]
+    controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath", "RLFollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.
@@ -179,7 +179,7 @@ controller_server:
     # Goal checker parameters
     cabot_goal_checker:
       plugin: "cabot_navigation2::CabotSimpleGoalChecker"
-      xy_goal_tolerance: 0.50
+      xy_goal_tolerance: 1.0
       yaw_goal_tolerance: 6.28
       stateful: True
     # DWB parameters
@@ -330,24 +330,31 @@ controller_server:
       group_topic: "/group_predictions"
       traj_vis_topic: "/control_output_vis"
       loc_goal_vis_topic: "/local_goal_vis"
-      prediction_horizon: 3.2
+      prediction_horizon: 4.8
       sampling_rate: 0.4
       max_linear_velocity: 1.0
-      linear_sample_size: 5.0
+      linear_sample_size: 8.0
       max_angular_velocity: 1.0
-      angular_sample_size: 16.0
+      angular_sample_size: 8.0
       lookahead_distance: 2.5
-      goal_distance: 0.5
-      discount_factor: 0.9
+      goal_distance: 1.0
+      discount_factor: 0.99
       obstacle_costval: 250.0
       time_cost: 5.0
-      focus_goal_dist: 0.5
-      goal_cost_wt: 0.5
-      group_cost_wt: 0.5
+      focus_goal_dist: 2.0
+      goal_cost_wt: 0.55
+      group_cost_wt: 0.45
       obs_cost_wt: 1.0
       time_cost_wt: 1.0
       energy_cost_wt: 0.0
-      smooth_wt: 0.1
+      smooth_wt: 0.0
+    RLFollowPath:
+      plugin: "cabot_navigation2::CaBotRLController"
+      rl_cmd_topic: "/rl_robot_cmd"
+      rl_info_topic: "/rl_robot_info"
+      loc_goal_vis_topic: "/local_goal_vis"
+      lookahead_distance: 2.5
+      focus_goal_dist: 2.0
 
 controller_server_rclcpp_node:
   ros__parameters:

@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -17,7 +18,13 @@ rosidl_generate_interfaces(lidar_process_msgs
   "msg/Group.msg"
   "msg/GroupArray.msg"
   "msg/GroupTimeArray.msg"
-  DEPENDENCIES geometry_msgs
+  "msg/PositionArray.msg"
+  "msg/PositionHistoryArray.msg"
+  "msg/RobotMessage.msg"
+  "srv/RlAction.srv"
+  DEPENDENCIES 
+  geometry_msgs
+  std_msgs
 )
 
 if(BUILD_TESTING)

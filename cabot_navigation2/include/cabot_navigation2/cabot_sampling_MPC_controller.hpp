@@ -147,7 +147,7 @@ private:
   double getCostFromCostmap(
     const geometry_msgs::msg::Pose & pose);
 
-  double calculateGroupTrajectoryCost(
+  std::tuple<double, int> calculateGroupTrajectoryCost(
     const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory);
 
   double pointDist(
