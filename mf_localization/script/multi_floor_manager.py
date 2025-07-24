@@ -46,6 +46,7 @@ import rclpy.client
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.parameter import Parameter
 import rclpy.time
 from rclpy.qos import QoSProfile, qos_profile_sensor_data
@@ -148,9 +149,45 @@ class RSSType(Enum):
     WiFi = 1
 
 
-def call_service(service: rclpy.client, request, timeout_sec: Optional[float] = None):
+def call_service(service: rclpy.client, request, timeout_sec: Optional[float] = None,
+                 max_retries: int = 1,
+                 logger: Optional[RcutilsLogger] = None):
     '''
     call_service function that executes a service call with optional timeout.
+
+    Args:
+        service: The service object to be called.
+        request: The request to be sent to the service.
+        timeout_sec (Optional[float]): Optional timeout in seconds for the service call.
+        max_retries: The maximum number of times a service call will be retried.
+        logger: rclpy logger.
+
+    Returns:
+        The result of the service call, if successful.
+
+    Raises:
+        TimeoutError: If a service call timeouts.
+        Exception: Exception on future object.
+    '''
+
+    if max_retries == 1:
+        return call_service_once(service, request, timeout_sec)
+    else:
+        exception = RuntimeError("call service fails to catch exception.")
+        for i in range(max_retries):
+            try:
+                return call_service_once(service, request, timeout_sec)
+            except TimeoutError or Exception as e:
+                if logger is not None:
+                    logger.info(F"failed to call {service.srv_name}. retries={i}")
+                exception = e
+
+        raise exception
+
+
+def call_service_once(service: rclpy.client, request, timeout_sec: Optional[float] = None):
+    '''
+    call_service_once function that executes a service call with optional timeout.
 
     Args:
         service: The service object to be called.
@@ -453,6 +490,7 @@ class MultiFloorManagerParameters:
 
     # service call
     service_call_timeout_sec: float = 5.0  # [s]
+    service_call_max_retries: int = 10  # [times]
 
 
 class MultiFloorManager:
@@ -1424,7 +1462,11 @@ class MultiFloorManager:
             trajectory_id_to_finish = last_trajectory_id
             req = FinishTrajectory.Request(trajectory_id=trajectory_id_to_finish)
             try:
-                res1: FinishTrajectory.Response = call_service(finish_trajectory, req, timeout_sec=self.params.service_call_timeout_sec)
+                res1: FinishTrajectory.Response = call_service(finish_trajectory, req,
+                                                               timeout_sec=self.params.service_call_timeout_sec,
+                                                               max_retries=self.params.service_call_max_retries,
+                                                               logger=self.logger,
+                                                               )
             except TimeoutError or Exception as e:
                 self.logger.error(F"Failed to call finish_trajectory. Error={e}")
                 raise e
@@ -1489,7 +1531,11 @@ class MultiFloorManager:
             initial_pose=relative_pose,
             relative_to_trajectory_id=relative_to_trajectory_id)
         try:
-            res2: StartTrajectory.Response = call_service(start_trajectory, req, timeout_sec=self.params.service_call_timeout_sec)
+            res2: StartTrajectory.Response = call_service(start_trajectory, req,
+                                                          timeout_sec=self.params.service_call_timeout_sec,
+                                                          max_retries=self.params.service_call_max_retries,
+                                                          logger=self.logger,
+                                                          )
         except TimeoutError or Exception as e:
             self.logger.error(F"Failed to call start_trajectory. Error={e}")
             raise e
