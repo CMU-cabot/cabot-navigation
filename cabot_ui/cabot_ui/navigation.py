@@ -504,7 +504,13 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._stop_loop()
 
             def done_callback():
-                self.resume_navigation()
+                def wait_resume_navigation():
+                    self._logger.info("wait_resume_navigation")
+                    self.wait_for_restart_timer.cancel()
+                    self.resume_navigation()
+                self._logger.info("wait_for_restart_navigation done_callback")
+                self.wait_for_restart_timer = self._node.create_timer(2.0, wait_resume_navigation)
+
             self.delegate.system_pause_navigation(done_callback)
 
     def _plan_callback(self, path):
