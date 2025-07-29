@@ -284,6 +284,8 @@ install(PROGRAMS
   test/run_test.py
   test/evaluator.py
   test/evaluation_metrics.py
+  src/robot_following_node.py
+  src/remote_control_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
