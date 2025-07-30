@@ -671,7 +671,11 @@ class MultiFloorManager:
                 # do not update pose_with_covariance_stamped_msg
                 self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. Assuming initialpose is published on the global frame({self.global_map_frame}).")
 
-        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
+        try:
+            status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
+        except TimeoutError or Exception as e:
+            self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+            status_code = StatusCode.CANCELLED
 
         # set is_active to True if succeeded to start trajectory
         if status_code == 0:
@@ -739,13 +743,13 @@ class MultiFloorManager:
                     self.finish_trajectory()  # finish trajectory before updating area value
             except TimeoutError or Exception as e:
                 self.logger.error(F"failed to call finish_trajectory. Error={e}")
-                return StatusCode.CANCELLED
+                raise e
 
             try:
                 status_code = self.start_trajectory_with_pose(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
             except TimeoutError or Exception as e:
                 self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
-                return StatusCode.CANCELLED
+                raise e
 
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
 
@@ -796,7 +800,7 @@ class MultiFloorManager:
             status_code_start_trajectory = self.start_trajectory_with_pose(local_pose, _target_floor, _target_area, _target_mode)
         except TimeoutError or Exception as e:
             self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
-            return StatusCode.CANCELLED
+            raise e
         self.logger.info(F"called /{floor_manager.node_id}/{_target_mode}/start_trajectory, code={status_code_start_trajectory}")
 
         # set current_frame and publish it in the setter
@@ -932,7 +936,11 @@ class MultiFloorManager:
                         return
 
                     # restart trajectory with the updated state variables
-                    status_code = self.restart_floor(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
+                    try:
+                        status_code = self.restart_floor(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
+                    except TimeoutError or Exception as e:
+                        self.looger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
+                        return
 
                     # release floor change event after restart floor success
                     if status_code == StatusCode.OK:
@@ -1052,9 +1060,10 @@ class MultiFloorManager:
             orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)  # orientation is unknown.
             local_pose = Pose(position=position, orientation=orientation)
 
-            status_code = self.restart_floor(local_pose, target_floor, target_area, target_mode)
-            if status_code != StatusCode.OK:
-                self.logger.error(F"Failed restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode})")
+            try:
+                _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
+            except (TimeoutError, Exception) as e:
+                self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
                 return
 
             # reset altitude_floor_estimator in floor initialization process
@@ -1126,9 +1135,10 @@ class MultiFloorManager:
                     return
 
                 # restart trajectory with the updated state variables
-                status_code = self.restart_floor(local_pose, target_floor, target_area, target_mode)
-                if status_code != StatusCode.OK:
-                    self.logger.error(F"Failed restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode})")
+                try:
+                    _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
+                except TimeoutError or Exception as e:
+                    self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
                     return
 
                 # update instance variables after restart_floor succeed
@@ -1241,7 +1251,12 @@ class MultiFloorManager:
                         self.logger.error(F"failed to call finish_trajectory. Error={e}")
                         return
                     # restart trajectory with the updated state variables
-                    status_code = self.restart_floor(local_pose, self.floor, target_area, target_mode)
+                    try:
+                        status_code = self.restart_floor(local_pose, self.floor, target_area, target_mode)
+                    except TimeoutError or Exception as e:
+                        self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, self.floor={self.floor}, area={target_area}, mode={target_mode}). Error={e}")
+                        return
+
                     if status_code == StatusCode.OK:
                         # update condition variables
                         self.optimization_detected = False
@@ -1996,7 +2011,12 @@ class MultiFloorManager:
 
         # self.publish_map_frame_adjust_tf()
         # here, map_adjust -> ... -> published_frame TF must be disabled.
-        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, mode=target_mode, floor=floor)  # reset pose on the global frame
+        try:
+            status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, mode=target_mode, floor=floor)  # reset pose on the global frame
+        except TimeoutError or Exception as e:
+            self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+            status_code = StatusCode.CANCELLED
+
         if status_code == StatusCode.OK:
             self.gnss_localization_time = now
 
@@ -2066,7 +2086,11 @@ class MultiFloorManager:
         pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
         # start localization
-        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)
+        try:
+            status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)  # reset pose on the global frame
+        except TimeoutError or Exception as e:
+            self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+            status_code = StatusCode.CANCELLED
 
         if status_code == StatusCode.OK:
             self.is_active = True
