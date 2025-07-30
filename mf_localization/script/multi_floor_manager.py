@@ -223,7 +223,7 @@ class FloorManager:
     def __init__(self):
         self.node_id = None
         self.frame_id = None
-        self.localizer = None
+        self.ble_localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
 
@@ -412,7 +412,7 @@ class MultiFloorManager:
         self.spin_count = 0
         self.prev_spin_count = None
 
-        self.ble_localizer_dict = {}
+        self.floor_manager_dict = {}
         self.ble_floor_localizer = None
         self.wifi_floor_localizer = None
 
@@ -583,6 +583,18 @@ class MultiFloorManager:
             self.current_frame_pub.publish(current_frame_msg)
             self.send_local_map_tf()
 
+    def get_floor_manager(self, floor, area, mode) -> FloorManager:
+        return self.floor_manager_dict[floor][area][mode]
+
+    def set_floor_manager(self, floor, area, mode, floor_manager):
+        if floor not in self.floor_manager_dict:
+            self.floor_manager_dict[floor] = {}
+
+        if area not in self.floor_manager_dict[floor]:
+            self.floor_manager_dict[floor][area] = {}
+
+        self.floor_manager_dict[floor][area][mode] = floor_manager
+
     # broadcast tf from global_map_frame to each (local) map_frame
     def send_static_transforms(self):
         for t in self.transforms:
@@ -715,7 +727,7 @@ class MultiFloorManager:
                 self.logger.info(f"multi_floor_manager.initialize_with_global_pose: mode={target_mode}, floor={target_floor}, area={target_area}")
 
             # get information from floor_manager
-            floor_manager = self.ble_localizer_dict[target_floor][target_area][target_mode]
+            floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
             frame_id = floor_manager.frame_id
             map_filename = floor_manager.map_filename
             node_id = floor_manager.node_id
@@ -781,7 +793,7 @@ class MultiFloorManager:
         # set z = 0 to ensure 2D position on the local map
         local_pose.position.z = 0.0
 
-        floor_manager = self.ble_localizer_dict[_target_floor][_target_area][_target_mode]
+        floor_manager = self.get_floor_manager(_target_floor, _target_area, _target_mode)
         frame_id = floor_manager.frame_id
         map_filename = floor_manager.map_filename
 
@@ -909,7 +921,7 @@ class MultiFloorManager:
                 target_mode = self.mode
 
                 # check the availablity of local_pose on the target frame
-                floor_manager = self.ble_localizer_dict[target_floor][target_area][target_mode]
+                floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
                 frame_id = floor_manager.frame_id  # target frame_id
                 local_transform = None
                 try:
@@ -1035,9 +1047,9 @@ class MultiFloorManager:
             # coarse initial localization on local frame (frame_id)
             localizer = None
             if rss_type == RSSType.iBeacon:
-                localizer = self.ble_localizer_dict[floor][area][LocalizationMode.INIT].localizer
+                localizer = self.get_floor_manager(floor, area, LocalizationMode.INIT).ble_localizer
             elif rss_type == RSSType.WiFi:
-                localizer = self.ble_localizer_dict[floor][area][LocalizationMode.INIT].wifi_localizer
+                localizer = self.get_floor_manager(floor, area, LocalizationMode.INIT).wifi_localizer
 
             # local_loc is on the local coordinate on frame_id
             local_loc = localizer.predict(beacons)
@@ -1109,7 +1121,7 @@ class MultiFloorManager:
             target_mode = LocalizationMode.TRACK
 
             # check the availablity of local_pose on the target frame
-            floor_manager = self.ble_localizer_dict[target_floor][target_area][target_mode]
+            floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
             frame_id = floor_manager.frame_id  # target frame_id
             local_transform = None
             try:
@@ -1227,7 +1239,7 @@ class MultiFloorManager:
                 target_area = area
                 target_mode = LocalizationMode.TRACK
                 # check the availablity of local_pose on the target frame
-                floor_manager = self.ble_localizer_dict[self.floor][target_area][target_mode]
+                floor_manager = self.get_floor_manager(self.floor, target_area, target_mode)
                 frame_id = floor_manager.frame_id  # target frame_id
                 local_transform = None
                 try:
@@ -1340,7 +1352,7 @@ class MultiFloorManager:
 
     def finish_trajectory(self):
         # try to finish the current trajectory
-        floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
+        floor_manager: FloorManager = self.get_floor_manager(self.floor, self.area, self.mode)
         floor_manager.cartographer_client.finish_trajectory(timeout_sec=self.params.service_call_timeout_sec,
                                                             max_retries=self.params.service_call_max_retries,
                                                             )
@@ -1361,7 +1373,7 @@ class MultiFloorManager:
         _target_area = self.area if target_area is None else target_area
         _target_mode = self.mode if target_mode is None else target_mode
 
-        floor_manager: FloorManager = self.ble_localizer_dict[_target_floor][_target_area][_target_mode]
+        floor_manager: FloorManager = self.get_floor_manager(_target_floor, _target_area, _target_mode)
         status_code = floor_manager.cartographer_client.start_trajectory(initial_pose,
                                                                          timeout_sec=self.params.service_call_timeout_sec,
                                                                          max_retries=self.params.service_call_max_retries,
@@ -1748,7 +1760,7 @@ class MultiFloorManager:
 
         # publish gnss fix to localizer node
         if self.floor is not None and self.area is not None and self.mode is not None:
-            floor_manager = self.ble_localizer_dict[self.floor][self.area][self.mode]
+            floor_manager = self.get_floor_manager(self.floor, self.area, self.mode)
             if fix.status.status >= self.gnss_params.gnss_status_threshold \
                     and self.prev_navsat_status:
                 fix_pub = floor_manager.fix_pub
@@ -2027,9 +2039,9 @@ class MultiFloorManager:
                 return
 
         transform_list = []
-        for floor in self.ble_localizer_dict.keys():
-            for area in self.ble_localizer_dict[floor].keys():
-                gnss_adjuster = self.gnss_adjuster_dict[floor][area]
+        for _floor in self.floor_manager_dict.keys():
+            for _area in self.floor_manager_dict[_floor].keys():
+                gnss_adjuster = self.gnss_adjuster_dict[_floor][_area]
 
                 parent_frame_id = gnss_adjuster.frame_id
                 child_frame_id = gnss_adjuster.map_frame_adjust
@@ -2100,7 +2112,7 @@ class MultiFloorManager:
             self.logger.info(f"localization mode is not init. mode={self.mode}")
             return False
 
-        floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
+        floor_manager: FloorManager = self.get_floor_manager(self.floor, self.area, self.mode)
         optimized = floor_manager.cartographer_client.is_optimized(timeout_sec=self.params.service_call_timeout_sec)
         return optimized
 
@@ -2687,11 +2699,6 @@ if __name__ == "__main__":
         else:
             samples_wifi = []
 
-        if floor not in multi_floor_manager.ble_localizer_dict:
-            multi_floor_manager.ble_localizer_dict[floor] = {}
-
-        multi_floor_manager.ble_localizer_dict[floor][area] = {}
-
         # gnss adjust
         map_frame_adjust = frame_id + "_adjust"
         if floor not in multi_floor_manager.gnss_adjuster_dict:
@@ -2768,23 +2775,20 @@ if __name__ == "__main__":
             floor_manager = FloorManager()
             floor_manager.configuration_directory = configuration_directory
             floor_manager.configuration_basename = tmp_configuration_basename
-            multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
+            multi_floor_manager.set_floor_manager(floor, area, mode, floor_manager)
 
         # set values to floor_manager
         for mode in modes:
-            floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
+            floor_manager = multi_floor_manager.get_floor_manager(floor, area, mode)
 
-            floor_manager.localizer = ble_localizer_floor
+            floor_manager.ble_localizer = ble_localizer_floor
             floor_manager.wifi_localizer = wifi_localizer_floor
             floor_manager.node_id = node_id
             floor_manager.frame_id = frame_id
             floor_manager.map_filename = map_filename
-            floor_manager.min_hist_count = min_hist_count
             # publishers
             floor_manager.initialpose_pub = node.create_publisher(PoseWithCovarianceStamped, node_id+"/"+str(mode)+initialpose_topic_name, 10, callback_group=MutuallyExclusiveCallbackGroup())
             floor_manager.fix_pub = node.create_publisher(NavSatFix, node_id+"/"+str(mode)+fix_topic_name, 10, callback_group=MutuallyExclusiveCallbackGroup())
-
-            multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
 
         # convert samples to the coordinate of global_anchor
         samples_ble_global = convert_samples_coordinate(samples_ble, anchor, global_anchor, floor)
@@ -2829,7 +2833,7 @@ if __name__ == "__main__":
             continue
 
         for mode in modes:
-            floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
+            floor_manager = multi_floor_manager.get_floor_manager(floor, area, mode)
             # rospy service
             # define callback group accessing the same ros node
             floor_manager.cartographer_client = CartographerClient(node, logger, node_id, mode,
