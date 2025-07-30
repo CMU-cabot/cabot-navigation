@@ -495,7 +495,6 @@ class MultiFloorManager:
         # parameters
         self.gnss_params = GNSSParameters()
         # variables
-        self.gnss_adjuster_dict = {}
         self.prev_navsat_msg = None
         self.prev_navsat_status = False
         self.prev_mf_navsat_msg = None
@@ -1342,10 +1341,6 @@ class MultiFloorManager:
         # reset floor_manager
         floor_manager.reset_states()
 
-        # reset gnss adjuster and publish
-        self.gnss_adjuster_dict[self.floor][self.area].reset()
-        self.publish_map_frame_adjust_tf()
-
     def start_trajectory_with_pose(self, initial_pose: Pose,
                                    target_floor=None,
                                    target_area=None,
@@ -1598,7 +1593,7 @@ class MultiFloorManager:
         # start converting gnss_fix message to global_map_frame and publish it for visualization
         # read message
         now = self.clock.now()
-        stamp = fix.header.stamp
+        # stamp = fix.header.stamp
         gnss_frame = fix.header.frame_id
         latitude = fix.latitude
         longitude = fix.longitude
@@ -1712,13 +1707,6 @@ class MultiFloorManager:
             self.prev_mf_navsat_msg = None
             self.gnss_navsat_time = now
 
-        # disable gnss adjust in indoor invironments
-        if self.indoor_outdoor_mode == IndoorOutdoorMode.INDOOR:
-            # reset all gnss adjust
-            for _floor in self.gnss_adjuster_dict.keys():
-                for _area in self.gnss_adjuster_dict[_floor].keys():
-                    self.gnss_adjuster_dict[_floor][_area].reset()
-
         # use different covariance threshold for initial localization and tracking
         if (self.gnss_localization_time is None) and (self.mode is None):
             # initial localization
@@ -1775,17 +1763,8 @@ class MultiFloorManager:
                         self.gnss_init_time = None
                         self.gnss_init_timeout_detected = True
 
-        # Forcibly prevent the tracked trajectory from going far away from the gnss position history
+        # tracking error detection
         track_error_detected = False
-        # Prevent too large adjust
-        large_adjust_detected = False
-
-        update_gnss_adjust = False
-        gnss_adjust_x = None
-        gnss_adjust_y = None
-        gnss_adjust_yaw = None
-        may_stable_Rt = False
-
         tf_available = False
 
         # lookup tf
@@ -1796,14 +1775,6 @@ class MultiFloorManager:
             trans_pos = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, end_time)
             # gnss pose
             transform_gnss = tfBuffer.lookup_transform(self.global_map_frame, gnss_frame, end_time)
-
-            # get tf required to compute gnss adjust
-            # gnss adjuster
-            gnss_adjuster = self.gnss_adjuster_dict[self.floor][self.area]
-            tf_global2local = tfBuffer.lookup_transform(self.global_map_frame, gnss_adjuster.frame_id, end_time)
-            tf_adjust2odom = tfBuffer.lookup_transform(gnss_adjuster.map_frame_adjust, self.odom_frame, end_time)
-            tf_odom2gnss = tfBuffer.lookup_transform(self.odom_frame, gnss_frame, end_time)
-
             tf_available = True
         except RuntimeError as e:
             self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error=RuntimeError({e})")
@@ -1817,148 +1788,27 @@ class MultiFloorManager:
             euler_angles_pos = tf_transformations.euler_from_quaternion([trans_pos.transform.rotation.x, trans_pos.transform.rotation.y, trans_pos.transform.rotation.z, trans_pos.transform.rotation.w], 'sxyz')
             yaw_pos = euler_angles_pos[2]  # [roll, pitch, yaw] radien (0 -> x-axis, counter-clock-wise
 
-            # gnss pose
-            euler_angles_gnss = tf_transformations.euler_from_quaternion([transform_gnss.transform.rotation.x, transform_gnss.transform.rotation.y, transform_gnss.transform.rotation.z, transform_gnss.transform.rotation.w], 'sxyz')
-            yaw_angle = euler_angles_gnss[2]  # [roll, pitch, yaw] radien (0 -> x-axis, counter-clock-wise)
-
             # calculate error
             xy_error = np.linalg.norm([transform_gnss.transform.translation.x - gnss_xy.x, transform_gnss.transform.translation.y - gnss_xy.y])
-            cosine = np.cos(gnss_yaw)*np.cos(yaw_angle) + np.sin(gnss_yaw)*np.sin(yaw_angle)
-            cosine = np.clip(cosine, -1.0, 1.0)
-            # yaw_error = np.arccos(cosine)
-            # self.logger.info("xy_error="+str(xy_error)+", yaw_error="+str(yaw_error))
-
-            # gnss adjuster
-            gnss_adjuster = self.gnss_adjuster_dict[self.floor][self.area]
-
-            # estimate map_local -> map_adjust
-            # global_map_frame -> local_map_frame (gnss_adjuster.frame_id) -> map_frame_adjust -> odom_frame -> base_link -> ... -> gnss
-
-            euler_global2local = tf_transformations.euler_from_quaternion([tf_global2local.transform.rotation.x, tf_global2local.transform.rotation.y, tf_global2local.transform.rotation.z, tf_global2local.transform.rotation.w], 'sxyz')
-            euler_adjust2odom = tf_transformations.euler_from_quaternion([tf_adjust2odom.transform.rotation.x, tf_adjust2odom.transform.rotation.y, tf_adjust2odom.transform.rotation.z, tf_adjust2odom.transform.rotation.w], 'sxyz')
-            euler_odom2gnss = tf_transformations.euler_from_quaternion([tf_odom2gnss.transform.rotation.x, tf_odom2gnss.transform.rotation.y, tf_odom2gnss.transform.rotation.z, tf_odom2gnss.transform.rotation.w], 'sxyz')
-
-            global2local = [stamp.nanosec/1e9, tf_global2local.transform.translation.x, tf_global2local.transform.translation.y, euler_global2local[2]]
-            adjust2odom = [stamp.nanosec/1e9, tf_adjust2odom.transform.translation.x, tf_adjust2odom.transform.translation.y, euler_adjust2odom[2]]
-            odom2gnss = [stamp.nanosec/1e9, tf_odom2gnss.transform.translation.x, tf_odom2gnss.transform.translation.y, euler_odom2gnss[2]]
-
-            Tglobal2local = toTransmat(global2local[1], global2local[2], global2local[3])
-            Tadjust2odom = toTransmat(adjust2odom[1], adjust2odom[2], adjust2odom[3])
-
-            # jump detection and small motion filtering
-            if len(gnss_adjuster.gnss_fix_list) > 0:
-                diff = np.linalg.norm([gnss_adjuster.local_odom_list[-1][1] - odom2gnss[1],
-                                       gnss_adjuster.local_odom_list[-1][2] - odom2gnss[2]])
-                # self.logger.info(F"diff={diff}")
-                if diff > self.gnss_params.gnss_odom_jump_threshold:  # if the local slam is jumped
-                    self.logger.info(F"detected local slam jump. diff={diff}.")
-                    gnss_adjuster.gnss_fix_list = []
-                    gnss_adjuster.local_odom_list = []
-                    gnss_adjuster.gnss_fix_list.append(fix_local)
-                    gnss_adjuster.local_odom_list.append(odom2gnss)
-                    gnss_adjuster.gnss_total_count += 1
-                    update_gnss_adjust = True
-                elif diff <= self.gnss_params.gnss_odom_small_threshold:  # if the movement is too small.
-                    pass
-                else:
-                    gnss_adjuster.gnss_fix_list.append(fix_local)
-                    gnss_adjuster.local_odom_list.append(odom2gnss)
-                    gnss_adjuster.gnss_total_count += 1
-                    update_gnss_adjust = True
-            else:
-                gnss_adjuster.gnss_fix_list.append(fix_local)
-                gnss_adjuster.local_odom_list.append(odom2gnss)
-                gnss_adjuster.gnss_total_count += 1
-                update_gnss_adjust = True
-
-            def apply_deadzone(x, deadzone):
-                x_new = 0.0
-                if deadzone <= x:
-                    x_new = x - deadzone
-                elif x <= -deadzone:
-                    x_new = x + deadzone
-                return x_new
-
-            # estimate gnss_adjust
-            if update_gnss_adjust:
-                if 2 <= len(gnss_adjuster.gnss_fix_list):  # use at least two points to calculate R, t
-
-                    W = []  # odom_frame -> gnss_frame
-                    Z = []  # global_map_frame -> gnss_frame
-
-                    for idx in range(np.min([self.gnss_params.gnss_n_max_correspondences, len(gnss_adjuster.gnss_fix_list)])):
-                        W.append([gnss_adjuster.local_odom_list[-idx-1][1], gnss_adjuster.local_odom_list[-idx-1][2], 1])
-                        Z.append([gnss_adjuster.gnss_fix_list[-idx-1][1], gnss_adjuster.gnss_fix_list[-idx-1][2], 1])
-
-                    W = np.array(W)
-                    Z = np.array(Z)
-
-                    X = W @ Tadjust2odom.transpose()
-                    Y = (np.linalg.inv(Tglobal2local) @ Z.transpose()).transpose()
-
-                    R, t = self.estimateRt(X[:, :2], Y[:, :2])
-
-                    gnss_adjust_x = t[0]
-                    gnss_adjust_y = t[1]
-                    gnss_adjust_yaw = np.arctan2(R[1, 0], R[0, 0])  # [-pi, pi]
-
-                    # apply dead zone
-                    gnss_adjust_x = apply_deadzone(gnss_adjust_x, self.gnss_params.gnss_track_error_adjust)
-                    gnss_adjust_y = apply_deadzone(gnss_adjust_y, self.gnss_params.gnss_track_error_adjust)
-
-                    # apply zero adjust weight
-                    if gnss_adjuster.zero_adjust_uncertainty < 1.0:
-                        alpha = gnss_adjuster.zero_adjust_uncertainty
-                        gnss_adjust_x = (1.0-alpha)*0.0 + alpha*gnss_adjust_x
-                        gnss_adjust_y = (1.0-alpha)*0.0 + alpha*gnss_adjust_y
-                        gnss_adjust_yaw = (1.0-alpha)*0.0 + alpha*gnss_adjust_yaw
-                        # update zero_adjust_uncertainty
-                        gnss_adjuster.zero_adjust_uncertainty += 1.0/self.gnss_params.gnss_n_max_correspondences
-                        gnss_adjuster.zero_adjust_uncertainty = np.min([gnss_adjuster.zero_adjust_uncertainty, 1.0])  # clipping
-
-                    # update gnss adjust values when the uncertainty of those values is high (initial stage) or those values are very stable (tracking stage).
-                    may_stable_Rt = self.gnss_params.gnss_n_min_correspondences_stable <= len(gnss_adjuster.gnss_fix_list)
-                    if gnss_adjuster.gnss_total_count < self.gnss_params.gnss_n_min_correspondences_stable \
-                            or may_stable_Rt:
-                        if gnss_adjuster.adjust_tf:
-                            gnss_adjuster.gnss_adjust_x = gnss_adjust_x
-                            gnss_adjuster.gnss_adjust_y = gnss_adjust_y
-                            gnss_adjuster.gnss_adjust_yaw = gnss_adjust_yaw
-                            self.logger.info(F"gnss_adjust updated: gnss_adjust_x={gnss_adjust_x}, gnss_adjust_y={gnss_adjust_y}, gnss_adjust_yaw={gnss_adjust_yaw}")
-                        else:
-                            self.logger.info(F"gnss_adjust NOT updated: gnss_adjust_x={gnss_adjust_x}, gnss_adjust_y={gnss_adjust_y}, gnss_adjust_yaw={gnss_adjust_yaw}")
 
             if np.sqrt(position_covariance[0]) + self.gnss_params.gnss_track_error_threshold <= xy_error:
                 self.logger.info(F"gnss tracking error detected. sqrt(position_covariance[0])={np.sqrt(position_covariance[0])} + gnss_track_error_threshold={self.gnss_params.gnss_track_error_threshold} < xy_error={xy_error}")
                 track_error_detected = True
 
-            if may_stable_Rt:
-                if np.sqrt(position_covariance[0]) + self.gnss_params.gnss_track_error_threshold <= np.sqrt(gnss_adjuster.gnss_adjust_x**2 + gnss_adjuster.gnss_adjust_y**2) \
-                        or self.gnss_params.gnss_track_yaw_threshold < np.abs(gnss_adjuster.gnss_adjust_yaw):
-                    self.logger.info("gnss map adjustment becomes too large.")
-                    large_adjust_detected = True
-
             # update pose for reset
-            if may_stable_Rt:
-                q = tf_transformations.quaternion_from_euler(0, 0, yaw_pos, 'sxyz')
-                pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+            q = tf_transformations.quaternion_from_euler(0, 0, yaw_pos, 'sxyz')
+            pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
-        # publish (possibly) updated map adjust
+        # reset trajectory if necessary
         reset_trajectory = False
-        reset_zero_adjust_uncertainty = False  # set zero adjust uncertainty to 1 (unknown) when gnss adjust is completely unknown (e.g. initialization, large error with estimated gnss adjust)
 
         if self.floor is None:  # run one time
             reset_trajectory = True
-            reset_zero_adjust_uncertainty = True
         elif self.floor is not None and \
                 self.area is None:
             # self.floor is specified but area and mode are unknown
             reset_trajectory = True
-            reset_zero_adjust_uncertainty = True
         elif track_error_detected:
-            reset_trajectory = True
-            reset_zero_adjust_uncertainty = True
-        elif large_adjust_detected:
             reset_trajectory = True
         else:
             reset_trajectory = False
@@ -1966,6 +1816,7 @@ class MultiFloorManager:
         if not reset_trajectory:
             return
 
+        # prevent frequent gnss-based trajectory restart
         if self.gnss_localization_time is not None:
             if now - self.gnss_localization_time < Duration(seconds=self.gnss_params.gnss_localization_interval):
                 return
@@ -1975,9 +1826,6 @@ class MultiFloorManager:
         if self.mode is None:
             target_mode = LocalizationMode.INIT
             self.gnss_init_time = now
-        elif self.mode == LocalizationMode.INIT \
-                and may_stable_Rt:  # change mode INIT -> TRACK if mode has not been updated by optimization
-            target_mode = LocalizationMode.TRACK
 
         # if floor, area, and mode are active, try to finish the trajectory.
         if self.floor is not None and self.area is not None:
@@ -1990,8 +1838,6 @@ class MultiFloorManager:
                 self.logger.error(F"failed to call finish_trajectory. Error={e}")
                 return
 
-            gnss_adjuster = self.gnss_adjuster_dict[self.floor][self.area]
-
             # temporarily cut TF tree between map_adjust -> odom_frame
             t = TransformStamped()
             t.header.stamp = now.to_msg()
@@ -2001,19 +1847,6 @@ class MultiFloorManager:
             t.transform.rotation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
             broadcaster.sendTransform([t])
 
-        # if target_mode is not None:
-        #     self.mode = target_mode  # set mode after finishing old trajectory
-
-        # reset all gnss adjust
-        for _floor in self.gnss_adjuster_dict.keys():
-            for _area in self.gnss_adjuster_dict[_floor].keys():
-                gnss_adjuster = self.gnss_adjuster_dict[_floor][_area]
-                gnss_adjuster.reset()
-                if reset_zero_adjust_uncertainty:
-                    gnss_adjuster.zero_adjust_uncertainty = 1.0
-
-        # self.publish_map_frame_adjust_tf()
-        # here, map_adjust -> ... -> published_frame TF must be disabled.
         try:
             status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, mode=target_mode, floor=floor)  # reset pose on the global frame
         except TimeoutError or Exception as e:
@@ -2022,37 +1855,6 @@ class MultiFloorManager:
 
         if status_code == StatusCode.OK:
             self.gnss_localization_time = now
-
-    def publish_map_frame_adjust_tf(self):
-        # prevent publishing redundant tf
-        stamp = self.clock.now().to_msg()
-        if self.prev_publish_map_frame_adjust_timestamp is not None:
-            if self.prev_publish_map_frame_adjust_timestamp == stamp:
-                return
-
-        transform_list = []
-        for _floor in self.floor_manager_dict.keys():
-            for _area in self.floor_manager_dict[_floor].keys():
-                gnss_adjuster = self.gnss_adjuster_dict[_floor][_area]
-
-                parent_frame_id = gnss_adjuster.frame_id
-                child_frame_id = gnss_adjuster.map_frame_adjust
-
-                t = TransformStamped()
-                t.header.stamp = stamp
-                t.header.frame_id = parent_frame_id
-                t.child_frame_id = child_frame_id
-                t.transform.translation = Vector3(x=gnss_adjuster.gnss_adjust_x, y=gnss_adjuster.gnss_adjust_y, z=0.0)
-                q = tf_transformations.quaternion_from_euler(0.0, 0.0, gnss_adjuster.gnss_adjust_yaw, 'sxyz')
-                t.transform.rotation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
-
-                transform_list.append(t)
-
-        broadcaster.sendTransform(transform_list)
-        self.prev_publish_map_frame_adjust_timestamp = stamp
-
-    def map_frame_adjust_callback(self):
-        self.publish_map_frame_adjust_tf()
 
     # input:
     #      MFLocalPosition global_position
@@ -2662,6 +2464,10 @@ if __name__ == "__main__":
         use_gnss_adjust = map_dict["use_gnss_adjust"] if "use_gnss_adjust" in map_dict else False
         min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 1
 
+        # warning
+        if use_gnss_adjust:
+            logger.warn("use_gnss_adjust feature was removed and is no longer available.")
+
         # check value
         if environment not in ["indoor", "outdoor"]:
             raise RuntimeError(
@@ -2704,12 +2510,6 @@ if __name__ == "__main__":
         else:
             samples_wifi = []
 
-        # gnss adjust
-        map_frame_adjust = frame_id + "_adjust"
-        if floor not in multi_floor_manager.gnss_adjuster_dict:
-            multi_floor_manager.gnss_adjuster_dict[floor] = {}
-        multi_floor_manager.gnss_adjuster_dict[floor][area] = TFAdjuster(frame_id, map_frame_adjust, use_gnss_adjust)
-
         # run ros nodes
         for mode in modes:
             namespace = node_id+"/"+str(mode)
@@ -2722,8 +2522,6 @@ if __name__ == "__main__":
 
             # update config variables if needed
             options_map_frame = frame_id
-            if use_gnss:
-                options_map_frame = map_frame_adjust
 
             # load cartographer_parameters
             cartographer_parameters = cartographer_parameter_converter.get_parameters(node_id, mode)
@@ -2979,10 +2777,6 @@ if __name__ == "__main__":
 
         # detect area and mode switching
         multi_floor_manager.check_and_update_states()  # 1 Hz
-
-        # publish adjustment tf for outdoor mode
-        if use_gnss:
-            multi_floor_manager.publish_map_frame_adjust_tf()
 
     main_timer = node.create_timer(1.0 / spin_rate, main_loop, callback_group=state_update_callback_group)
 
