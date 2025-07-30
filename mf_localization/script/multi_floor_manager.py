@@ -506,6 +506,7 @@ class MultiFloorManager:
         self.odom_frame = "odom"
         self.published_frame = "base_control_shift"
         self.base_link_frame = "base_link"
+        self.tracking_frame = "imu_frame"
         self.global_position_frame = "base_link"  # frame_id to compute global position
         # unknown frame to temporarily cut a TF tree
         self.unknown_frame = "unknown"
@@ -950,9 +951,9 @@ class MultiFloorManager:
                 local_transform = None
                 try:
                     # tf from the origin of the target floor to the robot pose
-                    local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                    local_transform = tfBuffer.lookup_transform(frame_id, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
                 except RuntimeError as e:
-                    self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}. error=RuntimeError({e})')
+                    self.logger.error(F'LookupTransform Error from {frame_id} to {self.tracking_frame}. error=RuntimeError({e})')
                     return
 
                 # update the trajectory only when local_transform is available
@@ -1145,9 +1146,9 @@ class MultiFloorManager:
             local_transform = None
             try:
                 # tf from the origin of the target floor to the robot pose
-                local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type), no_cache=True)
+                local_transform = tfBuffer.lookup_transform(frame_id, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type), no_cache=True)
             except RuntimeError:
-                self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
+                self.logger.error(F'LookupTransform Error from {frame_id} to {self.tracking_frame}')
 
             # update the trajectory only when local_transform is available
             if local_transform is not None:
@@ -1181,7 +1182,7 @@ class MultiFloorManager:
 
             # check localization failure
             try:
-                t = tfBuffer.lookup_transform(self.global_map_frame, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                t = tfBuffer.lookup_transform(self.global_map_frame, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
                 loc2D_track = np.array([t.transform.translation.x, t.transform.translation.y])
                 loc2D_beacon = np.array([loc[0, 0], loc[0, 1]])
                 failure_detected = self.check_localization_failure(loc2D_track, loc2D_beacon)
@@ -1189,7 +1190,7 @@ class MultiFloorManager:
                     self.restart_localization()
                     self.logger.error("Auto-relocalization. (localization failure detected)")
             except RuntimeError:
-                self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.base_link_frame}")
+                self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.tracking_frame}")
 
     # periodically check and update internal state variables (area and mode)
     def check_and_update_states(self):
@@ -1262,9 +1263,9 @@ class MultiFloorManager:
                 local_transform = None
                 try:
                     # tf from the origin of the target floor to the robot pose
-                    local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                    local_transform = tfBuffer.lookup_transform(frame_id, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
                 except RuntimeError:
-                    self.logger.error('LookupTransform Error from ' + frame_id + " to " + self.base_link_frame)
+                    self.logger.error('LookupTransform Error from ' + frame_id + " to " + self.tracking_frame)
 
                 # update the trajectory only when local_transform is available
                 if local_transform is not None:
@@ -2584,6 +2585,7 @@ if __name__ == "__main__":
     multi_floor_manager.global_map_frame = node.declare_parameter("global_map_frame", "map").value
     multi_floor_manager.odom_frame = node.declare_parameter("odom_frame", "odom").value
     multi_floor_manager.published_frame = node.declare_parameter("published_frame", "base_link").value
+    multi_floor_manager.tracking_frame = node.declare_parameter("tracking_frame", "imu_frame").value
     multi_floor_manager.global_position_frame = node.declare_parameter("global_position_frame", "base_link").value
     meters_per_floor = node.declare_parameter("meters_per_floor", 5).value
     multi_floor_manager.floor_queue_size = node.declare_parameter("floor_queue_size", 3).value  # [seconds]
