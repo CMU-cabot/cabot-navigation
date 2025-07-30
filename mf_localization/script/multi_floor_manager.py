@@ -69,13 +69,7 @@ from sensor_msgs.msg import NavSatFix, NavSatStatus, FluidPressure
 from tf2_geometry_msgs import PoseStamped
 from tf2_geometry_msgs import PointStamped, Vector3Stamped
 
-from cartographer_ros_msgs.msg import TrajectoryStates
 from cartographer_ros_msgs.msg import StatusCode
-from cartographer_ros_msgs.srv import GetTrajectoryStates
-from cartographer_ros_msgs.srv import FinishTrajectory
-from cartographer_ros_msgs.srv import StartTrajectory
-from cartographer_ros_msgs.srv import ReadMetrics
-from cartographer_ros_msgs.srv import TrajectoryQuery
 
 import mf_localization.geoutil as geoutil
 import mf_localization.resource_utils as resource_utils
@@ -99,7 +93,7 @@ from mf_localization.altitude_manager import AltitudeFloorEstimatorParameters
 from mf_localization.altitude_manager import AltitudeFloorEstimatorResult
 from mf_localization.altitude_manager import BalancedSampler
 from mf_localization.altitude_manager import FloorHeightMapper
-
+from mf_localization.cartographer_client import CartographerClient
 from mf_localization.rclpy_utils import call_service
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
@@ -226,32 +220,6 @@ def convert_samples_coordinate(samples, from_anchor, to_anchor, floor):
     return samples2
 
 
-def compute_relative_pose(pose1: Pose, pose2: Pose) -> Pose:
-    relative_position = [
-        pose2.position.x - pose1.position.x,
-        pose2.position.y - pose1.position.y,
-        pose2.position.z - pose1.position.z,
-        1  # for homogeneous transformation
-    ]
-    q1 = [pose1.orientation.x, pose1.orientation.y, pose1.orientation.z, pose1.orientation.w]
-    q2 = [pose2.orientation.x, pose2.orientation.y, pose2.orientation.z, pose2.orientation.w]
-    q1_inv = tf_transformations.quaternion_inverse(q1)
-    R = tf_transformations.quaternion_matrix(q1_inv)  # homogeneous rotation matrix
-    rotated_relative_position = R.dot(relative_position)
-    relative_orientation = tf_transformations.quaternion_multiply(q1_inv, q2)
-
-    relative_pose = Pose()
-    relative_pose.position.x = rotated_relative_position[0]
-    relative_pose.position.y = rotated_relative_position[1]
-    relative_pose.position.z = rotated_relative_position[2]
-    relative_pose.orientation.x = relative_orientation[0]
-    relative_pose.orientation.y = relative_orientation[1]
-    relative_pose.orientation.z = relative_orientation[2]
-    relative_pose.orientation.w = relative_orientation[3]
-
-    return relative_pose
-
-
 class FloorManager:
     def __init__(self):
         self.node_id = None
@@ -259,7 +227,6 @@ class FloorManager:
         self.localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
-        self.min_hist_count = 1
 
         # publisher
         self.initialpose_pub = None
@@ -268,23 +235,16 @@ class FloorManager:
         self.odom_pub = None
         self.fix_pub = None
 
-        # services
-        self.get_trajectory_states: rclpy.client.Client = None
-        self.finish_trajectory: rclpy.client.Client = None
-        self.start_trajectory: rclpy.client.Client = None
-        self.read_metrics: rclpy.client.Client = None
-        self.trajectory_query: rclpy.client.Client = None
+        # cartographer client
+        self.cartographer_client: CartographerClient = None
 
         # variables
         self.previous_fix_local_published = None
         self.trajectory_initial_pose = None  # variable to keep the initial pose from /trajectory_query
 
-        # variables - optimization
-        self.constraints_count = 0
-
     def reset_states(self):
         self.previous_fix_local_published = None
-        self.constraints_count = 0
+        self.cartographer_client.reset_states()
 
 
 class TFAdjuster:
@@ -1367,39 +1327,9 @@ class MultiFloorManager:
     def finish_trajectory(self):
         # try to finish the current trajectory
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
-
-        # wait for services
-        get_trajectory_states = floor_manager.get_trajectory_states
-        self.logger.info(F"wait for {get_trajectory_states.srv_name} service")
-        get_trajectory_states.wait_for_service()
-        finish_trajectory = floor_manager.finish_trajectory
-        self.logger.info(F"wait for {finish_trajectory.srv_name} service")
-        finish_trajectory.wait_for_service()
-
-        req = GetTrajectoryStates.Request()
-        try:
-            res0: GetTrajectoryStates.Response = call_service(get_trajectory_states, req, timeout_sec=self.params.service_call_timeout_sec)
-        except TimeoutError or Exception as e:
-            self.logger.error(F"Failed to call get_trajectory_states. Error={e}")
-            raise e
-        self.logger.info(F"{res0}")
-        last_trajectory_id = res0.trajectory_states.trajectory_id[-1]
-        last_trajectory_state = res0.trajectory_states.trajectory_state[-1]  # uint8 -> int
-
-        # finish trajectory only if the trajectory is active.
-        if last_trajectory_state in [TrajectoryStates.ACTIVE]:
-            trajectory_id_to_finish = last_trajectory_id
-            req = FinishTrajectory.Request(trajectory_id=trajectory_id_to_finish)
-            try:
-                res1: FinishTrajectory.Response = call_service(finish_trajectory, req,
-                                                               timeout_sec=self.params.service_call_timeout_sec,
-                                                               max_retries=self.params.service_call_max_retries,
-                                                               logger=self.logger,
-                                                               )
-            except TimeoutError or Exception as e:
-                self.logger.error(F"Failed to call finish_trajectory. Error={e}")
-                raise e
-            self.logger.info(F"{res1}")
+        floor_manager.cartographer_client.finish_trajectory(timeout_sec=self.params.service_call_timeout_sec,
+                                                            max_retries=self.params.service_call_max_retries,
+                                                            )
 
         # reset floor_manager
         floor_manager.reset_states()
@@ -1418,59 +1348,10 @@ class MultiFloorManager:
         _target_mode = self.mode if target_mode is None else target_mode
 
         floor_manager: FloorManager = self.ble_localizer_dict[_target_floor][_target_area][_target_mode]
-        start_trajectory = floor_manager.start_trajectory
-        self.logger.info(F"wait for {start_trajectory.srv_name} service")
-        start_trajectory.wait_for_service()
-
-        # start trajectory
-        configuration_directory = floor_manager.configuration_directory
-        configuration_basename = floor_manager.configuration_basename
-        use_initial_pose = True
-        relative_to_trajectory_id = 0
-
-        # compute relative pose
-        if floor_manager.trajectory_initial_pose is None:
-            # trajectory query (for the first time)
-            trajectory_query = floor_manager.trajectory_query
-            self.logger.info(F"wait for {trajectory_query.srv_name} service")
-            trajectory_query.wait_for_service()
-            req = TrajectoryQuery.Request(
-                trajectory_id=relative_to_trajectory_id
-            )
-            try:
-                res: TrajectoryQuery.Response = call_service(trajectory_query, req, timeout_sec=self.params.service_call_timeout_sec)
-            except TimeoutError or Exception as e:
-                self.logger.error(F"Failed to call trajectory_query. Error={e}")
-                raise e
-            trajectory = res.trajectory
-            trajectory_initial_pose: PoseStamped = trajectory[0]
-
-            self.logger.info(F"trajectory {relative_to_trajectory_id} initial pose = {trajectory_initial_pose}")
-            floor_manager.trajectory_initial_pose = trajectory_initial_pose
-
-        # compute relative pose to trajectory initial pose
-        relative_pose = compute_relative_pose(floor_manager.trajectory_initial_pose.pose, initial_pose)
-        self.logger.info(F"converted initial_pose ({initial_pose}) to relative_pose ({relative_pose}) on trajectory {relative_to_trajectory_id}")
-
-        self.logger.info("prepare request")
-        req = StartTrajectory.Request(
-            configuration_directory=configuration_directory,
-            configuration_basename=configuration_basename,
-            use_initial_pose=use_initial_pose,
-            initial_pose=relative_pose,
-            relative_to_trajectory_id=relative_to_trajectory_id)
-        try:
-            res2: StartTrajectory.Response = call_service(start_trajectory, req,
-                                                          timeout_sec=self.params.service_call_timeout_sec,
-                                                          max_retries=self.params.service_call_max_retries,
-                                                          logger=self.logger,
-                                                          )
-        except TimeoutError or Exception as e:
-            self.logger.error(F"Failed to call start_trajectory. Error={e}")
-            raise e
-        self.logger.info(F"start_trajectory response = {res2}")
-        status_code = res2.status.code
-
+        status_code = floor_manager.cartographer_client.start_trajectory(initial_pose,
+                                                                         timeout_sec=self.params.service_call_timeout_sec,
+                                                                         max_retries=self.params.service_call_max_retries,
+                                                                         )
         tfBuffer.clear()  # clear buffered tf to avoid the effect of the finished trajectory
 
         # update variables after success
@@ -2197,42 +2078,7 @@ class MultiFloorManager:
             return False
 
         floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
-        read_metrics = floor_manager.read_metrics
-        self.logger.info(F"wait for {read_metrics.srv_name} service")
-        read_metrics.wait_for_service()
-
-        req = ReadMetrics.Request()
-        self.logger.info("request read_metrics")
-        try:
-            res: ReadMetrics.Response = call_service(read_metrics, req, timeout_sec=self.params.service_call_timeout_sec)
-        except TimeoutError or Exception as e:
-            self.logger.error(F"failed to call read_metrics. Error={e}")
-            return False
-
-        if res.status.code != 0:  # OK
-            self.logger.info(f"read_metrics fails {res.status}")
-            return False
-
-        # comment out the following two lines to debug
-        # from rosidl_runtime_py import message_to_yaml
-        # self.logger.info(message_to_yaml(res))
-
-        # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
-        # because this value is updated after running optimization
-        optimized = False
-        for metric_family in res.metric_families:
-            if metric_family.name == "mapping_2d_pose_graph_constraints":
-                for metric in metric_family.metrics:
-                    # inter_submap -> different trajectory
-                    if metric.labels[0].key == "tag" and metric.labels[0].value == "inter_submap" \
-                            and metric.labels[1].key == "trajectory" and metric.labels[1].value == "different":
-                        self.logger.info(f"inter_submap different trajectory constraints. count={metric.value}")
-                        # check if the number of constraints changed
-                        if floor_manager.constraints_count != metric.value:
-                            floor_manager.constraints_count = metric.value
-                            if metric.value >= floor_manager.min_hist_count:
-                                optimized = True
-                                self.logger.info("pose graph optimization detected.")
+        optimized = floor_manager.cartographer_client.is_optimized(timeout_sec=self.params.service_call_timeout_sec)
         return optimized
 
 
@@ -2976,12 +2822,11 @@ if __name__ == "__main__":
             floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
             # rospy service
             # define callback group accessing the same ros node
-            node_service_callback_group = MutuallyExclusiveCallbackGroup()
-            floor_manager.get_trajectory_states = node.create_client(GetTrajectoryStates, node_id+"/"+str(mode)+'/get_trajectory_states', callback_group=node_service_callback_group)
-            floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=node_service_callback_group)
-            floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=node_service_callback_group)
-            floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=node_service_callback_group)
-            floor_manager.trajectory_query = node.create_client(TrajectoryQuery, node_id+"/"+str(mode)+'/trajectory_query', callback_group=node_service_callback_group)
+            floor_manager.cartographer_client = CartographerClient(node, logger, node_id, mode,
+                                                                   floor_manager.configuration_directory,
+                                                                   floor_manager.configuration_basename,
+                                                                   min_hist_count
+                                                                   )
 
     multi_floor_manager.floor_list = list(floor_set)
 
