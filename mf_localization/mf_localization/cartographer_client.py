@@ -195,9 +195,6 @@ class CartographerClient:
                 raise e
             self.logger.info(F"{res1}")
 
-        status_code = res1.status.code
-        return status_code
-
     def read_metrics(self, timeout_sec):
         self.logger.info(F"wait for {self._read_metrics.srv_name} service")
         self._read_metrics.wait_for_service()
