@@ -46,7 +46,6 @@ import rclpy.client
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.parameter import Parameter
 import rclpy.time
 from rclpy.qos import QoSProfile, qos_profile_sensor_data
@@ -101,6 +100,8 @@ from mf_localization.altitude_manager import AltitudeFloorEstimatorResult
 from mf_localization.altitude_manager import BalancedSampler
 from mf_localization.altitude_manager import FloorHeightMapper
 
+from mf_localization.rclpy_utils import call_service
+
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 
@@ -147,79 +148,6 @@ class IndoorOutdoorMode(Enum):
 class RSSType(Enum):
     iBeacon = 0
     WiFi = 1
-
-
-def call_service(service: rclpy.client, request, timeout_sec: Optional[float] = None,
-                 max_retries: int = 1,
-                 logger: Optional[RcutilsLogger] = None):
-    '''
-    call_service function that executes a service call with optional timeout.
-
-    Args:
-        service: The service object to be called.
-        request: The request to be sent to the service.
-        timeout_sec (Optional[float]): Optional timeout in seconds for the service call.
-        max_retries: The maximum number of times a service call will be retried.
-        logger: rclpy logger.
-
-    Returns:
-        The result of the service call, if successful.
-
-    Raises:
-        TimeoutError: If a service call timeouts.
-        Exception: Exception on future object.
-    '''
-
-    if max_retries == 1:
-        return call_service_once(service, request, timeout_sec)
-    else:
-        exception = RuntimeError("call service fails to catch exception.")
-        for i in range(max_retries):
-            try:
-                return call_service_once(service, request, timeout_sec)
-            except TimeoutError or Exception as e:
-                if logger is not None:
-                    logger.info(F"failed to call {service.srv_name}. retries={i}")
-                exception = e
-
-        raise exception
-
-
-def call_service_once(service: rclpy.client, request, timeout_sec: Optional[float] = None):
-    '''
-    call_service_once function that executes a service call with optional timeout.
-
-    Args:
-        service: The service object to be called.
-        request: The request to be sent to the service.
-        timeout_sec (Optional[float]): Optional timeout in seconds for the service call.
-
-    Returns:
-        The result of the service call, if successful.
-
-    Raises:
-        TimeoutError: If a service call timeouts.
-        Exception: Exception on future object.
-    '''
-    # service call with timeout
-    event = threading.Event()
-
-    def unblock(future) -> None:
-        nonlocal event
-        event.set()
-
-    future = service.call_async(request)
-    future.add_done_callback(unblock)
-
-    if not future.done():
-        if not event.wait(timeout_sec):
-            service.remove_pending_request(future)
-            raise TimeoutError("service call timeout")
-
-    exception = future.exception()
-    if exception is not None:
-        raise exception
-    return future.result()
 
 
 def extract_samples_ble_wifi_other(samples):
