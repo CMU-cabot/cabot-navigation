@@ -1492,8 +1492,7 @@ class MultiFloorManager:
     #      MFGlobalPosition global_position
     # input:
     #      MFLocalPosition local_position
-    def convert_local_to_global_callback(self, request, response):
-        averaging_interval = self.global_position_averaging_interval  # noqa: F841
+    def convert_local_to_global_callback(self, request: ConvertLocalToGlobal.Request, response: ConvertLocalToGlobal.Response):
         try:
             pos = PointStamped()
             vel = Vector3Stamped()
@@ -1523,15 +1522,26 @@ class MultiFloorManager:
             response.global_position.header.frame_id = self.global_position_frame
             response.global_position.latitude = latlng.lat
             response.global_position.longitude = latlng.lng
-            response.global_position.floor = floor
+            response.global_position.floor = int(floor)
             response.global_position.heading = heading
             response.global_position.speed = speed
             return response
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {self.global_position_frame}")
-            return None
-        except tf2_ros.TransformException:
-            return None
+            status_message = F"LookupTransform Error {self.global_map_frame} -> {self.global_position_frame}"
+            self.logger.info(status_message)
+            response.status.code = 1
+            response.status.message = status_message
+            return response
+        except tf2_ros.TransformException as e:
+            self.logger.error(F"{e}")
+            response.status.code = 1
+            response.status.message = F"tf2_ros.TransformException({e})"
+            return response
+        except Exception as e:
+            self.logger.error(F"{e}")
+            response.status.code = 1
+            response.status.message = F"Exception({e})"
+            return response
 
     def navsat_callback(self, msg: NavSAT):
         self.prev_navsat_msg = msg
