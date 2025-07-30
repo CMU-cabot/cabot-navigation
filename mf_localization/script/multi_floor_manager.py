@@ -660,6 +660,21 @@ class MultiFloorManager:
             msg.status = value
             self.localize_status_pub.publish(msg)
 
+    def get_local_pose(self, target_frame, source_frame, no_cache=False) -> Pose:
+        try:
+            local_transform = tfBuffer.lookup_transform(target_frame, source_frame,
+                                                        rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type),
+                                                        no_cache=no_cache)
+            # create local_pose instance
+            v3 = local_transform.transform.translation  # Vector3
+            position = Point(x=v3.x, y=v3.y, z=v3.z)
+            orientation = local_transform.transform.rotation  # Quaternion
+            local_pose = Pose(position=position, orientation=orientation)
+            return local_pose
+        except RuntimeError as e:
+            self.logger.error(F'LookupTransform Error from {target_frame} to {source_frame}')
+            raise e
+
     def initialpose_callback(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped):
         if self.verbose:
             self.logger.info(f"multi_floor_manager.initialpose_callback: initialpose = {pose_with_covariance_stamped_msg}")
@@ -924,39 +939,30 @@ class MultiFloorManager:
                 # check the availablity of local_pose on the target frame
                 floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
                 frame_id = floor_manager.frame_id  # target frame_id
-                local_transform = None
+                # tf from the origin of the target floor to the robot pose
                 try:
-                    # tf from the origin of the target floor to the robot pose
-                    local_transform = tfBuffer.lookup_transform(frame_id, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                    local_pose = self.get_local_pose(frame_id, self.tracking_frame)
                 except RuntimeError as e:
-                    self.logger.error(F'LookupTransform Error from {frame_id} to {self.tracking_frame}. error=RuntimeError({e})')
+                    self.logger.error(F"failed to call get_local_pose. Error={e}")
                     return
 
-                # update the trajectory only when local_transform is available
-                if local_transform is not None:
-                    # create local_pose instance
-                    v3 = local_transform.transform.translation  # Vector3
-                    position = Point(x=v3.x, y=v3.y, z=v3.z)
-                    orientation = local_transform.transform.rotation  # Quaternion
-                    local_pose = Pose(position=position, orientation=orientation)
+                # try to finish the current trajectory before updating state variables
+                try:
+                    self.finish_trajectory()
+                except TimeoutError or Exception as e:
+                    self.logger.error(F"failed to call finish_trajecotry. Error={e}")
+                    return
 
-                    # try to finish the current trajectory before updating state variables
-                    try:
-                        self.finish_trajectory()
-                    except TimeoutError or Exception as e:
-                        self.logger.error(F"failed to call finish_trajecotry. Error={e}")
-                        return
+                # restart trajectory with the updated state variables
+                try:
+                    status_code = self.restart_floor(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
+                except (TimeoutError, Exception) as e:
+                    self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
+                    return
 
-                    # restart trajectory with the updated state variables
-                    try:
-                        status_code = self.restart_floor(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
-                    except TimeoutError or Exception as e:
-                        self.looger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
-                        return
-
-                    # release floor change event after restart floor success
-                    if status_code == StatusCode.OK:
-                        self.latest_floor_estimation_result = None
+                # release floor change event after restart floor success
+                if status_code == StatusCode.OK:
+                    self.latest_floor_estimation_result = None
 
     def beacons_callback(self, message):
         self.valid_beacon = True
@@ -1118,34 +1124,26 @@ class MultiFloorManager:
             # check the availablity of local_pose on the target frame
             floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
             frame_id = floor_manager.frame_id  # target frame_id
-            local_transform = None
+            # tf from the origin of the target floor to the robot pose
             try:
-                # tf from the origin of the target floor to the robot pose
-                local_transform = tfBuffer.lookup_transform(frame_id, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type), no_cache=True)
-            except RuntimeError:
-                self.logger.error(F'LookupTransform Error from {frame_id} to {self.tracking_frame}')
+                local_pose = self.get_local_pose(frame_id, self.tracking_frame, no_cache=True)
+            except RuntimeError as e:
+                self.logger.error(F"failed to call get_local_pose. Error={e}")
+                return
 
-            # update the trajectory only when local_transform is available
-            if local_transform is not None:
-                # create local_pose instance
-                v3 = local_transform.transform.translation  # Vector3
-                position = Point(x=v3.x, y=v3.y, z=v3.z)
-                orientation = local_transform.transform.rotation  # Quaternion
-                local_pose = Pose(position=position, orientation=orientation)
+            # try to finish the current trajectory before updating state variables
+            try:
+                self.finish_trajectory()
+            except TimeoutError or Exception as e:
+                self.logger.error(F"failed to call finish_trajectory. Error={e}")
+                return
 
-                # try to finish the current trajectory before updating state variables
-                try:
-                    self.finish_trajectory()
-                except TimeoutError or Exception as e:
-                    self.logger.error(F"failed to call finish_trajectory. Error={e}")
-                    return
-
-                # restart trajectory with the updated state variables
-                try:
-                    _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
-                except TimeoutError or Exception as e:
-                    self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
-                    return
+            # restart trajectory with the updated state variables
+            try:
+                _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
+            except TimeoutError or Exception as e:
+                self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
+                return
         else:
             # skip if not activated
             if not rss_loc_params.failure_detection:
@@ -1232,38 +1230,31 @@ class MultiFloorManager:
                 # check the availablity of local_pose on the target frame
                 floor_manager = self.get_floor_manager(self.floor, target_area, target_mode)
                 frame_id = floor_manager.frame_id  # target frame_id
-                local_transform = None
+                # tf from the origin of the target floor to the robot pose
                 try:
-                    # tf from the origin of the target floor to the robot pose
-                    local_transform = tfBuffer.lookup_transform(frame_id, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError:
-                    self.logger.error('LookupTransform Error from ' + frame_id + " to " + self.tracking_frame)
+                    local_pose = self.get_local_pose(frame_id, self.tracking_frame)
+                except RuntimeError as e:
+                    self.logger.error(F"failed to call get_local_pose. Error={e}")
+                    return
 
-                # update the trajectory only when local_transform is available
-                if local_transform is not None:
-                    # create local_pose instance
-                    v3 = local_transform.transform.translation  # Vector3
-                    position = Point(x=v3.x, y=v3.y, z=v3.z)
-                    orientation = local_transform.transform.rotation  # Quaternion
-                    local_pose = Pose(position=position, orientation=orientation)
-                    # try to finish the current trajectory before updating state variables
-                    try:
-                        self.finish_trajectory()
-                    except TimeoutError or Exception as e:
-                        self.logger.error(F"failed to call finish_trajectory. Error={e}")
-                        return
-                    # restart trajectory with the updated state variables
-                    try:
-                        status_code = self.restart_floor(local_pose, self.floor, target_area, target_mode)
-                    except TimeoutError or Exception as e:
-                        self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, self.floor={self.floor}, area={target_area}, mode={target_mode}). Error={e}")
-                        return
+                # try to finish the current trajectory before updating state variables
+                try:
+                    self.finish_trajectory()
+                except TimeoutError or Exception as e:
+                    self.logger.error(F"failed to call finish_trajectory. Error={e}")
+                    return
+                # restart trajectory with the updated state variables
+                try:
+                    status_code = self.restart_floor(local_pose, self.floor, target_area, target_mode)
+                except TimeoutError or Exception as e:
+                    self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, self.floor={self.floor}, area={target_area}, mode={target_mode}). Error={e}")
+                    return
 
-                    if status_code == StatusCode.OK:
-                        # update condition variables
-                        self.optimization_detected = False
-                        self.initial_localization_timeout_detected = False
-                        self.gnss_init_timeout_detected = False
+                if status_code == StatusCode.OK:
+                    # update condition variables
+                    self.optimization_detected = False
+                    self.initial_localization_timeout_detected = False
+                    self.gnss_init_timeout_detected = False
         return
 
     # publish global position
