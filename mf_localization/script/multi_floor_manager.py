@@ -1081,45 +1081,39 @@ class MultiFloorManager:
             # reset altitude_floor_estimator in floor initialization process
             self.altitude_floor_estimator.reset(floor_est=floor)
 
-        # floor change or init->track
-        elif ((self.altitude_manager.is_height_changed() or not self.pressure_available) and self.floor != floor) \
-                or (self.mode == LocalizationMode.INIT and self.optimization_detected):
+        # floor change
+        elif ((self.altitude_manager.is_height_changed() or not self.pressure_available) and self.floor != floor):
             # skip if not activated
             if not rss_loc_params.continuous_localization:
                 self.logger.info(F"rss_callback({rss_type}): skipping continuous localization", throttle_duration_sec=5.0)
                 return
 
-            _floor_change_detected = self.floor != floor
+            self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
 
-            if _floor_change_detected:
-                self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
-
-                # check if the candidate pose is reachable
-                # get robot pose
-                try:
-                    robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
-                    self.logger.warn(F"{e}")
-                    return
-                # detect area in target_floor
-                x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(floor) * self.area_floor_const]]  # [x,y,floor]
-                # find area candidates
-                neigh_dists, neigh_indices = self.area_localizer.kneighbors(x_area, n_neighbors=1)
-                area_candidates = self.Y_area[neigh_indices]
-                neigh_dist = neigh_dists[0][0]
-                area = area_candidates[0][0]
-                # reject if the candidate area may be unreachable.
-                if self.area_distance_threshold < neigh_dist:
-                    if self.verbose:
-                        self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
-                    return
-            else:
-                self.logger.info("optimization_detected. change localization mode init->track")
+            # check if the candidate pose is reachable
+            # get robot pose
+            try:
+                robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+            except RuntimeError as e:
+                self.logger.warn(F"{e}")
+                return
+            # detect area in target_floor
+            x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(floor) * self.area_floor_const]]  # [x,y,floor]
+            # find area candidates
+            neigh_dists, neigh_indices = self.area_localizer.kneighbors(x_area, n_neighbors=1)
+            area_candidates = self.Y_area[neigh_indices]
+            neigh_dist = neigh_dists[0][0]
+            area = area_candidates[0][0]
+            # reject if the candidate area may be unreachable.
+            if self.area_distance_threshold < neigh_dist:
+                if self.verbose:
+                    self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
+                return
 
             # set temporal variables
             target_floor = floor
             target_area = area
-            target_mode = LocalizationMode.TRACK
+            target_mode = self.mode
 
             # check the availablity of local_pose on the target frame
             floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
@@ -1152,10 +1146,6 @@ class MultiFloorManager:
                 except TimeoutError or Exception as e:
                     self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
                     return
-
-                # update instance variables after restart_floor succeed
-                if not _floor_change_detected:  # optimization
-                    self.optimization_detected = False
         else:
             # skip if not activated
             if not rss_loc_params.failure_detection:
