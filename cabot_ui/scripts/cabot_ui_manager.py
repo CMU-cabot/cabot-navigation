@@ -468,11 +468,9 @@ class CabotUIManager(NavigationInterface, object):
             try:
                 if result:
                     self._logger.info(f"description - {result=}")
-                    self._interface.publish_navigation_event_sound("ImageDescResponseReceived")
                     self._interface.describe_surround(result['translated'])
                 else:
                     self._logger.info("description - Error")
-                    self._interface.publish_navigation_event_sound("ImageDescResponseReceived")
                     self._interface.describe_error()
             except:   # noqa: #722
                 self._logger.error(traceback.format_exc())
@@ -493,7 +491,6 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
-                self._interface.publish_navigation_event_sound("ImageDescRequestSent")
                 self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
 
         # request description internal functions
@@ -510,7 +507,6 @@ class CabotUIManager(NavigationInterface, object):
                             self._interface.lang,
                             length_index=0,
                             callback=description_callback):
-                        self._interface.publish_navigation_event_sound("ImageDescRequestSent")
                         self._interface.requesting_describe_surround_stop_reason()
                     else:
                         self._interface.requesting_please_wait()
@@ -531,7 +527,6 @@ class CabotUIManager(NavigationInterface, object):
                             self._interface.lang,
                             length_index=length_index,
                             callback=description_callback):
-                        self._interface.publish_navigation_event_sound("ImageDescRequestSent")
                         self._interface.requesting_describe_surround()
                     else:
                         self._interface.requesting_please_wait()
