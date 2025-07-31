@@ -249,6 +249,15 @@ class UserInterface(object):
         except Exception as e:
             CaBotRclpyUtil.error(F"Playback failed: {e}")
 
+    def publish_navigation_event_sound(self, sound_code):
+        if not isinstance(sound_code, str) or not sound_code:
+            return
+        self._activity_log("cabot/interface", "sound", sound_code)
+        e = NavigationEvent("sound", sound_code)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self.event_pub.publish(msg)
+
     def vibrate(self, pattern=vibration.UNKNOWN):
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
         msg = std_msgs.msg.Int8()

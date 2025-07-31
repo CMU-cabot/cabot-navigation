@@ -464,23 +464,15 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
-        def publish_navigation_event_sound(sound_request):
-            if not isinstance(sound_request, str) or not sound_request:
-                return
-            e = NavigationEvent("sound", sound_request)
-            msg = std_msgs.msg.String()
-            msg.data = str(e)
-            self._eventPub.publish(msg)
-
         def description_callback(result):
             try:
                 if result:
                     self._logger.info(f"description - {result=}")
-                    publish_navigation_event_sound("ImageDescResponseReceived")
+                    self._interface.publish_navigation_event_sound("ImageDescResponseReceived")
                     self._interface.describe_surround(result['translated'])
                 else:
                     self._logger.info("description - Error")
-                    publish_navigation_event_sound("ImageDescResponseReceived")
+                    self._interface.publish_navigation_event_sound("ImageDescResponseReceived")
                     self._interface.describe_error()
             except:   # noqa: #722
                 self._logger.error(traceback.format_exc())
@@ -501,7 +493,7 @@ class CabotUIManager(NavigationInterface, object):
                     self._interface.requesting_describe_surround_stop_reason()
                 elif not self._description.stop_reason_enabled and self._description.surround_enabled:
                     self._interface.requesting_describe_surround()
-                publish_navigation_event_sound("ImageDescRequestSent")
+                self._interface.publish_navigation_event_sound("ImageDescRequestSent")
                 self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
 
         # request description internal functions
@@ -518,7 +510,7 @@ class CabotUIManager(NavigationInterface, object):
                             self._interface.lang,
                             length_index=0,
                             callback=description_callback):
-                        publish_navigation_event_sound("ImageDescRequestSent")
+                        self._interface.publish_navigation_event_sound("ImageDescRequestSent")
                         self._interface.requesting_describe_surround_stop_reason()
                     else:
                         self._interface.requesting_please_wait()
@@ -539,7 +531,7 @@ class CabotUIManager(NavigationInterface, object):
                             self._interface.lang,
                             length_index=length_index,
                             callback=description_callback):
-                        publish_navigation_event_sound("ImageDescRequestSent")
+                        self._interface.publish_navigation_event_sound("ImageDescRequestSent")
                         self._interface.requesting_describe_surround()
                     else:
                         self._interface.requesting_please_wait()
