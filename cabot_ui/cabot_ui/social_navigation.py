@@ -45,6 +45,8 @@ class SNMessage:
         OBSTACLE_AHEAD = enum.auto()
         PLEASE_WAIT_FOR_A_SECOND = enum.auto()
         NOT_DETECT_TOUCH = enum.auto()
+        IMAGE_DESC_REQUEST_SENT = enum.auto()
+        IMAGE_DESC_RESPONSE_RECEIVED = enum.auto()
         # not used, avoid
         AVOIDING_A_PERSON = enum.auto()
         AVOIDING_PEOPLE = enum.auto()
@@ -84,6 +86,10 @@ class SNMessage:
     @staticmethod
     def empty_sound(clock: rclpy.clock.Clock):
         return SNMessage.empty(SNMessage.Type.Sound, clock)
+
+    @staticmethod
+    def sound(code: Code, clock: rclpy.clock.Clock):
+        return SNMessage(type=SNMessage.Type.Sound, code=code, category=None, time=clock.now(), priority=0)
 
 
 class SocialNavigation(object):

@@ -505,15 +505,23 @@ class UserInterface(object):
     def describe_error(self):
         self._activity_log("cabot/interface", "describe_error")
         self.speak(i18n.localized_string("REQUESTING_ERROR"), priority=SpeechPriority.MODERATE)
+        sound = SNMessage.sound(SNMessage.Code.IMAGE_DESC_RESPONSE_RECEIVED, self._node.get_clock())
+        self.request_sound(sound)
 
     def requesting_describe_surround(self):
         self._activity_log("cabot/interface", "requesting_describe_surround", "")
         self.speak(i18n.localized_string("REQUESTING_DESCRIBE_SURROUND"), priority=SpeechPriority.MODERATE)
+        sound = SNMessage.sound(SNMessage.Code.IMAGE_DESC_REQUEST_SENT, self._node.get_clock())
+        self.request_sound(sound)
 
     def requesting_describe_surround_stop_reason(self):
         self._activity_log("cabot/interface", "requesting_describe_surround_stop_reason", "")
         self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
+        sound = SNMessage.sound(SNMessage.Code.IMAGE_DESC_REQUEST_SENT, self._node.get_clock())
+        self.request_sound(sound)
 
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
         self.speak(description, priority=SpeechPriority.MODERATE)
+        sound = SNMessage.sound(SNMessage.Code.IMAGE_DESC_RESPONSE_RECEIVED, self._node.get_clock())
+        self.request_sound(sound)
