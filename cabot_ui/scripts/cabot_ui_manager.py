@@ -76,11 +76,11 @@ class CabotUIManager(NavigationInterface, object):
 
         self.reset()
 
-        self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
-        if self._handle_button_mapping == 2:
-            self._event_mapper = EventMapper2()
-        else:
-            self._event_mapper = EventMapper1()
+        self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 3).value
+
+        ## event mapper for the tour project
+        self._event_mapper = EventMapper3()
+
         self._event_mapper.delegate = self
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
@@ -340,59 +340,60 @@ class CabotUIManager(NavigationInterface, object):
         '''
         all events go through this method
         '''
-        # self._logger.info(f"process_event {str(event)}")
-
+        self._logger.info(f"process_event {str(event)}")
+        # self._interface.test_speaker(f"receiving event {str(event)}")
+        
         self._event_mapper.push(event)
         self._process_menu_event(event)
         self._process_navigation_event(event)
         self._process_exploration_event(event)
 
     def _process_menu_event(self, event):
-        '''
-        process only menu event
-        '''
-        if event.type != MenuEvent.TYPE:
-            return
-
-        curr_menu = self.menu_stack[-1]
-        if event.subtype == "next":
-            curr_menu.next()
-            self._interface.menu_changed(menu=curr_menu)
-
-        elif event.subtype == "prev":
-            curr_menu.prev()
-            self._interface.menu_changed(menu=curr_menu)
-
-        elif event.subtype == "select":
-            selected = curr_menu.select()
-            if selected is None:  # from main menu
-                if curr_menu.value is None:
-                    curr_menu.next()
-                selected = curr_menu
-            elif not selected.can_explore:
-                self.reset()
-            elif selected is not curr_menu:
-                self.menu_stack.append(selected)
-                if selected.value is None:
-                    selected.next()
-
-            self._interface.menu_changed(menu=selected, usage=True)
-
-        elif event.subtype == "back":
-            if len(self.menu_stack) > 1:
-                self.menu_stack.pop()
-                curr_menu = self.menu_stack[-1]
-
-            self._interface.menu_changed(menu=curr_menu, backed=True)
-
-            self.speed = 0
-            # self.cancel_pub.publish(True)
-            self._navigation.pause_navigation()
+        pass
 
     def _process_navigation_event(self, event):
         if event.type != NavigationEvent.TYPE:
             return
         self._logger.info(f"_process_navigation_event {event}")
+
+
+        # handle events from group tour project
+        if event.subtype == 'yx_left_click':
+            self._interface.test_speaker("left button clicked")
+            return 
+
+        if event.subtype == 'yx_right_click':
+            self._interface.test_speaker("right button clicked")
+            return 
+
+        if event.subtype == 'yx_down_click':
+            self._interface.test_speaker("down button clicked")
+            return 
+
+        if event.subtype == 'yx_center_click':
+            self._interface.test_speaker("center button clicked")
+            return 
+
+        if event.subtype == 'yx_left_hold':
+            self._interface.test_speaker("left button hold")
+            return 
+
+        if event.subtype == 'yx_right_hold':
+            self._interface.test_speaker("right button hold")
+            return 
+
+        if event.subtype == 'yx_up_hold':
+            self._interface.test_speaker("up button hold")
+            return 
+
+        if event.subtype == 'yx_down_hold':
+            self._interface.test_speaker("down button hold")
+            return 
+
+        if event.subtype == 'yx_center_hold':
+            self._interface.test_speaker("center button hold")
+            return 
+        
 
         # operations indepent from the navigation state
         if event.subtype == "language":
@@ -865,6 +866,56 @@ class EventMapper2(object):
                 if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
                     self.button_hold_down_duration_prev = self.button_hold_down_duration
                     return NavigationEvent(subtype="speeddown" if event.holddown == cabot_common.button.BUTTON_DOWN else "speedup")
+        return None
+
+
+class EventMapper3(object):
+    def __init__(self):
+        self._manager = StatusManager.get_instance()
+        self.button_hold_down_duration = 0
+        self.button_hold_down_duration_prev = 0
+
+    def push(self, event):
+        if event.type not in {ButtonEvent.TYPE, ClickEvent.TYPE, HoldDownEvent.TYPE}:
+            return
+
+        mevent = None
+        
+        # simplify the control
+        mevent = self.map_button_to_navigation(event)
+
+        if mevent:
+            self.delegate.process_event(mevent)
+
+
+    def map_button_to_navigation(self, event):
+
+        if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
+            self.button_hold_down_duration = 0
+            self.button_hold_down_duration_prev = 0
+            return None
+
+        if event.type == "click":
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="yx_right_click")
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="yx_left_click")
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="description_surround", param=event.count)
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="yx_down_click")
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
+                return NavigationEvent(subtype="yx_center_click")
+
+        if event.type == HoldDownEvent.TYPE:
+            if event.holddown == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="yx_left_hold")
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="yx_right_hold")
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="yx_down_hold")
+            if event.holddown == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="yx_up_hold")
         return None
 
 

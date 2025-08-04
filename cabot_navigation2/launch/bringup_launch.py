@@ -32,7 +32,7 @@ from launch.actions import TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 
 
 from nav2_common.launch import RewrittenYaml
@@ -42,7 +42,6 @@ from cabot_common.launch import AppendLogDirPrefix
 def generate_launch_description():
     # Get the launch directory
     pkg_dir = get_package_share_directory('cabot_navigation2')
-    output = {'stderr': {'log'}}
 
     # Create the launch configuration variables
     namespace = LaunchConfiguration('namespace')
@@ -60,6 +59,13 @@ def generate_launch_description():
     bond_timeout = LaunchConfiguration('bond_timeout')
 
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
+
+    ## create configuration files for Joy node
+    joy_config = LaunchConfiguration('joy_config')
+    joy_dev = LaunchConfiguration('joy_dev')
+    publish_stamped_twist = LaunchConfiguration('publish_stamped_twist')
+    config_filepath = LaunchConfiguration('config_filepath')
+
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -104,8 +110,8 @@ def generate_launch_description():
         param_rewrites=param_substitutions2,
         convert_types=True)
 
+
     return LaunchDescription([
-        DeclareLaunchArgument('sigterm_timeout', default_value='15'),
         # save all log file in the directory where the launch.log file is saved
         SetEnvironmentVariable('ROS_LOG_DIR', launch_config.log_dir),
         # append prefix name to the log directory for convenience
@@ -177,6 +183,19 @@ def generate_launch_description():
             'bond_timeout', default_value='90.0',
             description='bond timeout for lifecycle managers'),
 
+        # add joy node configuration
+        DeclareLaunchArgument('joy_vel', default_value='cmd_vel'),
+        DeclareLaunchArgument('joy_config', default_value='ps3'),
+        DeclareLaunchArgument('joy_dev', default_value='0'),
+        DeclareLaunchArgument('publish_stamped_twist', default_value='false'),
+        DeclareLaunchArgument('config_filepath', default_value=[
+            TextSubstitution(text=os.path.join(
+                get_package_share_directory('teleop_twist_joy'), 'config', '')),
+            joy_config, TextSubstitution(text='.config.yaml')]),
+
+
+
+
         # default navigator
         Node(
             package='nav2_controller',
@@ -184,10 +203,9 @@ def generate_launch_description():
             name='controller_server',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params],
-            remappings=remappings,
-        ),
+            remappings=remappings),
 
         Node(
             package='nav2_planner',
@@ -195,7 +213,7 @@ def generate_launch_description():
             name='planner_server',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params],
             remappings=remappings+[('/plan', '/plan_temp')],
             # arguments=["--ros-args", "--log-level", "debug"]
@@ -206,10 +224,9 @@ def generate_launch_description():
             name='behavior_server',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params],
-            remappings=remappings,
-        ),
+            remappings=remappings),
 
         Node(
             package='nav2_bt_navigator',
@@ -217,7 +234,7 @@ def generate_launch_description():
             name='bt_navigator',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params],
             remappings=remappings,
             # arguments=['--ros-args', '--log-level', 'debug']
@@ -230,7 +247,7 @@ def generate_launch_description():
                     package='nav2_lifecycle_manager',
                     executable='lifecycle_manager',
                     name='lifecycle_manager_navigation',
-                    output=output,
+                    output='log',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
                                 {'bond_timeout': bond_timeout},
@@ -239,7 +256,7 @@ def generate_launch_description():
                                                 'behavior_server',
                                                 'bt_navigator',
                                                 ]},
-                                ],
+                                ]
                 ),
             ]
         ),
@@ -252,7 +269,7 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=["--ros-args", "--log-level", "debug"]
@@ -265,7 +282,7 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=["--ros-args", "--log-level", "debug"]
@@ -278,10 +295,9 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params2],
-            remappings=remappings2,
-        ),
+            remappings=remappings2),
 
         Node(
             package='nav2_bt_navigator',
@@ -290,7 +306,7 @@ def generate_launch_description():
             namespace='local',
             respawn=True,
             respawn_delay=2.0,
-            output=output,
+            output='log',
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=['--ros-args', '--log-level', 'debug']
@@ -303,7 +319,7 @@ def generate_launch_description():
                     package='nav2_lifecycle_manager',
                     executable='lifecycle_manager',
                     name='lifecycle_manager_local_navigation',
-                    output=output,
+                    output='log',
                     namespace='local',
                     parameters=[{'use_sim_time': use_sim_time},
                                 {'autostart': autostart},
@@ -321,21 +337,21 @@ def generate_launch_description():
             package='nav2_map_server',
             executable='map_server',
             name='map_server',
-            output=output,
+            output='log',
             parameters=[configured_params],
-            remappings=remappings,
+            remappings=remappings
         ),
 
         Node(
             package='nav2_lifecycle_manager',
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
-            output=output,
+            output='log',
             parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': autostart},
                         {'bond_timeout': bond_timeout},
                         {'node_names': ['map_server']},
-                        ],
+                        ]
         ),
 
         # low obstacle detection
@@ -344,7 +360,6 @@ def generate_launch_description():
             executable='pointcloud_to_laserscan_node',
             namespace='',
             name='livox_pointcloud_to_laserscan_node',
-            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -376,7 +391,6 @@ def generate_launch_description():
             executable='clip_ground_filter_node',
             namespace='',
             name='clip_ground_filter_node',
-            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -401,7 +415,6 @@ def generate_launch_description():
             executable='ransac_ground_filter_node',
             namespace='',
             name='ransac_ground_filter_node',
-            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -432,7 +445,6 @@ def generate_launch_description():
             executable='grid_map_ground_filter_node',
             namespace='',
             name='grid_map_ground_filter_node',
-            output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'target_frame': 'livox_footprint',
@@ -479,7 +491,6 @@ def generate_launch_description():
             executable='grid_map_visualization',
             namespace='',
             name='grid_map_visualization',
-            output=output,
             parameters=[configured_params],
             condition=IfCondition(PythonExpression([low_obstacle_detect_version, " == 3 and '", publish_low_obstacle_ground, "' == 'true'"]))
         ),
@@ -489,41 +500,51 @@ def generate_launch_description():
             package='cabot_common',
             executable='map_loader.py',
             name='map_loader',
-            output=output,
-            parameters=[configured_params],
-        ),
+            output='log',
+            parameters=[configured_params]),
 
         Node(
             package='cabot_common',
             executable='footprint_publisher',
             name='footprint_publisher',
-            output=output,
             parameters=[configured_params],
-        ),
+            output='log'),
 
         Node(
             package='cabot_common',
             executable='people_vis_node',
             name='people_vis',
-            output=output,
             parameters=[configured_params],
-        ),
+            output='log'),
 
         Node(
             package='cabot_navigation2',
             executable='cabot_scan',
             name='cabot_scan',
-            output=output,
             parameters=[configured_params],
-        ),
+            output='log'),
 
         Node(
             package='cabot_navigation2',
             executable='cabot_scan',
             name='cabot_livox_scan',
-            output=output,
             parameters=[configured_params],
-            condition=IfCondition(use_low_obstacle_detect)
-        ),
+            output='log',
+            condition=IfCondition(use_low_obstacle_detect)),
 
+        ## add Nodes for joystick control 
+        Node(
+            package='joy', executable='joy_node', name='joy_node',
+            parameters=[{
+                'device_id': joy_dev,
+                'deadzone': 0.3,
+                'autorepeat_rate': 20.0,
+            }]),
+
+        Node(
+            package='teleop_twist_joy', executable='teleop_node',
+            name='teleop_twist_joy_node',
+            parameters=[config_filepath, {'publish_stamped_twist': publish_stamped_twist}],
+            remappings={('/cmd_vel', LaunchConfiguration('joy_vel'))},
+            ),
     ])
