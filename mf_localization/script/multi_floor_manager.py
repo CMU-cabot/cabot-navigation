@@ -37,7 +37,7 @@ import sys
 import signal
 import threading
 from typing import Optional
-# import traceback
+import traceback
 import yaml
 from dataclasses import dataclass
 
@@ -1301,22 +1301,29 @@ class MultiFloorManager:
             self.logger.info(F"{e}")
 
     def stop_localization_callback(self, request, response):
+        self.logger.info("stop_localization_callback")
         if not self.is_active:
             response.status.code = 1
             response.status.message = "Stop localization failed. (localization is aleady stopped.)"
             return response
         try:
             self.is_active = False
-            self.finish_trajectory()
+            try:
+                self.finish_trajectory()
+            except Exception as e:
+                self.is_active = True  # if failed to finish trajectory
+                raise e
             self.reset_states()
             response.status.code = 0
             response.status.message = "Stopped localization."
         except:  # noqa: E722
             response.status.code = 1
             response.status.message = "Stop localization failed."
+            self.logger.error(F"stop_localization_callback failed with exception. {traceback.format_exc()}")
         return response
 
     def start_localization_callback(self, request, response):
+        self.logger.info("start_localization_callback")
         if self.is_active:
             response.status.code = 1
             response.status.message = "Start localization failed. (localization is aleady started.)"
@@ -1333,13 +1340,17 @@ class MultiFloorManager:
 
     def finish_trajectory(self):
         # try to finish the current trajectory
-        floor_manager: FloorManager = self.get_floor_manager(self.floor, self.area, self.mode)
-        floor_manager.cartographer_client.finish_trajectory(timeout_sec=self.params.service_call_timeout_sec,
-                                                            max_retries=self.params.service_call_max_retries,
-                                                            )
-
-        # reset floor_manager
-        floor_manager.reset_states()
+        if all(v is not None for v in [self.floor, self.area, self.mode]):
+            floor_manager: FloorManager = self.get_floor_manager(self.floor, self.area, self.mode)
+            floor_manager.cartographer_client.finish_trajectory(timeout_sec=self.params.service_call_timeout_sec,
+                                                                max_retries=self.params.service_call_max_retries,
+                                                                )
+            # reset floor_manager
+            floor_manager.reset_states()
+            return True
+        else:
+            self.logger.info("finish_trajectory called but trajectory is not active.")
+            return False
 
     def start_trajectory_with_pose(self, initial_pose: Pose,
                                    target_floor=None,
@@ -1405,6 +1416,7 @@ class MultiFloorManager:
         self.is_active = True
 
     def restart_localization_callback(self, request, response):
+        self.logger.info("restart_localization_callback")
         try:
             response.status.code = 0
             if request.floor == RestartLocalization.Request.FLOOR_UNKNOWN:
@@ -1416,7 +1428,8 @@ class MultiFloorManager:
             response.status.code = 0
         except Exception as e:  # noqa: E722
             response.status.code = 1
-            response.status.message = f"Restart localization failed with exception = {e}."
+            response.status.message = f"Restart localization failed with exception = {type(e).__name__}({e})."
+            self.logger.error(F"restart_localization failed with exception. {traceback.format_exc()}")
         return response
 
     def enable_relocalization_callback(self, request, response):
