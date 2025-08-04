@@ -94,6 +94,7 @@ from mf_localization.altitude_manager import AltitudeFloorEstimatorResult
 from mf_localization.altitude_manager import BalancedSampler
 from mf_localization.altitude_manager import FloorHeightMapper
 from mf_localization.cartographer_client import CartographerClient
+from mf_localization.rclpy_utils import call_service
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
