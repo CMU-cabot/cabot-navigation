@@ -2492,8 +2492,13 @@ class BufferProxy():
         self.countPub = node.create_publisher(std_msgs.msg.Int32, "transform_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.transformMap = {}
         self.min_interval = rclpy.duration.Duration(seconds=0.2)
-        self.lookup_transform_service_call_timeout_sec = 1.0
-        self.lookup_transform_service_wait_timeout_sec = 5.0
+        # lookup transform
+        self.lookup_transform_service_call_timeout_sec = 1.0  # [s]
+        self.lookup_transform_service_wait_timeout_sec = 5.0  # [s]
+        # clear transform
+        self.clear_transform_buffer_call_timeout_sec = 1.0  # [s]
+        self.clear_transform_buffer_wait_timeout_sec = 5.0  # [s]
+        self.clear_transform_buffer_max_retries = 60  # [times]
 
     def call(self, service, request, timeout_sec: Optional[float] = None):
         # service call with timeout
@@ -2524,12 +2529,20 @@ class BufferProxy():
         self.transformMap = {}
 
         # clear TF buffer in lookup transform node
-        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.lookup_transform_service_wait_timeout_sec)
+        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.clear_transform_buffer_wait_timeout_sec)
         if not service_available:
-            self._logger.error("clear_transform_buffer_service timeout error")
+            self._logger.error(F"{self.clear_transform_buffer_service.srv_name} service timeout error")
             return
         req = Trigger.Request()
-        self.clear_transform_buffer_service.call(req)
+
+        try:
+            call_service(self.clear_transform_buffer_service, req,
+                         timeout_sec=self.clear_transform_buffer_call_timeout_sec,
+                         max_retries=self.clear_transform_buffer_max_retries,
+                         logger=self._logger,
+                         )
+        except TimeoutError or Exception as e:
+            self._logger.error(F"failed to call {self.clear_transform_buffer_service.srv_name} service. Error={e}")
 
     def debug(self):
         if not hasattr(self, "count"):
