@@ -57,7 +57,6 @@ def generate_launch_description():
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
-    bond_timeout = LaunchConfiguration('bond_timeout')
 
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
 
@@ -173,10 +172,6 @@ def generate_launch_description():
             'publish_low_obstacle_ground', default_value='false',
             description='publish ground to detect low obstacles only for debug purpose'),
 
-        DeclareLaunchArgument(
-            'bond_timeout', default_value='90.0',
-            description='bond timeout for lifecycle managers'),
-
         # default navigator
         Node(
             package='nav2_controller',
@@ -231,15 +226,18 @@ def generate_launch_description():
                     executable='lifecycle_manager',
                     name='lifecycle_manager_navigation',
                     output=output,
-                    parameters=[{'use_sim_time': use_sim_time},
-                                {'autostart': autostart},
-                                {'bond_timeout': bond_timeout},
-                                {'node_names': ['controller_server',
-                                                'planner_server',
-                                                'behavior_server',
-                                                'bt_navigator',
-                                                ]},
-                                ],
+                    parameters=[
+                        configured_params,
+                        {
+                            'autostart': autostart,
+                            'node_names': [
+                                'controller_server',
+                                'planner_server',
+                                'behavior_server',
+                                'bt_navigator',
+                            ]
+                        },
+                    ],
                 ),
             ]
         ),
@@ -305,14 +303,19 @@ def generate_launch_description():
                     name='lifecycle_manager_local_navigation',
                     output=output,
                     namespace='local',
-                    parameters=[{'use_sim_time': use_sim_time},
-                                {'autostart': autostart},
-                                {'bond_timeout': bond_timeout},
-                                {'node_names': ['controller_server',
-                                                'planner_server',
-                                                'behavior_server',
-                                                'bt_navigator',
-                                                ]}]),
+                    parameters=[
+                        configured_params2,
+                        {
+                            'autostart': autostart,
+                            'node_names': [
+                                'controller_server',
+                                'planner_server',
+                                'behavior_server',
+                                'bt_navigator',
+                            ]
+                        },
+                    ],
+                )
             ]
         ),
 
@@ -331,11 +334,15 @@ def generate_launch_description():
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
             output=output,
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': autostart},
-                        {'bond_timeout': bond_timeout},
-                        {'node_names': ['map_server']},
-                        ],
+            parameters=[
+                configured_params,
+                {
+                    'autostart': autostart,
+                    'node_names': [
+                        'map_server'
+                    ]
+                },
+            ],
         ),
 
         # low obstacle detection

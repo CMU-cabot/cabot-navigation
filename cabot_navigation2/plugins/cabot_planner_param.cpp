@@ -382,12 +382,6 @@ void CaBotPlannerParam::setCost()
       RCLCPP_INFO(logger, "setCost: consider a person %s in frame %s", it->name.c_str(), people_msg.header.frame_id.c_str());
     }
   }
-  for (auto it = obstacles_msg.people.begin(); it != obstacles_msg.people.end(); it++) {
-    bool stationary = (std::find(it->tags.begin(), it->tags.end(), "stationary") != it->tags.end());
-    if (!stationary) {
-      clearCostAround(*it);
-    }
-  }
   for (auto it = queue_msg.people.begin(); it != queue_msg.people.end(); it++) {
     clearCostAround(*it);
   }
@@ -420,7 +414,7 @@ bool CaBotPlannerParam::adjustPath()
 
 void CaBotPlannerParam::clearCostAround(people_msgs::msg::Person & person)
 {
-  int max_obstacle_scan_distance_cell = options.max_obstacle_scan_distance / resolution;
+  int max_clear_scan_distance_cell = options.max_clear_scan_distance / resolution;
 
   float mx, my;
   if (!worldToMap(person.position.x, person.position.y, mx, my)) {
@@ -430,7 +424,7 @@ void CaBotPlannerParam::clearCostAround(people_msgs::msg::Person & person)
   RCLCPP_INFO(logger, "clearCostAround %.2f %.2f \n %s", mx, my, rosidl_generator_traits::to_yaml(person).c_str());
 
   ObstacleGroup group;
-  scanObstacleAt(group, mx, my, nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE, max_obstacle_scan_distance_cell);
+  scanObstacleAt(group, mx, my, nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE, max_clear_scan_distance_cell);
 
   RCLCPP_INFO(logger, "found obstacles %ld", group.obstacles_.size());
   for (auto obstacle = group.obstacles_.begin(); obstacle != group.obstacles_.end(); obstacle++) {

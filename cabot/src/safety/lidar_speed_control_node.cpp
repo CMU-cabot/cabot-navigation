@@ -32,6 +32,7 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/polygon.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
@@ -53,17 +54,24 @@ public:
 
   bool check_blind_space_;
   bool check_front_obstacle_;
+  bool speed_limit_in_the_last_frame_;
 
   double max_speed_;
   double min_speed_;
   double max_acc_;
+  double urgent_max_acc_;
   double limit_factor_;
   double min_distance_;
   double front_region_width_;
   double blind_spot_min_range_;
 
+  nav_msgs::msg::Odometry last_odom_;
+  sensor_msgs::msg::LaserScan last_scan_;
+  double last_min_x_distance_;
+
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr footprint_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr limit_pub_;
   tf2_ros::TransformListener * tfListener;
@@ -82,13 +90,16 @@ public:
     robot_base_frame_("base_footprint"),
     check_blind_space_(true),
     check_front_obstacle_(true),
+    speed_limit_in_the_last_frame_(false),
     max_speed_(1.0),
     min_speed_(0.1),
     max_acc_(0.6),
+    urgent_max_acc_(1.2),
     limit_factor_(3.0),
     min_distance_(0.5),
     front_region_width_(0.50),
-    blind_spot_min_range_(0.25)
+    blind_spot_min_range_(0.25),
+    last_min_x_distance_(100)
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -147,6 +158,11 @@ private:
       footprint_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable().durability_volatile(),
       std::bind(&LiDARSpeedControlNode::footprintCallback, this, std::placeholders::_1));
 
+    odom_sub_ =
+      create_subscription<nav_msgs::msg::Odometry>(
+      "odom", rclcpp::SensorDataQoS(),
+      std::bind(&LiDARSpeedControlNode::odomCallback, this, std::placeholders::_1));
+
     vis_topic_ = declare_parameter("visualize_topic", vis_topic_);
     vis_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(vis_topic_, 100);
 
@@ -185,6 +201,13 @@ private:
 
   void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr input)
   {
+    double frame_period = 0.1;
+    if (last_scan_.header.stamp.sec != 0) {
+      rclcpp::Time stamp(input->header.stamp);
+      rclcpp::Time last_stamp(last_scan_.header.stamp);
+      frame_period = std::max(0.1, (stamp - last_stamp).seconds());
+    }
+    last_scan_ = *input;
     double inf = std::numeric_limits<double>::infinity();
     double speed_limit = max_speed_;
 
@@ -274,9 +297,29 @@ private:
         }
       }
       // calculate the speed
-      speed_limit = std::min(max_speed_, std::max(min_speed_, (min_x_distance - min_distance_) / limit_factor_));
-      if (speed_limit < max_speed_) {
-        RCLCPP_INFO(get_logger(), "limit by front obstacle (%.2f), min_x_distance=%.2f", speed_limit, min_x_distance);
+      double temp_limit = std::min(max_speed_, std::max(min_speed_, (min_x_distance - min_distance_) / limit_factor_));
+
+      RCLCPP_INFO(
+        get_logger(), "limit by front fobstacle (%.2f), temp_limit=%.2f, last_min_x_distance_=%.2f, "
+        "min_x_distance=%.2f, speed_limit_in_the_last_frame_=%s",
+        speed_limit, temp_limit, last_min_x_distance_, min_x_distance, speed_limit_in_the_last_frame_ ? "true" : "false");
+      if (temp_limit < max_speed_) {
+        if (speed_limit_in_the_last_frame_) {
+          if (last_min_x_distance_ < min_x_distance) {
+            // wait for the next frame, because object may be relatively moving away
+            // speed_limit = temp_limit;
+          } else {
+            // critical
+            speed_limit = std::max(temp_limit, last_odom_.twist.twist.linear.x - urgent_max_acc_ * frame_period);
+          }
+        } else {
+          // noop, wait for the next frame
+        }
+        speed_limit_in_the_last_frame_ = true;
+        last_min_x_distance_ = min_x_distance;
+      } else {
+        speed_limit_in_the_last_frame_ = false;
+        last_min_x_distance_ = 100;
       }
     }
 
@@ -409,6 +452,11 @@ private:
     const auto & p_y = msg->points[0].y;
 
     front_region_width_ = 2.0 * std::hypot(p_x, p_y);
+  }
+
+  void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+  {
+    last_odom_ = *msg;
   }
 };  // class LiDARSpeedControlNode
 

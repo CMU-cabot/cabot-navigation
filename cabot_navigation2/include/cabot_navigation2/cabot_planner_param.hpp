@@ -60,6 +60,7 @@ struct CaBotPlannerOptions
   int direction_averaging_count = 30;
 
   float max_obstacle_scan_distance = 7.5;
+  float max_clear_scan_distance = 0.75;
   float kdtree_search_radius = 2.5;
   int kdtree_max_results = 50;
   int min_iteration_count = 500;
