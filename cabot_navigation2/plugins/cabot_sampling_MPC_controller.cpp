@@ -264,7 +264,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
     double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
     double current_heading = tf2::getYaw(pose.pose.orientation);
     best_control.linear.x = 1.0;
-    best_control.angular.z = std::min(1.0, desired_heading - current_heading);
+    best_control.angular.z = std::max(-1.0, std::min(1.0, desired_heading - current_heading));
     return best_control;
   }
 
@@ -299,7 +299,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   trajectory_visualization_pub_->publish(best_trajectory);
 
   // smooth the control with prior control
-  if (min_cost < std::numeric_limits<double>::infinity() - 100){
+  if (min_cost < std::numeric_limits<double>::infinity() - 1){
     best_control.linear.x = (1 - smooth_wt_) * best_control.linear.x + smooth_wt_ * prev_v;
     best_control.angular.z = (1 - smooth_wt_) * best_control.angular.z + smooth_wt_ * prev_w;
   } else {
@@ -581,7 +581,7 @@ double CaBotSamplingMPCController::calculateCost(
     idx++;
   }
 
-  /*
+  
   if (last_trajectory_.initialized)
   {
     geometry_msgs::msg::Twist curr_control = trajectory.control;
@@ -590,7 +590,7 @@ double CaBotSamplingMPCController::calculateCost(
     double angular_energy_cost = std::abs(curr_control.angular.z - prev_control.angular.z) / (2 * max_angular_velocity_);
     energy_cost = cumulative_discount * (linear_energy_cost + angular_energy_cost) / 2;
   }
-  */
+  
 
   if (hit_idx == 0) {
     goal_cost = current_dist;

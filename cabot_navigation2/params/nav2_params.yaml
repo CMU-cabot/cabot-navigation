@@ -346,8 +346,8 @@ controller_server:
       group_cost_wt: 0.45
       obs_cost_wt: 1.0
       time_cost_wt: 1.0
-      energy_cost_wt: 0.0
-      smooth_wt: 0.0
+      energy_cost_wt: 0.01
+      smooth_wt: 0.1
     RLFollowPath:
       plugin: "cabot_navigation2::CaBotRLController"
       rl_cmd_topic: "/rl_robot_cmd"
