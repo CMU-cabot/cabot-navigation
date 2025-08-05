@@ -291,7 +291,7 @@ class ControlBase(object):
         except RuntimeError:
             self._logger.debug("cannot get current_ros_pose")
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_pose(self, frame=None) -> geoutil.Pose:
@@ -310,7 +310,7 @@ class ControlBase(object):
         except RuntimeError:
             self._logger.debug("cannot get current_local_pose")
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_odom_pose(self):
@@ -326,7 +326,7 @@ class ControlBase(object):
         except RuntimeError:
             self._logger.debug("cannot get current_local_odom_pose")
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_global_pose(self):
@@ -910,7 +910,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("could not get position", throttle_duration_sec=3)
             return
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
             return
 
         # wait data is analyzed
