@@ -36,7 +36,6 @@ from packaging.version import Version
 import sys
 import signal
 import threading
-from typing import Optional
 import traceback
 import yaml
 from dataclasses import dataclass
@@ -670,6 +669,9 @@ class MultiFloorManager:
             orientation = local_transform.transform.rotation  # Quaternion
             local_pose = Pose(position=position, orientation=orientation)
             return local_pose
+        except TimeoutError as e:
+            self.logger.error(F'LookupTransform Timeout from {target_frame} to {source_frame}')
+            raise e
         except RuntimeError as e:
             self.logger.error(F'LookupTransform Error from {target_frame} to {source_frame}')
             raise e
@@ -693,13 +695,14 @@ class MultiFloorManager:
                 converted_pose_stamped = tfBuffer.transform(pose_stamped_msg, self.global_map_frame, timeout=Duration(seconds=1.0))  # timeout 1.0 s
                 pose_with_covariance_stamped_msg.header.frame_id = self.global_map_frame
                 pose_with_covariance_stamped_msg.pose.pose = converted_pose_stamped.pose
-            except RuntimeError:
+            except (TimeoutError, RuntimeError) as e:
                 # do not update pose_with_covariance_stamped_msg
-                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. Assuming initialpose is published on the global frame({self.global_map_frame}).")
+                self.logger.info((F"LookupTransform Error (error={type(e).__name__}({e})) {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. "
+                                  F"Assuming initialpose is published on the global frame({self.global_map_frame})."))
 
         try:
             status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
-        except TimeoutError or Exception as e:
+        except (TimeoutError, Exception) as e:
             self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
             status_code = StatusCode.CANCELLED
 
@@ -751,10 +754,15 @@ class MultiFloorManager:
             try:
                 # this assumes frame_id of pose_stamped_msg is correctly set.
                 local_pose_stamped = tfBuffer.transform(pose_stamped_msg, frame_id, timeout=Duration(seconds=1.0))  # timeout 1.0 s
-            except RuntimeError:
+            except TimeoutError as e:
+                # abort when transform service is unavailable or timeouts.
+                self.logger.info(F"{type(e).__name__}({e})")
+                raise e
+            except RuntimeError:  # transform service returned an error
                 # when the frame_id of pose_stamped_msg is not correctly set (e.g. frame_id = map), assume the initial pose is published on the target frame.
                 # this workaround behaves intuitively in typical cases.
-                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. Assuming initial pose is published on the target frame ({frame_id}).")
+                self.logger.info((F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. "
+                                  F"Assuming initial pose is published on the target frame ({frame_id})."))
                 local_pose_stamped = PoseStamped()
                 local_pose_stamped.header = pose_stamped_msg.header
                 local_pose_stamped.header.frame_id = frame_id
@@ -767,13 +775,13 @@ class MultiFloorManager:
             try:
                 if self.area is not None:
                     self.finish_trajectory()  # finish trajectory before updating area value
-            except TimeoutError or Exception as e:
+            except (TimeoutError, Exception) as e:
                 self.logger.error(F"failed to call finish_trajectory. Error={e}")
                 raise e
 
             try:
                 status_code = self.start_trajectory_with_pose(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
-            except TimeoutError or Exception as e:
+            except (TimeoutError, Exception) as e:
                 self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
                 raise e
 
@@ -824,7 +832,7 @@ class MultiFloorManager:
         self.resetpose_pub.publish(pose_cov_stamped)  # publish local_pose for visualization
         try:
             status_code_start_trajectory = self.start_trajectory_with_pose(local_pose, _target_floor, _target_area, _target_mode)
-        except TimeoutError or Exception as e:
+        except (TimeoutError, Exception) as e:
             self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
             raise e
         self.logger.info(F"called /{floor_manager.node_id}/{_target_mode}/start_trajectory, code={status_code_start_trajectory}")
@@ -885,7 +893,7 @@ class MultiFloorManager:
             # get robot pose
             try:
                 robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-            except RuntimeError as e:
+            except (TimeoutError, RuntimeError) as e:
                 self.logger.warn(F"{e}")
                 return
         else:
@@ -948,7 +956,7 @@ class MultiFloorManager:
                 # try to finish the current trajectory before updating state variables
                 try:
                     self.finish_trajectory()
-                except TimeoutError or Exception as e:
+                except (TimeoutError, Exception) as e:
                     self.logger.error(F"failed to call finish_trajecotry. Error={e}")
                     return
 
@@ -1099,7 +1107,7 @@ class MultiFloorManager:
             # get robot pose
             try:
                 robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-            except RuntimeError as e:
+            except (TimeoutError, RuntimeError) as e:
                 self.logger.warn(F"{e}")
                 return
             # detect area in target_floor
@@ -1126,21 +1134,21 @@ class MultiFloorManager:
             # tf from the origin of the target floor to the robot pose
             try:
                 local_pose = self.get_local_pose(frame_id, self.tracking_frame, no_cache=True)
-            except RuntimeError as e:
+            except (TimeoutError, RuntimeError) as e:
                 self.logger.error(F"failed to call get_local_pose. Error={e}")
                 return
 
             # try to finish the current trajectory before updating state variables
             try:
                 self.finish_trajectory()
-            except TimeoutError or Exception as e:
+            except (TimeoutError, Exception) as e:
                 self.logger.error(F"failed to call finish_trajectory. Error={e}")
                 return
 
             # restart trajectory with the updated state variables
             try:
                 _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
-            except TimeoutError or Exception as e:
+            except (TimeoutError, Exception) as e:
                 self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
                 return
         else:
@@ -1158,8 +1166,9 @@ class MultiFloorManager:
                 if failure_detected and self.auto_relocalization:
                     self.restart_localization()
                     self.logger.error("Auto-relocalization. (localization failure detected)")
-            except RuntimeError:
+            except (TimeoutError, RuntimeError):
                 self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.tracking_frame}")
+                return
 
     # periodically check and update internal state variables (area and mode)
     def check_and_update_states(self):
@@ -1190,7 +1199,7 @@ class MultiFloorManager:
             # get robot pose
             try:
                 robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-            except RuntimeError as e:
+            except (TimeoutError, RuntimeError) as e:
                 self.logger.warn(F"{e}")
                 return
 
@@ -1232,20 +1241,20 @@ class MultiFloorManager:
                 # tf from the origin of the target floor to the robot pose
                 try:
                     local_pose = self.get_local_pose(frame_id, self.tracking_frame)
-                except RuntimeError as e:
+                except (TimeoutError, RuntimeError) as e:
                     self.logger.error(F"failed to call get_local_pose. Error={e}")
                     return
 
                 # try to finish the current trajectory before updating state variables
                 try:
                     self.finish_trajectory()
-                except TimeoutError or Exception as e:
+                except (TimeoutError, Exception) as e:
                     self.logger.error(F"failed to call finish_trajectory. Error={e}")
                     return
                 # restart trajectory with the updated state variables
                 try:
                     status_code = self.restart_floor(local_pose, self.floor, target_area, target_mode)
-                except TimeoutError or Exception as e:
+                except (TimeoutError, Exception) as e:
                     self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, self.floor={self.floor}, area={target_area}, mode={target_mode}). Error={e}")
                     return
 
@@ -1295,8 +1304,8 @@ class MultiFloorManager:
             global_position.heading = heading
             global_position.speed = v_xy
             self.global_position_pub.publish(global_position)
-        except RuntimeError as e:
-            self.logger.info(F"LookupTransform Error {self.global_map_frame}-> {self.global_position_frame}. error=RuntimeError({e})")
+        except (TimeoutError, RuntimeError) as e:
+            self.logger.info(F"LookupTransform Error (error={type(e).__name__}({e})) {self.global_map_frame}-> {self.global_position_frame}. error={type(e).__name__}({e})")
         except tf2_ros.TransformException as e:
             self.logger.info(F"{e}")
 
@@ -1546,9 +1555,10 @@ class MultiFloorManager:
             response.status.message = F"tf2_ros.TransformException({e})"
             return response
         except Exception as e:
-            self.logger.error(F"{e}")
+            status_message = F"{type(e).__name__}({e})"
+            self.logger.error(status_message)
             response.status.code = 1
-            response.status.message = F"Exception({e})"
+            response.status.message = status_message
             return response
 
     def navsat_callback(self, msg: NavSAT):
@@ -1789,8 +1799,8 @@ class MultiFloorManager:
             # gnss pose
             transform_gnss = tfBuffer.lookup_transform(self.global_map_frame, gnss_frame, end_time)
             tf_available = True
-        except RuntimeError as e:
-            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error=RuntimeError({e})")
+        except (TimeoutError, RuntimeError) as e:
+            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error={type(e).__name__}({e})")
         except tf2_ros.TransformException as error:
             self.logger.info(F"{error=}")
         except KeyError as error:
@@ -1862,7 +1872,7 @@ class MultiFloorManager:
 
         try:
             status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, mode=target_mode, floor=floor)  # reset pose on the global frame
-        except TimeoutError or Exception as e:
+        except (TimeoutError, Exception) as e:
             self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
             status_code = StatusCode.CANCELLED
 
@@ -1906,7 +1916,7 @@ class MultiFloorManager:
         # start localization
         try:
             status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)  # reset pose on the global frame
-        except TimeoutError or Exception as e:
+        except (TimeoutError, Exception) as e:
             self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
             status_code = StatusCode.CANCELLED
 
@@ -2112,34 +2122,12 @@ class BufferProxy():
         # lookup transform
         self.lookup_transform_service_call_timeout_sec = 1.0  # [s]
         self.lookup_transform_service_wait_timeout_sec = 5.0  # [s]
+        self.lookup_transform_service_max_retries = 1  # [times]
+
         # clear transform
         self.clear_transform_buffer_call_timeout_sec = 1.0  # [s]
         self.clear_transform_buffer_wait_timeout_sec = 5.0  # [s]
         self.clear_transform_buffer_max_retries = 60  # [times]
-
-    def call(self, service, request, timeout_sec: Optional[float] = None):
-        # service call with timeout
-        event = threading.Event()
-
-        def unblock(future) -> None:
-            nonlocal event
-            event.set()
-
-        future = service.call_async(request)
-        future.add_done_callback(unblock)
-
-        if not future.done():
-            if not event.wait(timeout_sec):
-                service.remove_pending_request(future)
-                raise TimeoutError("service call timeout")
-
-        exception = future.exception()
-        if exception is not None:
-            raise exception
-        return future.result()
-
-    def lookup_transform_service_call(self, request, timeout_sec: Optional[float] = None):
-        return self.call(self.lookup_transform_service, request, timeout_sec)
 
     def clear(self):
         # clear local transform cache
@@ -2158,7 +2146,7 @@ class BufferProxy():
                          max_retries=self.clear_transform_buffer_max_retries,
                          logger=self._logger,
                          )
-        except TimeoutError or Exception as e:
+        except (TimeoutError, Exception) as e:
             self._logger.error(F"failed to call {self.clear_transform_buffer_service.srv_name} service. Error={e}")
 
     def debug(self):
@@ -2171,6 +2159,20 @@ class BufferProxy():
 
     # buffer interface
     def lookup_transform(self, target, source, time=None, no_cache=False):
+        """
+        Args:
+            target
+            source
+            time
+            no_cache
+
+        Returns:
+            transform
+
+        Raises
+            TimeoutError: If a service call timeout
+            RuntimeError: If an error exists in the result of the service call
+        """
         # find the latest saved transform first
         key = f"{target}-{source}"
         now = self._clock.now()
@@ -2189,11 +2191,15 @@ class BufferProxy():
         req.source_frame = source
         lookup_transform_service_available = self.lookup_transform_service.wait_for_service(timeout_sec=self.lookup_transform_service_wait_timeout_sec)
         if not lookup_transform_service_available:
-            raise RuntimeError("lookup_transform service unavailable (wait_for_service timeout).")
+            raise TimeoutError("lookup_transform service unavailable (wait_for_service timeout).")
         try:
-            result = self.lookup_transform_service_call(req, timeout_sec=self.lookup_transform_service_call_timeout_sec)
+            result = call_service(self.lookup_transform_service, req,
+                                  timeout_sec=self.lookup_transform_service_call_timeout_sec,
+                                  max_retries=self.lookup_transform_service_max_retries,
+                                  logger=self._logger,
+                                  )
         except TimeoutError as e:
-            raise RuntimeError(f"lookup_transform service call timeout. error=TimeoutError({e}).")
+            raise TimeoutError(f"lookup_transform service call timeout. error=TimeoutError({e}).")
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
 

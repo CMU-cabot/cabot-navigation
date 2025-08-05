@@ -25,10 +25,11 @@ import threading
 from typing import Optional
 
 import rclpy
+import rclpy.client
 from rclpy.impl.rcutils_logger import RcutilsLogger
 
 
-def call_service(service: rclpy.client, request, timeout_sec: Optional[float] = None,
+def call_service(service: rclpy.client.Client, request, timeout_sec: Optional[float] = None,
                  max_retries: int = 1,
                  logger: Optional[RcutilsLogger] = None):
     '''
@@ -64,7 +65,7 @@ def call_service(service: rclpy.client, request, timeout_sec: Optional[float] = 
         raise exception
 
 
-def _call_service_once(service: rclpy.client, request, timeout_sec: Optional[float] = None):
+def _call_service_once(service: rclpy.client.Client, request, timeout_sec: Optional[float] = None):
     '''
     call_service_once function that executes a service call with optional timeout.
 
@@ -94,7 +95,7 @@ def _call_service_once(service: rclpy.client, request, timeout_sec: Optional[flo
     if not future.done():
         if not event.wait(timeout_sec):
             service.remove_pending_request(future)
-            raise TimeoutError("service call timeout")
+            raise TimeoutError(F"{service.srv_name} service call timeout")
 
     exception = future.exception()
     if exception is not None:
