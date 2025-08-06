@@ -283,15 +283,22 @@ class AltitudeFloorEstimator:
 
 class BalancedSampler:
     def __init__(self):
+        self._init()
+
+    def _init(self):
         self._x: list = None
         self._p: list = None
-        self._updated = False
-        self._reserved_init = []
-        self._reserved = []
+        self._updated: bool = False
+        self._reserved_init: list = []
+        self._reserved: list = []
+
+    def reset(self):
+        self._init()
 
     def update(self, x, p):
         _x = list(x)
         _p = list(p)
+        # do not update internal variables when both x and p are unchanged.
         if self._x == _x and self._p == _p:
             self._updated = False
         else:
@@ -309,6 +316,8 @@ class BalancedSampler:
                     reserved.append(self._x[i])
             self._reserved_init = reserved
             self._reserved = []
+
+        return self._updated
 
     def sample(self):
         if len(self._reserved) == 0:

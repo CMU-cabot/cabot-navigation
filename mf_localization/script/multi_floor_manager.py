@@ -1878,6 +1878,9 @@ class MultiFloorManager:
 
         if status_code == StatusCode.OK:
             self.gnss_localization_time = now
+        else:
+            # if failed, reset instances that maintain states
+            self.gnss_balanced_floor_sampler.reset()
 
     # input:
     #      MFLocalPosition global_position
