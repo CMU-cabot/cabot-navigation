@@ -619,3 +619,30 @@ def test_balanced_sampler():
     assert counts[0.0] == 100
     assert counts[1.0] == 3900
     assert counts[2.0] == 6000
+
+
+def test_balanced_sampler_reset():
+    sampler = BalancedSampler()
+
+    # generate 1/2 - 1/2
+    values = [0.0, 1.0]
+    probs = [0.5, 0.5]
+    sampler.update(x=values, p=probs)
+
+    # select
+    v = sampler.select(1.0)
+    assert v == 1.0
+
+    selectable = sampler.selectable(1.0)
+    assert selectable is False
+
+    # update does not change the internal states
+    sampler.update(x=values, p=probs)
+    selectable = sampler.selectable(1.0)
+    assert selectable is False
+
+    # reset and update change the internal state
+    sampler.reset()
+    sampler.update(x=values, p=probs)
+    selectable = sampler.selectable(1.0)
+    assert selectable is True
