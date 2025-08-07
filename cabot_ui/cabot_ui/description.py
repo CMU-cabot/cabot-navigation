@@ -139,6 +139,9 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
+    ## TODO: for group tour scenario
+    ## describe the people in the image 
+    
     # for EventMapper1()
     def request_description_with_images1(self, global_position, current_floor, lang, length_index=0, callback=None):
         if not self.enabled:
