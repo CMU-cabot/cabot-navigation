@@ -98,7 +98,11 @@ if [[ $record_cam -eq 1 ]]; then
 else
    # record throttled compressed image data
    if (( $(echo "$camera_throttle_hz > 0.0" | bc -l) )); then
-        throttle_com="ros2 launch -n cabot_common three_camera_throttle.launch.py output_hz:=$camera_throttle_hz \
+        use_sim_time_arg=""
+        if [[ -n $use_sim_time ]]; then
+            use_sim_time_arg=use_sim_time:=true
+        fi
+        throttle_com="ros2 launch -n cabot_common three_camera_throttle.launch.py $use_sim_time_arg output_hz:=${camera_throttle_hz} \
                         camera1:=/rs1/color camera2:=/rs2/color camera3:=/rs3/color 2>&1 &"
         echo $throttle_com
         eval $throttle_com
