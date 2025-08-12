@@ -427,6 +427,8 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.test_speaker("center button hold")
             return 
         
+        if event.subtype == 'guide_response':
+            self._interface.test_speaker("The guide is coming to you")
 
         # operations indepent from the navigation state
         if event.subtype == "language":
