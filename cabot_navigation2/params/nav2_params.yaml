@@ -278,14 +278,14 @@ controller_server:
         cost_threshold: 96.0
       PoseAlign:
         class: dwb_critics::PoseAlignCritic
-        scale: 24.0
+        scale: 16.0
         minimum_angle: 135.0
       PathAlign:
         class: dwb_critics::PathAlignCritic
-        scale: 24.0
+        scale: 16.0
       PathDist:
         class: dwb_critics::PathDistCritic
-        scale: 24.0
+        scale: 16.0
       GoalAlign:
         class: dwb_critics::GoalAlignCritic
         forward_point_distance: 0.35
