@@ -68,6 +68,7 @@ public:
   nav_msgs::msg::Odometry last_odom_;
   sensor_msgs::msg::LaserScan last_scan_;
   double last_min_x_distance_;
+  double distance_noise_threshold_;
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr footprint_sub_;
@@ -99,7 +100,8 @@ public:
     min_distance_(0.5),
     front_region_width_(0.50),
     blind_spot_min_range_(0.25),
-    last_min_x_distance_(100)
+    last_min_x_distance_(100),
+    distance_noise_threshold_(0.03)
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -177,6 +179,7 @@ private:
     limit_factor_ = declare_parameter("limit_factor", limit_factor_);
     min_distance_ = declare_parameter("min_distance", min_distance_);
     blind_spot_min_range_ = declare_parameter("blind_spot_min_range", blind_spot_min_range_);
+    distance_noise_threshold_ = declare_parameter("distance_noise_threshold", distance_noise_threshold_);
 
     RCLCPP_INFO(
       get_logger(), "LiDARSpeedControl with check_blind_space=%s, check_front_obstacle=%s, max_speed=%.2f",
@@ -305,9 +308,10 @@ private:
         speed_limit, temp_limit, last_min_x_distance_, min_x_distance, speed_limit_in_the_last_frame_ ? "true" : "false");
       if (temp_limit < max_speed_) {
         if (speed_limit_in_the_last_frame_) {
-          if (last_min_x_distance_ < min_x_distance) {
+          if (last_min_x_distance_ + distance_noise_threshold_ < min_x_distance) {
             // wait for the next frame, because object may be relatively moving away
             // speed_limit = temp_limit;
+            speed_limit = std::min(max_speed_, last_odom_.twist.twist.linear.x + max_acc_ * frame_period);
           } else {
             // critical
             speed_limit = std::max(temp_limit, last_odom_.twist.twist.linear.x - urgent_max_acc_ * frame_period);
