@@ -171,7 +171,7 @@ private:
     }
 
     // force stop
-    auto delay = (get_clock()->now() - lastCmdVelInput_).nanoseconds()/1e9;
+    auto delay = (get_clock()->now() - lastCmdVelInput_).nanoseconds() / 1e9;
     if (delay > timeout_) {
       auto r = std::max(0.0, 1.0 - std::min(decel_timeout_, delay - timeout_) / decel_timeout_);
       currentLinear_ *= r;

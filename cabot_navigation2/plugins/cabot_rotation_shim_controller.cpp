@@ -73,7 +73,8 @@ bool CaBotRotationShimController::isGoalChanged(const nav_msgs::msg::Path & path
   auto p1 = path.poses.back().pose;
   auto dx = p0.position.x - p1.position.x;
   auto dy = p0.position.y - p1.position.y;
-  RCLCPP_INFO(logger_, "Path goal changed: %f (%.2f, %.2f) - (%.2f, %.2f)", std::hypot(dx, dy),
+  RCLCPP_INFO(
+    logger_, "Path goal changed: %f (%.2f, %.2f) - (%.2f, %.2f)", std::hypot(dx, dy),
     p0.position.x, p0.position.y, p1.position.x, p1.position.y);
   return std::hypot(dx, dy) > 1.0;
 }
