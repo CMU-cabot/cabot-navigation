@@ -44,7 +44,9 @@ public:
     targetRate_(40),
     currentLinear_(0.0),
     currentAngular_(0.0),
-    lastCmdVelInput_(0, 0, get_clock()->get_clock_type())
+    lastCmdVelInput_(0, 0, get_clock()->get_clock_type()),
+    timeout_(0.5),
+    decel_timeout_(0.5)
   {
     RCLCPP_INFO(get_logger(), "SpeedControlNodeClass Constructor");
     onInit();
@@ -169,9 +171,11 @@ private:
     }
 
     // force stop
-    if (get_clock()->now() - lastCmdVelInput_ > rclcpp::Duration(500ms)) {
-      currentLinear_ = 0;
-      currentAngular_ = 0;
+    auto delay = (get_clock()->now() - lastCmdVelInput_).nanoseconds()/1e9;
+    if (delay > timeout_) {
+      auto r = std::max(0.0, 1.0 - std::min(decel_timeout_, delay - timeout_) / decel_timeout_);
+      currentLinear_ *= r;
+      currentAngular_ *= r;
     }
 
     double l = currentLinear_;
@@ -267,6 +271,9 @@ private:
   double currentLinear_;
   double currentAngular_;
   rclcpp::Time lastCmdVelInput_;
+
+  double timeout_;
+  double decel_timeout_;
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmdVelPub;
 
