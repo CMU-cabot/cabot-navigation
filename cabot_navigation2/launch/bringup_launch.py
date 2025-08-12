@@ -33,6 +33,7 @@ from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import EnvironmentVariable
 
 
 from nav2_common.launch import RewrittenYaml
@@ -57,6 +58,7 @@ def generate_launch_description():
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
+    footprint_publisher_version = LaunchConfiguration('footprint_publisher_version')
 
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
 
@@ -74,7 +76,7 @@ def generate_launch_description():
         'use_sim_time': use_sim_time,
         'autostart': autostart,
         'default_bt_xml_filename': default_bt_xml_file,
-        'footprint_normal': footprint_radius,
+        #'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
         'inflation_radius': PythonExpression([footprint_radius, "+ 0.30"]),
         'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
@@ -91,7 +93,7 @@ def generate_launch_description():
         'use_sim_time': use_sim_time,
         'autostart': autostart,
         'default_bt_xml_filename': default_bt_xml_file2,
-        'footprint_normal': footprint_radius,
+        #'footprint_normal': footprint_radius,
         'robot_radius': footprint_radius,
         'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
         'offset_normal': offset
@@ -171,6 +173,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'publish_low_obstacle_ground', default_value='false',
             description='publish ground to detect low obstacles only for debug purpose'),
+
+        DeclareLaunchArgument(
+            'footprint_publisher_version', default_value=EnvironmentVariable('CABOT_FOOTPRINT_PUBLISHER_VERSION', default_value='2'),
+            description='Footprint publisher version'),
 
         # default navigator
         Node(
@@ -521,6 +527,16 @@ def generate_launch_description():
             name='footprint_publisher',
             output=output,
             parameters=[configured_params],
+            condition=IfCondition(PythonExpression([footprint_publisher_version, " == 1"]))
+        ),
+
+        Node(
+            package='cabot_common',
+            executable='footprint_publisher2',
+            name='footprint_publisher',
+            output=output,
+            parameters=[configured_params],
+            condition=IfCondition(PythonExpression([footprint_publisher_version, " == 2"]))
         ),
 
         Node(
