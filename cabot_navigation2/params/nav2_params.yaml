@@ -373,6 +373,7 @@ controller_server_rclcpp_node:
 local_costmap:
   local_costmap:
     ros__parameters:
+      failure_tolerance: 60.0 # increase failure tolerance
       update_frequency: 5.0
       publish_frequency: 6.0 # needs to be big enough to capture all the update
       global_frame: map
