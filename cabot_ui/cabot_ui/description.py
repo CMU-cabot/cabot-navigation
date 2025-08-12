@@ -57,6 +57,7 @@ class Description:
         self.host = os.environ.get("CABOT_IMAGE_DESCRIPTION_SERVER", "http://localhost:8000")
         self.enabled = (os.environ.get("CABOT_IMAGE_DESCRIPTION_ENABLED", "false").lower() == "true")
         self.api_key = os.environ.get("CABOT_IMAGE_DESCRIPTION_API_KEY", "")
+        self.timeout = float(os.environ.get("CABOT_IMAGE_DESCRIPTION_TIMEOUT", 15))
         if self.enabled:
             # handle modes (default=surround,stop_reason)
             modes = os.environ.get("CABOT_IMAGE_DESCRIPTION_MODE", "surround,stop-reason").split(",")
@@ -138,6 +139,9 @@ class Description:
             prev = pose
         self.last_plan_distance = dist
 
+    ## TODO: for group tour scenario
+    ## describe the people in the image 
+    
     # for EventMapper1()
     def request_description_with_images1(self, global_position, current_floor, lang, length_index=0, callback=None):
         if not self.enabled:
@@ -236,7 +240,7 @@ class Description:
             response = requests.post(
                 F"{API_URL}?{lat=}&{lng=}&{floor=}&{rotation=}&{max_distance=}&{lang=}&{length_index=}&{distance_to_travel=}",
                 headers=headers,
-                timeout=15,
+                timeout=self.timeout,
                 data=json_data
             )
             self._requesting_lock.release()

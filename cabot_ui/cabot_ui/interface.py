@@ -169,6 +169,9 @@ class UserInterface(object):
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")
 
+    def test_speaker(self, input_text):
+        self.speak(input_text)
+
     def enable_speaker(self, enable_speaker: str):
         self._enable_speaker = enable_speaker.lower() == "true"
         self._activity_log("change speaker config", "enable speaker", str(self._enable_speaker), visualize=True)

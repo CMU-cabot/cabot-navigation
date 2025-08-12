@@ -32,7 +32,7 @@ from launch.actions import TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch_ros.actions import Node
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 
 
 from nav2_common.launch import RewrittenYaml
@@ -59,6 +59,13 @@ def generate_launch_description():
     bond_timeout = LaunchConfiguration('bond_timeout')
 
     use_low_obstacle_detect = PythonExpression([low_obstacle_detect_version, " > 0"])
+
+    ## create configuration files for Joy node
+    joy_config = LaunchConfiguration('joy_config')
+    joy_dev = LaunchConfiguration('joy_dev')
+    publish_stamped_twist = LaunchConfiguration('publish_stamped_twist')
+    config_filepath = LaunchConfiguration('config_filepath')
+
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -102,6 +109,7 @@ def generate_launch_description():
         root_key="local",
         param_rewrites=param_substitutions2,
         convert_types=True)
+
 
     return LaunchDescription([
         # save all log file in the directory where the launch.log file is saved
@@ -174,6 +182,19 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'bond_timeout', default_value='90.0',
             description='bond timeout for lifecycle managers'),
+
+        # add joy node configuration
+        DeclareLaunchArgument('joy_vel', default_value='cmd_vel'),
+        DeclareLaunchArgument('joy_config', default_value='ps3'),
+        DeclareLaunchArgument('joy_dev', default_value='0'),
+        DeclareLaunchArgument('publish_stamped_twist', default_value='false'),
+        DeclareLaunchArgument('config_filepath', default_value=[
+            TextSubstitution(text=os.path.join(
+                get_package_share_directory('teleop_twist_joy'), 'config', '')),
+            joy_config, TextSubstitution(text='.config.yaml')]),
+
+
+
 
         # default navigator
         Node(
@@ -511,4 +532,19 @@ def generate_launch_description():
             output='log',
             condition=IfCondition(use_low_obstacle_detect)),
 
+        ## add Nodes for joystick control 
+        Node(
+            package='joy', executable='joy_node', name='joy_node',
+            parameters=[{
+                'device_id': joy_dev,
+                'deadzone': 0.3,
+                'autorepeat_rate': 20.0,
+            }]),
+
+        Node(
+            package='teleop_twist_joy', executable='teleop_node',
+            name='teleop_twist_joy_node',
+            parameters=[config_filepath, {'publish_stamped_twist': publish_stamped_twist}],
+            remappings={('/cmd_vel', LaunchConfiguration('joy_vel'))},
+            ),
     ])

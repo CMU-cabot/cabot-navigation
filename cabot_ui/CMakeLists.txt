@@ -19,6 +19,7 @@ find_package(std_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(cabot REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 
 set(dependencies
@@ -32,6 +33,7 @@ set(dependencies
   std_msgs
   tf2_geometry_msgs
   tf2_ros
+  sensor_msgs
 )
 
 add_library(cabot_handle_v2_lib SHARED

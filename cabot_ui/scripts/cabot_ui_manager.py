@@ -64,6 +64,9 @@ from cabot_ui.description import Description
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 
+from sensor_msgs.msg import Joy
+from datetime import datetime
+
 
 class CabotUIManager(NavigationInterface, object):
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
@@ -76,11 +79,11 @@ class CabotUIManager(NavigationInterface, object):
 
         self.reset()
 
-        self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
-        if self._handle_button_mapping == 2:
-            self._event_mapper = EventMapper2()
-        else:
-            self._event_mapper = EventMapper1()
+        self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 3).value
+
+        ## event mapper for the tour project
+        self._event_mapper = EventMapper3()
+
         self._event_mapper.delegate = self
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
@@ -96,6 +99,11 @@ class CabotUIManager(NavigationInterface, object):
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
+
+        ## Subscriber for tour project 
+        self._node.create_subscription(Joy, "/joy", self.remote_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.last_time_teleop_speak = datetime.now()
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -136,6 +144,30 @@ class CabotUIManager(NavigationInterface, object):
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.send_speaker_audio_files()
+
+    def remote_callback(self, msg):
+        time_diff = datetime.now() - self.last_time_teleop_speak
+
+        if (time_diff.total_seconds() < 5):
+            return 
+
+        ## trigger speech from remote control buttons 
+        guide_arrival_button = msg.buttons[1]
+        path_description_button = msg.buttons[2]
+        reminder_button = msg.buttons[3]
+
+        ## notify the arrival state
+        if (guide_arrival_button == 1):
+            self._interface.test_speaker("The guide stopped. We are next to the guide.")
+            self.last_time_teleop_speak = datetime.now()
+        ## describe the path and tour plan
+        if path_description_button == 1:
+            self._interface.test_speaker("The guide is heading to exhibit 5")
+            self.last_time_teleop_speak = datetime.now()
+        ## remind if the guide is away
+        if reminder_button == 1:
+            self._interface.test_speaker("The guide is walking away. You can press the up button to follow the guide.")
+            self.last_time_teleop_speak = datetime.now()
 
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
@@ -340,59 +372,63 @@ class CabotUIManager(NavigationInterface, object):
         '''
         all events go through this method
         '''
-        # self._logger.info(f"process_event {str(event)}")
-
+        self._logger.info(f"process_event {str(event)}")
+        # self._interface.test_speaker(f"receiving event {str(event)}")
+        
         self._event_mapper.push(event)
         self._process_menu_event(event)
         self._process_navigation_event(event)
         self._process_exploration_event(event)
 
     def _process_menu_event(self, event):
-        '''
-        process only menu event
-        '''
-        if event.type != MenuEvent.TYPE:
-            return
-
-        curr_menu = self.menu_stack[-1]
-        if event.subtype == "next":
-            curr_menu.next()
-            self._interface.menu_changed(menu=curr_menu)
-
-        elif event.subtype == "prev":
-            curr_menu.prev()
-            self._interface.menu_changed(menu=curr_menu)
-
-        elif event.subtype == "select":
-            selected = curr_menu.select()
-            if selected is None:  # from main menu
-                if curr_menu.value is None:
-                    curr_menu.next()
-                selected = curr_menu
-            elif not selected.can_explore:
-                self.reset()
-            elif selected is not curr_menu:
-                self.menu_stack.append(selected)
-                if selected.value is None:
-                    selected.next()
-
-            self._interface.menu_changed(menu=selected, usage=True)
-
-        elif event.subtype == "back":
-            if len(self.menu_stack) > 1:
-                self.menu_stack.pop()
-                curr_menu = self.menu_stack[-1]
-
-            self._interface.menu_changed(menu=curr_menu, backed=True)
-
-            self.speed = 0
-            # self.cancel_pub.publish(True)
-            self._navigation.pause_navigation()
+        ## not handle menu selection (destination / route)
+        pass
 
     def _process_navigation_event(self, event):
         if event.type != NavigationEvent.TYPE:
             return
         self._logger.info(f"_process_navigation_event {event}")
+
+
+        # handle events from group tour project
+        if event.subtype == 'yx_left_click':
+            self._interface.test_speaker("left button clicked")
+            return 
+
+        if event.subtype == 'yx_right_click':
+            self._interface.test_speaker("right button clicked")
+            return 
+
+        if event.subtype == 'yx_down_click':
+            self._interface.test_speaker("Notifying the tour guide")
+            return 
+
+        if event.subtype == 'yx_center_click':
+            self._interface.test_speaker("center button clicked")
+            return 
+
+        if event.subtype == 'yx_left_hold':
+            self._interface.test_speaker("left button hold")
+            return 
+
+        if event.subtype == 'yx_right_hold':
+            self._interface.test_speaker("right button hold")
+            return 
+
+        if event.subtype == 'yx_up_hold':
+            self._interface.test_speaker("up button hold")
+            return 
+
+        if event.subtype == 'yx_down_hold':
+            self._interface.test_speaker("Notifying the tour guide")
+            return 
+
+        if event.subtype == 'yx_center_hold':
+            self._interface.test_speaker("center button hold")
+            return 
+        
+        if event.subtype == 'guide_response':
+            self._interface.test_speaker("The guide is coming to you")
 
         # operations indepent from the navigation state
         if event.subtype == "language":
@@ -865,6 +901,56 @@ class EventMapper2(object):
                 if self.button_hold_down_duration - self.button_hold_down_duration_prev >= 1:
                     self.button_hold_down_duration_prev = self.button_hold_down_duration
                     return NavigationEvent(subtype="speeddown" if event.holddown == cabot_common.button.BUTTON_DOWN else "speedup")
+        return None
+
+
+class EventMapper3(object):
+    def __init__(self):
+        self._manager = StatusManager.get_instance()
+        self.button_hold_down_duration = 0
+        self.button_hold_down_duration_prev = 0
+
+    def push(self, event):
+        if event.type not in {ButtonEvent.TYPE, ClickEvent.TYPE, HoldDownEvent.TYPE}:
+            return
+
+        mevent = None
+        
+        # simplify the control
+        mevent = self.map_button_to_navigation(event)
+
+        if mevent:
+            self.delegate.process_event(mevent)
+
+
+    def map_button_to_navigation(self, event):
+
+        if event.type == "button" and not event.down and self.button_hold_down_duration > 0:
+            self.button_hold_down_duration = 0
+            self.button_hold_down_duration_prev = 0
+            return None
+
+        if event.type == "click":
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="yx_right_click")
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="yx_left_click")
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="description_surround", param=2) #param: description_length 
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="yx_down_click")
+            if event.buttons == cabot_common.button.BUTTON_CENTER:
+                return NavigationEvent(subtype="yx_center_click")
+
+        if event.type == HoldDownEvent.TYPE:
+            if event.holddown == cabot_common.button.BUTTON_LEFT:
+                return NavigationEvent(subtype="yx_left_hold")
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
+                return NavigationEvent(subtype="yx_right_hold")
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return NavigationEvent(subtype="yx_down_hold")
+            if event.holddown == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="description_surround", param=2) #param: description_length 
         return None
 
 
