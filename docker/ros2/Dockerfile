@@ -30,7 +30,6 @@ ENV UNDERLAY_WS=/opt/underlay_ws
 RUN mkdir -p $UNDERLAY_WS/src
 COPY ./tf2_web_republisher $UNDERLAY_WS/src/tf2_web_republisher
 COPY ./rosbridge_suite $UNDERLAY_WS/src/rosbridge_suite
-COPY ./bond_core $UNDERLAY_WS/src/bond_core
 
 WORKDIR $UNDERLAY_WS
 

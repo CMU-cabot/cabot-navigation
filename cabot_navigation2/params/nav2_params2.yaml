@@ -18,13 +18,92 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# Map loader for multi floor localization
+map_loader:
+  ros__parameters:
+    use_sim_time: True
+    map_servers: ['/map_server']
+
+
+# This will override the default footprint setting below
+footprint_publisher:
+  ros__parameters:
+    use_sim_time: True
+    footprint_topics: ['/global_costmap/footprint', '/local_costmap/footprint', '/local/global_costmap/footprint', '/local/local_costmap/footprint']
+    footprint_mode: 1 # 0 normal, 1 smallest, 3 small
+    footprint_normal: 0.45
+    footprint_smallest: 0.20 # TBD
+    footprint_small: 0.40
+    footprint_links: ['base_footprint', 'local/base_footprint']
+    offset_links: ['base_control_shift', 'local/base_control_shift']
+    offset_normal: 0.25
+    offset_smallest: 0.0
+    offset_small: 0.10
+
+people_vis:
+  ros__parameters:
+    use_sim_time: True
+    people_topic: "people"
+    vis_topic: "people_vis"
+
+
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_footprint"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: map
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0
+    laser_min_range: -1.0
+    laser_model_type: "likelihood_field"
+    max_beams: 60
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "differential"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 0.5
+    update_min_a: 0.2
+    update_min_d: 0.25
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: scan
+    set_initial_pose: true
+
+amcl_map_client:
+  ros__parameters:
+    use_sim_time: True
+
+amcl_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
 bt_navigator:
   ros__parameters:
     use_sim_time: True
-    global_frame: local/odom
-    robot_base_frame: local/base_footprint
-    odom_topic: /local/odom
-    enable_groot_monitoring: False
+    global_frame: map
+    robot_base_frame: base_footprint
+    bt_loop_duration: 10
+    odom_topic: /odom
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
     - nav2_compute_path_through_poses_action_bt_node
@@ -71,12 +150,13 @@ bt_navigator:
     - cabot_restore_config_bt_node
     - cabot_wait_float_bt_node
     - cabot_publish_topic_bt_node
+    - cabot_path_to_poses_bt_node
+    - cabot_current_pose_bt_node
 
 
 bt_navigator_rclcpp_node:
   ros__parameters:
     use_sim_time: True
-
 
 controller_server:
   ros__parameters:
@@ -87,7 +167,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
-    controller_plugins: ["FollowPath"]
+    controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath", "RLFollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.
@@ -99,21 +179,30 @@ controller_server:
     # Goal checker parameters
     cabot_goal_checker:
       plugin: "cabot_navigation2::CabotSimpleGoalChecker"
-      xy_goal_tolerance: 0.50
+      xy_goal_tolerance: 1.0
       yaw_goal_tolerance: 6.28
       stateful: True
     # DWB parameters
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
+      plugin: "cabot_navigation2::CaBotRotationShimController"
+      primary_controller: "cabot_navigation2::CaBotDWBLocalPlanner"
+      # primary_controller: "dwb_core::DWBLocalPlanner"
+      # publish_cost_grid_pc: true  # for debug
+      angular_dist_threshold: 0.3
+      forward_sampling_distance: 1.0
+      rotate_to_heading_angular_vel: 0.5
+      max_angular_accel: 1.6
+      simulate_ahead_time: 0.5
+      #trajectory_generator_name: "dwb_plugins::LimitedAccelGenerator" # default: dwb_plugins::StandardTrajectoryGenerator
       trajectory_generator_name: "dwb_plugins::StandardTrajectoryGenerator"
       debug_trajectory_details: True
     #  prune_plan: True # default: True
-      prune_distance: 1.0 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
+      prune_distance: 2.0 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.5
+      max_vel_x: 1.0
       max_vel_y: 0.0
-      max_vel_theta: 2.0
+      max_vel_theta: 1.0
       min_speed_xy: 0.0
       max_speed_xy: 1.0
       min_speed_theta: 0.0
@@ -122,7 +211,7 @@ controller_server:
       acc_lim_x: 0.1
       acc_lim_y: 0.0
       acc_lim_theta: 1.0 # default 2.0
-      decel_lim_x: -0.5
+      decel_lim_x: -0.6
       decel_lim_y: 0.0
       decel_lim_theta: -1.0 # default -2.0
       vx_samples: 20
@@ -135,7 +224,7 @@ controller_server:
       angular_granularity: 0.025
       transform_tolerance: 0.5
       #critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
-      critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
       PathForwardPrefer:
         class: dwb_critics::PathForwardPreferCritic
         scale: 24.0
@@ -145,7 +234,7 @@ controller_server:
         #class: dwb_critics::BaseObstacleCritic
         scale: 1.0 # default: 1.0
         sum_scores: False # default: False
-        low_speed_threshold: 0.9
+        low_speed_threshold: 0.3
         cost_threshold: 96.0
       PoseAlign:
         class: dwb_critics::PoseAlignCritic
@@ -169,6 +258,106 @@ controller_server:
       trans_stopped_velocity: 0.25
       slowing_factor: 5.0
       stateful: True
+    FollowPathElevator:
+      plugin: "dwb_core::DWBLocalPlanner"
+      #trajectory_generator_name: "dwb_plugins::LimitedAccelGenerator" # default: dwb_plugins::StandardTrajectoryGenerator
+      trajectory_generator_name: "dwb_plugins::StandardTrajectoryGenerator"
+      debug_trajectory_details: True
+    #  prune_plan: True # default: True
+      prune_distance: 2.0 # default: 1.7 # should be greater than max_vel_x * sim_time + some margin
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      max_vel_x: 0.5
+      max_vel_y: 0.0
+      max_vel_theta: 1.0
+      min_speed_xy: 0.0
+      max_speed_xy: 0.5
+      min_speed_theta: 0.0
+    # Add high threshold velocity for turtlebot 3 issue.
+    # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
+      acc_lim_x: 0.1
+      acc_lim_y: 0.0
+      acc_lim_theta: 1.0 # default 2.0
+      decel_lim_x: -0.6
+      decel_lim_y: 0.0
+      decel_lim_theta: -1.0 # default -2.0
+      vx_samples: 20
+      vy_samples: 5
+      vtheta_samples: 20
+      sim_time: 1.7 #  default 1.7
+    #  discretize_by_time: False # default = False
+    #  time_granularity: 0.1 # default = 0.5
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.5
+      #critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
+      critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
+      PathForwardPrefer:
+        class: dwb_critics::PathForwardPreferCritic
+        scale: 24.0
+        num_of_poses: 20
+      VelocityBaseObstacle:
+        class: dwb_critics::VelocityObstacleCritic
+        #class: dwb_critics::BaseObstacleCritic
+        scale: 1.0 # default: 1.0
+        sum_scores: False # default: False
+        low_speed_threshold: 0.3
+        cost_threshold: 96.0
+      PoseAlign:
+        class: dwb_critics::PoseAlignCritic
+        scale: 24.0
+        minimum_angle: 135.0
+      PathAlign:
+        class: dwb_critics::PathAlignCritic
+        scale: 24.0
+      PathDist:
+        class: dwb_critics::PathDistCritic
+        scale: 24.0
+      GoalAlign:
+        class: dwb_critics::GoalAlignCritic
+        forward_point_distance: 0.35
+        scale: 16.0
+      GoalDist:
+        class: dwb_critics::GoalDistCritic
+        scale: 16.0
+      short_circuit_trajectory_evaluation: True
+      lookahead_time: -1.0
+      trans_stopped_velocity: 0.25
+      slowing_factor: 5.0
+      stateful: True
+    MPCFollowPath:
+      #plugin: "cabot_navigation2::CaBotRotationShimController"
+      #primary_controller: "cabot_navigation2::CaBotSamplingMPCController"
+      plugin: "cabot_navigation2::CaBotSamplingMPCController"
+      group_topic: "/group_predictions"
+      traj_vis_topic: "/control_output_vis"
+      loc_goal_vis_topic: "/local_goal_vis"
+      prediction_horizon: 4.8
+      sampling_rate: 0.4
+      max_linear_velocity: 0.5
+      linear_sample_size: 4.0
+      max_angular_velocity: 1.0
+      angular_sample_size: 16.0
+      obstacle_horizon: 2.0
+      lookahead_distance: 2.5
+      goal_distance: 1.0
+      discount_factor: 0.99
+      obstacle_costval: 250.0
+      time_cost: 5.0
+      focus_goal_dist: 2.0
+      goal_cost_wt: 0.1
+      group_cost_wt: 0.45
+      obs_cost_wt: 1.0
+      time_cost_wt: 1.0
+      energy_cost_wt: 0.01
+      smooth_wt: 0.0
+    RLFollowPath:
+      plugin: "cabot_navigation2::CaBotRLController"
+      rl_cmd_topic: "/rl_robot_cmd"
+      rl_info_topic: "/rl_robot_info"
+      loc_goal_vis_topic: "/local_goal_vis"
+      lookahead_distance: 2.5
+      focus_goal_dist: 2.0
 
 controller_server_rclcpp_node:
   ros__parameters:
@@ -178,35 +367,47 @@ local_costmap:
   local_costmap:
     ros__parameters:
       update_frequency: 5.0
-      publish_frequency: 5.0
-      global_frame: local/odom
-      robot_base_frame: local/base_footprint
+      publish_frequency: 6.0 # needs to be big enough to capture all the update
+      global_frame: map
+      robot_base_frame: base_footprint
       use_sim_time: True
       rolling_window: True
-      width: 10
-      height: 10
+      transform_tolerance: 0.5
+      width: 15
+      height: 15
       resolution: 0.05
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer", "group_obstacle_layer"]
       robot_radius: 0.45
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.45
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.75
+        cost_scaling_factor: 5.0
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: scan
+        observation_sources: velodyne
         scan:
-          topic: /local/scan
-          min_obstacle_height: -100.0
-          max_obstacle_height: 100.0
+          topic: /scan
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          obstacle_max_range: 4.0
+          raytrace_max_range: 5.0
+          clearing: True
+          marking: True
+          inf_is_valid: False # default: False
+          data_type: "LaserScan"
+        velodyne:
+          topic: /velodyne_points_cropped
+          min_obstacle_height: 0.3
+          max_obstacle_height: 1.8
+          obstacle_min_range: 0.4
           obstacle_max_range: 4.0
           raytrace_max_range: 5.0
           clearing: True
           marking: True
           inf_is_valid: True # default: False
-          data_type: "LaserScan"
+          data_type: "PointCloud2"
       low_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -214,7 +415,7 @@ local_costmap:
         max_obstacle_height: 2.0
         observation_sources: scan
         scan:
-          topic: /local/livox_scan
+          topic: /livox_scan
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
           obstacle_min_range: 0.05
@@ -224,6 +425,16 @@ local_costmap:
           marking: True
           inf_is_valid: True # default: False
           data_type: "LaserScan"
+      static_layer:
+        map_subscribe_transient_local: True
+      group_obstacle_layer:
+        plugin: "cabot_navigation2::GroupObstacleLayer"
+        enabled: False
+        group_topic: /group_predictions
+        update_width: 10.0
+        update_height: 10.0
+        init_cost: 200.0
+        discount_factor: 0.8
       always_send_full_costmap: True
   local_costmap_client:
     ros__parameters:
@@ -235,36 +446,80 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
+      transform_tolerance: 0.5
       update_frequency: 1.0
       publish_frequency: 1.0
-      robot_base_frame: local/base_footprint
-      global_frame: local/odom
-      rolling_window: True
-      width: 20
-      height: 20
+      global_frame: map
+      robot_base_frame: base_footprint
       use_sim_time: True
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "low_obstacle_layer", "inflation_layer"]
       robot_radius: 0.45
       resolution: 0.05
+      track_unknown_space: False
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.35
+        inflation_radius: 0.75
         cost_scaling_factor: 5.0
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
+      people_obstacle_layer:
+        plugin: "cabot_navigation2::PeopleObstacleLayer"
         enabled: True
-        observation_sources: scan
+        observation_sources: velodyne
         scan:
-          topic: /local/scan
-          min_obstacle_height: -100.0
-          max_obstacle_height: 100.0
-          obstacle_max_range: 8.0
+          topic: /scan
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          raytrace_min_range: 0.0
           raytrace_max_range: 8.0
+          obstacle_min_range: 0.0
+          obstacle_max_range: 7.5
           clearing: True
           marking: True
           inf_is_valid: True # default: False
           data_type: "LaserScan"
+          observation_persistence: 0.5 # default: 0 (store only latest observation)
+        velodyne:
+          topic: /velodyne_points_cropped
+          min_obstacle_height: 0.3
+          max_obstacle_height: 1.8
+          obstacle_min_range: 0.4
+          obstacle_max_range: 7.5
+          raytrace_max_range: 8.0
+          clearing: True
+          marking: True
+          inf_is_valid: True # default: False
+          data_type: "PointCloud2"
+        mode: "ignore_move_people"
+        person_radius: 0.50
+        exclude_topic: /ignore
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: velodyne
+        scan:
+          topic: /scan
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          raytrace_min_range: 0.0
+          raytrace_max_range: 8.0
+          obstacle_min_range: 0.0
+          obstacle_max_range: 7.5
+          clearing: True
+          marking: True
+          inf_is_valid: True # default: False
+          data_type: "LaserScan"
+          observation_persistence: 0.5 # default: 0 (store only latest observation)
+        velodyne:
+          topic: /velodyne_points_cropped
+          min_obstacle_height: 0.3
+          max_obstacle_height: 1.8
+          obstacle_min_range: 0.4
+          obstacle_max_range: 7.5
+          raytrace_max_range: 8.0
+          clearing: True
+          marking: True
+          inf_is_valid: True # default: False
+          data_type: "PointCloud2"
       low_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -272,7 +527,7 @@ global_costmap:
         max_obstacle_height: 2.0
         observation_sources: scan
         scan:
-          topic: /local/livox_scan
+          topic: /livox_scan
           min_obstacle_height: -2.0
           max_obstacle_height: 2.0
           obstacle_min_range: 0.05
@@ -282,7 +537,40 @@ global_costmap:
           marking: True
           inf_is_valid: True # default: False
           data_type: "LaserScan"
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 1.8
+        mark_threshold: 0
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /intel_realsense_r200_depth/points
+          max_obstacle_height: 1.8
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
       always_send_full_costmap: False
+      navcog_path_layer:
+        plugin: "cabot_navigation2::NavCogPathLayer"
+        path_width: 2.0
+        path_width_detect: true
+        path_topic: /path
+        # walk_weight value will be overwritten in navigate_w_replanning_and_recovery.xml
+        walk_weight: [0.0, 0.0, 0.0]
+        # path_adjusted_center value will be overwritten in navigate_w_replanning_and_recovery.xml
+        path_adjusted_center: 0.0
+        path_adjusted_minimum_path_width: 0.5
+        weight_grid: 0.25
+        robot_radius: 0.45
+        safe_margin: 0.05
+        max_cost: 127.0
   global_costmap_client:
     ros__parameters:
       use_sim_time: True
@@ -290,26 +578,59 @@ global_costmap:
     ros__parameters:
       use_sim_time: True
 
+map_server:
+  ros__parameters:
+    use_sim_time: True
+    yaml_filename: ""  # needs to be blank string
+
 planner_server:
   ros__parameters:
     expected_planner_frequency: 2.0
     use_sim_time: True
-    planner_plugins: ["GridBased"]
+    planner_plugins: ["GridBased", "NavCog", "CaBot", "PathForward"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
       use_astar: false
       allow_unknown: false
+#      cost_neutral: 8
+#      cost_factor: 0.97
+    NavCog:
+      plugin: "cabot_navigation2/NavCogPathPlanner"
+      path_width: 2.0
+      path_adjusted_center: 0.0
+      path_adjusted_minimum_path_width: 0.5
+      weight_grid: 0.25
+      robot_radius: 0.45
+      safe_margin: 0.25
+      cost_threshold: 253
+    CaBot:
+      plugin: "cabot_navigation2/CaBotPlanner"
+      path_width: 1.0
+      path_min_width: 0.5
+      path_adjusted_center: 0.0
+      path_adjusted_minimum_path_width: 0.5
+      robot_radius: 0.45
+      safe_margin: 0.25
+      path_length_to_width_factor: 1.0
+      adjust_start: true
+    PathForward:
+      plugin: "cabot_navigation2/CabotPathForwardPlanner"
+      path_topic: "/path"
+
 
 planner_server_rclcpp_node:
   ros__parameters:
     use_sim_time: True
 
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: True
 
 behavior_server:
   ros__parameters:
-    costmap_topic: /local/local_costmap/costmap_raw
-    footprint_topic: /local/local_costmap/published_footprint
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
     cycle_frequency: 5.0
     behavior_plugins: ["spin", "backup", "wait"]
     spin:
@@ -318,11 +639,25 @@ behavior_server:
       plugin: "nav2_behaviors/BackUp"
     wait:
       plugin: "nav2_behaviors/Wait"
-    global_frame: local/odom
-    robot_base_frame: local/base_footprint
+    global_frame: map
+    robot_base_frame: base_footprint
     transform_timeout: 0.1
     use_sim_time: true
     simulate_ahead_time: 2.0
     max_rotational_vel: 0.5
     min_rotational_vel: 0.01
     rotational_acc_lim: 0.2
+
+cabot_scan:
+  ros__parameters:
+    use_sim_time: True
+    scan_topic: scan
+    scan_out_topic: /local/scan
+    scan_out_frame: local/velodyne
+
+cabot_livox_scan:
+  ros__parameters:
+    use_sim_time: True
+    scan_topic: livox_scan
+    scan_out_topic: /local/livox_scan
+    scan_out_frame: local/livox_footprint

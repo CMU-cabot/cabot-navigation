@@ -332,10 +332,10 @@ controller_server:
       loc_goal_vis_topic: "/local_goal_vis"
       prediction_horizon: 4.8
       sampling_rate: 0.4
-      max_linear_velocity: 1.0
-      linear_sample_size: 8.0
+      max_linear_velocity: 0.5
+      linear_sample_size: 2.0
       max_angular_velocity: 1.0
-      angular_sample_size: 8.0
+      angular_sample_size: 10.0
       lookahead_distance: 2.5
       goal_distance: 1.0
       discount_factor: 0.99
@@ -343,7 +343,7 @@ controller_server:
       time_cost: 5.0
       focus_goal_dist: 2.0
       goal_cost_wt: 0.55
-      group_cost_wt: 0.45
+      group_cost_wt: 0.0
       obs_cost_wt: 1.0
       time_cost_wt: 1.0
       energy_cost_wt: 0.01

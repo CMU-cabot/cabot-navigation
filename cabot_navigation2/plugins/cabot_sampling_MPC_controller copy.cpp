@@ -81,6 +81,10 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".angular_sample_size", angular_sample_size_);
 
   declare_parameter_if_not_declared(
+    node, name_ + ".obstacle_horizon", rclcpp::ParameterValue(2.0)); 
+  node->get_parameter(name_ + ".obstacle_horizon", obstacle_horizon_);
+
+  declare_parameter_if_not_declared(
     node, name_ + ".lookahead_distance", rclcpp::ParameterValue(0.5)); // meters
   node->get_parameter(name_ + ".lookahead_distance", lookahead_distance_);
 
@@ -271,7 +275,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   }
 
   // Generate all the trajectories based on sampled velocities
-  std::vector<Trajectory> trajectories = generateTrajectoriesImproved(pose, velocity);
+  std::vector<Trajectory> trajectories = generateTrajectoriesSimple(pose, velocity);
 
   double prev_v;
   double prev_w;
@@ -549,26 +553,28 @@ double CaBotSamplingMPCController::calculateCost(
 
   for (const auto & pose : sampled_trajectory)
   {
-    // if (idx == 0)
-    // {
+    if (idx <= obstacle_horizon_)
+    {
       step_cost = getCostFromCostmap(pose.pose);
       if (step_cost >= obstacle_costval_)
       {
         cost = std::numeric_limits<double>::infinity();
         return cost;
       }
-    // }
+    }
     
     // calculate goal dist at the same time
     if (idx == (hit_idx - 1)) {
+      // if turning in place, or 0 linear vel, then orietation difference is goal dist
       goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
-      tf2::Quaternion quat;
-      tf2::fromMsg(local_goal.pose.orientation, quat);
-      tf2::Matrix3x3 m(quat);
-      double roll, pitch, yaw;
-      m.getRPY(roll, pitch, yaw);
-      goal_dist += 0.1 * std::abs(yaw - atan2(local_goal.pose.position.y - pose.pose.position.y, 
-                                              local_goal.pose.position.x - pose.pose.position.x));
+      // if (trajectory.control.linear.x == 0) 
+      // tf2::Quaternion quat;
+      // tf2::fromMsg(local_goal.pose.orientation, quat);
+      // tf2::Matrix3x3 m(quat);
+      // double roll, pitch, yaw;
+      // m.getRPY(roll, pitch, yaw);
+      // goal_dist += 0.1 * std::abs(yaw - atan2(local_goal.pose.position.y - pose.pose.position.y, 
+      //                                         local_goal.pose.position.x - pose.pose.position.x));
       
       //min_goal_dist = std::max(0.0, current_dist - max_linear_velocity_ * (idx + 1));
       goal_cost = goal_dist;
@@ -578,10 +584,10 @@ double CaBotSamplingMPCController::calculateCost(
     
     // if (last_trajectory_.initialized)
     // {
-    //   last_pose = last_trajectory_.trajectory[idx];
-    //   energy_dist = pointDist(pose.pose.position, last_pose.pose.position);
-    //   // max if going two opposite ways
-    //   max_energy_dist = max_linear_velocity_ * ((idx + 1) * sampling_rate_);
+      // last_pose = last_trajectory_.trajectory[idx];
+      // energy_dist = pointDist(pose.pose.position, last_pose.pose.position);
+      // max if going two opposite ways
+      // max_energy_dist = max_linear_velocity_ * ((idx + 1) * sampling_rate_);
     //   energy_cost += discount * energy_dist; // / max_energy_dist;
     // }
     

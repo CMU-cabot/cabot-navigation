@@ -86,6 +86,7 @@ private:
   double linear_sample_size_;
   double max_angular_velocity_;
   double angular_sample_size_;
+  double obstacle_horizon_;
   double lookahead_distance_;
   double goal_distance_;
   double discount_factor_;  // Discount factor for future time steps
