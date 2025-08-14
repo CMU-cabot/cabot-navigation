@@ -103,6 +103,7 @@ public:
   double social_distance_x_;
   double social_distance_y_;
   double last_social_dist_;
+  double distance_noise_threshold_;
   bool social_distance_speed_limit_in_last_frame_;
   double urgent_max_acc_;
   double social_distance_min_radius_;
@@ -169,6 +170,7 @@ public:
     social_distance_x_(2.0),
     social_distance_y_(1.0),
     last_social_dist_(100),
+    distance_noise_threshold_(0.03),
     social_distance_speed_limit_in_last_frame_(false),
     urgent_max_acc_(1.2),
     social_distance_min_radius_(0.45),
@@ -438,6 +440,12 @@ private:
       return;
     }
 
+    geometry_msgs::msg::TransformStamped robot_to_path_msg;
+    tf2::Stamped<tf2::Transform> robot_to_path_tf2;
+    if (!lookupTransform("base_footprint", last_plan_.header.frame_id, robot_to_path_msg, robot_to_path_tf2)) {
+      return;
+    }
+
     geometry_msgs::msg::TransformStamped robot_to_map_global_msg;
     tf2::Stamped<tf2::Transform> robot_to_map_global_transform_tf2;
     if (!lookupTransform("base_footprint", input->header.frame_id, robot_to_map_global_msg, robot_to_map_global_transform_tf2)) {
@@ -467,6 +475,7 @@ private:
     // Social Distance
     for (size_t i = 0; i < input->people.size(); ++i) {
       const auto & person = input->people[i];
+
       const auto & p_local = transformed_people[i].first;
       const auto & v_local = transformed_people[i].second;
 
@@ -479,6 +488,10 @@ private:
       }
 
       double vx = v_local.x();
+      if (vx > 0) {
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl ignore %s, (v=%.2f)", person.name.c_str(), vx);
+        continue;
+      }
 
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
@@ -498,7 +511,7 @@ private:
 
       for (auto pose : last_plan_.poses) {
         tf2::Vector3 p_frame(pose.pose.position.x, pose.pose.position.y, 0);
-        auto p_local = robot_to_map_global_transform_tf2 * p_frame;
+        auto p_local = robot_to_path_tf2 * p_frame;
         auto dx = p_local.x() - x;
         auto dy = p_local.y() - y;
         auto dist = sqrt(dx * dx + dy * dy);
@@ -523,38 +536,18 @@ private:
         "last_social_dist=%.2f social_distance(%.2f %.2f) - temp=%.2f, limit=%.2f, (flag=%s)",
         person.name.c_str(), min_path_dist, dist, last_social_dist_, social_distance_x_, social_distance_y_,
         temp_social_distance_speed_limit, social_distance_speed_limit, social_distance_speed_limit_in_last_frame_ ? "true" : "false");
-      if (temp_social_distance_speed_limit < max_speed_) {
-        if (social_distance_speed_limit_in_last_frame_) {
-          if (last_social_dist_ < dist) {
-            // wait for the next frame, because object may be relatively moving away
-            // social_distance_speed_limit = temp_social_distance_speed_limit;
-          } else {
-            // critical
-            social_distance_speed_limit = std::max(
-              temp_social_distance_speed_limit,
-              last_odom_.twist.twist.linear.x - urgent_max_acc_ * frame_period);
+      
+      social_distance_speed_limit = temp_social_distance_speed_limit;
 
-            std_msgs::msg::String msg;
-
-            if (fabs(social_distance_speed_limit) < 0.01) {
-              msg.data = "navigation;event;people_speed_stopped";
-            } else if (vx > 0.25 && social_distance_speed_limit < max_speed_ * 0.75) {
-              msg.data = "navigation;event;people_speed_following";
-            }
-
-            if (!msg.data.empty()) {
-              RCLCPP_INFO(get_logger(), "PeopleSpeedControl %s", msg.data.c_str());
-              event_pub_->publish(msg);
-            }
-          }
-        } else {
-          // noop, wait for the next frame
-        }
-        social_distance_speed_limit_in_last_frame_ = true;
-        last_social_dist_ = dist;
-      } else {
-        social_distance_speed_limit_in_last_frame_ = false;
-        last_social_dist_ = 100;
+      std_msgs::msg::String msg;
+      if (fabs(social_distance_speed_limit) < 0.01) {
+        msg.data = "navigation;event;people_speed_stopped";
+      } else if (vx > 0.25 && social_distance_speed_limit < max_speed_ * 0.75) {
+        msg.data = "navigation;event;people_speed_following";
+      }
+      if (!msg.data.empty()) {
+        RCLCPP_INFO(get_logger(), "PeopleSpeedControl %s", msg.data.c_str());
+        event_pub_->publish(msg);
       }
     }
 

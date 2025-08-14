@@ -46,10 +46,9 @@ cabot:
       limit_topic: /cabot/lidar_speed
       # front obstacle detection
       check_front_obstacle: true
-      check_blind_space: true
+      check_blind_space: false
       min_speed: 0.0
       min_distance: 1.0
-      limit_factor: 1.0
       distance_noise_threshold: 0.03
 
   low_lidar_speed_control_node: # old name cabot_e_lidar_speed
@@ -62,8 +61,7 @@ cabot:
       check_blind_space: false
       min_speed: 0.0
       min_distance: 1.0
-      limit_factor: 1.0
-      distance_noise_threshold: 0.03
+      distance_noise_threshold: 0.06
 
   people_speed_control_node: # old name cabot_e_people_speed:
     ros__parameters:
