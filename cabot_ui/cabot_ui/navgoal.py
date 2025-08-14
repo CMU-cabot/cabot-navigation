@@ -665,7 +665,7 @@ class Nav2Params:
     side_min_distance: 0.4
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
-    social_distance_y: 0.5
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,false,true,true,false,true,true]
 """
@@ -696,7 +696,7 @@ class Nav2Params:
     side_min_distance: 0.4
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 0.50
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,true,true,true,false,true,true]
 """
@@ -727,7 +727,7 @@ class Nav2Params:
     side_min_distance: 0.4
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 0.50
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,true,true,true,false,true,true]
 """
@@ -744,7 +744,7 @@ class Nav2Params:
     footprint_mode: 3
 /controller_server:
     FollowPath.max_vel_x: 1.0
-    FollowPath.sim_time: 0.5
+    FollowPath.sim_time: 0.37
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
     inflation_layer.inflation_radius: 0.45
@@ -756,18 +756,17 @@ class Nav2Params:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 0.50
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         # if simualtion, check if 'speed_control_node_touch_true' or 'speed_control_node_touch_false' is used
-        if CaBotRclpyUtil.instance().use_sim_time:
-            CaBotRclpyUtil.info("parameters simulation mode")
-            # returns List[Tuple[node_name, namespace]]
-            nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
-            names = [name for name, ns in nodes]
-            if "speed_control_node_touch_false" in names:
-                params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
+        CaBotRclpyUtil.info("parameters simulation mode")
+        # returns List[Tuple[node_name, namespace]]
+        nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
+        names = [name for name, ns in nodes]
+        if "speed_control_node_touch_false" in names:
+            params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
 
         data = yaml.safe_load(params)
         return data

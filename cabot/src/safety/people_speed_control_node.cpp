@@ -488,7 +488,7 @@ private:
       }
 
       double vx = v_local.x();
-      if (vx > 0) {
+      if (vx > 0.25) {
         RCLCPP_INFO(get_logger(), "PeopleSpeedControl ignore %s, (v=%.2f)", person.name.c_str(), vx);
         continue;
       }
