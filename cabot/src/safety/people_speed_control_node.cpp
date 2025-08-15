@@ -536,7 +536,7 @@ private:
         "last_social_dist=%.2f social_distance(%.2f %.2f) - temp=%.2f, limit=%.2f, (flag=%s)",
         person.name.c_str(), min_path_dist, dist, last_social_dist_, social_distance_x_, social_distance_y_,
         temp_social_distance_speed_limit, social_distance_speed_limit, social_distance_speed_limit_in_last_frame_ ? "true" : "false");
-      
+
       social_distance_speed_limit = temp_social_distance_speed_limit;
 
       std_msgs::msg::String msg;
