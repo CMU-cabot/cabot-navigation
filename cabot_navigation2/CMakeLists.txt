@@ -33,6 +33,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
+find_package(ios_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
@@ -83,6 +84,7 @@ set(dependencies
   tf2_ros
   people_msgs
   queue_msgs
+  ios_msgs
   sensor_msgs
   diagnostic_updater
   visualization_msgs
@@ -150,6 +152,7 @@ ament_target_dependencies(cabot_planners
   people_msgs
   pluginlib
   queue_msgs
+  ios_msgs
   rclcpp
   tf2
 )
@@ -341,6 +344,7 @@ set(dependencies_test
   sensor_msgs
   people_msgs
   queue_msgs
+  ios_msgs
   rclcpp
   nav2_lifecycle_manager
   nav2_navfn_planner

@@ -39,6 +39,7 @@
   <depend>rclcpp</depend>
   <depend>people_msgs</depend>
   <depend>queue_msgs</depend>
+  <depend>ios_msgs</depend>
   <depend>pcl_conversions</depend>
   <depend>pcl_ros</depend>
   <depend>tf2_ros</depend>

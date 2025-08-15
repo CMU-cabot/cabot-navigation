@@ -6,5 +6,6 @@ cabot
 cabot_description
 cabot_gazebo
 cabot_msgs
+ios_msgs
 cabot_navigation
 cabot_ui

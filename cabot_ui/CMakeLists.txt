@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(cabot_msgs REQUIRED)
+find_package(ios_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_lifecycle_manager REQUIRED)
@@ -27,6 +28,7 @@ set(dependencies
   rclcpp_components
   cabot
   cabot_msgs
+  ios_msgs
   geometry_msgs
   nav_msgs
   people_msgs

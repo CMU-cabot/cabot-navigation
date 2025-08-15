@@ -32,6 +32,7 @@ from ament_index_python.packages import get_package_share_directory
 import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
+import ios_msgs.msg
 import cabot_ui.geojson
 from cabot_ui import visualizer, geoutil, i18n
 from cabot_ui.event import NavigationEvent

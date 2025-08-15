@@ -1,0 +1,11 @@
+int32 VERTICAL_DIRECTION_ESTIMATE_UNKNOWN = 0
+int32 VERTICAL_DIRECTION_ESTIMATE_SAME = 1
+int32 VERTICAL_DIRECTION_ESTIMATE_ABOVE = 2
+int32 VERTICAL_DIRECTION_ESTIMATE_BELOW = 3
+int32 VERTICAL_DIRECTION_ESTIMATE_ABOVE_OR_BELOW = 4
+
+float32 distance
+SimdFloat3 direction
+float32 horizontal_angle
+int32 vertical_direction_estimate
+string identifier

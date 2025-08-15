@@ -67,6 +67,7 @@ from diagnostic_msgs.msg import DiagnosticStatus
 from sensor_msgs.msg import Joy
 from datetime import datetime
 
+from cabot_ui.nearby_detection import NearbyDetection
 
 class CabotUIManager(NavigationInterface, object):
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
@@ -104,6 +105,7 @@ class CabotUIManager(NavigationInterface, object):
         ## Subscriber for tour project 
         self._node.create_subscription(Joy, "/joy", self.remote_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.last_time_teleop_speak = datetime.now()
+        self.nearby_detection = NearbyDetection(desc_node)
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -392,11 +394,15 @@ class CabotUIManager(NavigationInterface, object):
 
         # handle events from group tour project
         if event.subtype == 'yx_left_click':
-            self._interface.test_speaker("left button clicked")
+            if (self.nearby_detection.guide_description != ""): 
+                self._interface.test_speaker(self.nearby_detection.guide_description + self.nearby_detection.people_description)
+            else:
+                self._interface.test_speaker("left button clicked")
+            
             return 
 
         if event.subtype == 'yx_right_click':
-            self._interface.test_speaker("right button clicked")
+            self._interface.test_speaker("Following the guide. To stop the robot, press the right button again.")
             return 
 
         if event.subtype == 'yx_down_click':

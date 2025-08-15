@@ -1,0 +1,6 @@
+int32 NOT_AVAILABLE=0
+int32 LIMITED=1
+int32 EXTENDING=2
+int32 MAPPED=3
+
+int32 state

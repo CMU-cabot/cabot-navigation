@@ -24,6 +24,7 @@ find_package(dwb_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
+find_package(ios_msgs REQUIRED)
 find_package(behaviortree_cpp_v3 REQUIRED)
 find_package(rosbag2 REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
@@ -46,6 +47,7 @@ set(dependencies
   nav2_util
   people_msgs
   queue_msgs
+  ios_msgs
   behaviortree_cpp_v3
   nav2_behavior_tree
 )
@@ -65,6 +67,7 @@ if(BUILD_TESTING)
     nav2_util
     people_msgs
     queue_msgs
+    ios_msgs
     behaviortree_cpp_v3
     nav2_behavior_tree
     yaml_cpp_vendor

@@ -37,6 +37,7 @@
   <depend>nav2_msgs</depend>
   <depend>people_msgs</depend>
   <depend>queue_msgs</depend>
+  <depend>ios_msgs</depend>
   <depend>rosbag2_cpp</depend>
   <depend>rosbag2_storage</depend>
   <depend>rosbag2_transport</depend>
