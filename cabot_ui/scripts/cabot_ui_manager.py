@@ -394,10 +394,10 @@ class CabotUIManager(NavigationInterface, object):
 
         # handle events from group tour project
         if event.subtype == 'yx_left_click':
-            if (self.nearby_detection.guide_description != ""): 
+            if (self.nearby_detection.guide_description != "" or self.nearby_detection.people_description != ""): 
                 self._interface.test_speaker(self.nearby_detection.guide_description + self.nearby_detection.people_description)
             else:
-                self._interface.test_speaker("left button clicked")
+                self._interface.test_speaker("No people detected nearby")
             
             return 
 
