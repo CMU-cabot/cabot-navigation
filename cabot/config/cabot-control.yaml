@@ -90,7 +90,7 @@ cabot:
         velocity_variance: 0.52
       min_pos_gain: 0.1
       min_vel_gain: 0.1
-      max_speed_: 2.0
+      max_speed: 2.0
 
   tf_speed_control_node: # old name cabot_e_tf_speed:
     ros__parameters:
