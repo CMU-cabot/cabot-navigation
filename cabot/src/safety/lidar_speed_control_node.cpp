@@ -95,7 +95,7 @@ public:
     check_front_obstacle_(true),
     speed_limit_in_the_last_frame_(false),
     max_speed_(1.0),
-    min_speed_(0.1),
+    min_speed_(0.0),
     max_acc_(0.6),
     delay_(0.2),
     urgent_max_acc_(1.2),
@@ -262,6 +262,7 @@ private:
                                   // get some points in front of the robot
       auto max_v = [](double D, double A, double d)
         {
+          D = std::max(0.0, D);
           return (-2 * A * d + sqrt(4 * A * A * d * d + 8 * A * D)) / 2;
         };
       auto max_D = [](double v, double A, double d)
@@ -329,9 +330,9 @@ private:
       double temp_limit = std::min(max_speed_, std::max(min_speed_, max_v(min_point.x - min_distance, max_acc_, delay_)));
 
       RCLCPP_INFO(
-        get_logger(), "limit by front fobstacle (%.2f), temp_limit=%.2f, last_min_x_distance_=%.2f, "
+        get_logger(), "limit by front fobstacle (%.2f), temp_limit=%.2f, min_distance_=%.2f, r=%.2f"
         "min_point=(%.2f, %.2f), speed_limit_in_the_last_frame_=%s",
-        speed_limit, temp_limit, last_min_x_distance_, min_point.x, min_point.y, speed_limit_in_the_last_frame_ ? "true" : "false");
+        speed_limit, temp_limit, min_distance, r, min_point.x, min_point.y, speed_limit_in_the_last_frame_ ? "true" : "false");
       speed_limit = temp_limit;
 
       /*
