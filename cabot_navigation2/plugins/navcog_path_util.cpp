@@ -40,6 +40,7 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
     auto n2 = temp.poses[i + 1];
     auto dx = n2.pose.position.x - n1.pose.position.x;
     auto dy = n2.pose.position.y - n1.pose.position.y;
+    RCLCPP_INFO(util_logger_, "dx = %.2f, dy = %.2f, std::hypot(dx, dy) = %.2f", dx, dy, std::hypot(dx, dy));
     if (std::hypot(dx, dy) > 1.0) {
       geometry_msgs::msg::PoseStamped newPose;
       newPose.header = n1.header;
@@ -51,7 +52,9 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
     }
   }
   temp.poses.push_back(path.poses.back());
-
+  temp.header = path.header;
+  return temp;
+  /*
   nav_msgs::msg::Path normalized;
   normalized.header = path.header;
 
@@ -67,7 +70,7 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
 
     if (it2 + 1 < temp.poses.end()) {
       if (fabs(angles::shortest_angular_distance(prev, curr)) < M_PI / 10) {
-        if (distance < 10) {
+        if (distance < 1) {
           continue;
         }
       }
@@ -81,6 +84,7 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
     normalized.poses.push_back(*it1);
   }
   return normalized;
+  */
 }
 
 nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & start)
@@ -106,11 +110,43 @@ nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const 
     }
   }
 
-  if (mindist > FIRST_LINK_THRETHOLD) {
-    ret.poses.push_back(minpose);
+  // look ahead
+  auto look_ahead_pose = *minit;
+  int look_ahead_count = 0;
+  for (auto next = minit; next < path.poses.end() && next < minit + 5; next++) {
+    look_ahead_pose = *next;
+    look_ahead_count++;
   }
-  for (auto next = minit + 1; next < path.poses.end(); next++) {
-    ret.poses.push_back(*next);
+  // check if the look ahead pose is same direction with the current pose
+  auto start_yaw = tf2::getYaw(start.pose.orientation);
+  auto look_ahead_yaw = tf2::getYaw(look_ahead_pose.pose.orientation);
+
+  RCLCPP_INFO(util_logger_, "start_yaw = %.2f, look_ahead_yaw = %.2f, normalized_diff = %.2f",
+    start_yaw, look_ahead_yaw, normalized_diff(start_yaw, look_ahead_yaw));
+  if (path.poses.size() > 10 && fabs(normalized_diff(start_yaw, look_ahead_yaw)) < M_PI / 6) {
+    auto last_pose = *minit;
+    auto dist = 0.0;
+    for (auto next = minit; next < path.poses.end() && next < minit + look_ahead_count; next++) {
+      auto next_pose = *next;
+      auto dx = last_pose.pose.position.x - next_pose.pose.position.x;
+      auto dy = last_pose.pose.position.y - next_pose.pose.position.y;
+      dist += std::hypot(dx, dy);
+
+      geometry_msgs::msg::PoseStamped new_pose = start;
+      new_pose.pose.position.x += dist * cos(start_yaw);
+      new_pose.pose.position.y += dist * sin(start_yaw);
+      ret.poses.push_back(new_pose);
+
+      last_pose = next_pose;
+    }
+    for (auto next = minit + look_ahead_count; next < path.poses.end(); next++) {
+      ret.poses.push_back(*next);
+    }
+  } else {
+    ret.poses.push_back(minpose);
+    for (auto next = minit + 1; next < path.poses.end(); next++) {
+      ret.poses.push_back(*next);
+    }
   }
 
   return ret;
