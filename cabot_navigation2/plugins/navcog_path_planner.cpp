@@ -129,7 +129,7 @@ NavCogPathPlanner::createPlan(const geometry_msgs::msg::PoseStamped & start, con
     return nav_msgs::msg::Path();
   }
 
-  estimatePathWidthAndAdjust(path, costmap_, options_);
+  //estimatePathWidthAndAdjust(path, costmap_, options_);
 
   path = adjustedPathByStart(path, start);
 
