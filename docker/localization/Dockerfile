@@ -83,6 +83,7 @@ RUN apt update && \
     ros-${ROS_DISTRO}-rosbridge-suite \
     ros-${ROS_DISTRO}-tf-transformations \
     ros-${ROS_DISTRO}-tf2 \
+    ros-${ROS_DISTRO}-tf2-ros \
     ros-${ROS_DISTRO}-tf2-geometry-msgs \
     ros-${ROS_DISTRO}-velodyne-description \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
@@ -221,6 +222,7 @@ RUN apt update && \
     ros-${ROS_DISTRO}-rosbridge-suite \
     ros-${ROS_DISTRO}-tf-transformations \
     ros-${ROS_DISTRO}-tf2 \
+    ros-${ROS_DISTRO}-tf2-ros \
     ros-${ROS_DISTRO}-tf2-geometry-msgs \
     ros-${ROS_DISTRO}-velodyne-description \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
