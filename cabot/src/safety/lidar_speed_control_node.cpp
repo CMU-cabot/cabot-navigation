@@ -168,7 +168,7 @@ private:
 
     odom_sub_ =
       create_subscription<nav_msgs::msg::Odometry>(
-      "odom", rclcpp::SensorDataQoS(),
+      "/odom", rclcpp::SensorDataQoS(),
       std::bind(&LiDARSpeedControlNode::odomCallback, this, std::placeholders::_1));
 
     vis_topic_ = declare_parameter("visualize_topic", vis_topic_);
@@ -313,6 +313,7 @@ private:
         if (point_in_robot_frame.x > 0.0 && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
           double r = fabs(point_in_robot_frame.y) / (front_region_width_ / 2.0);
           double min_distance = r * side_min_distance_ + (1 - r) * center_min_distance_;
+          min_distance = min_distance * std::max(1.0, 2 * pow(last_odom_.twist.twist.linear.x, 2.0));
           double local_speed_limit = max_v(point_in_robot_frame.x - min_distance, max_acc_, delay_);
           if (local_speed_limit < max_speed_) {
             CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
@@ -327,12 +328,13 @@ private:
       // calculate the speed
       double r = fabs(min_point.y) / (front_region_width_ / 2.0);
       double min_distance = r * side_min_distance_ + (1 - r) * center_min_distance_;
+      min_distance = min_distance * std::max(1.0, 2 * pow(last_odom_.twist.twist.linear.x, 2.0));
       double temp_limit = std::min(max_speed_, std::max(min_speed_, max_v(min_point.x - min_distance, max_acc_, delay_)));
 
       RCLCPP_INFO(
         get_logger(), "limit by front fobstacle (%.2f), temp_limit=%.2f, min_distance_=%.2f, r=%.2f"
-        "min_point=(%.2f, %.2f), speed_limit_in_the_last_frame_=%s",
-        speed_limit, temp_limit, min_distance, r, min_point.x, min_point.y, speed_limit_in_the_last_frame_ ? "true" : "false");
+        "odom=%.2f, min_point=(%.2f, %.2f), speed_limit_in_the_last_frame_=%s",
+        speed_limit, temp_limit, min_distance, r, last_odom_.twist.twist.linear.x, min_point.x, min_point.y, speed_limit_in_the_last_frame_ ? "true" : "false");
       speed_limit = temp_limit;
 
       /*

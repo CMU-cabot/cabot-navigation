@@ -501,10 +501,6 @@ private:
       }
 
       double vx = v_local.x();
-      if (vx > 0.25) {
-        RCLCPP_INFO(get_logger(), "PeopleSpeedControl ignore %s, (v=%.2f)", person.name.c_str(), vx);
-        continue;
-      }
 
       double RPy = atan2(y, x);
       double dist = hypot(x, y);
@@ -540,10 +536,17 @@ private:
         d = std::max(0.0, fabs(y) - social_distance_y_);
       }
       double r = (1.0 - std::min(1.0, d / social_distance_y_));
-      temp_social_distance_speed_limit = std::min(
-        social_distance_speed_limit,
-        social_distance_speed_limit * (1 - r) +
-        max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_) * r);
+
+      if (vx > 0.25) {
+        temp_social_distance_speed_limit = std::min(
+          social_distance_speed_limit,
+          max_speed_ * (1 - r) + r * vx);
+      } else {
+        temp_social_distance_speed_limit = std::min(
+          social_distance_speed_limit,
+          max_speed_ * (1 - r) +
+          max_v(std::max(0.0, dist - social_distance_x_), max_acc_, delay_) * r);
+      }
 
       if (temp_social_distance_speed_limit < sd_min_speed_) {
         temp_social_distance_speed_limit = 0;
@@ -552,9 +555,9 @@ private:
 
       double frame_period = (this->get_clock()->now() - last_people_message_time_).seconds();
       RCLCPP_INFO(
-        get_logger(), "PeopleSpeedControl people_limit name=%s, min_path_dist=%.2f dist=%.2f "
+        get_logger(), "PeopleSpeedControl people_limit name=%s, vx=%.2f, min_path_dist=%.2f dist=%.2f "
         "last_social_dist=%.2f xy(%.2f, %.2f) social_distance(%.2f %.2f) - dr(%.2f, %.2f) temp=%.2f, limit=%.2f, (flag=%s)",
-        person.name.c_str(), min_path_dist, dist, last_social_dist_, x, y, social_distance_x_, social_distance_y_,
+        person.name.c_str(), vx, min_path_dist, dist, last_social_dist_, x, y, social_distance_x_, social_distance_y_,
         d, r, social_distance_speed_limit, social_distance_speed_limit,
         robot_is_on_the_path ? "true" : "false");
 
