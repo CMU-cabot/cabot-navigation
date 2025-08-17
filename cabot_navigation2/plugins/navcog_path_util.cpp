@@ -121,7 +121,8 @@ nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const 
   auto start_yaw = tf2::getYaw(start.pose.orientation);
   auto look_ahead_yaw = tf2::getYaw(look_ahead_pose.pose.orientation);
 
-  RCLCPP_INFO(util_logger_, "start_yaw = %.2f, look_ahead_yaw = %.2f, normalized_diff = %.2f",
+  RCLCPP_INFO(
+    util_logger_, "start_yaw = %.2f, look_ahead_yaw = %.2f, normalized_diff = %.2f",
     start_yaw, look_ahead_yaw, normalized_diff(start_yaw, look_ahead_yaw));
   if (path.poses.size() > 10 && fabs(normalized_diff(start_yaw, look_ahead_yaw)) < M_PI / 6) {
     auto last_pose = *minit;
