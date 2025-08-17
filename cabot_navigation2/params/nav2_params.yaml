@@ -386,8 +386,8 @@ local_costmap:
         inflation_radius: 0.75
         cost_scaling_factor: 5.0
       obstacle_layer:
-        plugin: "cabot_navigation2::TemporalObstacleLayer"
-        # plugin: "nav2_costmap_2d::ObstacleLayer"
+        # plugin: "cabot_navigation2::TemporalObstacleLayer"
+        plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
         decaying_rate: 25
         rising_rate: 25
