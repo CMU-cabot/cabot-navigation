@@ -106,6 +106,7 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(Joy, "/joy", self.remote_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.last_time_teleop_speak = datetime.now()
         self.nearby_detection = NearbyDetection(desc_node)
+        self.tour_following_mode = "STOP"  # or "FOLLOWING"
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -153,7 +154,7 @@ class CabotUIManager(NavigationInterface, object):
         if (time_diff.total_seconds() < 5):
             return 
 
-        ## trigger speech from remote control buttons 
+        ## trigger speech from remote joystick control buttons 
         guide_arrival_button = msg.buttons[1]
         path_description_button = msg.buttons[2]
         reminder_button = msg.buttons[3]
@@ -393,16 +394,23 @@ class CabotUIManager(NavigationInterface, object):
 
 
         # handle events from group tour project
-        if event.subtype == 'yx_left_click':
+        if event.subtype == 'yx_right_click':
             if (self.nearby_detection.guide_description != "" or self.nearby_detection.people_description != ""): 
                 self._interface.test_speaker(self.nearby_detection.guide_description + self.nearby_detection.people_description)
+                # Reset the descriptions after reading
+                self.nearby_detection.guide_description = ""
+                self.nearby_detection.people_description = ""
             else:
                 self._interface.test_speaker("No people detected nearby")
-            
             return 
 
-        if event.subtype == 'yx_right_click':
-            self._interface.test_speaker("Following the guide. To stop the robot, press the right button again.")
+        if event.subtype == 'yx_up_click':
+            if self.tour_following_mode == "STOP":
+                self._interface.test_speaker("Following the guide. To stop the robot, press the up button again.")
+                self.tour_following_mode = "FOLLOWING"
+            else:
+                self._interface.test_speaker("Stopped following the guide. To follow the guide, press the up button again.")
+                self.tour_following_mode = "STOP"
             return 
 
         if event.subtype == 'yx_down_click':
@@ -940,23 +948,31 @@ class EventMapper3(object):
             if event.buttons == cabot_common.button.BUTTON_RIGHT:
                 return NavigationEvent(subtype="yx_right_click")
             if event.buttons == cabot_common.button.BUTTON_LEFT:
-                return NavigationEvent(subtype="yx_left_click")
-            if event.buttons == cabot_common.button.BUTTON_UP:
                 return NavigationEvent(subtype="description_surround", param=2) #param: description_length 
+                # return NavigationEvent(subtype="yx_left_click")
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return NavigationEvent(subtype="yx_up_click")
+                # return NavigationEvent(subtype="description_surround", param=2) #param: description_length 
             if event.buttons == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="yx_down_click")
             if event.buttons == cabot_common.button.BUTTON_CENTER:
                 return NavigationEvent(subtype="yx_center_click")
 
         if event.type == HoldDownEvent.TYPE:
-            if event.holddown == cabot_common.button.BUTTON_LEFT:
-                return NavigationEvent(subtype="yx_left_hold")
-            if event.holddown == cabot_common.button.BUTTON_RIGHT:
-                return NavigationEvent(subtype="yx_right_hold")
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 3:
+                return NavigationEvent(subtype="resume")
+            if event.holddown == cabot_common.button.BUTTON_RIGHT and event.duration == 3:
+                return NavigationEvent(subtype="idle")
+
+            # if event.holddown == cabot_common.button.BUTTON_LEFT:
+            #     return NavigationEvent(subtype="yx_left_hold")
+            # if event.holddown == cabot_common.button.BUTTON_RIGHT:
+            #     return NavigationEvent(subtype="yx_right_hold")
             if event.holddown == cabot_common.button.BUTTON_DOWN:
                 return NavigationEvent(subtype="yx_down_hold")
             if event.holddown == cabot_common.button.BUTTON_UP:
-                return NavigationEvent(subtype="description_surround", param=2) #param: description_length 
+                return NavigationEvent(subtype="yx_up_hold")
+                # return NavigationEvent(subtype="description_surround", param=2) #param: description_length 
         return None
 
 
