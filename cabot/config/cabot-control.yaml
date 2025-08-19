@@ -88,7 +88,7 @@ cabot:
       gaussian:
         position_variance: 0.52
         velocity_variance: 0.52
-      min_pos_gain: 0.1
+      min_pos_gain: 0.3
       min_vel_gain: 0.1
       max_speed: 2.75
 
