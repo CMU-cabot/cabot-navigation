@@ -68,6 +68,7 @@ from sensor_msgs.msg import Joy
 from datetime import datetime
 
 from cabot_ui.nearby_detection import NearbyDetection
+import json
 
 class CabotUIManager(NavigationInterface, object):
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
@@ -107,6 +108,8 @@ class CabotUIManager(NavigationInterface, object):
         self.last_time_teleop_speak = datetime.now()
         self.nearby_detection = NearbyDetection(desc_node)
         self.tour_following_mode = "STOP"  # or "FOLLOWING"
+        self._node.create_subscription(std_msgs.msg.String, "/group_tour", self.guide_callback, 10, callback_group=MutuallyExclusiveCallbackGroup()) 
+        self.last_away_reminder = datetime.now()
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -171,6 +174,13 @@ class CabotUIManager(NavigationInterface, object):
         if reminder_button == 1:
             self._interface.test_speaker("The guide is walking away. You can press the up button to follow the guide.")
             self.last_time_teleop_speak = datetime.now()
+
+    def guide_callback(self, msg):
+        time_diff = datetime.now() - self.last_away_reminder
+
+        if (msg.data == "Away" and time_diff.total_seconds() > 10 and self.tour_following_mode == "STOP"):
+            self._interface.test_speaker("The guide is away. You can press the Up button to follow the guide.")
+            self.last_away_reminder = datetime.now()
 
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
@@ -395,21 +405,23 @@ class CabotUIManager(NavigationInterface, object):
 
         # handle events from group tour project
         if event.subtype == 'yx_right_click':
-            if (self.nearby_detection.guide_description != "" or self.nearby_detection.people_description != ""): 
-                self._interface.test_speaker(self.nearby_detection.guide_description + self.nearby_detection.people_description)
-                # Reset the descriptions after reading
-                self.nearby_detection.guide_description = ""
-                self.nearby_detection.people_description = ""
-            else:
-                self._interface.test_speaker("No people detected nearby")
-            return 
+            try:
+                people_desc = self.nearby_detection.get_nearby_description()
+                if (people_desc != ""): 
+                    self._interface.test_speaker(people_desc)
+                else:
+                    self._interface.test_speaker("No people detected nearby")
+                return 
+            except Exception as e:
+                self._logger.error(f"Failed to get nearby description: {e}")
+                return
 
         if event.subtype == 'yx_up_click':
             if self.tour_following_mode == "STOP":
                 self._interface.test_speaker("Following the guide. To stop the robot, press the up button again.")
                 self.tour_following_mode = "FOLLOWING"
             else:
-                self._interface.test_speaker("Stopped following the guide. To follow the guide, press the up button again.")
+                self._interface.test_speaker("Stopped. To follow the guide, press the up button again.")
                 self.tour_following_mode = "STOP"
             return 
 
@@ -442,7 +454,8 @@ class CabotUIManager(NavigationInterface, object):
             return 
         
         if event.subtype == 'guide_response':
-            self._interface.test_speaker("The guide is coming to you")
+            prompt_data = json.loads(event.param)
+            self._interface.test_speaker(prompt_data['guide_response'])
 
         # operations indepent from the navigation state
         if event.subtype == "language":
