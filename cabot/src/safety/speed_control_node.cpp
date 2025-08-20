@@ -41,6 +41,7 @@ public:
     mapSpeedInput_("/map_speed"),
     userSpeedLimit_(2.0),
     mapSpeedLimit_(2.0),
+    completeStopThreshold_(0.005),
     targetRate_(40),
     currentLinear_(0.0),
     currentAngular_(0.0),
@@ -109,6 +110,9 @@ private:
       }
       if (completeStop_.size() <= index) {
         completeStop_.push_back(false);
+      }
+      while (filteredSpeed_.size() < index) {
+        filteredSpeed_.push_back(0);
       }
 
       enabled_.push_back(true);  // enabled at initial moment
@@ -192,9 +196,19 @@ private:
           l = -limit;
         }
 
-        // if limit equals zero and complete stop is true then angular is also zero
-        if (limit == 0 && completeStop_[index]) {
-          r = 0;
+        filteredSpeed_[index] = filteredSpeed_[index] * 0.9 + limit * 0.1;
+        if (limit == 0) {
+          // if limit equals zero and complete stop is true then angular is also zero
+          if (limit == 0) {
+            if (completeStop_[index]) {
+              r = 0;
+            } else {
+              RCLCPP_INFO(get_logger(), "filteredSpeed_[%ld]=%f < completeStopThreshold_=%f", index, filteredSpeed_[index], completeStopThreshold_);
+              if (completeStopThreshold_ < filteredSpeed_[index]) {
+                r = 0;
+              }
+            }
+          }
         }
       }
     } else {
@@ -257,7 +271,9 @@ private:
   std::vector<double> speedLimit_;
   std::vector<rclcpp::Time> callbackTime_;
   std::vector<double> speedTimeOut_;
+  std::vector<double> filteredSpeed_;
   std::vector<bool> completeStop_;
+  double completeStopThreshold_;
   std::vector<bool> enabled_;
   std::vector<bool> configurable_;
   std::vector<rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr> configureServices_;

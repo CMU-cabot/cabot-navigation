@@ -481,7 +481,8 @@ private:
         min_path_dist = dist;
       }
     }
-    RCLCPP_INFO(get_logger(), "PeopleSpeedControl robot_is_on_the_path=%s, min_path_dist=%.2f",
+    RCLCPP_INFO(
+      get_logger(), "PeopleSpeedControl robot_is_on_the_path=%s, min_path_dist=%.2f",
       robot_is_on_the_path ? "true" : "false", min_path_dist);
 
     // Social Distance
@@ -638,8 +639,11 @@ private:
     }
 
     publishLimits(social_distance_speed_limit, pure_velocity_obstacle_speed_limit, combined_speed_limit, people_speed_limit);
-    RCLCPP_INFO(get_logger(), "PeopleSpeedControl use_velocity_obstacle_=%s, social_distance_speed_limit=%.2f, pure_velocity_obstacle_speed_limit=%.2f, combined_speed_limit=%.2f, people_speed_limit=%.2f",
-      use_velocity_obstacle_ ? "true" : "false", social_distance_speed_limit, pure_velocity_obstacle_speed_limit, combined_speed_limit, people_speed_limit);
+    RCLCPP_INFO(
+      get_logger(), "PeopleSpeedControl use_velocity_obstacle_=%s, social_distance_speed_limit=%.2f, "
+      "pure_velocity_obstacle_speed_limit=%.2f, combined_speed_limit=%.2f, people_speed_limit=%.2f",
+      use_velocity_obstacle_ ? "true" : "false", social_distance_speed_limit,
+      pure_velocity_obstacle_speed_limit, combined_speed_limit, people_speed_limit);
 
     if (logger_level <= RCUTILS_LOG_SEVERITY_DEBUG) {
       addSpeedLimitMarker(map_to_robot_tf2, people_speed_limit, min_radius, max_radius);
