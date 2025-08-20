@@ -125,9 +125,9 @@ nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const 
     util_logger_, "start_yaw = %.2f, look_ahead_yaw = %.2f, normalized_diff = %.2f",
     start_yaw, look_ahead_yaw, normalized_diff(start_yaw, look_ahead_yaw));
   if (path.poses.size() > 10 && fabs(normalized_diff(start_yaw, look_ahead_yaw)) < M_PI / 6) {
-    auto last_pose = *minit;
+    auto last_pose = minpose;
     auto dist = 0.0;
-    for (auto next = minit; next < path.poses.end() && next < minit + look_ahead_count; next++) {
+    for (auto next = minit + 1; next < path.poses.end() && next < minit + look_ahead_count; next++) {
       auto next_pose = *next;
       auto dx = last_pose.pose.position.x - next_pose.pose.position.x;
       auto dy = last_pose.pose.position.y - next_pose.pose.position.y;
