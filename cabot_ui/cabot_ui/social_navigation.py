@@ -23,7 +23,7 @@ import rclpy.node
 import rclpy.time
 import rclpy.clock
 from rclpy.duration import Duration
-from cabot_ui.turn_detector import Turn
+# from cabot_ui.turn_detector import Turn
 from people_msgs.msg import People
 import tf2_geometry_msgs  # noqa: to register class for transform
 from geometry_msgs.msg import PointStamped
@@ -188,6 +188,8 @@ class SocialNavigation(object):
             - Person (People)      - always say PERSON_AHEAD since 2024.03.28
             - Obstacle (Obstacles) - always play sound       since 2024.03.28
         '''
+        # disable message when avoiding something
+        '''
         if self._turn is not None and self._turn.turn_type == Turn.Type.Avoiding:
             self._logger.info(F"social navigation update turn={self._turn}")
             self._logger.info(F"avoiding turn, people count = {self._people_count}, "
@@ -205,6 +207,7 @@ class SocialNavigation(object):
                 self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID, 10)
                 # self._set_sound(SNMessage.Code.AVOIDING_OBSTACLES, SNMessage.Category.AVOID)
             self._turn = None
+        '''
 
         if self._stop_reason is not None:
             self._logger.info(F"social navigation stop_reason {self._stop_reason}")
