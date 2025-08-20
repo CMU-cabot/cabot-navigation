@@ -59,15 +59,18 @@ public:
   double max_speed_;
   double min_speed_;
   double max_acc_;
+  double delay_;
   double urgent_max_acc_;
-  double limit_factor_;
-  double min_distance_;
+  // double min_distance_;
+  double center_min_distance_;
+  double side_min_distance_;
   double front_region_width_;
   double blind_spot_min_range_;
 
   nav_msgs::msg::Odometry last_odom_;
   sensor_msgs::msg::LaserScan last_scan_;
   double last_min_x_distance_;
+  double distance_noise_threshold_;
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr footprint_sub_;
@@ -92,14 +95,16 @@ public:
     check_front_obstacle_(true),
     speed_limit_in_the_last_frame_(false),
     max_speed_(1.0),
-    min_speed_(0.1),
+    min_speed_(0.0),
     max_acc_(0.6),
+    delay_(0.2),
     urgent_max_acc_(1.2),
-    limit_factor_(3.0),
-    min_distance_(0.5),
+    center_min_distance_(1.25),
+    side_min_distance_(0.50),
     front_region_width_(0.50),
     blind_spot_min_range_(0.25),
-    last_min_x_distance_(100)
+    last_min_x_distance_(100),
+    distance_noise_threshold_(0.03)
   {
     RCLCPP_INFO(get_logger(), "LiDARSpeedControlNodeClass Constructor");
     tfBuffer = new tf2_ros::Buffer(get_clock());
@@ -135,8 +140,11 @@ private:
       if (param.get_name() == "check_blind_space") {
         check_blind_space_ = param.as_bool();
       }
-      if (param.get_name() == "min_distance") {
-        min_distance_ = param.as_double();
+      if (param.get_name() == "center_min_distance") {
+        center_min_distance_ = param.as_double();
+      }
+      if (param.get_name() == "side_min_distance") {
+        side_min_distance_ = param.as_double();
       }
     }
     results->successful = true;
@@ -174,9 +182,10 @@ private:
     max_speed_ = declare_parameter("max_speed", max_speed_);
     min_speed_ = declare_parameter("min_speed", min_speed_);
     max_acc_ = declare_parameter("max_acc", max_acc_);
-    limit_factor_ = declare_parameter("limit_factor", limit_factor_);
-    min_distance_ = declare_parameter("min_distance", min_distance_);
+    center_min_distance_ = declare_parameter("center_min_distance", center_min_distance_);
+    side_min_distance_ = declare_parameter("side_min_distance", side_min_distance_);
     blind_spot_min_range_ = declare_parameter("blind_spot_min_range", blind_spot_min_range_);
+    distance_noise_threshold_ = declare_parameter("distance_noise_threshold", distance_noise_threshold_);
 
     RCLCPP_INFO(
       get_logger(), "LiDARSpeedControl with check_blind_space=%s, check_front_obstacle=%s, max_speed=%.2f",
@@ -251,24 +260,40 @@ private:
 
     if (check_front_obstacle_) {  // Check front obstacle (mainly for avoinding from speeding up near the wall
                                   // get some points in front of the robot
-      const double rect_height = max_speed_ * limit_factor_;
-      Point region_ur_point(min_distance_ + rect_height, front_region_width_ / 2.0);
-      Point region_ul_point(min_distance_ + rect_height, -front_region_width_ / 2.0);
+      auto max_v = [](double D, double A, double d)
+        {
+          D = std::max(0.0, D);
+          return (-2 * A * d + sqrt(4 * A * A * d * d + 8 * A * D)) / 2;
+        };
+      auto max_D = [](double v, double A, double d)
+        {
+          return ((v + A * d) * (v + A * d) - A * A * d * d) / 2 / A;
+        };
+
+      const double rect_height = max_D(max_speed_, max_acc_, delay_);
+
+      Point region_ur_point(side_min_distance_ + rect_height, front_region_width_ / 2.0);
+      Point region_uc_point(center_min_distance_ + rect_height, 0.0);
+      Point region_ul_point(side_min_distance_ + rect_height, -front_region_width_ / 2.0);
       Point region_lr_point(0.0, front_region_width_ / 2.0);
       Point region_ll_point(0.0, -front_region_width_ / 2.0);
 
       region_ur_point.transform(map_to_robot_tf2);
+      region_uc_point.transform(map_to_robot_tf2);
       region_ul_point.transform(map_to_robot_tf2);
       region_lr_point.transform(map_to_robot_tf2);
       region_ll_point.transform(map_to_robot_tf2);
 
+      std::array<Point, 3> front_check_region_0 = {region_ur_point, region_uc_point, region_ul_point};
       std::array<Point, 3> front_check_region_1 = {region_ur_point, region_ul_point, region_ll_point};
       std::array<Point, 3> front_check_region_2 = {region_ll_point, region_lr_point, region_ur_point};
 
+      CaBotSafety::add_triangle(get_clock()->now(), front_check_region_0, 1.0, 0.0, 0.0, 0.0, 0.6);
       CaBotSafety::add_triangle(get_clock()->now(), front_check_region_1, 1.0, 0.0, 0.0, 0.0, 0.6);
       CaBotSafety::add_triangle(get_clock()->now(), front_check_region_2, 1.0, 0.0, 0.0, 0.0, 0.6);
 
-      double min_x_distance = 100;
+      double min_limit = 100;
+      Point min_point;
       for (uint64_t i = 0; i < input->ranges.size(); i++) {
         double angle = input->angle_min + input->angle_increment * i;
         double range = input->ranges[i];
@@ -286,28 +311,38 @@ private:
 
         // Check if the point is in the front region
         if (point_in_robot_frame.x > 0.0 && fabs(point_in_robot_frame.y) < front_region_width_ / 2.0) {
-          double local_speed_limit = (point_in_robot_frame.x - min_distance_) / limit_factor_;
+          double r = fabs(point_in_robot_frame.y) / (front_region_width_ / 2.0);
+          double min_distance = r * side_min_distance_ + (1 - r) * center_min_distance_;
+          double local_speed_limit = max_v(point_in_robot_frame.x - min_distance, max_acc_, delay_);
           if (local_speed_limit < max_speed_) {
             CaBotSafety::add_point(get_clock()->now(), point_in_map_frame, 0.2, 1, 1, 0, 1);
           }
 
-          if (point_in_robot_frame.x < min_x_distance) {
-            min_x_distance = point_in_robot_frame.x;
+          if (local_speed_limit < min_limit) {
+            min_point = point_in_robot_frame;
+            min_limit = local_speed_limit;
           }
         }
       }
       // calculate the speed
-      double temp_limit = std::min(max_speed_, std::max(min_speed_, (min_x_distance - min_distance_) / limit_factor_));
+      double r = fabs(min_point.y) / (front_region_width_ / 2.0);
+      double min_distance = r * side_min_distance_ + (1 - r) * center_min_distance_;
+      double temp_limit = std::min(max_speed_, std::max(min_speed_, max_v(min_point.x - min_distance, max_acc_, delay_)));
 
       RCLCPP_INFO(
-        get_logger(), "limit by front fobstacle (%.2f), temp_limit=%.2f, last_min_x_distance_=%.2f, "
-        "min_x_distance=%.2f, speed_limit_in_the_last_frame_=%s",
-        speed_limit, temp_limit, last_min_x_distance_, min_x_distance, speed_limit_in_the_last_frame_ ? "true" : "false");
+        get_logger(), "limit by front fobstacle (%.2f), temp_limit=%.2f, min_distance_=%.2f, r=%.2f"
+        "min_point=(%.2f, %.2f), speed_limit_in_the_last_frame_=%s",
+        speed_limit, temp_limit, min_distance, r, min_point.x, min_point.y, speed_limit_in_the_last_frame_ ? "true" : "false");
+      speed_limit = temp_limit;
+
+      /*
       if (temp_limit < max_speed_) {
+
         if (speed_limit_in_the_last_frame_) {
-          if (last_min_x_distance_ < min_x_distance) {
+          if (last_min_x_distance_ + distance_noise_threshold_ < min_point.x) {
             // wait for the next frame, because object may be relatively moving away
             // speed_limit = temp_limit;
+            speed_limit = std::min(max_speed_, last_odom_.twist.twist.linear.x + max_acc_ * frame_period);
           } else {
             // critical
             speed_limit = std::max(temp_limit, last_odom_.twist.twist.linear.x - urgent_max_acc_ * frame_period);
@@ -316,11 +351,12 @@ private:
           // noop, wait for the next frame
         }
         speed_limit_in_the_last_frame_ = true;
-        last_min_x_distance_ = min_x_distance;
+        last_min_x_distance_ = min_point.x;
       } else {
         speed_limit_in_the_last_frame_ = false;
         last_min_x_distance_ = 100;
       }
+      */
     }
 
     if (check_blind_space_) {  // Check blind space
@@ -450,7 +486,6 @@ private:
     }
     const auto & p_x = msg->points[0].x;
     const auto & p_y = msg->points[0].y;
-
     front_region_width_ = 2.0 * std::hypot(p_x, p_y);
   }
 
