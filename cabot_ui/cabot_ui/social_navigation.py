@@ -255,7 +255,7 @@ class SocialNavigation(object):
         now = self._node.get_clock().now()
         self._logger.info(F"set_message {code} {category} {priority} {self._last_message} {now - self._last_message.time}")
         if (self._last_message.priority < priority and self._last_message.category != category) or \
-           (now - self._last_message.time) > Duration(seconds=25.0):
+           (now - self._last_message.time) > Duration(seconds=5.0):
             self._message.code = code
             self._message.category = category
             self._message.priority = priority
@@ -265,7 +265,7 @@ class SocialNavigation(object):
         self._logger.info(F"set_sound {code} {category} {priority}")
         now = self._node.get_clock().now()
         if (self._last_sound.priority < priority and self._last_sound.category != category) or \
-           (now - self._last_sound.time) > Duration(seconds=25.0):
+           (now - self._last_sound.time) > Duration(seconds=5.0):
             self._sound.code = code
             self._sound.category = category
             self._sound.priority = priority
