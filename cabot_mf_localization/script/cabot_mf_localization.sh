@@ -506,6 +506,9 @@ return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
           use_sim_time:=$gazebo_bool \
           grid_resolution:=${MAPPING_RESOLUTION} \
           configuration_directory:=$configuration_directory_tmp \
+          save_pose:=true \
+          save_trajectory:=true \
+          interpolate_samples_by_trajectory:=true \
           bag_filename:=$bag_filename"
     if [ $cabot_model != "" ]; then
         cmd="$cmd cabot_model:=$cabot_model"
@@ -520,11 +523,8 @@ return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
               $work_dir/${bag_filename}.cartographer_2d_mapping_gnss.lua
 
         cmd="$cmd \
-            save_pose:=true \
-            save_trajectory:=true \
             fix_topic:=$fix_filtered_topic \
             configuration_basename:=cartographer_2d_mapping_gnss.lua \
-            interpolate_samples_by_trajectory:=true \
             mapping_use_gnss:=true \
             "
     fi
