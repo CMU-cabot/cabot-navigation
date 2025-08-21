@@ -113,6 +113,10 @@ class AltitudeFloorEstimatorResult:
     height_vel_est: float
     current_state: int
     floor_change_event: int
+    # debug
+    height_CW: float
+    height_HW: float
+    last_stable_height: float
 
 
 class AltitudeFloorEstimator:
@@ -146,6 +150,7 @@ class AltitudeFloorEstimator:
         self.last_floor_est = floor_est
 
         self.last_state = 0  # no motion
+        self.last_stable_height = None
 
         self.floor_array = None
         self.height_array = None
@@ -202,7 +207,11 @@ class AltitudeFloorEstimator:
             self.time_queue.pop(0)
             self.height_queue.pop(0)
         else:  # return if not ready
-            return AltitudeFloorEstimatorResult(ref_height, floor_est, height_est, floor_vel_est, height_vel_est, current_state, floor_change_event)
+            return AltitudeFloorEstimatorResult(ref_height, floor_est, height_est, floor_vel_est, height_vel_est, current_state, floor_change_event,
+                                                height_CW=None,
+                                                height_HW=None,
+                                                last_stable_height=None,
+                                                )
 
         time_CW_window = self.time_queue[self._HW:]
         height_CW_window = self.height_queue[self._HW:]
@@ -269,7 +278,11 @@ class AltitudeFloorEstimator:
         self.last_state = current_state
         self.last_floor_est = floor_est
 
-        return AltitudeFloorEstimatorResult(ref_height, floor_est, height_est, floor_vel_est, height_vel_est, current_state, floor_change_event)
+        return AltitudeFloorEstimatorResult(ref_height, floor_est, height_est, floor_vel_est, height_vel_est, current_state, floor_change_event,
+                                            height_CW=height_CW,
+                                            height_HW=height_HW,
+                                            last_stable_height=self.last_stable_height,
+                                            )
 
     def is_height_changed(self):
         if self.last_state == 0:  # no motion
