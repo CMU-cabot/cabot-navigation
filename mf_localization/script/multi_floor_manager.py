@@ -789,6 +789,7 @@ class MultiFloorManager:
 
             # reset altitude_floor_estimator in floor initialization process
             self.altitude_floor_estimator.reset(floor_est=self.floor)
+            self.latest_floor_estimation_result = None
 
             # set current_frame and publish it in the setter
             self.current_frame = frame_id
@@ -911,17 +912,20 @@ class MultiFloorManager:
 
         # log floor change event
         if floor_change_event is not None:
+            self.logger.info(F"pressure_callback: altitude_floor_estimator result = {result}")
             self.logger.info(F"pressure_callback: floor_change_event (floor_est={target_floor}) detected. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
-            self.latest_floor_estimation_result = result  # store floor change event to prepare for service call failure
         else:
             if self.latest_floor_estimation_result is not None:
-                target_floor = self.latest_floor_estimation_result.floor_est
-                floor_change_event = self.latest_floor_estimation_result.floor_change_event
-                self.logger.info(F"pressure_callback: floor_change_event was not detected, but latest_floor_change_event was found. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
+                result = self.latest_floor_estimation_result
+                target_floor = result.floor_est
+                floor_change_event = result.floor_change_event
+                self.logger.info(F"pressure_callback: floor_change_event was not detected, but latest_floor_change_event (floor_est={target_floor}) was found. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
 
         if self.floor is not None:
             if self.floor != target_floor \
                     and (floor_change_event is not None):
+                # store floor change event to prepare for trajectory service call failure
+                self.latest_floor_estimation_result = result
 
                 # detect area in target_floor
                 x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(target_floor) * self.area_floor_const]]  # [x,y,floor]
@@ -970,6 +974,11 @@ class MultiFloorManager:
                 # release floor change event after restart floor success
                 if status_code == StatusCode.OK:
                     self.latest_floor_estimation_result = None
+        else:
+            if self.latest_floor_estimation_result is not None:
+                # release latest floor change event when it is unnecessary to stop/start trajectories.
+                self.latest_floor_estimation_result = None
+                self.logger.info("pressure_callback: cleared latest_floor_change_event")
 
     def beacons_callback(self, message):
         self.valid_beacon = True
@@ -1093,6 +1102,7 @@ class MultiFloorManager:
 
             # reset altitude_floor_estimator in floor initialization process
             self.altitude_floor_estimator.reset(floor_est=floor)
+            self.latest_floor_estimation_result = None
 
         # floor change
         elif ((self.altitude_manager.is_height_changed() or not self.pressure_available) and self.floor != floor):
@@ -1409,6 +1419,7 @@ class MultiFloorManager:
 
         self.floor_queue = []
         self.altitude_floor_estimator.reset()
+        self.latest_floor_estimation_result = None
 
         self.spin_count = 0
         self.prev_spin_count = None
