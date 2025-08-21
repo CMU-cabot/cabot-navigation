@@ -180,7 +180,7 @@ class Description:
             self._requesting_lock.release()
             return None
 
-        self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
+        self._logger.info(F"Request Description with images 1 at {global_position} to {API_URL}")
         image_data_list = []
         distance_to_travel = 100
         if self.last_plan_distance:
@@ -288,6 +288,13 @@ class Description:
                 self._logger.debug("Unexpected mode: surround, {self.surround_enabled}")
                 self._requesting_lock.release()
                 return None
+        elif mode == "nearby_exhibit":
+            if self.surround_enabled:
+                API_URL = F"{self.host}/{Description.DESCRIPTION_API}"
+            else:
+                self._logger.debug("Unexpected mode: nearby_exhibit, {self.surround_enabled}")
+                self._requesting_lock.release()
+                return None
         else:
             self._logger.error(F"Undefined mode: {mode}")
             self._requesting_lock.release()
@@ -298,7 +305,7 @@ class Description:
             self._requesting_lock.release()
             return None
 
-        self._logger.info(F"Request Description with images at {global_position} to {API_URL}")
+        self._logger.info(F"Request Description with images 2 at {global_position} to {API_URL}")
         image_data_list = []
         distance_to_travel = 100
         if self.last_plan_distance:
@@ -343,14 +350,42 @@ class Description:
                 'x-api-key': self.api_key
             }
             json_data = json.dumps(image_data_list)
-            self._logger.debug(F"Request data: {image_data_list}")
+            self._logger.info(F"Request data: {len(image_data_list)}")
             lat = global_position.lat
             lng = global_position.lng
             rotation = global_position.r
             max_distance = self.max_distance
-            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, current_floor, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
+
+            if mode == "nearby_exhibit":
+                threading.Thread(target=self.get_request_nearby_exhibit, args=(API_URL, headers, lat, lng, 4, rotation, max_distance, lang, callback), daemon=True).start()
+                return
+
+            threading.Thread(target=self.post_request, args=(API_URL, headers, json_data, lat, lng, 4, rotation, max_distance, lang, length_index, distance_to_travel, callback)).start()
         except requests.exceptions.Timeout:
             self._logger.error("Request timed out. Skipping description processing.")
         except Exception as e:
             self._logger.error(f'Error sending HTTP request: {e}')
         return True
+
+    def get_request_nearby_exhibit(self, API_URL, headers, lat, lng, floor, rotation, max_distance, lang, callback):
+        params = {
+            "lat": float(lat),
+            "lng": float(lng),
+            "floor": 4,
+            "rotation": float(rotation),
+            "max_distance": int(max_distance),
+            "lang": lang,  # ensure no quotes like 'ja'
+        }
+        try:
+            resp = requests.get(API_URL, headers=headers, params=params, timeout=self.timeout)
+            resp.raise_for_status()  # raises on 4xx/5xx
+            data = resp.json()
+            callback(data)
+        except requests.exceptions.RequestException as e:
+            self._logger.error(f"Request nearby exhibit failed: {e}")
+            callback(None)
+        finally:
+            # make sure we always release, even on error
+            self._requesting_lock.release()
+
+

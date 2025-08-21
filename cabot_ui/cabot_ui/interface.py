@@ -497,6 +497,10 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "requesting_describe_surround_stop_reason", "")
         self.speak(i18n.localized_string("REQUESTING_DESCRIBE_FORWARD"), priority=SpeechPriority.MODERATE)
 
+    def request_nearby_exhibit_description(self):
+        self._activity_log("cabot/interface", "request_nearby_exhibit_description", "")
+        self.speak("Nearby exhibits", priority=SpeechPriority.MODERATE)
+
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
         self.speak(description, priority=SpeechPriority.MODERATE)

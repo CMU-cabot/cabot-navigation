@@ -107,7 +107,7 @@ class CabotUIManager(NavigationInterface, object):
         self._node.create_subscription(Joy, "/joy", self.remote_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.last_time_teleop_speak = datetime.now()
         self.nearby_detection = NearbyDetection(desc_node)
-        self.tour_following_mode = "STOP"  # or "FOLLOWING"
+        self.tour_following_mode = "FOLLOWING"  # "FOLLOWING" or "STOP"
         self._node.create_subscription(std_msgs.msg.String, "/group_tour", self.guide_callback, 10, callback_group=MutuallyExclusiveCallbackGroup()) 
         self.last_away_reminder = datetime.now()
 
@@ -414,13 +414,14 @@ class CabotUIManager(NavigationInterface, object):
                 return
 
         if event.subtype == 'yx_up_click':
-            if self.tour_following_mode == "STOP":
-                self._interface.test_speaker("ガイド追従中。上ボタンで停止。") #"Following the guide. To stop the robot, press the up button again."
-                self.tour_following_mode = "FOLLOWING"
-            else:
+            self._interface.test_speaker("stop speech")
+            # if self.tour_following_mode == "STOP":
+            #     self._interface.test_speaker("ガイド追従中。上ボタンで停止。") #"Following the guide. To stop the robot, press the up button again."
+            #     self.tour_following_mode = "FOLLOWING"
+            # else:
                 
-                self._interface.test_speaker("停止しました。上ボタンで追従。") #"Stopped. To follow the guide, press the up button again."
-                self.tour_following_mode = "STOP"
+            #     self._interface.test_speaker("停止しました。上ボタンで追従。") #"Stopped. To follow the guide, press the up button again."
+            #     self.tour_following_mode = "STOP"
             return 
 
         if event.subtype == 'yx_down_click':
@@ -432,7 +433,7 @@ class CabotUIManager(NavigationInterface, object):
             return 
 
         if event.subtype == 'yx_left_hold':
-            self._interface.test_speaker("left button hold")
+            # self._interface.test_speaker("stop speech")
             return 
 
         if event.subtype == 'yx_right_hold':
@@ -596,11 +597,34 @@ class CabotUIManager(NavigationInterface, object):
             except:  # noqa: #722
                 self._logger.error(traceback.format_exc())
 
+        def request_nearby_exhibit_description():
+            self._logger.info(F"description - Request nearby exhibit description (Duration: {event.param})")
+            try:
+                if self._interface.last_pose:
+                    length_index = event.param
+                    gp = self._interface.last_pose['global_position']
+                    cf = self._interface.last_pose['current_floor']
+                    if self._description.request_description_with_images2(
+                            gp,
+                            cf,
+                            "nearby_exhibit",
+                            self._interface.lang,
+                            length_index=length_index,
+                            callback=description_callback):
+                        self._interface.request_nearby_exhibit_description()
+                    else:
+                        self._interface.requesting_please_wait()
+            except:  # noqa: #722
+                self._logger.error(traceback.format_exc())
+
         if event.subtype == "description_stop_reason" and self._description.enabled:
             request_stop_reason_description()
 
         if event.subtype == "description_surround" and self._description.enabled:
             request_surround_description()
+        
+        if event.subtype == "description_nearby_exhibit" and self._description.enabled:
+            request_nearby_exhibit_description()
 
         if event.subtype == "speaker_enable":
             self._interface.enable_speaker(event.param)
@@ -980,9 +1004,9 @@ class EventMapper3(object):
             if event.holddown == cabot_common.button.BUTTON_UP and event.duration == 3:
                 return NavigationEvent(subtype="idle")
 
-            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 2:
-                return NavigationEvent(subtype="yx_left_hold")
-            if event.holddown == cabot_common.button.BUTTON_RIGHT and event.duration == 2:
+            if event.holddown == cabot_common.button.BUTTON_LEFT and event.duration == 1:
+                return NavigationEvent(subtype="description_nearby_exhibit", param=1)
+            if event.holddown == cabot_common.button.BUTTON_RIGHT and event.duration == 1:
                 return NavigationEvent(subtype="yx_right_hold")
             # if event.holddown == cabot_common.button.BUTTON_DOWN:
             #     return NavigationEvent(subtype="yx_down_hold")
