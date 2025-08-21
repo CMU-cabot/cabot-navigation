@@ -78,7 +78,7 @@ class NearbyDetection:
 
         if (len(msg.people) > 0):
             self.nearby_people = msg.people
-            self.__logger.info(f"Received people data: {msg}")
+            # self.__logger.info(f"Received people data: {msg}")
             self.last_update_people = datetime.now()
         
 
@@ -87,7 +87,7 @@ class NearbyDetection:
 
 
     def cabot_pose_callback(self, msg):
-        self.__logger.info(f"Received cabot pose data: {msg}")
+        # self.__logger.info(f"Received cabot pose data: {msg}")
         self.cabot_pose = msg.pose
 
         # stamp=builtin_interfaces.msg.Time(sec=1755498097, nanosec=127273477), frame_id='map_global'), 
@@ -102,7 +102,7 @@ class NearbyDetection:
         # time diff in seconds
         if (time_diff_guide > 3 or len(self.nearby_objects) == 0): 
             self.__logger.info(f"{time_diff_guide}, No tour guide is nearby or the data is outdated.")
-            return "The tour guide is not detected. "
+            return "ガイドなし。" #No guide is detected.
 
         guide_description = ""
 
@@ -111,7 +111,7 @@ class NearbyDetection:
         direction = self.nearby_objects[0].direction
         
         # not enbale "camera assistance" on the ios app as it's not for moving objects
-        orientation_description= "not facing you."
+        orientation_description= "" #"not facing you."
         if (direction.z != 0):
             # the tour guide is facing the suitcase 
             # x: 1--> 90 deg; 
@@ -130,9 +130,12 @@ class NearbyDetection:
                 clock = 2
             else:
                 clock = 3
-            orientation_description = f"facing you at {clock} o'clock."
+            orientation_description = f"ガイド{clock}時方向" #f"{clock}時の方向でこちらを向いており" #f"facing you at {clock} o'clock."
 
-        guide_description = f"The tour guide is {orientation_description} and is {distance:.2f} meters away. "
+        if orientation_description == "":
+            guide_description = f"ガイド{distance:.2f}メートル。背向き。"
+        else:
+            guide_description = f"{orientation_description}。{distance:.2f}メートル。こちら向き。" # f"The tour guide is {orientation_description} and is {distance:.2f} meters away. "
         self.__logger.info(f"guide description: {guide_description}")
         return guide_description
 
@@ -142,9 +145,9 @@ class NearbyDetection:
         time_diff_people = (datetime.now() - self.last_update_people).total_seconds()
         if (time_diff_people > 3 or (self.nearby_people is None) or (len(self.nearby_people) == 0)):
             self.__logger.info(f"{time_diff_people}, No people are nearby or the data is outdated.")
-            return "No people are nearby."
+            return "人なし。" #"No people are nearby."
         
-        people_description = ""
+        people_description = "人なし。"
         
         # TF conversion from "map_global" to "map" frame  
         try:
@@ -157,13 +160,14 @@ class NearbyDetection:
         if len(self.nearby_people) == 1:
             person = self.nearby_people[0]
             distance = self.get_distance(person, robot_pose)
-            people_description = f"One person is {distance:.2f} meters away from the AI suitcase."
+            people_description = f"人1人。距離{distance:.2f}メートル。" # f"One person is {distance:.2f} meters away from the AI suitcase."
             
         elif (len(self.nearby_people) > 1):
-            people_description = f"{len(self.nearby_people)} people are nearby. Their distances to the AI suitcase are "
+            people_description = f"人{len(self.nearby_people)}人。距離" # f"{len(self.nearby_people)} people are nearby. Their distances to the AI suitcase are "
             for person in self.nearby_people:
                 distance = self.get_distance(person, robot_pose)
-                people_description += f"{distance:.2f} meters. "
+                people_description += f"{distance:.2f}。" # f"{distance:.2f} meters. "
+            people_description += "メートル。"
         self.__logger.info(f"people description: {people_description}")
 
         return people_description

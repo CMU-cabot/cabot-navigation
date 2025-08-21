@@ -47,9 +47,9 @@ cabot:
       # front obstacle detection
       check_front_obstacle: true
       min_speed: 0.0
-      min_distance: 1.0
+      min_distance: 0.3
       limit_factor: 1.0
-      min_distance: 1.0
+      min_distance: 0.3
 
   low_lidar_speed_control_node: # old name cabot_e_lidar_speed
     ros__parameters:
@@ -59,7 +59,7 @@ cabot:
       # front obstacle detection
       check_front_obstacle: true
       min_speed: 0.0
-      min_distance: 1.0
+      min_distance: 0.3
       limit_factor: 1.0
 
   people_speed_control_node: # old name cabot_e_people_speed:
@@ -103,21 +103,21 @@ cabot:
     ros__parameters:
       cmd_vel_input: /cabot/cmd_vel_adapter
       cmd_vel_output: /cabot/cmd_vel
-      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/low_lidar_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed', '/cabot/touch_speed_switched']
-      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
-      complete_stop: [false,false,false,false,true,true,false,true,true]
-      configurable: [true,false,false,false,false,false,false,false,false]
+      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed', '/cabot/touch_speed_switched']
+      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
+      complete_stop: [false,false,true,true,false,true,true]
+      configurable: [true, false, false,false,false,false,false]
 
   speed_control_node_touch_false:  #TODO better way
     ros__parameters:
       cmd_vel_input: /cabot/cmd_vel_adapter
       cmd_vel_output: /cabot/cmd_vel
-      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/low_lidar_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed']
-      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
-      complete_stop: [false,false,false,false,true,true,false,true,true]
-      configurable: [true,false,false,false,false,false,false,false,false]
+      speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed']
+      speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+      speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+      complete_stop: [false,false,true,true,false,true]
+      configurable: [true,false,false,false,false,false]
 
   wheelie_speed_control_node:
     ros__parameters:
