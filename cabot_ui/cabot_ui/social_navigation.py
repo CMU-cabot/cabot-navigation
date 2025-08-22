@@ -222,7 +222,8 @@ class SocialNavigation(object):
                 self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID, 7)
                 # self._set_sound(SNMessage.Code.TRYING_TO_AVOID_OBSTACLE, SNMessage.STOP, 7)
             elif code == "UNKNOWN":
-                self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.Category.STOP, 7)
+                # self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.Category.STOP, 7)
+                pass
             elif code == "NO_TOUCH":
                 self._set_message(SNMessage.Code.NOT_DETECT_TOUCH, SNMessage.Category.STOP, 7)
             self._stop_reason = None
