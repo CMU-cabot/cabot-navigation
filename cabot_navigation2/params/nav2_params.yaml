@@ -31,12 +31,12 @@ footprint_publisher:
     use_sim_time: True
     footprint_topics: ['/global_costmap/footprint', '/local_costmap/footprint', '/local/global_costmap/footprint', '/local/local_costmap/footprint']
     footprint_mode: 0 # 0 normal, 1 smallest, 3 small
-    footprint_normal: 0.45
+    footprint_normal: 0.3
     footprint_smallest: 0.20 # TBD
-    footprint_small: 0.40
+    footprint_small: 0.3
     footprint_links: ['base_footprint', 'local/base_footprint']
     offset_links: ['base_control_shift', 'local/base_control_shift']
-    offset_normal: 0.25
+    offset_normal: 0.1
     offset_smallest: 0.0
     offset_small: 0.10
 

@@ -159,20 +159,23 @@ class CabotUIManager(NavigationInterface, object):
 
         ## trigger speech from remote joystick control buttons 
         guide_arrival_button = msg.buttons[1]
-        path_description_button = msg.buttons[2]
-        reminder_button = msg.buttons[3]
-
+        heading_to_next_button = msg.buttons[0]
+        waiting_explain_button1 = msg.buttons[2]
+        waiting_explain_button2 = msg.buttons[3]
         ## notify the arrival state
-        if (guide_arrival_button == 1):
+        if (waiting_explain_button1 == 1):
             self._interface.test_speaker("狭い通路。待機中。")
             self.last_time_teleop_speak = datetime.now()
         ## describe the current blocking situation
-        if path_description_button == 1:
+        if waiting_explain_button2 == 1:
             self._interface.test_speaker("前方に人。待機中。")
             self.last_time_teleop_speak = datetime.now()
         ## heading to the next exhibition
-        if reminder_button == 1:
-            self._interface.test_speaker("次展示へ移動中。")
+        if heading_to_next_button == 1:
+            self._interface.test_speaker("次の目的地に向かっています。")
+            self.last_time_teleop_speak = datetime.now()
+        if guide_arrival_button == 1:
+            self._interface.test_speaker("目的地に到着しました。")
             self.last_time_teleop_speak = datetime.now()
 
     def guide_callback(self, msg):

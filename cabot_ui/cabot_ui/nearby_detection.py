@@ -102,7 +102,7 @@ class NearbyDetection:
         # time diff in seconds
         if (time_diff_guide > 3 or len(self.nearby_objects) == 0): 
             self.__logger.info(f"{time_diff_guide}, No tour guide is nearby or the data is outdated.")
-            return "ガイドなし。" #No guide is detected.
+            return "周囲にガイドはいません。" #No guide is detected.
 
         guide_description = ""
 
@@ -130,12 +130,12 @@ class NearbyDetection:
                 clock = 2
             else:
                 clock = 3
-            orientation_description = f"ガイド{clock}時方向" #f"{clock}時の方向でこちらを向いており" #f"facing you at {clock} o'clock."
+            orientation_description = f"ガイドは{clock}時の方向" #f"{clock}時の方向でこちらを向いており" #f"facing you at {clock} o'clock."
 
         if orientation_description == "":
-            guide_description = f"ガイド{distance:.2f}メートル。背向き。"
+            guide_description = f"ガイドは{distance:.1f}メートル先。後ろを向いてます。"
         else:
-            guide_description = f"{orientation_description}。{distance:.2f}メートル。こちら向き。" # f"The tour guide is {orientation_description} and is {distance:.2f} meters away. "
+            guide_description = f"{orientation_description}。{distance:.1f}メートル先こちらを向いてます。" # f"The tour guide is {orientation_description} and is {distance:.2f} meters away. "
         self.__logger.info(f"guide description: {guide_description}")
         return guide_description
 
@@ -145,9 +145,9 @@ class NearbyDetection:
         time_diff_people = (datetime.now() - self.last_update_people).total_seconds()
         if (time_diff_people > 3 or (self.nearby_people is None) or (len(self.nearby_people) == 0)):
             self.__logger.info(f"{time_diff_people}, No people are nearby or the data is outdated.")
-            return "人なし。" #"No people are nearby."
+            return "周囲に人はいません。" #"No people are nearby."
         
-        people_description = "人なし。"
+        people_description = "周囲に人はいません。"
         
         # TF conversion from "map_global" to "map" frame  
         try:
@@ -160,13 +160,13 @@ class NearbyDetection:
         if len(self.nearby_people) == 1:
             person = self.nearby_people[0]
             distance = self.get_distance(person, robot_pose)
-            people_description = f"人1人。距離{distance:.2f}メートル。" # f"One person is {distance:.2f} meters away from the AI suitcase."
+            people_description = f"人1人。距離{distance:.1f}メートル。" # f"One person is {distance:.2f} meters away from the AI suitcase."
             
         elif (len(self.nearby_people) > 1):
             people_description = f"人{len(self.nearby_people)}人。距離" # f"{len(self.nearby_people)} people are nearby. Their distances to the AI suitcase are "
             for person in self.nearby_people:
                 distance = self.get_distance(person, robot_pose)
-                people_description += f"{distance:.2f}。" # f"{distance:.2f} meters. "
+                people_description += f"{distance:.1f}。" # f"{distance:.2f} meters. "
             people_description += "メートル。"
         self.__logger.info(f"people description: {people_description}")
 
