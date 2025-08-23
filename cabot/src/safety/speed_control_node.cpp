@@ -26,6 +26,7 @@
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/u_int8.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 using namespace std::chrono_literals;
 
@@ -40,6 +41,7 @@ public:
     cmdVelOutput_("/cmd_vel_limit"),
     userSpeedInput_("/user_speed"),
     mapSpeedInput_("/map_speed"),
+    odomInput_("/odom"),
     need_stop_alert_(0),
     lastVibrator1Time_(0, 0, get_clock()->get_clock_type()),
     userSpeedLimit_(2.0),
@@ -141,6 +143,14 @@ private:
 
       RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
     }
+    odomInput_ = declare_parameter("odom_input", odomInput_);
+    odomSub_ = create_subscription<nav_msgs::msg::Odometry>(odomInput_, rclcpp::SystemDefaultsQoS(),
+      [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
+        double currentLinear_ = msg->twist.twist.linear.x;
+        if (currentLinear_ > 0.25) {
+          need_stop_alert_ = std::floor(currentLinear_ / 0.25);
+        }
+      });
     vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / targetRate_),
@@ -269,10 +279,6 @@ private:
     currentLinear_ = input->linear.x;
     currentAngular_ = input->angular.z;
 
-    if (currentLinear_ > 0.25) {
-      need_stop_alert_ = std::round(currentLinear_ / 0.25);
-    }
-
     lastCmdVelInput_ = get_clock()->now();
   }
 
@@ -295,6 +301,9 @@ private:
   std::vector<rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr> configureServices_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
+
+  std::string odomInput_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odomSub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
   int need_stop_alert_;
   rclcpp::Time lastVibrator1Time_;
