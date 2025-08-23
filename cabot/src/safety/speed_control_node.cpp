@@ -149,7 +149,7 @@ private:
       [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
         double currentOdomLinear = msg->twist.twist.linear.x;
         if (currentOdomLinear > 0.25 && currentLinear_ > 0) {
-          need_stop_alert_ = std::floor(currentLinear_ / 0.25);
+          need_stop_alert_ = std::floor(currentOdomLinear / 0.25);
         }
       });
     vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
@@ -247,12 +247,14 @@ private:
     geometry_msgs::msg::Twist cmd_vel;
     cmd_vel.linear.x = l;
 
-    if (l == 0 && (get_clock()->now() - lastVibrator1Time_).seconds() > 1.0 && need_stop_alert_ > 0) {
-      std_msgs::msg::UInt8 msg;
-      msg.data = need_stop_alert_ * 10;
-      vibrator1_pub_->publish(msg);
+    if (l == 0 && need_stop_alert_ > 0) {
+      if ((get_clock()->now() - lastVibrator1Time_).seconds() > 1.0) {
+        std_msgs::msg::UInt8 msg;
+        msg.data = need_stop_alert_ * 10;
+        vibrator1_pub_->publish(msg);
+        lastVibrator1Time_ = get_clock()->now();
+      }
       need_stop_alert_ = 0;
-      lastVibrator1Time_ = get_clock()->now();
     }
 
     if (currentLinear_ != 0 && l != 0) {
