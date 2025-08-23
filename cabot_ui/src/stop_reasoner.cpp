@@ -103,7 +103,7 @@ StopReasoner::StopReasoner(const std::shared_ptr<rclcpp::Node> node)
   angular_velocity_(Constant::FILTER_DURATION_SHORT),
   cmd_vel_linear_(Constant::FILTER_DURATION_SHORT),
   cmd_vel_angular_(Constant::FILTER_DURATION_SHORT),
-  people_speed_(Constant::FILTER_DURATION_LONG),
+  people_speed_(Constant::FILTER_DURATION_SHORT),
   touch_speed_(Constant::FILTER_DURATION_LONG),
   replan_reason_(Constant::FILTER_DURATION_LONG)
 {
@@ -308,15 +308,13 @@ std::tuple<double, StopReason> StopReasoner::update()
     return update();
   }
 
-  if (people_speed_.minimum(get_current_time()) >= 0) {
-    if (people_speed_.minimum(get_current_time()) < 0.9) {
-      RCLCPP_DEBUG(
-        logger_, "%.2f, people_speed minimum=%.2f, average=%.2f",
-        get_current_time().nanoseconds() / 1e9,
-        people_speed_.minimum(get_current_time()),
-        people_speed_.average(get_current_time()));
-      return std::make_tuple(duration, StopReason::THERE_ARE_PEOPLE_IN_THE_PATH);
-    }
+  if (people_speed_.minimum(get_current_time()) == 0) {
+    RCLCPP_INFO(
+      logger_, "%.2f, people_speed minimum=%.2f, average=%.2f",
+      get_current_time().nanoseconds() / 1e9,
+      people_speed_.minimum(get_current_time()),
+      people_speed_.average(get_current_time()));
+    return std::make_tuple(duration, StopReason::THERE_ARE_PEOPLE_IN_THE_PATH);
   }
 
   if (is_waiting_for_elevator_) {
@@ -329,6 +327,10 @@ std::tuple<double, StopReason> StopReasoner::update()
 
   if (replan_reason_.majority(get_current_time()) != StopReason::NONE) {
     return std::make_tuple(duration, replan_reason_.majority(get_current_time()));
+  }
+
+  if (duration < Constant::UNKNOWN_DURATION_THRESHOLD) {
+    return std::make_tuple(duration, StopReason::STOPPED_BUT_UNDER_THRESHOLD);
   }
 
   return std::make_tuple(duration, StopReason::UNKNOWN);
