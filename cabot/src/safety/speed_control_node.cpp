@@ -144,10 +144,11 @@ private:
       RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
     }
     odomInput_ = declare_parameter("odom_input", odomInput_);
-    odomSub_ = create_subscription<nav_msgs::msg::Odometry>(odomInput_, rclcpp::SystemDefaultsQoS(),
+    odomSub_ = create_subscription<nav_msgs::msg::Odometry>(
+      odomInput_, rclcpp::SystemDefaultsQoS(),
       [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
-        double currentLinear_ = msg->twist.twist.linear.x;
-        if (currentLinear_ > 0.25) {
+        double currentOdomLinear = msg->twist.twist.linear.x;
+        if (currentOdomLinear > 0.25 && currentLinear_ > 0) {
           need_stop_alert_ = std::floor(currentLinear_ / 0.25);
         }
       });
@@ -246,11 +247,11 @@ private:
     geometry_msgs::msg::Twist cmd_vel;
     cmd_vel.linear.x = l;
 
-    if (l == 0 && (get_clock()->now() - lastVibrator1Time_).seconds() > 0.3 && need_stop_alert_ > 0) {
+    if (l == 0 && (get_clock()->now() - lastVibrator1Time_).seconds() > 1.0 && need_stop_alert_ > 0) {
       std_msgs::msg::UInt8 msg;
-      msg.data = 20;
+      msg.data = need_stop_alert_ * 10;
       vibrator1_pub_->publish(msg);
-      need_stop_alert_--;
+      need_stop_alert_ = 0;
       lastVibrator1Time_ = get_clock()->now();
     }
 
