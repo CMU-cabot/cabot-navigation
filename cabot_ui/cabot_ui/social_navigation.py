@@ -23,7 +23,7 @@ import rclpy.node
 import rclpy.time
 import rclpy.clock
 from rclpy.duration import Duration
-from cabot_ui.turn_detector import Turn
+# from cabot_ui.turn_detector import Turn
 from people_msgs.msg import People
 import tf2_geometry_msgs  # noqa: to register class for transform
 from geometry_msgs.msg import PointStamped
@@ -188,6 +188,8 @@ class SocialNavigation(object):
             - Person (People)      - always say PERSON_AHEAD since 2024.03.28
             - Obstacle (Obstacles) - always play sound       since 2024.03.28
         '''
+        # disable message when avoiding something
+        '''
         if self._turn is not None and self._turn.turn_type == Turn.Type.Avoiding:
             self._logger.info(F"social navigation update turn={self._turn}")
             self._logger.info(F"avoiding turn, people count = {self._people_count}, "
@@ -205,6 +207,7 @@ class SocialNavigation(object):
                 self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID, 10)
                 # self._set_sound(SNMessage.Code.AVOIDING_OBSTACLES, SNMessage.Category.AVOID)
             self._turn = None
+        '''
 
         if self._stop_reason is not None:
             self._logger.info(F"social navigation stop_reason {self._stop_reason}")
@@ -252,7 +255,7 @@ class SocialNavigation(object):
         now = self._node.get_clock().now()
         self._logger.info(F"set_message {code} {category} {priority} {self._last_message} {now - self._last_message.time}")
         if (self._last_message.priority < priority and self._last_message.category != category) or \
-           (now - self._last_message.time) > Duration(seconds=25.0):
+           (now - self._last_message.time) > Duration(seconds=5.0):
             self._message.code = code
             self._message.category = category
             self._message.priority = priority
@@ -262,7 +265,7 @@ class SocialNavigation(object):
         self._logger.info(F"set_sound {code} {category} {priority}")
         now = self._node.get_clock().now()
         if (self._last_sound.priority < priority and self._last_sound.category != category) or \
-           (now - self._last_sound.time) > Duration(seconds=25.0):
+           (now - self._last_sound.time) > Duration(seconds=5.0):
             self._sound.code = code
             self._sound.category = category
             self._sound.priority = priority
