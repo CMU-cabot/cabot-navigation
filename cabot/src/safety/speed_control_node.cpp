@@ -24,6 +24,7 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 
 using namespace std::chrono_literals;
@@ -39,6 +40,8 @@ public:
     cmdVelOutput_("/cmd_vel_limit"),
     userSpeedInput_("/user_speed"),
     mapSpeedInput_("/map_speed"),
+    need_stop_alert_(0),
+    lastVibrator1Time_(0, 0, get_clock()->get_clock_type()),
     userSpeedLimit_(2.0),
     mapSpeedLimit_(2.0),
     completeStopThreshold_(0.005),
@@ -138,6 +141,7 @@ private:
 
       RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
     }
+    vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / targetRate_),
       std::bind(&SpeedControlNode::timerCallback, this));
@@ -232,6 +236,14 @@ private:
     geometry_msgs::msg::Twist cmd_vel;
     cmd_vel.linear.x = l;
 
+    if (l == 0 && (get_clock()->now() - lastVibrator1Time_).seconds() > 0.3 && need_stop_alert_ > 0) {
+      std_msgs::msg::UInt8 msg;
+      msg.data = 20;
+      vibrator1_pub_->publish(msg);
+      need_stop_alert_--;
+      lastVibrator1Time_ = get_clock()->now();
+    }
+
     if (currentLinear_ != 0 && l != 0) {
       // to fit curve, adjust angular speed
       cmd_vel.angular.z = r / currentLinear_ * l;
@@ -257,6 +269,10 @@ private:
     currentLinear_ = input->linear.x;
     currentAngular_ = input->angular.z;
 
+    if (currentLinear_ > 0.25) {
+      need_stop_alert_ = std::round(currentLinear_ / 0.25);
+    }
+
     lastCmdVelInput_ = get_clock()->now();
   }
 
@@ -279,6 +295,9 @@ private:
   std::vector<rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr> configureServices_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
+  int need_stop_alert_;
+  rclcpp::Time lastVibrator1Time_;
 
   double userSpeedLimit_;
   double mapSpeedLimit_;
