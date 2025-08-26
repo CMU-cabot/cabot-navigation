@@ -60,6 +60,7 @@ import tf2_ros
 import tf_transformations
 import message_filters
 from std_msgs.msg import String, Int64, Float64
+from std_srvs.srv import SetBool
 from geometry_msgs.msg import TransformStamped, Vector3, Quaternion, Point, Pose
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import TwistWithCovarianceStamped  # gnss_fix_velocity
@@ -77,6 +78,7 @@ import mf_localization.resource_utils as resource_utils
 from wireless_rss_localizer import create_wireless_rss_localizer
 
 from mf_localization_msgs.msg import MFGlobalPosition
+from mf_localization_msgs.msg import MFGlobalPosition2
 from mf_localization_msgs.msg import MFLocalizeStatus
 from mf_localization_msgs.msg import MFNavSAT
 from mf_localization_msgs.srv import ConvertLocalToGlobal
@@ -493,6 +495,7 @@ class MultiFloorManager:
         # for gnss localization
         # parameters
         self.gnss_params = GNSSParameters()
+        self.use_gnss = False
         # variables
         self.prev_navsat_msg = None
         self.prev_navsat_status = False
@@ -505,6 +508,12 @@ class MultiFloorManager:
         self.gnss_navsat_time = None
         self.gnss_balanced_floor_sampler = BalancedSampler()
 
+        # for global localizer
+        self.use_global_localizer = False
+        self.global_localizer_is_active = False
+        self.global_localizer_set_enabled_service: rclpy.client.Client = None
+
+        # diagnostic
         self.updater = Updater(self.node)
 
         def localize_status(stat):
@@ -1327,10 +1336,17 @@ class MultiFloorManager:
             return response
         try:
             self.is_active = False
+            if self.use_global_localizer:
+                self.gnss_is_active = False
+                self.global_localizer_is_active = False
             try:
                 self.finish_trajectory()
             except Exception as e:
-                self.is_active = True  # if failed to finish trajectory
+                # if failed to finish trajectory
+                self.is_active = True
+                if self.use_global_localizer:
+                    self.gnss_is_active = True
+                    self.global_localizer_is_active = True
                 raise e
             self.reset_states()
             response.status.code = 0
@@ -1352,7 +1368,13 @@ class MultiFloorManager:
         else:
             self.floor = int(request.floor)
             response.status.message = f"Starting localization with floor={request.floor}."
-        self.is_active = True
+
+        if self.use_global_localizer:
+            self.is_active = False
+            self.gnss_is_active = False
+            self.global_localizer_is_active = True
+        else:
+            self.is_active = True
         response.status.code = 0
 
         return response
@@ -1412,12 +1434,28 @@ class MultiFloorManager:
         self.gnss_init_timeout_detected = False
         self.gnss_localization_time = None
         self.gnss_navsat_time = None
+        if self.use_gnss:
+            self.gnss_is_active = True
         if self.gnss_is_active:
             self.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
         else:
             self.indoor_outdoor_mode = IndoorOutdoorMode.INDOOR
 
+        # global localizer
+        if self.use_global_localizer:
+            self.gnss_is_active = False
+
+        if self.global_localizer_set_enabled_service is not None:
+            _ = call_service(self.global_localizer_set_enabled_service,
+                             SetBool.Request(data=True),  # enable
+                             timeout_sec=5.0,
+                             max_retries=10,
+                             )
+
+        # rss-based floor estimation smoothing
         self.floor_queue = []
+
+        # altitude floor estimator
         self.altitude_floor_estimator.reset()
         self.latest_floor_estimation_result = None
 
@@ -1433,7 +1471,12 @@ class MultiFloorManager:
         self.reset_states()
         if floor_value is not None:
             self.floor = floor_value
-        self.is_active = True
+
+        if self.use_global_localizer:
+            self.is_active = False
+            self.gnss_is_active = False
+        else:
+            self.is_active = True
 
     def restart_localization_callback(self, request, response):
         self.logger.info("restart_localization_callback")
@@ -1896,6 +1939,16 @@ class MultiFloorManager:
     # input:
     #      MFLocalPosition global_position
     def global_localizer_global_pose_callback(self, msg):
+        self.logger.info("global_localizer_global_pose_callback")
+
+        if not self.global_localizer_is_active:
+            self.logger.info(F"do not start trajectory. global_localizer_is_active = {self.global_localizer_is_active}")
+            return
+
+        if self.is_active or self.gnss_is_active:
+            self.logger.info(F"do not start trajectory. is_active = {self.is_active} gnss_is_active = {self.gnss_is_active}")
+            return
+
         self.logger.info(F"received global_pose from global_localizer: global_pose={msg}")
 
         stamp = msg.header.stamp
@@ -1936,6 +1989,16 @@ class MultiFloorManager:
 
         if status_code == StatusCode.OK:
             self.is_active = True
+            if self.use_gnss:
+                self.gnss_is_active = True
+
+            if self.global_localizer_set_enabled_service is not None:
+                _ = call_service(self.global_localizer_set_enabled_service,
+                                 SetBool.Request(data=False),
+                                 timeout_sec=5.0,
+                                 max_retries=10,
+                                 )
+                self.logger.info("global_localizer_global_pose_callback: stopped global localizer.")
 
     # check if pose graph is optimized
     def is_optimized(self):
@@ -2343,6 +2406,7 @@ if __name__ == "__main__":
     # external localizer parameters
     use_gnss = node.declare_parameter("use_gnss", False).value
     use_global_localizer = node.declare_parameter("use_global_localizer", False).value
+    stop_global_localizer_after_use = node.declare_parameter("stop_global_localizer_after_use", True).value  # enabled by default
 
     # auto-relocalization parameters
     multi_floor_manager.auto_relocalization = node.declare_parameter("auto_relocalization", False).value
@@ -2759,6 +2823,7 @@ if __name__ == "__main__":
         multi_floor_manager.gnss_params = GNSSParameters(**gnss_config)
         logger.info(F"gnss_config={gnss_config}, multi_floor_manager.gnss_params={multi_floor_manager.gnss_params}")
     if use_gnss:
+        multi_floor_manager.use_gnss = True
         multi_floor_manager.gnss_is_active = True
         multi_floor_manager.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
         gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix", callback_group=state_update_callback_group)
@@ -2772,15 +2837,16 @@ if __name__ == "__main__":
         # map_frame_adjust_time = node.create_timer(0.1, multi_floor_manager.map_frame_adjust_callback) # 10 Hz
 
     if use_global_localizer:
-        multi_floor_manager.is_active = False  # deactivate multi_floor_manager
-        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
-        # call external global localization service
-        logger.info("wait for service /global_localizer/request_localization")
-        global_localizer_request_localization = node.create_client(MFSetInt, '/global_localizer/request_localization', callback_group=MutuallyExclusiveCallbackGroup())
-        global_localizer_request_localization.wait_for_service()
-        n_compute_global_pose = 1  # request computing global_pose once
-        resp = global_localizer_request_localization(n_compute_global_pose)
-        logger.info("called /global_localizer/request_localization")
+        logger.info(F"multi_floor_manager: use_global_localizer = {use_global_localizer}")
+        multi_floor_manager.is_active = False  # deactivate rss_callback initial localization
+        multi_floor_manager.gnss_is_active = False  # deactivate gnss_fix_callback initial localization
+        multi_floor_manager.use_global_localizer = True
+        multi_floor_manager.global_localizer_is_active = True
+        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition2, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
+
+        # global localizer service
+        if stop_global_localizer_after_use:
+            multi_floor_manager.global_localizer_set_enabled_service = node.create_client(SetBool, "/global_localizer/set_enabled", callback_group=MutuallyExclusiveCallbackGroup())
 
     # publish global_map->local_map by /tf_static
     multi_floor_manager.send_static_transforms()

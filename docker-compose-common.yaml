@@ -130,6 +130,7 @@ services:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
+      - NVIDIA_VISIBLE_DEVICES=all
       - ROS_LOG_DIR
 # CaBot
       - CABOT_GAZEBO=1
@@ -137,6 +138,7 @@ services:
       - CABOT_PRESSURE_AVAILABLE=${CABOT_PRESSURE_AVAILABLE:-0}
       - CABOT_ROSBAG_COMPRESSION
       - CABOT_USE_GNSS=${CABOT_USE_GNSS:-0}
+      - CABOT_USE_GLOBAL_LOCALIZER=${CABOT_USE_GLOBAL_LOCALIZER:-0}
       - CABOT_MODEL
       - CABOT_SITE
       - CABOT_SITE_TAGS
@@ -161,6 +163,10 @@ services:
       - NTRIP_USERNAME
       - NTRIP_PASSWORD
       - NTRIP_STR2STR_RELAY_BACK=${NTRIP_STR2STR_RELAY_BACK:-0}
+      # image
+      - CABOT_IMAGE_ROTATE_LEFT=${CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT:-""}
+      - CABOT_IMAGE_ROTATE_FRONT=${CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT:-""}
+      - CABOT_IMAGE_ROTATE_RIGHT=${CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT:-""}
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
@@ -366,6 +372,7 @@ services:
     extends: localization-prod-base
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
 
 
   rtk_gnss-dev-base:
