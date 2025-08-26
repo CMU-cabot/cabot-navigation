@@ -52,6 +52,7 @@
 #include "nav2_costmap_2d/layered_costmap.hpp"
 #include "nav2_costmap_2d/costmap_layer.hpp"
 
+#include "lidar_process_msgs/msg/group_array1_d.hpp"
 #include "lidar_process_msgs/msg/group_time_array.hpp"
 #include "lidar_process_msgs/msg/group_array.hpp"
 #include "lidar_process_msgs/msg/group.hpp"
@@ -92,13 +93,15 @@ private:
   double update_width, update_height;
   double init_cost, discount_factor;
 
-  void groupCallBack(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group_series);
+  void groupCallBack(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group_series);
 
   // Indicates that the entire costmap should be recalculated next time.
   bool need_recalculation_;
 
   std::string group_topic_;
-  rclcpp::Subscription<lidar_process_msgs::msg::GroupTimeArray>::SharedPtr group_sub_;
+  rclcpp::Subscription<lidar_process_msgs::msg::GroupArray1D>::SharedPtr group_sub_;
+  long group_quantity_;
+  std::vector<lidar_process_msgs::msg::Group> groups_;
   lidar_process_msgs::msg::GroupTimeArray::SharedPtr last_group_;
 
   std::mutex mutex_;

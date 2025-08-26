@@ -11,7 +11,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 
-#include "lidar_process_msgs/msg/group_time_array.hpp"
+#include "lidar_process_msgs/msg/group_array1_d.hpp"
 #include "lidar_process_msgs/msg/group_array.hpp"
 #include "lidar_process_msgs/msg/group.hpp"
 
@@ -77,6 +77,8 @@ private:
   nav_msgs::msg::Path global_plan;
 
   // Storage for the group trajectories
+  long group_quantity_;
+  std::vector<lidar_process_msgs::msg::Group> groups_;
   std::vector<lidar_process_msgs::msg::GroupArray> group_trajectories_;
 
   // MPC-related variables
@@ -107,8 +109,8 @@ private:
   geometry_msgs::msg::PoseStamped curr_local_goal_;
 
   std::string group_topic_;
-  rclcpp::Subscription<lidar_process_msgs::msg::GroupTimeArray>::SharedPtr group_trajectory_sub_;  // group prediction subscriber
-  void groupPredictionCallback(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group_series);
+  rclcpp::Subscription<lidar_process_msgs::msg::GroupArray1D>::SharedPtr group_trajectory_sub_;  // group prediction subscriber
+  void groupPredictionCallback(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group_series);
 
   std::string traj_vis_topic_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr trajectory_visualization_pub_;

@@ -118,7 +118,7 @@ GroupObstacleLayer::onInitialize()
   declareParameter("discount_factor", rclcpp::ParameterValue(0.9));
   node->get_parameter(name_ + "." + "discount_factor", discount_factor);
 
-  group_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
+  group_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupArray1D>(
     group_topic_, 10,
     std::bind(&GroupObstacleLayer::groupCallBack, this, std::placeholders::_1));
 
@@ -271,11 +271,26 @@ GroupObstacleLayer::updateCosts(
   RCLCPP_INFO(node->get_logger(), "GrouObstacleLayer update time cost: %d ms", e - s);
 }
 
-void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group)
+void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group)
 {
   // Group sequences: First time, then groups
   auto node = node_.lock();
-  last_group_ = group;
+  group_quantity_ = group->quantity;
+  groups_ = group->groups;
+  last_group_ = std::make_shared<lidar_process_msgs::msg::GroupTimeArray>();
+  last_group_->group_sequences.clear();
+  if (groups_.size() == 0) {
+    RCLCPP_WARN(logger_, "No group predictions received!");
+    return;
+  }
+  long num_time_steps = groups_.size() / group_quantity_;
+  for (long t = 0; t < num_time_steps; t++) {
+    lidar_process_msgs::msg::GroupArray group_array;
+    for (long g = 0; g < group_quantity_; g++) {
+      group_array.groups.push_back(groups_[t * group_quantity_ + g]);
+    }
+    last_group_->group_sequences.push_back(group_array);
+  }
 }
 
 }  // namespace cabot_navigation2

@@ -133,7 +133,7 @@ void CaBotSamplingMPCController::configure(
   last_trajectory_ = Trajectory();
 
   // Subscribe to group trajectory prediction topic
-  group_trajectory_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupTimeArray>(
+  group_trajectory_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupArray1D>(
       group_topic_, 10, std::bind(&CaBotSamplingMPCController::groupPredictionCallback, this, std::placeholders::_1));
 
   // Publish selected trajectory for visualization purposes
@@ -147,11 +147,29 @@ void CaBotSamplingMPCController::configure(
     prediction_horizon_, sampling_rate_);
 }
 
-void CaBotSamplingMPCController::groupPredictionCallback(const lidar_process_msgs::msg::GroupTimeArray::SharedPtr group)
+void CaBotSamplingMPCController::groupPredictionCallback(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group)
 {
   // Group sequences: First time, then groups
   auto node = node_.lock();
-  group_trajectories_ = group->group_sequences;
+  group_quantity_ = group->quantity;
+  groups_ = group->groups;
+
+  group_trajectories_.clear();
+  if (groups_.size() == 0) {
+    RCLCPP_WARN(logger_, "No group predictions received!");
+    return;
+  }
+  long num_time_steps = groups_.size() / group_quantity_;
+  RCLCPP_INFO(logger_, "Received %ld group prediction with %ld groups and %ld time steps",
+    groups_.size(), group_quantity_, num_time_steps);
+
+  for (long t = 0; t < num_time_steps; t++) {
+    lidar_process_msgs::msg::GroupArray group_array;
+    for (long g = 0; g < group_quantity_; g++) {
+      group_array.groups.push_back(groups_[t * group_quantity_ + g]);
+    }
+    group_trajectories_.push_back(group_array);
+  }
 }
 
 void CaBotSamplingMPCController::localGoalVisualizationCallback()
