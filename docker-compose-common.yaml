@@ -269,6 +269,7 @@ services:
     extends: navigation-prod-base
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
 
 
   gazebo-dev-base:
