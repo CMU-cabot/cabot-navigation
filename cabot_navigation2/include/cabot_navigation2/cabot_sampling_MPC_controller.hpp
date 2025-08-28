@@ -77,8 +77,9 @@ private:
   nav_msgs::msg::Path global_plan;
 
   // Storage for the group trajectories
-  long group_quantity_;
-  std::vector<lidar_process_msgs::msg::Group> groups_;
+  int group_points_ = 10; // Number of numbers in each group
+  int group_quantity_;
+  std::vector<float> groups_;
   std::vector<lidar_process_msgs::msg::GroupArray> group_trajectories_;
 
   // MPC-related variables

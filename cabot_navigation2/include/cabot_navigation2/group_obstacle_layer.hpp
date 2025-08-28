@@ -100,8 +100,9 @@ private:
 
   std::string group_topic_;
   rclcpp::Subscription<lidar_process_msgs::msg::GroupArray1D>::SharedPtr group_sub_;
-  long group_quantity_;
-  std::vector<lidar_process_msgs::msg::Group> groups_;
+  int group_quantity_;
+  int group_points_ = 10;
+  std::vector<float> groups_;
   lidar_process_msgs::msg::GroupTimeArray::SharedPtr last_group_;
 
   std::mutex mutex_;

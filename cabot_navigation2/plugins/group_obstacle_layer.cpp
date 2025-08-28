@@ -99,6 +99,7 @@ void
 GroupObstacleLayer::onInitialize()
 {
   auto node = node_.lock();
+  auto sensor_qos = rclcpp::SensorDataQoS().keep_last(1).best_effort();
 
   declareParameter("enabled", rclcpp::ParameterValue(true));
   node->get_parameter(name_ + "." + "enabled", enabled_);
@@ -119,7 +120,7 @@ GroupObstacleLayer::onInitialize()
   node->get_parameter(name_ + "." + "discount_factor", discount_factor);
 
   group_sub_ = node->create_subscription<lidar_process_msgs::msg::GroupArray1D>(
-    group_topic_, 10,
+    group_topic_, sensor_qos,
     std::bind(&GroupObstacleLayer::groupCallBack, this, std::placeholders::_1));
 
   need_recalculation_ = false;
@@ -283,11 +284,22 @@ void GroupObstacleLayer::groupCallBack(const lidar_process_msgs::msg::GroupArray
     RCLCPP_WARN(logger_, "No group predictions received!");
     return;
   }
-  long num_time_steps = groups_.size() / group_quantity_;
+  int num_time_steps = groups_.size() / (group_quantity_ * group_points_);
   for (long t = 0; t < num_time_steps; t++) {
     lidar_process_msgs::msg::GroupArray group_array;
     for (long g = 0; g < group_quantity_; g++) {
-      group_array.groups.push_back(groups_[t * group_quantity_ + g]);
+      lidar_process_msgs::msg::Group group;
+      group.left.x = groups_[(t * group_quantity_ + g) * group_points_ + 0];
+      group.left.y = groups_[(t * group_quantity_ + g) * group_points_ + 1];
+      group.center.x = groups_[(t * group_quantity_ + g) * group_points_ + 2];
+      group.center.y = groups_[(t * group_quantity_ + g) * group_points_ + 3];
+      group.right.x = groups_[(t * group_quantity_ + g) * group_points_ + 4];
+      group.right.y = groups_[(t * group_quantity_ + g) * group_points_ + 5];
+      group.left_offset.x = groups_[(t * group_quantity_ + g) * group_points_ + 6];
+      group.left_offset.y = groups_[(t * group_quantity_ + g) * group_points_ + 7];
+      group.right_offset.x = groups_[(t * group_quantity_ + g) * group_points_ + 8];
+      group.right_offset.y = groups_[(t * group_quantity_ + g) * group_points_ + 9];
+      group_array.groups.push_back(group);
     }
     last_group_->group_sequences.push_back(group_array);
   }

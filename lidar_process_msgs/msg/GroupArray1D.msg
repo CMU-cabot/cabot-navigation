@@ -1,2 +1,2 @@
-int64 quantity
-lidar_process_msgs/Group[] groups
+int32 quantity
+float32[] groups
