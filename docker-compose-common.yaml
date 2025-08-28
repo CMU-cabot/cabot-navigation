@@ -167,6 +167,7 @@ services:
       - CABOT_IMAGE_ROTATE_LEFT=${CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT:-""}
       - CABOT_IMAGE_ROTATE_FRONT=${CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT:-""}
       - CABOT_IMAGE_ROTATE_RIGHT=${CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT:-""}
+      - GPR_SERVER_URL
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm

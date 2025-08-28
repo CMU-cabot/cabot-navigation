@@ -36,3 +36,6 @@ uint32[] shape
 
 # data of the feature descriptor
 float64[] data
+
+# additional information
+string message
