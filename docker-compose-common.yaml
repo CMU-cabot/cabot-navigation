@@ -205,13 +205,13 @@ services:
       # - HOST_GID
       # - HOST_TZ
       # - DISPLAY
-      - GPR_SERVER_PORT=${GPR_SERVER_PORT:-8001}
+      - GPR_SERVER_PORT
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
       # - NVIDIA_VISIBLE_DEVICES=all
     # network
     privileged: true
     network_mode: host
-    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT}
+    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT:-8001}
 
   gpr:
     extends: gpr-base
@@ -222,14 +222,13 @@ services:
       - ./mf_app:/home/developer/mf_app
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
-    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT} --reload
+    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT:-8001} --reload
 
   gpr-prod:
     extends: gpr
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
-    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT}
 
   navigation-base:
     extends: ros2-base
