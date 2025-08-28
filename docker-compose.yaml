@@ -106,6 +106,28 @@ services:
     profiles:
       - prod
 
+  # gpr
+  gpr:
+    extends:
+      file: docker-compose-common.yaml
+      service: gpr
+    profiles:
+      - build
+
+  gpr-dev:
+    extends:
+      file: docker-compose-common.yaml
+      service: gpr-dev
+    profiles:
+      - dev
+
+  gpr-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: gpr-prod
+    profiles:
+      - prod
+
   # map server
   map_server:
     extends:
