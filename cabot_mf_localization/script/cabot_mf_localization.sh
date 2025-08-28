@@ -119,6 +119,7 @@ fi
 : ${CABOT_ROSBAG_COMPRESSION:='message'}
 : ${CABOT_USE_GNSS:=0}
 # global localizer
+: ${CABOT_RUN_GLOBAL_LOCALIZER:=0}
 : ${CABOT_USE_GLOBAL_LOCALIZER:=0}
 
 # mapping
@@ -145,6 +146,7 @@ robot_desc=$CABOT_MODEL
 pressure_available=$CABOT_PRESSURE_AVAILABLE
 use_gnss=$CABOT_USE_GNSS
 # global localizer
+run_global_localizer=$CABOT_RUN_GLOBAL_LOCALIZER
 use_global_localizer=$CABOT_USE_GLOBAL_LOCALIZER
 
 # for navigation
@@ -285,6 +287,7 @@ echo "Robot         : $robot"
 echo "Global planner: $gplanner"
 echo "Local planner : $lplanner"
 echo "Use gnss fix  : $use_gnss"
+echo "Run global localizer: $run_global_localizer"
 echo "Use global localizer : $use_global_localier"
 
 ### For GAZEBO simulation, run wireless simulator with gazebo
@@ -567,7 +570,7 @@ if [ $navigation -eq 0 ]; then
                     use_gnss:=$([[ $use_gnss -eq 1 ]] && echo 'true' || echo 'false') \
                     gnss_fix_topic:=$gnss_fix_topic \
                     gnss_fix_velocity_topic:=$gnss_fix_velocity_topic \
-                    run_global_localizer:=$([[ $use_global_localizer -eq 1 ]] && echo 'true' || echo 'false') \
+                    run_global_localizer:=$([[ $run_global_localizer -eq 1 ]] && echo 'true' || echo 'false') \
                     use_global_localizer:=$([[ $use_global_localizer -eq 1 ]] && echo 'true' || echo 'false') \
                     publish_current_rate:=$publish_current_rate \
                     use_sim_time:=$gazebo_bool \
