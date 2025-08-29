@@ -1,7 +1,7 @@
 ARG TARGETARCH
 
 # AMD64
-FROM --platform=linux/amd64 pytorch/pytorch:2.3.1-cuda11.8-cudnn8-runtime as base_amd64
+FROM --platform=linux/amd64 pytorch/pytorch:2.0.0-cuda11.7-cudnn8-runtime as base_amd64
 
 # ARM64
 FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3 as base_arm64

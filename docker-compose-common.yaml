@@ -168,7 +168,7 @@ services:
       - CABOT_IMAGE_ROTATE_LEFT=${CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT:-""}
       - CABOT_IMAGE_ROTATE_FRONT=${CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT:-""}
       - CABOT_IMAGE_ROTATE_RIGHT=${CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT:-""}
-      - GPR_SERVER_URL
+      - EMBEDDING_SERVER_URL
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
@@ -186,15 +186,15 @@ services:
       # - "-C"                                # launch cvi client
       # - "-N"                                # start ROS1 navigation for development
 
-  gpr-base:
-    image: cmucal/cabot-gpr:${CABOT_LAUNCH_IMAGE_TAG:-latest}
+  embedding-base:
+    image: cmucal/cabot-embedding:${CABOT_LAUNCH_IMAGE_TAG:-latest}
     build:
-      context: ./docker/gpr
+      context: ./docker/embedding
       additional_contexts:
         cabot_src: ./
       x-bake:
         tags:
-          - ${REGISTRY:-cmucal}/cabot-gpr
+          - ${REGISTRY:-cmucal}/cabot-embedding
         platforms:
           - linux/amd64
           - linux/arm64
@@ -207,27 +207,27 @@ services:
       # - HOST_GID
       # - HOST_TZ
       # - DISPLAY
-      - GPR_SERVER_PORT
+      - EMBEDDING_SERVER_PORT
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
       # - NVIDIA_VISIBLE_DEVICES=all
     # network
     privileged: true
     network_mode: host
-    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT:-8001}
+    command: uvicorn server.app:app --host 127.0.0.1 --port ${EMBEDDING_SERVER_PORT:-8001}
 
-  gpr:
-    extends: gpr-base
+  embedding:
+    extends: embedding-base
 
-  gpr-dev:
-    extends: gpr
+  embedding-dev:
+    extends: embedding
     volumes:
       - ./mf_app:/home/developer/mf_app
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
-    command: uvicorn server.app:app --host 127.0.0.1 --port ${GPR_SERVER_PORT:-8001} --reload
+    command: uvicorn server.app:app --host 127.0.0.1 --port ${EMBEDDING_SERVER_PORT:-8001} --reload
 
-  gpr-prod:
-    extends: gpr
+  embedding-prod:
+    extends: embedding
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
