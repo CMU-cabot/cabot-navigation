@@ -21,10 +21,26 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from .routers import image_feature
+import os
 
-app = FastAPI()
+from .routers import image_feature
+from .vpr.image_feature_extractor import get_image_feature_extractor
+
+
+features = os.environ.get("GPR_PRELOAD_FEATURES", "cosplace").split(",")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # start
+    for feature in features:
+        get_image_feature_extractor(feature, warmup=True)
+    yield
+    # end
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")
