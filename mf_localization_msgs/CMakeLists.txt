@@ -25,6 +25,7 @@ find_package(rosidl_default_generators REQUIRED)
 set(msg_files
   msg/StatusResponse.msg
   msg/MFDescriptor.msg
+  msg/MFDescriptors.msg
   msg/MFGlobalPosition.msg
   msg/MFGlobalPosition2.msg
   msg/MFLocalPosition.msg
