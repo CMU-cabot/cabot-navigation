@@ -141,8 +141,11 @@ typedef struct directionalIndicator
   int16_t target_pos_local;
   int16_t target_pos_global;
   const uint8_t THRESHOLD_RESET = 10;
-  const uint8_t THRESHOLD_PASS_CONTROL_MAX = 180;
+  const uint8_t THRESHOLD_PASS_CONTROL_MAX = 190;
   const uint8_t THRESHOLD_PASS_CONTROL_MIN = 15;
+  geometry_msgs::msg::PoseStamped reference_pose;
+  std::vector<geometry_msgs::msg::PoseStamped> turn_angle_queue_;
+  std::vector<geometry_msgs::msg::PoseStamped> turn_angle_queue_prefer_;
 } DirectionalIndicator;
 
 class Handle : public std::enable_shared_from_this<Handle>
@@ -174,6 +177,13 @@ private:
   float getWeightedMovingAverage(const std::vector<float> & data);
   float getMedian(const std::vector<float> & data);
   float getRotationDegree(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2);
+  float getDistance(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2);
+  bool isPoseMatching(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2);
+  void transformPoseToReferenceFrame(
+    const geometry_msgs::msg::PoseStamped & pose_in, geometry_msgs::msg::PoseStamped & pose_out,
+    const std::string reference_frame);
+  void checkTurnAngleQueue();
+  void setTurnAngle();
   void timer_callback();
   void vib_waiting_timer_callback();
   void buttonCallback(std_msgs::msg::Int8::SharedPtr msg);
@@ -181,7 +191,8 @@ private:
   void eventCallback(std_msgs::msg::String::SharedPtr msg);
   void cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg);
   void servoPosCallback(std_msgs::msg::Int16::SharedPtr msg);
-  void turnAngleCallback(std_msgs::msg::Float32::SharedPtr msg);
+  void turnPoseCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void turnPosePreferentialCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void turnTypeCallback(std_msgs::msg::String::SharedPtr msg);
   void turnEndCallback(std_msgs::msg::Bool::SharedPtr msg);
   void rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg);
@@ -222,7 +233,8 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr event_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<std_msgs::msg::Int16>::SharedPtr servo_pos_sub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr turn_angle_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_prefer_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr turn_type_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr turn_end_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr rotation_complete_sub_;

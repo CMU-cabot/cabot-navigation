@@ -67,8 +67,10 @@ Handle::Handle(
     "cmd_vel", rclcpp::SensorDataQoS(), std::bind(&Handle::cmdVelCallback, this, std::placeholders::_1));
   servo_pos_sub_ = node->create_subscription<std_msgs::msg::Int16>(
     "servo_pos", rclcpp::SensorDataQoS(), std::bind(&Handle::servoPosCallback, this, std::placeholders::_1));
-  turn_angle_sub_ = node->create_subscription<std_msgs::msg::Float32>(
-    "turn_angle", rclcpp::SensorDataQoS(), std::bind(&Handle::turnAngleCallback, this, std::placeholders::_1));
+  turn_pose_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
+    "turn_pose", rclcpp::SensorDataQoS(), std::bind(&Handle::turnPoseCallback, this, std::placeholders::_1));
+  turn_pose_prefer_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
+    "turn_pose_prefer", rclcpp::SensorDataQoS(), std::bind(&Handle::turnPosePreferentialCallback, this, std::placeholders::_1));
   turn_type_sub_ = node->create_subscription<std_msgs::msg::String>(
     "turn_type", rclcpp::SensorDataQoS(), std::bind(&Handle::turnTypeCallback, this, std::placeholders::_1));
   turn_end_sub_ = node->create_subscription<std_msgs::msg::Bool>(
@@ -99,6 +101,14 @@ Handle::Handle(
   wma_filter_coef_ = -0.1f;
   wma_window_size_ = 3;
   di.control_mode = "both";
+  di.reference_pose.header.frame_id = "base_footprint";
+  di.reference_pose.pose.position.x = 0.0f;
+  di.reference_pose.pose.position.y = 0.0f;
+  di.reference_pose.pose.position.z = 0.0f;
+  di.reference_pose.pose.orientation.x = 0.0f;
+  di.reference_pose.pose.orientation.y = 0.0f;
+  di.reference_pose.pose.orientation.z = 0.0f;
+  di.reference_pose.pose.orientation.w = 1.0f;
   di.target_turn_angle = 0.0f;
   di.is_controlled_exclusive = false;
   di.current_servo_pos = 0;
@@ -176,6 +186,89 @@ float Handle::getRotationDegree(const geometry_msgs::msg::Pose & p1, const geome
   q_rot.normalize();
   rotate_deg = getEulerYawDegrees(q_rot.x(), q_rot.y(), q_rot.z(), q_rot.w());
   return rotate_deg;
+}
+
+float Handle::getDistance(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2)
+{
+  float diff_x = p2.position.x - p1.position.x;
+  float diff_y = p2.position.y - p1.position.y;
+  float diff_z = p2.position.z - p1.position.z;
+  return std::sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z);
+}
+
+bool Handle::isPoseMatching(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2)
+{
+  float angle_diff = getRotationDegree(p1, p2);
+  float distance_diff = getDistance(p1, p2);
+  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "angle_diff: %f, distance_diff: %f", angle_diff, distance_diff);
+  if (std::abs(angle_diff) <= 10 && distance_diff <= 0.75f) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void Handle::transformPoseToReferenceFrame(
+  const geometry_msgs::msg::PoseStamped & pose_in, geometry_msgs::msg::PoseStamped & pose_out,
+  const std::string reference_frame)
+{
+  if (pose_in.header.frame_id != reference_frame) {
+    geometry_msgs::msg::TransformStamped transformStamped;
+    try {
+      RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Transform: <%s> to <%s>", pose_in.header.frame_id.c_str(), reference_frame.c_str());
+      transformStamped = tfBuffer->lookupTransform(reference_frame, pose_in.header.frame_id, pose_in.header.stamp, rclcpp::Duration(1s));
+    } catch (tf2::TransformException &ex) {
+      RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "%s", ex.what());
+    }
+    tf2::doTransform(pose_in, pose_out, transformStamped);
+  } else {
+    pose_out = pose_in;
+  }
+}
+
+void Handle::setTurnAngle()
+{
+  geometry_msgs::msg::PoseStamped target_pose;
+  if (!di.turn_angle_queue_prefer_.empty()) {
+    transformPoseToReferenceFrame(di.turn_angle_queue_prefer_.front(), target_pose, di.reference_pose.header.frame_id);
+    di.target_turn_angle = getRotationDegree(di.reference_pose.pose, target_pose.pose);
+    di.turn_angle_queue_prefer_.erase(di.turn_angle_queue_prefer_.begin());
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation (preferential): %f", di.target_turn_angle);
+  } else if (!di.turn_angle_queue_.empty()){
+    transformPoseToReferenceFrame(di.turn_angle_queue_.front(), target_pose, di.reference_pose.header.frame_id);
+    di.target_turn_angle = getRotationDegree(di.reference_pose.pose, target_pose.pose);
+    di.turn_angle_queue_.erase(di.turn_angle_queue_.begin());
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation: %f", di.target_turn_angle);
+  } else {
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "There is NO pose in queue, this is bug.");
+    return;
+  }
+  if (std::abs(di.target_turn_angle) >= 20.0f) {  // control dial when turn/rotation angle is greater than or equal to 20[deg]
+    previous_pose_ = getCurrentPose();
+    di.is_controlled_exclusive = true;
+    changeServoPos(static_cast<int16_t>(di.target_turn_angle));
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "(global) target_yaw: %d", static_cast<int16_t>(di.target_turn_angle));
+  } else {
+    di.target_turn_angle = 0.0f;
+  }
+}
+
+void Handle::checkTurnAngleQueue()
+{
+  auto node = node_.lock();
+  if (!di.is_controlled_exclusive && (!di.turn_angle_queue_prefer_.empty() || !di.turn_angle_queue_.empty())) {
+    setTurnAngle();
+  }
+  for (int idx = di.turn_angle_queue_.size() - 1; idx >= 0; idx--) {
+    geometry_msgs::msg::PoseStamped target_pose;
+    di.turn_angle_queue_[idx].header.stamp = node->get_clock()->now();
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "There is pose in target_queue, timestamp should be updated for doing transform");
+    transformPoseToReferenceFrame(di.turn_angle_queue_[idx], target_pose, di.reference_pose.header.frame_id);
+    if (isPoseMatching(target_pose.pose, di.reference_pose.pose)) {
+      RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Drop head of queue because passed");
+      di.turn_angle_queue_.erase(di.turn_angle_queue_.begin() + idx);
+    }
+  }
 }
 
 void Handle::timer_callback()
@@ -324,6 +417,7 @@ void Handle::cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg)
 
 void Handle::servoPosCallback(std_msgs::msg::Int16::SharedPtr msg)
 {
+  checkTurnAngleQueue();
   if (di.is_controlled_exclusive) {
     current_pose_ = getCurrentPose();
     float turned_angle = getRotationDegree(previous_pose_, current_pose_);  // The angle that the Cabot has already turned
@@ -348,19 +442,31 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::SharedPtr msg)
   }
 }
 
-void Handle::turnAngleCallback(std_msgs::msg::Float32::SharedPtr msg)
+void Handle::turnPoseCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
-  float _rotation_amount = msg->data * 180.0f / M_PI;
-  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation: %f", _rotation_amount);
-  if (std::abs(_rotation_amount) >= 20.0f) {  // control dial when turn/rotation angle is greater than or equal to 20[deg]
+  geometry_msgs::msg::PoseStamped orig_pose;
+  orig_pose.header = msg->header;
+  orig_pose.pose = msg->pose;
     if (di.control_mode == "both" || di.control_mode == "global") {
-      di.target_turn_angle = _rotation_amount;
-      previous_imu_yaw_ = current_imu_yaw_;
-      di.is_controlled_by_imu = true;
-      changeServoPos(static_cast<int16_t>(di.target_turn_angle));
-      RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "(global) target_yaw: %d", static_cast<int16_t>(di.target_turn_angle));
-      RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "(global) start_yaw: %f", previous_imu_yaw_);
+    di.turn_angle_queue_.push_back(orig_pose);
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Append turn_angle que");
+    if (!di.is_controlled_exclusive) {
+      setTurnAngle();
+    } else {
+      RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Wait for finish preferential rotate command");
     }
+  }
+}
+
+void Handle::turnPosePreferentialCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+  geometry_msgs::msg::PoseStamped orig_pose;
+  orig_pose.header = msg->header;
+  orig_pose.pose = msg->pose;
+  if (di.control_mode == "both" || di.control_mode == "global") {
+    di.turn_angle_queue_prefer_.push_back(orig_pose);
+    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Append preferential turn_angle que");
+    setTurnAngle();
   }
 }
 
