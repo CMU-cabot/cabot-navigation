@@ -183,7 +183,6 @@ private:
   void turnEndCallback(std_msgs::msg::Bool::SharedPtr msg);
   void rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg);
   void localPlanCallback(nav_msgs::msg::Path::SharedPtr msg);
-  void angularDistanceCallback(std_msgs::msg::Float64::SharedPtr msg);
   void changeDiControlModeCallback(std_msgs::msg::String::SharedPtr msg);
   void planCallback(nav_msgs::msg::Path::SharedPtr msg);
   void startVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr vibratorPub);

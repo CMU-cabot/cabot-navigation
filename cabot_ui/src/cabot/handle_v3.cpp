@@ -81,8 +81,6 @@ Handle::Handle(
     "change_di_control_mode", rclcpp::SensorDataQoS(), std::bind(&Handle::changeDiControlModeCallback, this, std::placeholders::_1));
   local_plan_sub_ = node->create_subscription<nav_msgs::msg::Path>(
     "/local_plan", rclcpp::SensorDataQoS(), std::bind(&Handle::localPlanCallback, this, std::placeholders::_1));
-  angular_distance_sub_ = node->create_subscription<std_msgs::msg::Float64>(
-    "/angular_distance", rclcpp::SensorDataQoS(), std::bind(&Handle::angularDistanceCallback, this, std::placeholders::_1));
   plan_sub_ = node->create_subscription<nav_msgs::msg::Path>(
     "/plan", rclcpp::SensorDataQoS(), std::bind(&Handle::planCallback, this, std::placeholders::_1));
 
@@ -428,18 +426,6 @@ void Handle::localPlanCallback(nav_msgs::msg::Path::SharedPtr msg)
           resetServoPosition();
         }
       }
-    }
-  }
-}
-
-void Handle::angularDistanceCallback(std_msgs::msg::Float64::SharedPtr msg)
-{
-  if (di.control_mode == "both" || di.control_mode == "local") {
-    double angular_data = msg->data;
-    float di_target = static_cast<float>(angular_data) * 180 / M_PI;
-    RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "di control: %f", di_target);
-    if (!di.is_controlled_by_imu) {
-      changeServoPos(static_cast<int16_t>(di_target));
     }
   }
 }
