@@ -57,7 +57,8 @@ struct PathEstimateOptions
 Path normalizedPath(const Path & path);
 Path adjustedPathByStart(
   const Path & path,
-  const PoseStamped & pose);
+  const PoseStamped & pose,
+  bool smooth_start = false);
 
 std::vector<PathWidth> estimatePathWidthAndAdjust(
   Path & path,
