@@ -77,6 +77,8 @@ Handle::Handle(
     "turn_end", rclcpp::SensorDataQoS(), std::bind(&Handle::turnEndCallback, this, std::placeholders::_1));
   rotation_complete_sub_ = node->create_subscription<std_msgs::msg::Bool>(
     "rotation_complete", rclcpp::SensorDataQoS(), std::bind(&Handle::rotationCompleteCallback, this, std::placeholders::_1));
+  pause_control_sub_ = node->create_subscription<std_msgs::msg::Bool>(
+    "pause_control", rclcpp::SensorDataQoS(), std::bind(&Handle::pauseControlCallback, this, std::placeholders::_1));
   change_di_control_mode_sub_ = node->create_subscription<std_msgs::msg::String>(
     "change_di_control_mode", rclcpp::SensorDataQoS(), std::bind(&Handle::changeDiControlModeCallback, this, std::placeholders::_1));
   local_plan_sub_ = node->create_subscription<nav_msgs::msg::Path>(
@@ -417,6 +419,8 @@ void Handle::cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg)
 
 void Handle::servoPosCallback(std_msgs::msg::Int16::SharedPtr msg)
 {
+  di.current_servo_pos = msg->data;
+  RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "current servo_pos: %d", di.current_servo_pos);
   checkTurnAngleQueue();
   if (di.is_controlled_exclusive) {
     current_pose_ = getCurrentPose();
@@ -503,6 +507,20 @@ void Handle::rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg)
   }
 }
 
+void Handle::pauseControlCallback(std_msgs::msg::Bool::SharedPtr msg)
+{
+  if (msg->data && di.current_servo_pos != 0) {
+    is_navigating_ = false;
+    wma_data_buffer_.clear();
+    resetServoPosition();
+    for (uint8_t i = 0; i < 5; i++) {
+      RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset dial position");
+      changeServoPos(0);
+    }
+    setServoFree(true);
+  }
+}
+
 void Handle::localPlanCallback(nav_msgs::msg::Path::SharedPtr msg)
 {
   if (di.control_mode == "both" || di.control_mode == "local") {
@@ -523,11 +541,13 @@ void Handle::localPlanCallback(nav_msgs::msg::Path::SharedPtr msg)
           changeServoPos(di.target_pos_local);
           RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "(local) target: %d", di.target_pos_local);
         } else {
+          if (di.current_servo_pos != 0) {
           resetServoPosition();
         }
       }
     }
   }
+}
 }
 
 void Handle::planCallback(nav_msgs::msg::Path::SharedPtr msg)

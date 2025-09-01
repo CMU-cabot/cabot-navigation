@@ -138,6 +138,7 @@ typedef struct directionalIndicator
   std::string control_mode;
   float target_turn_angle;
   bool is_controlled_exclusive;
+  int16_t current_servo_pos;
   int16_t target_pos_local;
   int16_t target_pos_global;
   const uint8_t THRESHOLD_RESET = 10;
@@ -196,6 +197,7 @@ private:
   void turnTypeCallback(std_msgs::msg::String::SharedPtr msg);
   void turnEndCallback(std_msgs::msg::Bool::SharedPtr msg);
   void rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg);
+  void pauseControlCallback(std_msgs::msg::Bool::SharedPtr msg);
   void localPlanCallback(nav_msgs::msg::Path::SharedPtr msg);
   void changeDiControlModeCallback(std_msgs::msg::String::SharedPtr msg);
   void planCallback(nav_msgs::msg::Path::SharedPtr msg);
@@ -238,6 +240,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr turn_type_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr turn_end_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr rotation_complete_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr pause_control_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr change_di_control_mode_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr local_plan_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
