@@ -24,7 +24,6 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_listener.h>
-#include <nav2_util/robot_utils.hpp>
 #include <time.h>
 #include <memory>
 #include <vector>
@@ -44,6 +43,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <nav2_util/robot_utils.hpp>
 #include "button.hpp"
 #include "cabot_handle_v3_node.hpp"
 

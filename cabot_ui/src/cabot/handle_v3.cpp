@@ -219,7 +219,7 @@ void Handle::transformPoseToReferenceFrame(
     try {
       RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Transform: <%s> to <%s>", pose_in.header.frame_id.c_str(), reference_frame.c_str());
       transformStamped = tfBuffer->lookupTransform(reference_frame, pose_in.header.frame_id, pose_in.header.stamp, rclcpp::Duration(1s));
-    } catch (tf2::TransformException &ex) {
+    } catch (tf2::TransformException & ex) {
       RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "%s", ex.what());
     }
     tf2::doTransform(pose_in, pose_out, transformStamped);
@@ -236,7 +236,7 @@ void Handle::setTurnAngle()
     di.target_turn_angle = getRotationDegree(di.reference_pose.pose, target_pose.pose);
     di.turn_angle_queue_prefer_.erase(di.turn_angle_queue_prefer_.begin());
     RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "amount_of_rotation (preferential): %f", di.target_turn_angle);
-  } else if (!di.turn_angle_queue_.empty()){
+  } else if (!di.turn_angle_queue_.empty()) {
     transformPoseToReferenceFrame(di.turn_angle_queue_.front(), target_pose, di.reference_pose.header.frame_id);
     di.target_turn_angle = getRotationDegree(di.reference_pose.pose, target_pose.pose);
     di.turn_angle_queue_.erase(di.turn_angle_queue_.begin());
