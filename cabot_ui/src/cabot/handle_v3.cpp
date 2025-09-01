@@ -451,7 +451,7 @@ void Handle::turnPoseCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
   geometry_msgs::msg::PoseStamped orig_pose;
   orig_pose.header = msg->header;
   orig_pose.pose = msg->pose;
-    if (di.control_mode == "both" || di.control_mode == "global") {
+  if (di.control_mode == "both" || di.control_mode == "global") {
     di.turn_angle_queue_.push_back(orig_pose);
     RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Append turn_angle que");
     if (!di.is_controlled_exclusive) {
@@ -542,12 +542,12 @@ void Handle::localPlanCallback(nav_msgs::msg::Path::SharedPtr msg)
           RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "(local) target: %d", di.target_pos_local);
         } else {
           if (di.current_servo_pos != 0) {
-          resetServoPosition();
+            resetServoPosition();
+          }
         }
       }
     }
   }
-}
 }
 
 void Handle::planCallback(nav_msgs::msg::Path::SharedPtr msg)
@@ -589,6 +589,16 @@ void Handle::setServoFree(bool is_free)
   servo_free_pub_->publish(std::move(msg));
 }
 
+void Handle::resetServoPosition()
+{
+  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Reset: servo_pos");
+  di.is_controlled_exclusive = false;
+  di.target_turn_angle = 0.0f;
+  di.target_pos_global = 0.0f;
+  recalculation_cnt_of_path = 0;
+  changeServoPos(0);
+}
+
 void Handle::navigationArrived()
 {
   RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Navigation arrived");
@@ -601,7 +611,7 @@ void Handle::navigationArrived()
     vibratePattern(vibrator1_pub_, VibConst::LRA::NumVibrations::HAS_ARRIVED, VibConst::LRA::Duration::HAS_ARRIVED, VibConst::LRA::Sleep::DEFAULT);
   }
   for (uint8_t i = 0; i < 5; i++) {
-    RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset of dial position");
+    RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset dial position");
     changeServoPos(0);
   }
   setServoFree(true);
@@ -612,16 +622,6 @@ void Handle::navigationStart()
   is_navigating_ = true;
   wma_data_buffer_.clear();
   resetServoPosition();
-}
-
-void Handle::resetServoPosition()
-{
-  RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Reset: servo_pos");
-  di.is_controlled_by_imu = false;
-  di.target_turn_angle = 0.0f;
-  di.target_pos_global = 0.0f;
-  recalculation_cnt_of_path = 0;
-  changeServoPos(0);
 }
 
 void Handle::vibrateLeftTurn()
