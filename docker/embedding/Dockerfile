@@ -35,6 +35,8 @@ RUN useradd -m $USERNAME && \
 RUN usermod -aG video $USERNAME
 USER $USERNAME
 
+COPY entrypoint.sh /entrypoint.sh
+
 ENV HOME /home/$USERNAME
 WORKDIR $HOME
 
@@ -44,4 +46,5 @@ ENV TORCH_HOME=$HOME/.cache/torch
 COPY --from=cabot_src ./mf_app $HOME/mf_app
 
 WORKDIR $HOME/mf_app
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "server.app:app", "--host", "127.0.0.1", "--port", "8001"]
