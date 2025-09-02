@@ -14,6 +14,15 @@ ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
 # Target arch
 FROM base_${TARGETARCH} AS base
 
+# install ubuntu packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gosu \
+    sudo \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# install python packages
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -33,7 +42,8 @@ RUN useradd -m $USERNAME && \
 # add user to video group to fix NvRmMemInitNvmap error on Jetson
 # https://forums.developer.nvidia.com/t/jetpack-5-0-dp-nvrmmeminitnvmap-failed-with-permission-denied/219804
 RUN usermod -aG video $USERNAME
-USER $USERNAME
+
+COPY entrypoint.sh /entrypoint.sh
 
 ENV HOME /home/$USERNAME
 WORKDIR $HOME
@@ -44,4 +54,5 @@ ENV TORCH_HOME=$HOME/.cache/torch
 COPY --from=cabot_src ./mf_app $HOME/mf_app
 
 WORKDIR $HOME/mf_app
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "server.app:app", "--host", "127.0.0.1", "--port", "8001"]

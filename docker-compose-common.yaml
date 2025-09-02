@@ -203,13 +203,13 @@ services:
     # ports:
     #   - "127.0.0.1:8000:8000"  # only localhost can access to the server
     environment:
-      # - HOST_UID
-      # - HOST_GID
-      # - HOST_TZ
-      # - DISPLAY
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
+      - DISPLAY
       - EMBEDDING_SERVER_PORT
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
-      # - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=all
     # network
     privileged: true
     network_mode: host
