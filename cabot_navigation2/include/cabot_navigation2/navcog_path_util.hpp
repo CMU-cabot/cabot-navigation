@@ -54,11 +54,12 @@ struct PathEstimateOptions
   double path_length_to_width_factor = 5;
 };
 
-Path normalizedPath(const Path & path);
+Path normalizedPath(const Path & path, double min_length = 1.0);
 Path adjustedPathByStart(
   const Path & path,
   const PoseStamped & pose,
-  bool smooth_start = false);
+  bool smooth_start = false,
+  nav2_costmap_2d::Costmap2D * costmap = nullptr);
 
 std::vector<PathWidth> estimatePathWidthAndAdjust(
   Path & path,
