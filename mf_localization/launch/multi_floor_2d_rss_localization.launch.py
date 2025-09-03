@@ -27,11 +27,13 @@ from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch.actions import DeclareLaunchArgument
 from launch.actions import GroupAction
+from launch.actions import IncludeLaunchDescription
 from launch.actions import SetEnvironmentVariable
 from launch.actions import RegisterEventHandler
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
 from launch.event_handlers import OnShutdown
+from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
 from launch_ros.actions import SetParametersFromFile
@@ -58,10 +60,13 @@ def generate_launch_description():
     pressure_topic = LaunchConfiguration('pressure_topic')
 
     use_gnss = LaunchConfiguration('use_gnss')
-    use_global_localizer = LaunchConfiguration('use_global_localizer')
     gnss_fix_topic = LaunchConfiguration('gnss_fix_topic')
     gnss_fix_velocity_topic = LaunchConfiguration('gnss_fix_velocity_topic')
     gnss_navsat_topic = LaunchConfiguration('gnss_navsat_topic')
+
+    # global localizer
+    run_global_localizer = LaunchConfiguration('run_global_localizer')
+    use_global_localizer = LaunchConfiguration('use_global_localizer')
 
     publish_current_rate = LaunchConfiguration('publish_current_rate')
 
@@ -88,10 +93,12 @@ def generate_launch_description():
         DeclareLaunchArgument('pressure_topic', default_value='pressure', description='Specify pressure topic name'),
 
         DeclareLaunchArgument('use_gnss', default_value='false', description='Weather GNSS functionality is used or not'),
-        DeclareLaunchArgument('use_global_localizer', default_value='false', description='Weather use global localizer or not'),
         DeclareLaunchArgument('gnss_fix_topic', default_value='gnss_fix', description='Specify GNSS fix topic name'),
         DeclareLaunchArgument('gnss_fix_velocity_topic', default_value='gnss_fix_velocity', description='Specify GNSS fix velocity topicname'),
         DeclareLaunchArgument('gnss_navsat_topic', default_value='ublox/navsat', description='Specify NAVSAT topicname'),
+
+        DeclareLaunchArgument('run_global_localizer', default_value='false', description='Whether to run global localizer or not'),
+        DeclareLaunchArgument('use_global_localizer', default_value='false', description='Weather use the output of the global localizer or not'),
 
         DeclareLaunchArgument('publish_current_rate', default_value='0', description='Specify the rate of publishing current location'),
 
@@ -154,6 +161,21 @@ def generate_launch_description():
                     ('sv_status', 'ublox_converter/sv_status'),
                 ],
                 # prefix='python3 -m cProfile -o multi_floor_manager.profile',
+            ),
+
+            # global localizer
+            IncludeLaunchDescription(
+                AnyLaunchDescriptionSource(PathJoinSubstitution([pkg_dir, 'launch', 'global_localizer.launch.py'])),
+                launch_arguments=[
+                    ('use_sim_time', use_sim_time),
+                    ('map_config_file', map_config_file),
+                    ('points2', points2_topic),
+                    ('imu', imu_topic),
+                    ('wifi', wifi_topic),
+                    ('beacons', beacons_topic),
+                    ('fix', gnss_fix_topic),
+                ],
+                condition=IfCondition(run_global_localizer),
             ),
         ]),
     ])

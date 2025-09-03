@@ -106,6 +106,28 @@ services:
     profiles:
       - prod
 
+  # embedding
+  embedding:
+    extends:
+      file: docker-compose-common.yaml
+      service: embedding
+    profiles:
+      - build
+
+  embedding-dev:
+    extends:
+      file: docker-compose-common.yaml
+      service: embedding-dev
+    profiles:
+      - dev
+
+  embedding-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: embedding-prod
+    profiles:
+      - prod
+
   # map server
   map_server:
     extends:

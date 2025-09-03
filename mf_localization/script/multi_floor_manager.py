@@ -38,7 +38,7 @@ import signal
 import threading
 import traceback
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import rclpy
 import rclpy.client
@@ -60,6 +60,7 @@ import tf2_ros
 import tf_transformations
 import message_filters
 from std_msgs.msg import String, Int64, Float64
+from std_srvs.srv import SetBool
 from geometry_msgs.msg import TransformStamped, Vector3, Quaternion, Point, Pose
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import TwistWithCovarianceStamped  # gnss_fix_velocity
@@ -77,6 +78,7 @@ import mf_localization.resource_utils as resource_utils
 from wireless_rss_localizer import create_wireless_rss_localizer
 
 from mf_localization_msgs.msg import MFGlobalPosition
+from mf_localization_msgs.msg import MFGlobalPosition2
 from mf_localization_msgs.msg import MFLocalizeStatus
 from mf_localization_msgs.msg import MFNavSAT
 from mf_localization_msgs.srv import ConvertLocalToGlobal
@@ -307,6 +309,18 @@ class GNSSParameters:
 
 
 @dataclass
+class GlobalLocalizerParameters:
+    confidence_high_threshold: float = 0.7
+    confidence_low_threshold: float = 0.3
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        field_names = {f.name for f in fields(cls)}
+        filtered_data = {k: v for k, v in data.items() if k in field_names}
+        return cls(**filtered_data)
+
+
+@dataclass
 class RSSLocalizationParameters:
     initial_localization: bool = True
     continuous_localization: bool = True
@@ -493,6 +507,7 @@ class MultiFloorManager:
         # for gnss localization
         # parameters
         self.gnss_params = GNSSParameters()
+        self.use_gnss = False
         # variables
         self.prev_navsat_msg = None
         self.prev_navsat_status = False
@@ -505,6 +520,13 @@ class MultiFloorManager:
         self.gnss_navsat_time = None
         self.gnss_balanced_floor_sampler = BalancedSampler()
 
+        # for global localizer
+        self.global_localization_parameters = GlobalLocalizerParameters()
+        self.use_global_localizer = False
+        self.global_localizer_is_active = False
+        self.global_localizer_set_enabled_service: rclpy.client.Client = None
+
+        # diagnostic
         self.updater = Updater(self.node)
 
         def localize_status(stat):
@@ -1327,10 +1349,17 @@ class MultiFloorManager:
             return response
         try:
             self.is_active = False
+            if self.use_global_localizer:
+                self.gnss_is_active = False
+                self.global_localizer_is_active = False
             try:
                 self.finish_trajectory()
             except Exception as e:
-                self.is_active = True  # if failed to finish trajectory
+                # if failed to finish trajectory
+                self.is_active = True
+                if self.use_global_localizer:
+                    self.gnss_is_active = True
+                    self.global_localizer_is_active = True
                 raise e
             self.reset_states()
             response.status.code = 0
@@ -1352,7 +1381,13 @@ class MultiFloorManager:
         else:
             self.floor = int(request.floor)
             response.status.message = f"Starting localization with floor={request.floor}."
-        self.is_active = True
+
+        if self.use_global_localizer:
+            self.is_active = False
+            self.gnss_is_active = False
+            self.global_localizer_is_active = True
+        else:
+            self.is_active = True
         response.status.code = 0
 
         return response
@@ -1412,12 +1447,28 @@ class MultiFloorManager:
         self.gnss_init_timeout_detected = False
         self.gnss_localization_time = None
         self.gnss_navsat_time = None
+        if self.use_gnss:
+            self.gnss_is_active = True
         if self.gnss_is_active:
             self.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
         else:
             self.indoor_outdoor_mode = IndoorOutdoorMode.INDOOR
 
+        # global localizer
+        if self.use_global_localizer:
+            self.gnss_is_active = False
+
+        if self.global_localizer_set_enabled_service is not None:
+            _ = call_service(self.global_localizer_set_enabled_service,
+                             SetBool.Request(data=True),  # enable
+                             timeout_sec=5.0,
+                             max_retries=10,
+                             )
+
+        # rss-based floor estimation smoothing
         self.floor_queue = []
+
+        # altitude floor estimator
         self.altitude_floor_estimator.reset()
         self.latest_floor_estimation_result = None
 
@@ -1433,7 +1484,12 @@ class MultiFloorManager:
         self.reset_states()
         if floor_value is not None:
             self.floor = floor_value
-        self.is_active = True
+
+        if self.use_global_localizer:
+            self.is_active = False
+            self.gnss_is_active = False
+        else:
+            self.is_active = True
 
     def restart_localization_callback(self, request, response):
         self.logger.info("restart_localization_callback")
@@ -1895,7 +1951,17 @@ class MultiFloorManager:
 
     # input:
     #      MFLocalPosition global_position
-    def global_localizer_global_pose_callback(self, msg):
+    def global_localizer_global_pose_callback(self, msg: MFGlobalPosition2):
+        self.logger.info("global_localizer_global_pose_callback")
+
+        if not self.global_localizer_is_active:
+            self.logger.info(F"do not start trajectory. global_localizer_is_active = {self.global_localizer_is_active}")
+            return
+
+        if self.is_active or self.gnss_is_active:
+            self.logger.info(F"do not start trajectory. is_active = {self.is_active} gnss_is_active = {self.gnss_is_active}")
+            return
+
         self.logger.info(F"received global_pose from global_localizer: global_pose={msg}")
 
         stamp = msg.header.stamp
@@ -1903,39 +1969,69 @@ class MultiFloorManager:
         longitude = msg.longitude
         floor_val = msg.floor  # noqa: F841
         heading = msg.heading
+        confidence = msg.confidence
 
-        frame_id = self.global_map_frame
-        anchor = self.global_anchor
+        stop_global_localizer = False
 
-        # lat,lng -> x,y
-        latlng = geoutil.Latlng(lat=latitude, lng=longitude)
-        xy = geoutil.global2local(latlng, anchor)
+        # determine whether to start trajectory based on global pose confidence
+        if self.global_localization_parameters.confidence_high_threshold <= confidence:
+            frame_id = self.global_map_frame
+            anchor = self.global_anchor
 
-        # heading -> yaw
-        anchor_rotation = anchor.rotate
-        yaw_degrees = anchor_rotation + 90.0 - heading
-        yaw_degrees = yaw_degrees % 360
-        yaw = np.radians(yaw_degrees)
+            # lat,lng -> x,y
+            latlng = geoutil.Latlng(lat=latitude, lng=longitude)
+            xy = geoutil.global2local(latlng, anchor)
 
-        # x,y,yaw -> PoseWithCovarianceStamped message
-        pose_with_covariance_stamped = PoseWithCovarianceStamped()
-        pose_with_covariance_stamped.header.stamp = stamp
-        pose_with_covariance_stamped.header.frame_id = frame_id
-        pose_with_covariance_stamped.pose.pose.position.x = xy.x
-        pose_with_covariance_stamped.pose.pose.position.y = xy.y
-        pose_with_covariance_stamped.pose.pose.position.z = 0.0
-        q = tf_transformations.quaternion_from_euler(0, 0, yaw, 'sxyz')
-        pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+            # heading -> yaw
+            anchor_rotation = anchor.rotate
+            yaw_degrees = anchor_rotation + 90.0 - heading
+            yaw_degrees = yaw_degrees % 360
+            yaw = np.radians(yaw_degrees)
 
-        # start localization
-        try:
-            status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)  # reset pose on the global frame
-        except (TimeoutError, Exception) as e:
-            self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
-            status_code = StatusCode.CANCELLED
+            # x,y,yaw -> PoseWithCovarianceStamped message
+            pose_with_covariance_stamped = PoseWithCovarianceStamped()
+            pose_with_covariance_stamped.header.stamp = stamp
+            pose_with_covariance_stamped.header.frame_id = frame_id
+            pose_with_covariance_stamped.pose.pose.position.x = xy.x
+            pose_with_covariance_stamped.pose.pose.position.y = xy.y
+            pose_with_covariance_stamped.pose.pose.position.z = 0.0
+            q = tf_transformations.quaternion_from_euler(0, 0, yaw, 'sxyz')
+            pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
-        if status_code == StatusCode.OK:
+            # start localization
+            try:
+                status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)  # reset pose on the global frame
+            except (TimeoutError, Exception) as e:
+                self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+                status_code = StatusCode.CANCELLED
+
+            if status_code == StatusCode.OK:
+                self.is_active = True
+                if self.use_gnss:
+                    self.gnss_is_active = True
+                if self.global_localizer_set_enabled_service is not None:
+                    stop_global_localizer = True
+        elif confidence < self.global_localization_parameters.confidence_low_threshold:
+            self.logger.info("failed to get initial location from global_localizer. fallback to default mode.")
+            # fallback to default localization mode
             self.is_active = True
+            if self.use_gnss:
+                self.gnss_is_active = True
+            # stop global localizer
+            if self.global_localizer_set_enabled_service is not None:
+                stop_global_localizer = True
+        else:  # confidence_low_threshold <= confidnce < confidence_high_threshold
+            # wait next global pose input
+            self.logger.info("skipped starting trajectory. global localizer confidence = {confidence}")
+
+        # stop global localizer if necessary
+        if stop_global_localizer:
+            _ = call_service(self.global_localizer_set_enabled_service,
+                             SetBool.Request(data=False),
+                             timeout_sec=5.0,
+                             max_retries=10,
+                             )
+            self.logger.info("global_localizer_global_pose_callback: stopped global localizer.")
 
     # check if pose graph is optimized
     def is_optimized(self):
@@ -2343,6 +2439,7 @@ if __name__ == "__main__":
     # external localizer parameters
     use_gnss = node.declare_parameter("use_gnss", False).value
     use_global_localizer = node.declare_parameter("use_global_localizer", False).value
+    stop_global_localizer_after_use = node.declare_parameter("stop_global_localizer_after_use", True).value  # enabled by default
 
     # auto-relocalization parameters
     multi_floor_manager.auto_relocalization = node.declare_parameter("auto_relocalization", False).value
@@ -2759,6 +2856,7 @@ if __name__ == "__main__":
         multi_floor_manager.gnss_params = GNSSParameters(**gnss_config)
         logger.info(F"gnss_config={gnss_config}, multi_floor_manager.gnss_params={multi_floor_manager.gnss_params}")
     if use_gnss:
+        multi_floor_manager.use_gnss = True
         multi_floor_manager.gnss_is_active = True
         multi_floor_manager.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
         gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix", callback_group=state_update_callback_group)
@@ -2772,15 +2870,18 @@ if __name__ == "__main__":
         # map_frame_adjust_time = node.create_timer(0.1, multi_floor_manager.map_frame_adjust_callback) # 10 Hz
 
     if use_global_localizer:
-        multi_floor_manager.is_active = False  # deactivate multi_floor_manager
-        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
-        # call external global localization service
-        logger.info("wait for service /global_localizer/request_localization")
-        global_localizer_request_localization = node.create_client(MFSetInt, '/global_localizer/request_localization', callback_group=MutuallyExclusiveCallbackGroup())
-        global_localizer_request_localization.wait_for_service()
-        n_compute_global_pose = 1  # request computing global_pose once
-        resp = global_localizer_request_localization(n_compute_global_pose)
-        logger.info("called /global_localizer/request_localization")
+        # config
+        multi_floor_manager.global_localization_parameters = GlobalLocalizerParameters.from_dict(map_config.get("global_localizer", {}))
+        logger.info(F"multi_floor_manager: use_global_localizer = {use_global_localizer}, parameters = {multi_floor_manager.global_localization_parameters}")
+        multi_floor_manager.is_active = False  # deactivate rss_callback initial localization
+        multi_floor_manager.gnss_is_active = False  # deactivate gnss_fix_callback initial localization
+        multi_floor_manager.use_global_localizer = True
+        multi_floor_manager.global_localizer_is_active = True
+        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition2, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
+
+        # global localizer service
+        if stop_global_localizer_after_use:
+            multi_floor_manager.global_localizer_set_enabled_service = node.create_client(SetBool, "/global_localizer/set_enabled", callback_group=MutuallyExclusiveCallbackGroup())
 
     # publish global_map->local_map by /tf_static
     multi_floor_manager.send_static_transforms()

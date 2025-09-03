@@ -73,6 +73,7 @@ install(TARGETS
 
 install(PROGRAMS
   script/fix_filter.py
+  script/global_localizer_node.py
   script/imu_frame_renamer.py
   script/multi_floor_manager.py
   script/multi_floor_map_server.py
