@@ -119,8 +119,8 @@ fi
 : ${CABOT_ROSBAG_COMPRESSION:='message'}
 : ${CABOT_USE_GNSS:=0}
 # global localizer
-: ${CABOT_RUN_GLOBAL_LOCALIZER:=0}
-: ${CABOT_USE_GLOBAL_LOCALIZER:=0}
+: ${CABOT_GLOBAL_LOCALIZER_RUN:=0}
+: ${CABOT_GLOBAL_LOCALIZER_USE:=0}
 
 # mapping
 : ${MAPPING_USE_GNSS:=false}
@@ -146,8 +146,8 @@ robot_desc=$CABOT_MODEL
 pressure_available=$CABOT_PRESSURE_AVAILABLE
 use_gnss=$CABOT_USE_GNSS
 # global localizer
-run_global_localizer=$CABOT_RUN_GLOBAL_LOCALIZER
-use_global_localizer=$CABOT_USE_GLOBAL_LOCALIZER
+run_global_localizer=$CABOT_GLOBAL_LOCALIZER_RUN
+use_global_localizer=$CABOT_GLOBAL_LOCALIZER_USE
 
 # for navigation
 navigation=0
