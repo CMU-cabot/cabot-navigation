@@ -28,6 +28,7 @@ import numpy as np
 from io import BytesIO
 from PIL import Image
 from fastapi import APIRouter, Request, Response
+from fastapi import HTTPException
 
 from ..vpr.image_feature_extractor import get_image_feature_extractor
 
@@ -38,7 +39,11 @@ logger = logging.getLogger(__name__)
 
 @router.post("/load_model")
 async def load_model(feature: str = "cosplace"):
-    _ = get_image_feature_extractor(feature)
+    try:
+        _ = get_image_feature_extractor(feature)
+    except Exception:
+        logger.exception("Failed get_image_feature_extractor in load_model")
+        raise HTTPException(status_code=500, detail="Failed to get image feature extractor model")
 
 
 @router.post('/extract_feature')
@@ -64,7 +69,11 @@ async def extract_feature(request: Request,
         pil_images.append(pil_image)
 
     # extract feature
-    model = get_image_feature_extractor(feature)
+    try:
+        model = get_image_feature_extractor(feature)
+    except Exception:
+        logger.exception("Failed get_image_feature_extractor in extract_feature")
+        raise HTTPException(status_code=500, detail="Failed to get image feature extractor model")
     descriptors = model.extract_feature(images=pil_images)
 
     if format == "npy":

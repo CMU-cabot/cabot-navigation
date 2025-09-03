@@ -23,11 +23,13 @@
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+import logging
 import os
 
 from .routers import image_feature
 from .vpr.image_feature_extractor import get_image_feature_extractor
 
+logger = logging.getLogger(__name__)
 
 features = os.environ.get("GPR_PRELOAD_FEATURES", "cosplace").split(",")
 
@@ -35,8 +37,12 @@ features = os.environ.get("GPR_PRELOAD_FEATURES", "cosplace").split(",")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # start
-    for feature in features:
-        get_image_feature_extractor(feature, warmup=True)
+    try:
+        for feature in features:
+            get_image_feature_extractor(feature, warmup=True)
+    except Exception:
+        logger.exception("Failed get_image_feature_extractor while application startup.")
+        logger.error("Keep the application running.")
     yield
     # end
 
