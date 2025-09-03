@@ -76,6 +76,10 @@ protected:
   bool publish_debug_ground_;
   std::string output_debug_ground_topic_;
   float ground_distance_threshold_;
+  bool ignore_noise_by_ror_;
+  float ignore_noise_by_ror_max_range_;
+  float ignore_noise_by_ror_radius_;
+  int ignore_noise_by_ror_min_neighbors_;
 
   tf2_ros::TransformListener * tf_listener_;
   tf2_ros::Buffer * tf_buffer_;
@@ -85,7 +89,7 @@ private:
   void filterGroundTimerCallback();
 
   int xfer_format_;
-  bool ignore_noise_;
+  bool ignore_noise_by_tag_;
   std::string input_topic_;
   std::string output_ground_topic_;
   std::string output_filtered_topic_;
