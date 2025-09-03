@@ -40,6 +40,9 @@ def generate_launch_description():
     compressed_image1 = LaunchConfiguration('compressed_image1')
     compressed_image2 = LaunchConfiguration('compressed_image2')
     compressed_image3 = LaunchConfiguration('compressed_image3')
+    compressed_image1_throttled = LaunchConfiguration('compressed_image1_throttled')
+    compressed_image2_throttled = LaunchConfiguration('compressed_image2_throttled')
+    compressed_image3_throttled = LaunchConfiguration('compressed_image3_throttled')
     imu = LaunchConfiguration('imu')
     wifi = LaunchConfiguration('wifi')
     beacons = LaunchConfiguration('beacons')
@@ -84,6 +87,21 @@ def generate_launch_description():
             ),
 
         DeclareLaunchArgument(
+            'compressed_image1_throttled',
+            default_value='/rs1/color/image_throttled/compressed'
+            ),
+
+        DeclareLaunchArgument(
+            'compressed_image2_throttled',
+            default_value='/rs2/color/image_throttled/compressed'
+            ),
+
+        DeclareLaunchArgument(
+            'compressed_image3_throttled',
+            default_value='/rs3/color/image_throttled/compressed'
+            ),
+
+        DeclareLaunchArgument(
             'imu',
             default_value='/imu/data'
             ),
@@ -125,6 +143,9 @@ def generate_launch_description():
                 ('compressed_image1', compressed_image1),
                 ('compressed_image2', compressed_image2),
                 ('compressed_image3', compressed_image3),
+                ('compressed_image1_throttled', compressed_image1_throttled),
+                ('compressed_image2_throttled', compressed_image2_throttled),
+                ('compressed_image3_throttled', compressed_image3_throttled),
                 ('imu', imu),
                 ('wifi', wifi),
                 ('beacons', beacons),

@@ -152,6 +152,18 @@ class LocalizerInterface:
         pass
 
     @abstractmethod
+    def image1_throttled_callback(self, image: CompressedImage):
+        pass
+
+    @abstractmethod
+    def image2_throttled_callback(self, image: CompressedImage):
+        pass
+
+    @abstractmethod
+    def image3_throttled_callback(self, image: CompressedImage):
+        pass
+
+    @abstractmethod
     def imu_callback(self, imu: Imu):
         pass
 
@@ -197,6 +209,9 @@ class GlobalLocalizerNode:
         self.image1_sub = node.create_subscription(CompressedImage, "compressed_image1", self.image1_callback, qos_profile=sensor_qos)  # front
         self.image2_sub = node.create_subscription(CompressedImage, "compressed_image2", self.image2_callback, qos_profile=sensor_qos)  # right"
         self.image3_sub = node.create_subscription(CompressedImage, "compressed_image3", self.image3_callback, qos_profile=sensor_qos)  # left
+        self.image1_throttled_sub = node.create_subscription(CompressedImage, "compressed_image1_throttled", self.image1_throttled_callback, qos_profile=sensor_qos)  # front
+        self.image2_throttled_sub = node.create_subscription(CompressedImage, "compressed_image2_throttled", self.image2_throttled_callback, qos_profile=sensor_qos)  # right"
+        self.image3_throttled_sub = node.create_subscription(CompressedImage, "compressed_image3_throttled", self.image3_throttled_callback, qos_profile=sensor_qos)  # left
         self.imu_sub = node.create_subscription(Imu, "imu", self.imu_callback, qos_profile=sensor_qos)
         self.wifi_sub = node.create_subscription(String, "wifi", self.wifi_callback, qos_profile=sensor_qos)
         self.beacons_sub = node.create_subscription(String, "beacons", self.beacons_callback, qos_profile=sensor_qos)
@@ -235,6 +250,15 @@ class GlobalLocalizerNode:
 
     def image3_callback(self, image: CompressedImage):
         self.localizer.image3_callback(image)
+
+    def image1_throttled_callback(self, image: CompressedImage):
+        self.localizer.image1_throttled_callback(image)
+
+    def image2_throttled_callback(self, image: CompressedImage):
+        self.localizer.image2_throttled_callback(image)
+
+    def image3_throttled_callback(self, image: CompressedImage):
+        self.localizer.image3_throttled_callback(image)
 
     def imu_callback(self, imu: Imu):
         self.localizer.imu_callback(imu)
