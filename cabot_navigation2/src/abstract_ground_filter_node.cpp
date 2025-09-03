@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl_ros/transforms.hpp>
 
@@ -38,7 +39,11 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
   output_debug_ground_topic_("/ground_filter_ground"),
   ground_distance_threshold_(0.05),
   xfer_format_(POINTCLOUD2_XYZRTL),
-  ignore_noise_(true),
+  ignore_noise_by_tag_(true),
+  ignore_noise_by_ror_(true),
+  ignore_noise_by_ror_max_range_(0.5),
+  ignore_noise_by_ror_radius_(0.05),
+  ignore_noise_by_ror_min_neighbors_(3),
   input_topic_("/livox/points"),
   output_ground_topic_("/livox/points_ground"),
   output_filtered_topic_("/livox/points_filtered"),
@@ -57,7 +62,11 @@ AbstractGroundFilterNode::AbstractGroundFilterNode(const std::string & filter_na
   if (xfer_format_ != POINTCLOUD2_XYZRTL && xfer_format_ != POINTCLOUD2_XYZI) {
     RCLCPP_ERROR(get_logger(), "Invalid format, specify 0 (Livox pointcloud2 format, PointXYZRTL) or 2 (Standard pointcloud2 format, pcl :: PointXYZI).");
   }
-  ignore_noise_ = declare_parameter("ignore_noise", ignore_noise_);
+  ignore_noise_by_tag_ = declare_parameter("ignore_noise_by_tag", ignore_noise_by_tag_);
+  ignore_noise_by_ror_ = declare_parameter("ignore_noise_by_ror", ignore_noise_by_ror_);
+  ignore_noise_by_ror_max_range_ = declare_parameter("ignore_noise_by_ror_max_range", ignore_noise_by_ror_max_range_);
+  ignore_noise_by_ror_radius_ = declare_parameter("ignore_noise_by_ror_radius", ignore_noise_by_ror_radius_);
+  ignore_noise_by_ror_min_neighbors_ = declare_parameter("ignore_noise_by_ror_min_neighbors", ignore_noise_by_ror_min_neighbors_);
   input_topic_ = declare_parameter("input_topic", input_topic_);
   output_ground_topic_ = declare_parameter("output_ground_topic", output_ground_topic_);
   output_filtered_topic_ = declare_parameter("output_filtered_topic", output_filtered_topic_);
@@ -108,7 +117,7 @@ void AbstractGroundFilterNode::filterGroundTimerCallback()
     pcl::fromROSMsg(*input, *input_points);
 
     // filter noise by point cloud tag
-    if (ignore_noise_) {
+    if (ignore_noise_by_tag_) {
       for (const auto & p : input_points->points) {
         // Livox Mid-70 manual (https://www.livoxtech.com/jp/mid-70/downloads)
         // Livox Mid-360 manual (https://www.livoxtech.com/jp/mid-360/downloads)
@@ -160,10 +169,53 @@ void AbstractGroundFilterNode::filterGroundTimerCallback()
   valid_extract_indices.setInputCloud(transformed_normal_points);
   valid_extract_indices.filter(*valid_transformed_normal_points);
 
+  // filter near noise by outlier removal
+  pcl::PointCloud<pcl::PointXYZ>::Ptr valid_transformed_inlier_points(new pcl::PointCloud<pcl::PointXYZ>);
+  if (ignore_noise_by_ror_) {
+    pcl::PointIndices near_indices;
+    pcl::PointIndices far_indices;
+    near_indices.indices.reserve(valid_transformed_normal_points->size());
+    far_indices.indices.reserve(valid_transformed_normal_points->size());
+    for (unsigned int i = 0; i < valid_transformed_normal_points->points.size(); i++) {
+      const auto & p = valid_transformed_normal_points->points[i];
+      float r = hypot(p.x, p.y);
+      if (r < ignore_noise_by_ror_max_range_) {
+        near_indices.indices.push_back(i);
+      } else {
+        far_indices.indices.push_back(i);
+      }
+    }
+
+    if (!near_indices.indices.empty()) {
+      pcl::PointCloud<pcl::PointXYZ>::Ptr near_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+      pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+      ror.setInputCloud(valid_transformed_normal_points);
+      ror.setIndices(pcl::make_shared<const pcl::PointIndices>(near_indices));
+      ror.setRadiusSearch(ignore_noise_by_ror_radius_);
+      ror.setMinNeighborsInRadius(ignore_noise_by_ror_min_neighbors_);
+      ror.filter(*near_filtered);
+      if (!near_filtered->empty()) {
+        *valid_transformed_inlier_points += *near_filtered;
+      }
+    }
+    if (!far_indices.indices.empty()) {
+      pcl::PointCloud<pcl::PointXYZ>::Ptr far_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+      pcl::ExtractIndices<pcl::PointXYZ> far_extract_indices;
+      far_extract_indices.setInputCloud(valid_transformed_normal_points);
+      far_extract_indices.setIndices(pcl::make_shared<const pcl::PointIndices>(far_indices));
+      far_extract_indices.filter(*far_cloud);
+      if (!far_cloud->empty()) {
+        *valid_transformed_inlier_points += *far_cloud;
+      }
+    }
+  } else {
+    valid_transformed_inlier_points = valid_transformed_normal_points;
+  }
+
   // filter ground point cloud
   pcl::PointCloud<pcl::PointXYZ>::Ptr ground_points(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_points(new pcl::PointCloud<pcl::PointXYZ>);
-  filterGround(input->header.stamp, valid_transformed_normal_points, ground_points, filtered_points);
+  filterGround(input->header.stamp, valid_transformed_inlier_points, ground_points, filtered_points);
 
   // publish ground point cloud
   sensor_msgs::msg::PointCloud2 ground_points_msg;
