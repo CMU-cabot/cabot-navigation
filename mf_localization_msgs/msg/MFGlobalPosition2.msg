@@ -31,7 +31,7 @@ float64 longitude
 float64 altitude
 
 # Floor
-int64 floor
+float64 floor
 
 # Heading [degrees]
 float64 heading
