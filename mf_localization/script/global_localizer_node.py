@@ -30,6 +30,7 @@ from rclpy.node import Node
 
 from mf_localization.global_localizer import init_localizer
 from mf_localization.global_localizer import GlobalLocalizerNode
+from mf_localization.global_localizer import LocalizerInterface
 from mf_localization.global_localizer import GLOBAL_LOCALIZER_CONFIG_KEY
 
 
@@ -42,6 +43,9 @@ signal.signal(signal.SIGINT, receiveSignal)
 
 
 def main():
+    """
+    Create a GlobalLocalizerNode instance that subscribes sensor data topics and publishes GlobalPose topic
+    """
     rclpy.init()
     node = Node("global_localizer")
     logger = node.get_logger()
@@ -52,7 +56,6 @@ def main():
         logger.error("map_config_file is not specified.")
         return
 
-    map_config = None
     with open(map_config_file) as stream:
         map_config = yaml.safe_load(stream)
 
@@ -64,7 +67,7 @@ def main():
         logger.info("global_localizer config does not exist in map_config.")
         return
 
-    localizer = init_localizer(node, map_config)
+    localizer: LocalizerInterface = init_localizer(node, map_config)
 
     logger.info(F"created {type(localizer).__name__}")
 

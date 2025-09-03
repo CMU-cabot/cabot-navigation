@@ -110,7 +110,18 @@ class GlobalPose:
 LocalizerCallback = Callable[[GlobalPose], None]
 
 
-def init_localizer(node: Node, map_config):
+def init_localizer(node: Node, map_config: dict) -> LocalizerInterface:
+    """
+    Initialize a localizer instance
+
+    Args:
+        node (rclpy.node.Node): ROS node
+        map_config (dict): A dictionary of map configuration
+            global_localizer:
+                localizer: "module/class"
+    Returns:
+        localizer (LocalizerInterface)
+    """
     # parse localizer_id "module/class"
     global_localizer_config = map_config.get(GLOBAL_LOCALIZER_CONFIG_KEY)
     localizer_id = global_localizer_config.get(LOCALIZER_CONFIG_KEY)
@@ -120,21 +131,26 @@ def init_localizer(node: Node, map_config):
     module: types.ModuleType = importlib.import_module(localizer_module_name)
     cls: LocalizerInterface = getattr(module, localizer_class_name)
 
-    localizer = cls.create(node, map_config)
+    localizer: LocalizerInterface = cls.create(node, map_config)
 
     return localizer
 
 
 class LocalizerInterface:
+    """
+    Interface specification of a localizer instance
+    """
     @classmethod
     @abstractmethod
-    def create(self, node: Node, config):
+    def create(self, node: Node, config) -> LocalizerInterface:
         pass
 
+    # callback to send the localizer output
     @abstractmethod
     def register_callback(self, callback: LocalizerCallback):
         pass
 
+    # subscription callbacks
     @abstractmethod
     def points2_callback(self, points2: PointCloud2):
         pass
@@ -187,6 +203,7 @@ class LocalizerInterface:
     def odom_callback(self, odom: Odometry):
         pass
 
+    # other methods
     @abstractmethod
     def set_enabled(self, active: bool):
         pass
@@ -197,10 +214,25 @@ class LocalizerInterface:
 
 
 class GlobalLocalizerNode:
-    def __init__(self, node: Node, map_config, localizer: LocalizerInterface):
+    """
+    A ROS 2 node implementation that subscribes multiple sensor inputs
+    (LiDAR, camera, IMU, Wi-Fi, GNSS, odometry, etc.), forwards them to an internal
+    localization backend, and publish the global and local pose estimates.
+    """
+    def __init__(self, node: Node, map_config: dict, localizer: LocalizerInterface):
         self.node = node
         self.logger = node.get_logger()
 
+        # load config
+        anchor_dict = map_config.get("anchor")
+        global_anchor = geoutil.Anchor(lat=anchor_dict["latitude"],
+                                       lng=anchor_dict["longitude"],
+                                       rotate=anchor_dict["rotate"]
+                                       )
+        self.global_anchor = global_anchor
+        self.frame_id = map_config.get("frame_id", "map_global")
+
+        # create a localizer implementation instance
         self.localizer: LocalizerInterface = localizer
 
         # create subscribers
@@ -228,13 +260,6 @@ class GlobalLocalizerNode:
 
         # create service
         self.set_enabled_srv = node.create_service(SetBool, "~/set_enabled", self.set_enabled_callback)
-
-        anchor_dict = map_config.get("anchor")
-        global_anchor = geoutil.Anchor(lat=anchor_dict["latitude"],
-                                       lng=anchor_dict["longitude"],
-                                       rotate=anchor_dict["rotate"]
-                                       )
-        self.global_anchor = global_anchor
 
         # set this instance to localizer to allow access
         localizer.set_localizer_node(self)
@@ -285,13 +310,12 @@ class GlobalLocalizerNode:
         self.logger.info(F"global_pose_callback: global_pose = {global_pose}")
 
         now = self.node.get_clock().now().to_msg()
-        frame_id = "map_global"
         # mf localization message
-        mf_pos: MFGlobalPosition2 = global_pose.to_mf_global_position2(now, frame_id)
+        mf_pos: MFGlobalPosition2 = global_pose.to_mf_global_position2(now, self.frame_id)
         self.mf_global_pose_pub.publish(mf_pos)
 
         # visualization message
-        pose_with_cov: PoseWithCovarianceStamped = global_pose.to_pose_with_covariance_stamped(self.global_anchor, now, frame_id)
+        pose_with_cov: PoseWithCovarianceStamped = global_pose.to_pose_with_covariance_stamped(self.global_anchor, now, self.frame_id)
         self.pose_pub.publish(pose_with_cov)
 
     def set_enabled(self, active: bool):
