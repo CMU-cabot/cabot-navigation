@@ -512,6 +512,8 @@ void Handle::pauseControlCallback(std_msgs::msg::Bool::SharedPtr msg)
   if (msg->data && di.current_servo_pos != 0) {
     is_navigating_ = false;
     wma_data_buffer_.clear();
+    di.turn_angle_queue_.clear();
+    di.turn_angle_queue_prefer_.clear();
     resetServoPosition();
     for (uint8_t i = 0; i < 5; i++) {
       RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset dial position");
@@ -604,6 +606,8 @@ void Handle::navigationArrived()
   RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Navigation arrived");
   is_navigating_ = false;
   wma_data_buffer_.clear();
+  di.turn_angle_queue_.clear();
+  di.turn_angle_queue_prefer_.clear();
   resetServoPosition();
   if (vibratorType_ == vibrator_type_::ERM) {
     vibratePattern(vibrator1_pub_, VibConst::ERM::NumVibrations::HAS_ARRIVED, VibConst::ERM::Duration::HAS_ARRIVED, VibConst::ERM::Sleep::DEFAULT);
@@ -621,6 +625,8 @@ void Handle::navigationStart()
 {
   is_navigating_ = true;
   wma_data_buffer_.clear();
+  di.turn_angle_queue_.clear();
+  di.turn_angle_queue_prefer_.clear();
   resetServoPosition();
 }
 
