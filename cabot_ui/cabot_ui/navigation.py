@@ -452,8 +452,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         rotation_complete_output = node.declare_parameter("rotation_complete_topic", "/cabot/rotation_complete").value
         self.rotation_complete_pub = node.create_publisher(std_msgs.msg.Bool, rotation_complete_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
-        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        turn_pose_prefer_output = node.declare_parameter("turn_pose_prefer_topic", "/cabot/turn_pose_prefer").value
+        self.turn_pose_prefer_pub = node.create_publisher(geometry_msgs.msg.PoseStamped, turn_pose_prefer_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._process_queue = []
         self._process_queue_lock = threading.Lock()
@@ -1341,9 +1341,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
 
-        msg = std_msgs.msg.Float32()
-        msg.data = geoutil.normalize_angle(turn_yaw)
-        self.turn_angle_pub.publish(msg)
+        msg = geometry_msgs.msg.PoseStamped()
+        msg.header.frame_id = self._global_map_name
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        quaternion = tf_transformations.quaternion_from_euler(0.0, 0.0, turn_yaw)
+        msg.pose.orientation.x = quaternion[0]
+        msg.pose.orientation.y = quaternion[1]
+        msg.pose.orientation.z = quaternion[2]
+        msg.pose.orientation.w = quaternion[3]
+        self.turn_pose_prefer_pub.publish(msg)
 
         future = self._spin_client.send_goal_async(goal)
         future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))

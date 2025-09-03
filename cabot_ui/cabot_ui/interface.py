@@ -31,10 +31,11 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from ament_index_python.packages import get_package_share_directory
 
 import std_msgs.msg
+import geometry_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
 import cabot_ui.geojson
-from cabot_ui import visualizer, geoutil, i18n
+from cabot_ui import visualizer, i18n
 from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
@@ -71,7 +72,7 @@ class UserInterface(object):
         self.pose_log_pub = node.create_publisher(cabot_msgs.msg.PoseLog, "/cabot/pose_log", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.pose_log2_pub = node.create_publisher(cabot_msgs.msg.PoseLog2, "/cabot/pose_log2", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.event_pub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_angle", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.turn_pose_pub = node.create_publisher(geometry_msgs.msg.PoseStamped, "/cabot/turn_pose", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.turn_type_pub = node.create_publisher(std_msgs.msg.String, "/cabot/turn_type", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.lang = node.declare_parameter("language", "en").value
@@ -339,7 +340,7 @@ class UserInterface(object):
             return
         pattern = vibration.UNKNOWN
         text = ""
-        msgs = [std_msgs.msg.String(), std_msgs.msg.Float32()]
+        msgs = [std_msgs.msg.String(), geometry_msgs.msg.PoseStamped()]
         if turn.turn_type == Turn.Type.Normal:
             if turn.angle <= -180/4*3:
                 pattern = vibration.RIGHT_ABOUT_TURN
@@ -366,9 +367,11 @@ class UserInterface(object):
             self._activity_log("cabot/turn_type", "Type.Avoiding")
         self.last_notify_turn[device] = self._node.get_clock().now()
         if device == "directional_indicator" and turn.end is not None:
-            angle_diff = geoutil.diff_angle(self.last_pose['ros_pose'].orientation, turn.end.pose.orientation)
-            msgs[1].data = geoutil.normalize_angle(angle_diff)
-            self.turn_angle_pub.publish(msgs[1])
+            msgs[1].header.frame_id = self.last_pose['global_frame']
+            msgs[1].header.stamp = self._node.get_clock().now().to_msg()
+            msgs[1].pose.position = turn.end.pose.position
+            msgs[1].pose.orientation = turn.end.pose.orientation
+            self.turn_pose_pub.publish(msgs[1])
         elif device == "vibrator":
             self._activity_log("cabot/interface", "turn angle", str(turn.angle))
             self._activity_log("cabot/interface", "notify", text)

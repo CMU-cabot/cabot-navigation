@@ -21,8 +21,8 @@
 
 #ifndef CABOT_NAVIGATION2__CABOT_ROTATION_SHIM_CONTROLLER_HPP_
 #define CABOT_NAVIGATION2__CABOT_ROTATION_SHIM_CONTROLLER_HPP_
+#include <tf2/LinearMath/Quaternion.h>
 #include <nav2_rotation_shim_controller/nav2_rotation_shim_controller.hpp>
-#include <std_msgs/msg/float64.hpp>
 
 namespace cabot_navigation2
 {
@@ -36,7 +36,7 @@ public:
     nav2_core::GoalChecker * goal_checker) override;
 
 private:
-  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr angular_distance_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_prefer_pub_;
 
 protected:
   geometry_msgs::msg::TwistStamped
