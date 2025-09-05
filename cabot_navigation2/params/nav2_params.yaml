@@ -423,6 +423,7 @@ local_costmap:
         enabled: True
         decaying_rate: 25
         rising_rate: 25
+        decay_outside_fov: False
         min_obstacle_height: -2.0
         max_obstacle_height: 2.0
         observation_sources: scan
@@ -503,6 +504,7 @@ global_costmap:
         enabled: True
         decaying_rate: 25
         rising_rate: 25
+        decay_outside_fov: False
         min_obstacle_height: -2.0
         max_obstacle_height: 2.0
         observation_sources: scan
