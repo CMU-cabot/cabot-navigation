@@ -53,6 +53,7 @@ private:
   unsigned char * temp_costmap2_;
   unsigned char decaying_rate_;
   unsigned char rising_rate_;
+  bool decay_outside_fov_;
 };
 
 }  // namespace cabot_navigation2
