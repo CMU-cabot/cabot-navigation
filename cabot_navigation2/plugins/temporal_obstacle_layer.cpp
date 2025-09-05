@@ -26,6 +26,7 @@
 
 using nav2_costmap_2d::Costmap2D;
 using nav2_costmap_2d::Observation;
+using nav2_costmap_2d::NO_INFORMATION;
 using nav2_costmap_2d::LETHAL_OBSTACLE;
 using nav2_costmap_2d::FREE_SPACE;
 
@@ -50,9 +51,11 @@ void TemporalObstacleLayer::onInitialize()
 
   declareParameter("decaying_rate", rclcpp::ParameterValue(25));
   declareParameter("rising_rate", rclcpp::ParameterValue(25));
+  declareParameter("decay_outside_fov", rclcpp::ParameterValue(true));
 
   node->get_parameter(name_ + "." + "decaying_rate", decaying_rate_);
   node->get_parameter(name_ + "." + "rising_rate", rising_rate_);
+  node->get_parameter(name_ + "." + "decay_outside_fov", decay_outside_fov_);
 
   nav2_costmap_2d::ObstacleLayer::onInitialize();
 }
@@ -104,12 +107,17 @@ TemporalObstacleLayer::updateBounds(
 
   auto node = node_.lock();
 
-  // raytrace freespace
-  // for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
-  //   RCLCPP_INFO(node->get_logger(), "Clearing obstacles");
-  //   raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
-  // }
-  memset(temp_costmap_, 0, size_x_ * size_y_ * sizeof(unsigned char));
+  if (decay_outside_fov_) {
+    memset(temp_costmap_, 0, size_x_ * size_y_ * sizeof(unsigned char));
+  } else {
+    memset(temp_costmap_, NO_INFORMATION, size_x_ * size_y_ * sizeof(unsigned char));
+
+    // raytrace freespace
+    for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
+      RCLCPP_INFO(node->get_logger(), "Clearing obstacles");
+      raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
+    }
+  }
 
   // place the new obstacles into a priority queue... each with a priority of zero to begin with
   for (std::vector<Observation>::const_iterator it = observations.begin();
@@ -281,6 +289,9 @@ TemporalObstacleLayer::updateCosts(
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
   for (int i = 0; i < size_x_ * size_y_; ++i) {
     unsigned char & cost = temp_costmap_[i];
+    if (cost == NO_INFORMATION) {
+      continue;
+    }
     if (cost == 0) {
       temp_costmap2_[i] = std::max(static_cast<int>(temp_costmap2_[i]) - decaying_rate_ / 2, static_cast<int>(FREE_SPACE));
     } else if (cost == 1) {
