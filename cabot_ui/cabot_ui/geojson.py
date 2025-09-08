@@ -1083,7 +1083,7 @@ class Landmark(Facility):
 
 
 class TrafficLightPOI(POI):
-    """Cabot Traffic Light class"""
+    """Cabot Traffic Light POI class"""
 
     @classmethod
     def marshal(cls, dic):
