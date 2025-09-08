@@ -840,7 +840,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
             self.gradient = goal.gradient
-            self.traffic_light_pois = [x for x in goal.pois if isinstance(x, geojson.TraficLightPOI)]
+            self.traffic_light_pois = [x for x in goal.pois if isinstance(x, geojson.TrafficLightPOI)]
         else:
             self.visualizer.pois = []
             self.speed_poi = []
@@ -1059,8 +1059,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self._logger.debug(f"TrafficLightPOI {max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)=}")
                     self._logger.debug(f"TrafficLightPOI {dist=}, {target_distance=}, {expected_deceleration=}, {expected_delay=}, {limit=}, {poi.limit=}")
                 if limit < self._max_speed:
-                    self._logger.debug(F"trafic light poi dist={dist:.2f}m, limit={limit:.2f}")
-                    self.delegate.activity_log("cabot/navigation", "trafic_light_poi", f"{limit}")
+                    self._logger.debug(F"traffic light poi dist={dist:.2f}m, limit={limit:.2f}")
+                    self.delegate.activity_log("cabot/navigation", "traffic_light_poi", f"{limit}")
 
         msg = std_msgs.msg.Float32()
         msg.data = limit
