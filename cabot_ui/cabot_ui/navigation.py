@@ -20,6 +20,7 @@
 # SOFTWARE.
 
 import copy
+import json
 import math
 import inspect
 import numpy
@@ -367,6 +368,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
         self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
+        self.traffic_light_pois = []
+        self.traffic_light_pois_enabled = {}  # Ex: {"facil_id_1": True, "facil_id_2": True, "facil_id_3": False}
 
         self.i_am_ready = False
         self._sub_goals = None
@@ -837,12 +840,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
             self.gradient = goal.gradient
+            self.traffic_light_pois = [x for x in goal.pois if isinstance(x, geojson.TraficLightPOI)]
         else:
             self.visualizer.pois = []
             self.speed_poi = []
             self.info_pois = []
             self.queue_wait_pois = []
             self.gradient = []
+            self.traffic_light_pois = []
         self.turns = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
@@ -1045,6 +1050,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 if limit < self._max_speed:
                     self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
+
+        for poi in [p for p in self.traffic_light_pois if self.traffic_light_pois_enabled.get(p.facil_id, False)]:
+            dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
+            if dist < 5.0:
+                if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
+                    limit = min(limit, max(poi.limit, max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)))
+                    self._logger.debug(f"TrafficLightPOI {max_v(max(0, dist-target_distance), expected_deceleration, expected_delay)=}")
+                    self._logger.debug(f"TrafficLightPOI {dist=}, {target_distance=}, {expected_deceleration=}, {expected_delay=}, {limit=}, {poi.limit=}")
+                if limit < self._max_speed:
+                    self._logger.debug(F"trafic light poi dist={dist:.2f}m, limit={limit:.2f}")
+                    self.delegate.activity_log("cabot/navigation", "trafic_light_poi", f"{limit}")
 
         msg = std_msgs.msg.Float32()
         msg.data = limit
@@ -1504,6 +1520,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def request_parameters(self, params, callback):
         self.param_manager.request_parameters(params, callback)
+
+    def set_traffic_light_enabled(self, params):
+        self.delegate.activity_log("cabot/navigation", "set_traffic_light_enabled", params)
+        self.traffic_light_pois_enabled = json.loads(params)
 
 
 class NavigationParamManager:

@@ -814,6 +814,8 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = QueueWaitPOI
                 if category == '_nav_queue_target_':
                     cls = QueueTargetPOI
+                if category == '_nav_traffic_light_':
+                    cls = TrafficLightPOI
 
         if cls == POI:
             return cls(**dic)
@@ -1078,3 +1080,17 @@ class Landmark(Facility):
     def __init__(self, **dic):
         self._id = dic['node']+"_landmark"
         super(Landmark, self).__init__(**dic)
+
+
+class TrafficLightPOI(POI):
+    """Cabot Traffic Light class"""
+
+    @classmethod
+    def marshal(cls, dic):
+        """marshal Traffic Light POI object"""
+        return cls(**dic)
+
+    def __init__(self, **dic):
+        super(TrafficLightPOI, self).__init__(**dic)
+        self.limit = 0.0
+        self.facil_id = self.properties.facil_id

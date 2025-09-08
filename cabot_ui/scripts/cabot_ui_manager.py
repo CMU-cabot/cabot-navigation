@@ -464,6 +464,9 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(True)
             self._navigation.set_pause_control(True)
 
+        if event.subtype == "set_trafic_light_enabled":
+            self._navigation.set_traffic_light_enabled(event.param)
+
         def description_callback(result):
             try:
                 if result:
