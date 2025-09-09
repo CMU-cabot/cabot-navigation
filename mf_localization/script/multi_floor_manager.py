@@ -75,7 +75,7 @@ import mf_localization.geoutil as geoutil
 import mf_localization.resource_utils as resource_utils
 
 # from mf_localization.wireless_utils import extract_samples
-from wireless_rss_localizer import create_wireless_rss_localizer
+from mf_localization.wireless_rss_localizer import create_wireless_rss_localizer
 
 from mf_localization_msgs.msg import MFGlobalPosition
 from mf_localization_msgs.msg import MFGlobalPosition2
