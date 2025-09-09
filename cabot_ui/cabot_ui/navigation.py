@@ -834,6 +834,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.visualizer.pois = goal.pois
             self.visualizer.visualize()
             self.speed_pois = [x for x in goal.pois if isinstance(x, geojson.SpeedPOI)]
+            self.signal_pois = [x for x in goal.pois if isinstance(x, geojson.SignalPOI)]
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
             self.gradient = goal.gradient
@@ -1045,6 +1046,26 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 if limit < self._max_speed:
                     self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
+
+        if self.signal_pois:
+            self.visualizer.visualize()
+
+        for poi in self.signal_pois:
+            dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
+            if dist >= 5.0:
+                continue
+            if not poi.in_angle(current_pose):
+                continue
+            temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
+
+            if poi.signal is None:
+                limit = temp_limit
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
+                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+            if poi.signal.state == geojson.Signal.RED:
+                limit = temp_limit
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)")
+                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
 
         msg = std_msgs.msg.Float32()
         msg.data = limit

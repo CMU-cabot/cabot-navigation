@@ -884,7 +884,7 @@ class NavGoal(Goal):
             if isinstance(item, geojson.RouteLink):
                 CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
+                    CaBotRclpyUtil.debug(f"{['  ', type(poi), poi._id]}")
                 temp.extend(item.pois)
         return temp
 
