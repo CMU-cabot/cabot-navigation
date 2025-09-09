@@ -158,6 +158,9 @@ def generate_launch_description():
             'mf_navsat:=mf_navsat_temp',
             'ublox_converter/num_active_sv:=ublox_converter/num_active_sv_temp',
             'ublox_converter/sv_status:=ublox_converter/sv_status_temp',
+            # global_localizer
+            'global_localizer/global_pose:=global_localizer/global_pose_temp',
+            'global_localizer/local_pose:=global_localizer/local_pose_temp',
         ])
         if convert_points.perform(context) == 'true':
             cmd.append([points2, ':=', points2_temp])
