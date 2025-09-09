@@ -370,6 +370,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
         self.traffic_light_pois = []
         self.traffic_light_pois_enabled = {}  # Ex: {"facil_id_1": True, "facil_id_2": True, "facil_id_3": False}
+        self.traffic_light_pois_last_update = time.time()
 
         self.i_am_ready = False
         self._sub_goals = None
@@ -1051,7 +1052,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
 
-        for poi in [p for p in self.traffic_light_pois if self.traffic_light_pois_enabled.get(p.facil_id, False)]:
+        extra_speed_pois = self.traffic_light_pois if time.time() - self.traffic_light_pois_last_update > 3 else [p for p in self.traffic_light_pois if self.traffic_light_pois_enabled.get(p.facil_id, False)]
+        for poi in extra_speed_pois
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
@@ -1524,6 +1526,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def set_traffic_light_enabled(self, params):
         self.delegate.activity_log("cabot/navigation", "set_traffic_light_enabled", params)
         self.traffic_light_pois_enabled = json.loads(params)
+        self.traffic_light_pois_last_update = time.time()
 
 
 class NavigationParamManager:
