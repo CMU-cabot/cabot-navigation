@@ -1053,7 +1053,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
 
         extra_speed_pois = self.traffic_light_pois if time.time() - self.traffic_light_pois_last_update > 3 else [p for p in self.traffic_light_pois if self.traffic_light_pois_enabled.get(p.facil_id, False)]
-        for poi in extra_speed_pois
+        for poi in extra_speed_pois:
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist < 5.0:
                 if poi.in_angle(current_pose):  # and poi.in_angle(c2p):
