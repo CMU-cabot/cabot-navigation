@@ -62,6 +62,9 @@ from mf_localization_msgs.msg import MFLocalizeStatus
 
 
 class NavigationInterface(object):
+    def user_speed(self):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
     def activity_log(self, category="", text="", memo=""):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
@@ -1050,6 +1053,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self.signal_pois:
             self.visualizer.visualize()
 
+        dx = self._current_goal.x - current_pose.x
+        dy = self._current_goal.y - current_pose.y
+        goal_dist = math.sqrt(dx * dx + dy * dy)
+        user_speed = self.delegate.user_speed()
+        margin = 3.0
+        rate = 0.9
+        expected_time = goal_dist / user_speed / rate + margin
+
         for poi in self.signal_pois:
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist >= 5.0:
@@ -1061,6 +1072,18 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             if poi.signal is None:
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
+                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+            elif poi.signal.state == geojson.Signal.GREEN:
+                remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s")
+
+                if remaining_time < expected_time:
+                    limit = temp_limit
+                    self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)")
+                    self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+            elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
+                limit = temp_limit
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)")
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
             elif poi.signal.state == geojson.Signal.RED:
                 limit = temp_limit
