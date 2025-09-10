@@ -578,6 +578,7 @@ class Tester:
                 action_name='setting speed',
                 topic='/cabot/user_speed',
                 topic_type='std_msgs/msg/Float32',
+                qos=QoSProfile(depth=10, durability=DurabilityPolicy.TRANSIENT_LOCAL),
                 message=f"data: {speed}",
             ),
             **kwargs)
