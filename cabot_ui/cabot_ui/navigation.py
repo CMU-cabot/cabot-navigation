@@ -1053,13 +1053,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self.signal_pois:
             self.visualizer.visualize()
 
-        dx = self._current_goal.x - current_pose.x
-        dy = self._current_goal.y - current_pose.y
-        goal_dist = math.sqrt(dx * dx + dy * dy)
+        goal_dist = 999
+        expected_time = 999
         user_speed = self.delegate.user_speed()
-        margin = 3.0
-        rate = 0.9
-        expected_time = goal_dist / user_speed / rate + margin
+        if self._current_goal.current_target():
+            current_target = self._current_goal.current_target().pose.position
+            dx = current_target.x - current_pose.x
+            dy = current_target.y - current_pose.y
+            goal_dist = math.sqrt(dx * dx + dy * dy)
+            margin = 3.0
+            rate = 0.9
+            expected_time = goal_dist / user_speed / rate + margin
 
         for poi in self.signal_pois:
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
@@ -1075,7 +1079,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
-                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s")
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s")
 
                 if remaining_time < expected_time:
                     limit = temp_limit

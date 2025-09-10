@@ -1016,6 +1016,9 @@ class NavGoal(Goal):
         return floor == self._floor and \
             self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
 
+    def current_target(self):
+        return self.navcog_routes[self.route_index][1]
+
 
 class TurnGoal(Goal):
     def __init__(self, delegate, goal_node, anchor, yaw, **kwargs):
