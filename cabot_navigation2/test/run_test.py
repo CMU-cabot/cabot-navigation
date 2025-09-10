@@ -397,7 +397,31 @@ class Tester:
             **kwargs)
         )
 
+    def send_navigation_event(self, event):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'send_navigation_event({event})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'navigation_{event}'"
+            ),
+        ))
+
+    """
+    # do no use raw button events because there are some different button mappings
     # shorthand functions
+    def button_up(self, button, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name=f'button_up({button})',
+                topic='/cabot/event',
+                topic_type='std_msgs/msg/String',
+                message=f"data: 'button_up_{button}'"
+            ),
+            **kwargs)
+        )
+        return
+
     def button_down(self, button, hold=0, **kwargs):
         if hold:
             self.pub_topic(**dict(
@@ -451,6 +475,7 @@ class Tester:
                 ),
                 **kwargs)
             )
+    """
 
     def cancel_navigation(self, **kwargs):
         self.pub_topic(**dict(
@@ -543,6 +568,17 @@ class Tester:
                 topic='/cabot/event',
                 topic_type='std_msgs/msg/String',
                 message=f"data: 'navigation;destination;{node_id}'"
+            ),
+            **kwargs)
+        )
+
+    def set_speed(self, speed, **kwargs):
+        self.pub_topic(**dict(
+            dict(
+                action_name='setting speed',
+                topic='/cabot/user_speed',
+                topic_type='std_msgs/msg/Float32',
+                message=f"data: {speed}",
             ),
             **kwargs)
         )
