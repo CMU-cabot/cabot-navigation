@@ -67,6 +67,8 @@ class Actions(Action):
 
                 if _type == "publish_topic":
                     temp.append(PublishTopicAction(action, menu))
+                elif _type == "subscribe_topic":
+                    temp.append(SubscribeTopicAction(action, menu))
                 elif _type == "reconfigure":
                     temp.append(ReconfigureAction(action, menu))
                 elif _type == "syscommand":
@@ -122,6 +124,30 @@ class PublishTopicAction(Action):
                 self._pub.publish(msg)
                 return True
         return False
+
+
+class SubscribeTopicAction(Action):
+    """Menu Action for subscribing topic"""
+    def __init__(self, config, menu):
+        super(SubscribeTopicAction, self).__init__(config, menu)
+        self._topic = Menu.get_menu_config(config, "topic", error=True)
+        msg_type_str = Menu.get_menu_config(config, "msg_type", default="std_msgs.msg.String")
+        self._msg_type = my_import(msg_type_str)
+
+        if self._topic is not None:
+            # needs to update with custom message typep
+            latching_qos = QoSProfile(depth=1,
+                                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
+            self._pub = CaBotRclpyUtil.instance().node.create_subscription(self._msg_type, self._topic, self.callback, qos_profile=latching_qos)
+
+    def callback(self, msg):
+        CaBotRclpyUtil.info(f"callback for subscribe topic {self._topic}, data={msg.data}")
+        if self._menu.value != msg.data:
+            self._menu.set_value(msg.data)
+
+    def do_action(self):
+        # do nothing
+        return True
 
 
 class ReconfigureAction(Action):
