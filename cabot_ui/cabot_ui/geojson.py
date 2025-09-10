@@ -36,6 +36,7 @@ import scipy
 import scipy.spatial
 import numpy
 import numpy.linalg
+import time
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
@@ -1136,7 +1137,12 @@ class SignalPOI(POI):
     @property
     def signal(self):
         # for safety, if no signal info, return 0.0
-        if SignalPOI.last_status is None:
+        if not SignalPOI.last_status:
+            return None
+
+        timestamp = SignalPOI.last_status[0]['timestamp'] if 'timestamp' in SignalPOI.last_status[0] else None
+        if timestamp is None or (time.time() - timestamp) > 1.0:
+            SignalPOI.last_status = []
             return None
 
         status = None

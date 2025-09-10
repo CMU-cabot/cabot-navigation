@@ -1062,7 +1062,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
-            if poi.signal.state == geojson.Signal.RED:
+            elif poi.signal.state == geojson.Signal.RED:
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)")
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
