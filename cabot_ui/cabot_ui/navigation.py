@@ -57,6 +57,7 @@ from cabot_ui import navgoal
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui.social_navigation import SocialNavigation, SNMessage
 from cabot_msgs.srv import LookupTransform
+import cabot_msgs.msg
 import queue_msgs.msg
 from mf_localization_msgs.msg import MFLocalizeStatus
 
@@ -367,6 +368,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.info_pois = []
         self.queue_wait_pois = []
         self.speed_pois = []
+        self.signal_pois = []
         self.turns = []
         self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
@@ -417,6 +419,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_pub = node.create_publisher(std_msgs.msg.Bool, pause_control_output, 10, callback_group=MutuallyExclusiveCallbackGroup())
         map_speed_output = node.declare_parameter("map_speed_topic", "/cabot/map_speed").value
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
@@ -1065,6 +1068,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             rate = 0.9
             expected_time = goal_dist / user_speed / rate + margin
 
+        state = "None"
+        remaining_time = -1.0
         for poi in self.signal_pois:
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist >= 5.0:
@@ -1077,6 +1082,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                state = "NO_SIGNAL_INFO"
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
                 self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s")
@@ -1085,18 +1091,28 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     limit = temp_limit
                     self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)")
                     self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                    state = "GREEN_SIGNAL_SHORT"
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
+                remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)")
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                state = "GREEN_SIGNAL_SHORT"
             elif poi.signal.state == geojson.Signal.RED:
+                remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)")
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                state = "RED_SIGNAL"
 
         msg = std_msgs.msg.Float32()
         msg.data = limit
         self.speed_limit_pub.publish(msg)
+        msg = cabot_msgs.msg.SignalState()
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.state = state
+        msg.remaining_time = remaining_time
+        self.signal_state_pub.publish(msg)
 
     def _check_turn(self, current_pose):
         # provide turn tactile notification

@@ -28,7 +28,7 @@ from people_msgs.msg import People
 import tf2_geometry_msgs  # noqa: to register class for transform
 from geometry_msgs.msg import PointStamped
 from nav_msgs.msg import Odometry
-from cabot_msgs.msg import StopReason
+from cabot_msgs.msg import StopReason, SignalState
 
 from dataclasses import dataclass
 import enum
@@ -60,6 +60,10 @@ class SNMessage:
         # not used, follow
         FOLLOWING_A_PERSON = enum.auto()
         FOLLOWING_PEOPLE = enum.auto()
+        # signal
+        RED_SIGNAL = enum.auto()
+        GREEN_SIGNAL_SHORT = enum.auto()
+        NO_SIGNAL_INFO = enum.auto()
 
     class Category(enum.Enum):
         AVOID = enum.auto()
@@ -69,13 +73,14 @@ class SNMessage:
 
     type: Type
     code: Code
+    param: str
     category: Category
     time: rclpy.time.Time
     priority: int
 
     @staticmethod
     def empty(type: Type, clock: rclpy.clock.Clock):
-        return SNMessage(type=type, code=None, category=None, time=clock.now(), priority=0)
+        return SNMessage(type=type, code=None, param=None, category=None, time=clock.now(), priority=0)
 
     @staticmethod
     def empty_message(clock: rclpy.clock.Clock):
@@ -100,6 +105,7 @@ class SocialNavigation(object):
         self._people_count = 0
         self._obstacles_count = 0
         self._event = None
+        self._latest_signal_state = None
 
         self._message: SNMessage = SNMessage.empty_message(node.get_clock())
         self._last_message: SNMessage = SNMessage.empty_message(node.get_clock())
@@ -112,10 +118,12 @@ class SocialNavigation(object):
         people_topic = node.declare_parameter("people_topic", "/people").value
         obstacles_topic = node.declare_parameter("obstacles_topic", "/obstacles").value
         stop_reason_topic = node.declare_parameter("stop_reason_topic", "/stop_reason").value
+        signal_state_topic = node.declare_parameter("signal_state_topic", "/cabot/signal_state").value
         self.odom_topic = node.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
         self.people_sub = node.create_subscription(People, people_topic, self._people_callback, 10)
         self.obstacles_sub = node.create_subscription(People, obstacles_topic, self._obstacles_callback, 10)
         self.stop_reason_sub = node.create_subscription(StopReason, stop_reason_topic, self._stop_reason_callback, 10)
+        self.signal_state_sub = node.create_subscription(SignalState, signal_state_topic, self._signal_state_callback, 10)
 
     def set_active(self, active):
         self._is_active = active
@@ -179,6 +187,10 @@ class SocialNavigation(object):
         except:  # noqa: 722
             self._logger.error(traceback.format_exc())
 
+    def _signal_state_callback(self, msg: SignalState):
+        self._latest_signal_state = msg
+        self._update()
+
     def _update(self):
         '''
         Message types:
@@ -221,6 +233,14 @@ class SocialNavigation(object):
             elif code == "AVOIDING_OBSTACLE":
                 self._set_sound(SNMessage.Code.OBSTACLE_AHEAD, SNMessage.Category.AVOID, 7)
                 # self._set_sound(SNMessage.Code.TRYING_TO_AVOID_OBSTACLE, SNMessage.STOP, 7)
+            elif code == "RED_SIGNAL":
+                param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
+                self._set_message(SNMessage.Code.RED_SIGNAL, SNMessage.Category.STOP, 7, param=param)
+            elif code == "GREEN_SIGNAL_SHORT":
+                param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
+                self._set_message(SNMessage.Code.GREEN_SIGNAL_SHORT, SNMessage.Category.STOP, 7, param=param)
+            elif code == "NO_SIGNAL_INFO":
+                self._set_message(SNMessage.Code.NO_SIGNAL_INFO, SNMessage.Category.STOP, 7)
             elif code == "UNKNOWN":
                 # self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.Category.STOP, 7)
                 pass
@@ -252,21 +272,22 @@ class SocialNavigation(object):
             # delete event after check
             self._event = None
 
-    def _set_message(self, code, category, priority):
+    def _set_message(self, code, category, priority, param=None):
         now = self._node.get_clock().now()
         self._logger.info(F"set_message {code} {category} {priority} {self._last_message} {now - self._last_message.time}")
         if (self._last_message.priority < priority and self._last_message.category != category) or \
-           (now - self._last_message.time) > Duration(seconds=5.0):
+           (now - self._last_message.time) > Duration(seconds=4.5):
             self._message.code = code
             self._message.category = category
             self._message.priority = priority
             self._message.time = now
+            self._message.param = param
 
     def _set_sound(self, code, category, priority):
         self._logger.info(F"set_sound {code} {category} {priority}")
         now = self._node.get_clock().now()
         if (self._last_sound.priority < priority and self._last_sound.category != category) or \
-           (now - self._last_sound.time) > Duration(seconds=5.0):
+           (now - self._last_sound.time) > Duration(seconds=4.5):
             self._sound.code = code
             self._sound.category = category
             self._sound.priority = priority
