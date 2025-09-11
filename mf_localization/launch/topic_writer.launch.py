@@ -132,8 +132,8 @@ def generate_launch_description():
 
         Node(
             package='mf_localization',
-            executable='topic_recorder_node.py',
-            name='topic_recorder',
+            executable='topic_writer_node.py',
+            name='topic_writer',
             output=output,
             parameters=[{
                 'output_dir': output_dir,

@@ -152,6 +152,7 @@ def generate_launch_description():
             'current_map_filename:=current_floor_map_filename_temp',
             'current_area:=current_area_temp',
             'current_mode:=current_mode_temp',
+            'global_position:=global_position_temp',
             'localize_status:=localize_status_temp',
             'map:=map_temp',
             # ublox_converter
@@ -161,6 +162,9 @@ def generate_launch_description():
             # global_localizer
             'global_localizer/global_pose:=global_localizer/global_pose_temp',
             'global_localizer/local_pose:=global_localizer/local_pose_temp',
+            # other
+            'cabot/pose_log:=cabot/pose_log_temp',
+            'cabot/pose_log2:=cabot/pose_log2_temp',
         ])
         if convert_points.perform(context) == 'true':
             cmd.append([points2, ':=', points2_temp])

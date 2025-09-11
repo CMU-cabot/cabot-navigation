@@ -280,7 +280,7 @@ signal.signal(signal.SIGINT, receiveSignal)
 
 def main():
     rclpy.init()
-    node = Node("topic_recorder")
+    node = Node("topic_writer")
     logger = node.get_logger()
 
     # parameter

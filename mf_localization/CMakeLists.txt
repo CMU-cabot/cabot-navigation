@@ -80,7 +80,7 @@ install(PROGRAMS
   script/multi_floor_wireless_rss_localizer.py
   script/tf2_beacons_listener.py
   script/tf2_listener.py
-  script/topic_recorder_node.py
+  script/topic_writer_node.py
   script/tracked_pose_listener.py
   script/trajectory_based_interpolator.py
   script/trajectory_recorder.py
