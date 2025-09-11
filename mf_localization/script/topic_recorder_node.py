@@ -21,53 +21,34 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from __future__ import annotations
-
 import signal
 import sys
-import yaml
-
-import rclpy
-from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import ReentrantCallbackGroup
-
-from abc import abstractmethod
-from dataclasses import dataclass
-import importlib
 import json
-import math
 from pathlib import Path
 import traceback
-import types
 import queue
-import threading
-import time
 
 import cv2
 import numpy as np
 import open3d
 
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+
+import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile
 from rclpy.qos import qos_profile_sensor_data
 from rosidl_runtime_py import message_to_ordereddict
 
-from geometry_msgs.msg import Pose
-from geometry_msgs.msg import PoseWithCovariance
-from geometry_msgs.msg import PoseWithCovarianceStamped
-from geometry_msgs.msg import TwistWithCovarianceStamped
-from nav_msgs.msg import Odometry
 from std_msgs.msg import String
-from std_srvs.srv import SetBool
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs.msg import CompressedImage
-from sensor_msgs.msg import Imu
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs_py import point_cloud2
 
 from cabot_msgs.msg import PoseLog2
+from mf_localization_msgs.msg import MFGlobalPosition
 
 
 class TopicRecorder:
@@ -99,6 +80,7 @@ class TopicRecorder:
         self._wifi_queue = queue.Queue(maxsize=1)
         self._beacons_queue = queue.Queue(maxsize=1)
         self._gnss_fix_queue = queue.Queue(maxsize=1)
+        self._global_position_queue = queue.Queue(maxsize=1)
         self._pose_log2_queue = queue.Queue(maxsize=1)
 
         # create subscribers
@@ -114,6 +96,7 @@ class TopicRecorder:
         self.beacons_sub = node.create_subscription(String, "beacons", self.beacons_callback, qos_profile=sensor_qos, callback_group=self._cb_group)
         self.gnss_fix_sub = node.create_subscription(NavSatFix, "fix", self.gnss_fix_callback, qos_profile=sensor_qos, callback_group=self._cb_group)
 
+        self.global_position_sub = node.create_subscription(MFGlobalPosition, "/global_position", self.global_position_callback, qos_profile=sensor_qos, callback_group=self._cb_group)
         self.pose_log2_sub = node.create_subscription(PoseLog2, "/cabot/pose_log2", self.pose_log2_callback, qos_profile=sensor_qos, callback_group=self._cb_group)
 
         # timer
@@ -170,16 +153,25 @@ class TopicRecorder:
             _ = self._gnss_fix_queue.get_nowait()
         self._gnss_fix_queue.put_nowait(fix)
 
+    def global_position_callback(self, msg: MFGlobalPosition):
+        if self._global_position_queue.full():
+            _ = self._global_position_queue.get_nowait()
+        self._global_position_queue.put_nowait(msg)
+
     def pose_log2_callback(self, msg: PoseLog2):
         if self._pose_log2_queue.full():
             _ = self._pose_log2_queue.get_nowait()
         self._pose_log2_queue.put_nowait(msg)
 
     def worker_tick(self):
+        if self._global_position_queue.qsize() < 1:
+            return
+        global_position = self._global_position_queue.get_nowait()
+
         if self._point2_queue.qsize() > 0 \
-          and self._image1_queue.qsize() > 0 \
-          and self._wifi_queue.qsize() > 0\
-          and self._gnss_fix_queue.qsize() > 0:
+           and self._image1_queue.qsize() > 0 \
+           and self._wifi_queue.qsize() > 0\
+           and self._gnss_fix_queue.qsize() > 0:
             pass
         else:
             return
@@ -259,6 +251,12 @@ class TopicRecorder:
                 with open(fix_path, "w") as f:
                     json.dump(fix_dict, f, indent=2)
 
+                # global_position
+                gp_dict = message_to_ordereddict(global_position)
+                gp_path = output_path.joinpath(F"{timestamp}_globalposition.json")
+                with open(gp_path, "w") as f:
+                    json.dump(gp_dict, f, indent=2)
+
                 # pose log2
                 if self._pose_log2_queue.qsize() > 0:
                     pose_log2 = self._pose_log2_queue.get_nowait()
@@ -287,12 +285,13 @@ def main():
 
     # parameter
     output_dir = node.declare_parameter("output_dir", "").value
-    logger.info(F"output dir = {output_dir}")
 
-    topic_recorder: TopicRecorder = TopicRecorder(node, output_dir)
+    if output_dir == "":
+        logger.error("output_dir is not specified.")
+    else:
+        logger.info(F"output_dir = {output_dir}")
 
-    logger.info(F"created {type(topic_recorder).__name__}")
-
+    _: TopicRecorder = TopicRecorder(node, output_dir)
     exec = MultiThreadedExecutor()
     exec.add_node(node)
     exec.spin()
