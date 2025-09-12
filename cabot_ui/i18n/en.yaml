@@ -45,6 +45,9 @@ PEOPLE_ARE_IN_MY_WAY: "people are in the way"
 PEOPLE_IN_THE_WAY: "people in the way"
 FOLLOWING_A_PERSON: "following a person"
 FOLLOWING_PEOPLE: "following some people"
+RED_SIGNAL: "red signal, {0} seconds remaining"
+GREEN_SIGNAL_SHORT: "green signal, but not enough time remains"
+NO_SIGNAL_INFO: "no signal information"
 
 ## queue
 GOING_TO_GET_IN_LINE: "We are going to get in line"

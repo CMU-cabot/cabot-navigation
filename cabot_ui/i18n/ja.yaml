@@ -45,6 +45,9 @@ A_PERSON_IN_THE_WAY: "ルート上に人。"
 PEOPLE_IN_THE_WAY: "ルート上に複数の人。"
 FOLLOWING_A_PERSON: "前の人に合わせています。"
 FOLLOWING_PEOPLE: "前の人たちに合わせています。"
+RED_SIGNAL: "赤信号、残り{0}秒"
+GREEN_SIGNAL_SHORT: "緑信号ですが、残り時間が足りません"
+NO_SIGNAL_INFO: "信号情報がありません"
 
 ## queue
 GOING_TO_GET_IN_LINE: "列に並びます。"

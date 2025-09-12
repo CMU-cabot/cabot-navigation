@@ -122,6 +122,23 @@ class Visualizer(object):
                     array.markers.append(make_marker(poi, r=1.0, x=1.0, s=0.5, _type=Marker.ARROW))
                     array.markers.append(make_marker(poi, text="%.2f m/s" % (poi.limit),
                                                      _type=Marker.TEXT_VIEW_FACING))
+                elif isinstance(poi, geojson.SignalPOI):
+                    state = poi.signal.state if poi.signal else None
+                    text = poi.signal.text if poi.signal else "No Signal Info."
+                    r = 0.0
+                    g = 0.0
+                    b = 0.0
+                    if state == geojson.Signal.RED:
+                        r = 1.0
+                    elif state == geojson.Signal.GREEN_BLINKING:
+                        r = 1.0
+                        g = 1.0
+                    elif state == geojson.Signal.GREEN:
+                        g = 1.0
+                    array.markers.append(make_marker(poi, r=r, g=g, b=b, x=0.5, y=0.5, z=0.5,
+                                                     _type=Marker.SPHERE))
+                    array.markers.append(make_marker(poi, text=text, x=0.5, y=0.5,
+                                                     _type=Marker.TEXT_VIEW_FACING))
                 else:
                     array.markers.append(make_marker(poi))
 

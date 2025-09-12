@@ -93,3 +93,7 @@ class CaBotRclpyUtil(object):
     @classmethod
     def time_zero(cls):
         return Time(seconds=0, nanoseconds=0, clock_type=cls.instance().clock.clock_type)
+
+    @classmethod
+    def create_subscription(cls, *args, **kwargs):
+        return cls.instance().node.create_subscription(*args, **kwargs)

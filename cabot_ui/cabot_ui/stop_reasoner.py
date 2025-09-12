@@ -20,6 +20,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
+"""
+This module is not used currently.
+Please check src/stop_reasoner.cpp instead.
+"""
+
+
 import code
 import enum
 import logging

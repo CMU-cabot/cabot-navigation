@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include <cabot_msgs/msg/signal_state.hpp>
 #include <cabot_msgs/msg/stop_reason.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
@@ -46,6 +47,7 @@ using namespace std::chrono_literals;
 #define LOCAL_PREFIX "/local"
 #define REPLAN_REASON_TOPIC "/replan_reason"
 #define CURRENT_FRAME_TOPIC "/current_frame"
+#define SIGNAL_STATE_TOPIC "/cabot/signal_state"
 
 namespace CaBotUI
 {
@@ -68,6 +70,7 @@ public:
     local_global_plan_sub_ = this->create_subscription<nav_msgs::msg::Path>(LOCAL_PREFIX RECEIVED_GLOBAL_PLAN, 10, std::bind(&StopReasonsNode::global_plan_callback, this, _1));
     replan_reason_sub_ = this->create_subscription<people_msgs::msg::Person>(REPLAN_REASON_TOPIC, 10, std::bind(&StopReasonsNode::replan_reason_callback, this, _1));
     current_frame_sub_ = this->create_subscription<std_msgs::msg::String>(CURRENT_FRAME_TOPIC, 10, std::bind(&StopReasonsNode::current_frame_callback, this, _1));
+    signal_state_sub_ = this->create_subscription<cabot_msgs::msg::SignalState>(SIGNAL_STATE_TOPIC, 10, std::bind(&StopReasonsNode::signal_state_callback, this, _1));
     timer_ = this->create_wall_timer(0.1s, std::bind(&StopReasonsNode::timer_callback, this));
     RCLCPP_INFO(this->get_logger(), "StopReasonsNode constructor completed");
   }
@@ -125,6 +128,13 @@ public:
   {
     if (reasoner_ != nullptr) {
       reasoner_->input_current_frame(*msg);
+    }
+  }
+
+  void signal_state_callback(const cabot_msgs::msg::SignalState::SharedPtr msg)
+  {
+    if (reasoner_ != nullptr) {
+      reasoner_->input_signal_state(*msg);
     }
   }
 
@@ -193,6 +203,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr local_global_plan_sub_;
   rclcpp::Subscription<people_msgs::msg::Person>::SharedPtr replan_reason_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr current_frame_sub_;
+  rclcpp::Subscription<cabot_msgs::msg::SignalState>::SharedPtr signal_state_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };  // class StopReasonsNode
 }  // namespace CaBotUI
