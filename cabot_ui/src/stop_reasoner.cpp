@@ -138,9 +138,6 @@ void StopReasoner::input_odom(nav_msgs::msg::Odometry & msg)
   auto az = msg.twist.twist.angular.z;
   linear_velocity_.input(get_current_time(), std::abs(std::sqrt(lx * lx + ly * ly)));
   angular_velocity_.input(get_current_time(), std::abs(az));
-  RCLCPP_INFO(logger_, "%.2f, linear=%.2f, angular=%.2f (raw)", get_current_time().nanoseconds() / 1e9,
-    std::abs(std::sqrt(lx * lx + ly * ly)),
-    std::abs(az));
 }
 
 void StopReasoner::input_event(std_msgs::msg::String & msg)
@@ -278,10 +275,6 @@ std::tuple<double, StopReason> StopReasoner::update()
       return std::make_tuple(0.0, StopReason::NOT_STOPPED);
     }
   }
-
-  RCLCPP_INFO(logger_, "%.2f, linear=%.2f, angular=%.2f", get_current_time().nanoseconds() / 1e9,
-    linear_velocity_.latest(get_current_time()),
-    angular_velocity_.latest(get_current_time()));
 
   // average velocity is under threshold
   if (linear_velocity_.latest(get_current_time()) < Constant::STOP_LINEAR_VELOCITY_THRESHOLD &&
