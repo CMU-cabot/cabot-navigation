@@ -744,7 +744,7 @@ class Nav2Params:
 /footprint_publisher:
     footprint_mode: 3
 /controller_server:
-    FollowPath.max_vel_x: 1.0
+    FollowPath.max_vel_x: 2.75
     FollowPath.sim_time: 0.37
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
