@@ -87,7 +87,6 @@ install(PROGRAMS
   script/str2str_node.py
   script/ublox_converter.py
   script/wireless_rss_localizer_node.py
-  script/wireless_rss_localizer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

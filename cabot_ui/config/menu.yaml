@@ -84,6 +84,10 @@ max_velocity_menu:
       type: publish_topic
       msg_type: std_msgs.msg.Float32
       topic: /cabot/user_speed
+    -
+      type: subscribe_topic
+      msg_type: std_msgs.msg.Float32
+      topic: /cabot/user_speed
   title: MAXIMUM_VELOCITY
   usage: MENU_ADJUST_USAGE
   name: max_velocity

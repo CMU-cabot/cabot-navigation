@@ -32,7 +32,7 @@ from geometry_msgs.msg import Point, Quaternion
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from mf_localization.wireless_utils import extract_samples
 
-from wireless_rss_localizer import SimpleRSSLocalizer
+from mf_localization.wireless_rss_localizer import SimpleRSSLocalizer
 
 
 class RSSLocalizerNode:

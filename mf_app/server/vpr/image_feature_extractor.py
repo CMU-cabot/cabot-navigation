@@ -25,20 +25,20 @@ import torch
 from torchvision import transforms
 
 
-def get_image_feature_extractor(feature="cosplace", warmup=False):
-    return ImageFeatureExtractor.get_instance(feature, warmup)
+def get_image_feature_extractor(feature="cosplace", eval=True, warmup=False):
+    return ImageFeatureExtractor.get_instance(feature, eval, warmup)
 
 
 class ImageFeatureExtractor:
     _reusable_instances = {}
 
     @classmethod
-    def get_instance(cls, feature="cosplace", warmup=False):
+    def get_instance(cls, feature="cosplace", eval=True, warmup=False):
         if feature not in cls._reusable_instances.keys():
-            cls._reusable_instances[feature] = cls(feature, warmup)
+            cls._reusable_instances[feature] = cls(feature, eval=eval, warmup=warmup)
         return cls._reusable_instances.get(feature)
 
-    def __init__(self, feature="cosplace", warmup=False):
+    def __init__(self, feature="cosplace", eval=True, warmup=False):
         if torch.cuda.is_available():
             device_str = "cuda"
         elif torch.backends.mps.is_available():
@@ -69,6 +69,9 @@ class ImageFeatureExtractor:
                                             ])
         else:
             raise RuntimeError(F"Invalid {feature = }")
+
+        if eval:
+            self.model.eval()
 
         if warmup:
             dummy = torch.randn(1, 3, 480, 480).to(self.device)
