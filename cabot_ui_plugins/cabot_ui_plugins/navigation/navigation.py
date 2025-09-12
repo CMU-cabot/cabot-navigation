@@ -22,6 +22,7 @@
 import copy
 import math
 import inspect
+from sre_parse import State
 import numpy
 import numpy.linalg
 import os
@@ -43,6 +44,7 @@ import tf2_geometry_msgs  # noqa: to register class for transform
 import tf_transformations
 import nav2_msgs.action
 import std_msgs.msg
+import std_srvs.srv
 import nav_msgs.msg
 import geometry_msgs.msg
 import unique_identifier_msgs.msg
@@ -51,97 +53,19 @@ from action_msgs.msg import GoalStatus
 
 # Other
 from cabot_common import util
+from cabot_ui.event import NavigationEvent
+from cabot_ui.node_manager import NodeManager
+from cabot_ui.plugin import NavigationInterface
+from cabot_ui.process_queue import ProcessQueue
 from cabot_ui import visualizer, geoutil, geojson, datautil
 from cabot_ui.turn_detector import TurnDetector, Turn
-from cabot_ui import navgoal
+from cabot_ui_plugins.navigation import navgoal
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui.social_navigation import SocialNavigation, SNMessage
+from cabot_ui.status import State, StatusManager
 from cabot_msgs.srv import LookupTransform
 import queue_msgs.msg
 from mf_localization_msgs.msg import MFLocalizeStatus
-
-
-class NavigationInterface(object):
-    def activity_log(self, category="", text="", memo=""):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def i_am_ready(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def start_navigation(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def update_pose(self, **kwargs):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def notify_turn(self, device=None, turn=None):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def notify_human(self, angle=0):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def goal_canceled(self, goal):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def have_arrived(self, goal):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def have_completed(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def approaching_to_poi(self, poi=None):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def approached_to_poi(self, poi=None):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def passed_poi(self, poi=None):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def enter_goal(self, goal):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def exit_goal(self, goal):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def could_not_get_current_location(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def please_call_elevator(self, pos):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def elevator_opening(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def floor_changed(self, floor):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def queue_start_arrived(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def queue_proceed(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def please_pass_door(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def door_passed(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def please_follow_behind(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def please_return_position(self):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def announce_social(self, message: SNMessage):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def request_sound(self, message: SNMessage):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
-
-    def system_pause_navigation(self, callback):
-        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
 
 class BufferProxy():
@@ -350,9 +274,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     NS = ["", "/local"]
     TURN_NEARBY_THRESHOLD = 2
 
-    def __init__(self, node: Node, tf_node: Node, srv_node: Node, act_node: Node, soc_node: Node,
-                 datautil_instance=None, anchor_file='', wait_for_action=True):
+    def __init__(self, node_manager: NodeManager,
+                 datautil_instance=None, anchor_file='', wait_for_action=True):        
+        node = node_manager.get_node("nav", False)
+        tf_node = node_manager.get_node("tf", True)
+        srv_node = node_manager.get_node("srv", True)
+        act_node = node_manager.get_node("act", True)
+        soc_node = node_manager.get_node("soc", True)
 
+        self._ready = False
+        self._status_manager = StatusManager.get_instance()
+        self._status_manager.delegate = self
         self.current_floor = None
         self.current_frame = None
 
@@ -368,7 +300,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
 
-        self.i_am_ready = False
         self._sub_goals = None
         self._goal_index = -1
         self._current_goal = None
@@ -455,16 +386,193 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
         self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
-        self._process_queue = []
-        self._process_queue_lock = threading.Lock()
-        self._process_timer = act_node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+        self._touchModeProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
+        self._userSpeedEnabledProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/user_speed_enabled", callback_group=MutuallyExclusiveCallbackGroup())
+
+        self._process_queue = ProcessQueue(act_node)
         self._start_loop()
+
+    @property
+    def ready(self) -> bool:
+        return self._ready
 
     def _localize_status_callback(self, msg):
         self._logger.info(F"_localize_status_callback {msg}")
         self.localize_status = msg.status
 
-    def process_event(self, event):
+    def process_event(self, event) -> None:
+        # operations depents on the current navigation state
+        if self._status_manager.state == State.in_preparation:
+            self.activity_log("cabot_ui/navigation", "in preparation")
+            self.delegate.in_preparation()
+            return
+
+        if event.subtype == "event":
+            self.process_navigation_event(event)
+            return True
+
+        if event.subtype == "arrived":
+            self.destination = None
+            return True
+
+        if event.subtype == "decision":
+            if self.destination is None:
+                self._logger.info("NavigationState: Subtour")
+                e = NavigationEvent("subtour", None)
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
+            return True
+
+        # deactivate control
+        if event.subtype == "idle":
+            self._logger.info("NavigationState: Pause control = True")
+            self.delegate.set_pause_control(True)
+            self.set_pause_control(True)
+            return True
+
+        result = False
+        if event.subtype == "destination":
+            if self._status_manager.state != State.idle:
+                self.activity_log("cabot_ui/navigation", "destination", "need to cancel")
+
+                def done_callback():
+                    self._status_manager.set_state(State.idle)
+                    self._process_navigation_event(event)
+                self._navigation.cancel_navigation(done_callback)
+                return True
+
+            self._logger.info(F"Destination: {event.param}")
+            self._retry_count = 0
+            self.destination = event.param
+            # change handle mode
+            request = std_srvs.srv.SetBool.Request()
+            request.data = True
+            if self._touchModeProxy.wait_for_service(timeout_sec=1):
+                self._touchModeProxy.call_async(request)
+                # response: std_srvs.srv.SetBool.Response = self._touchModeProxy.call(request)
+                # if not response.success:
+                #     self._logger.error("Could not set touch mode to True")
+            else:
+                self._logger.error("Could not find set touch mode service")
+
+            if self._userSpeedEnabledProxy.wait_for_service(timeout_sec=1):
+                self._userSpeedEnabledProxy.call_async(request)
+                # response = self._userSpeedEnabledProxy.call(request)
+                # if not response.success:
+                #     self._logger.info("Could not set user speed enabled to True")
+            else:
+                self._logger.error("Could not find set user speed enabled service")
+
+            # change state
+            # change to waiting_action by using actionlib
+            self._status_manager.set_state(State.in_action)
+            self.set_destination(event.param)
+            result = True
+
+        if event.subtype == "summons":
+            if self._status_manager.state != State.idle:
+                self.activity_log("cabot_ui/navigation", "summons", "need to cancel")
+
+                def done_callback():
+                    self._status_manager.set_state(State.idle)
+                    self._process_navigation_event(event)
+                self.cancel_navigation(done_callback)
+                return True
+
+            self._logger.info(F"Summons Destination: {event.param}")
+            self.destination = event.param
+            # change handle mode
+            request = std_srvs.srv.SetBool.Request()
+            request.data = False
+            if self._touchModeProxy.wait_for_service(timeout_sec=1):
+                response: std_srvs.srv.SetBool.Response = self._touchModeProxy.call(request)
+                if not response.success:
+                    self._logger.info("Could not set touch mode to False")
+            else:
+                self._logger.error("Could not find set touch mode service")
+
+            if self._userSpeedEnabledProxy.wait_for_service(timeout_sec=1):
+                response = self._userSpeedEnabledProxy.call(request)
+                if not response.success:
+                    self._logger.info("Could not set user speed enabled to False")
+            else:
+                self._logger.error("Could not find set user speed enabled service")
+
+            # change state
+            # change to waiting_action by using actionlib
+            self._status_manager.set_state(State.in_summons)
+            self.set_destination(event.param)
+            result = True
+
+        if event.subtype == "pause":
+            self._logger.info("NavigationState: User Pause requested")
+            if self._status_manager.state == State.in_action or \
+               self._status_manager.state == State.in_summons:
+                self._logger.info("NavigationState: pausing (user)")
+
+                def done_callback():
+                    self._status_manager.set_state(State.in_pause)
+                    self._logger.info("NavigationState: paused (user)")
+                self._status_manager.set_state(State.in_pausing)
+                self.delegate.pause_navigation()
+                self.pause_navigation(done_callback)
+            else:
+                # force to pause state
+                self._logger.info("NavigationState: state is not in action state={}".format(self._status_manager.state))
+            result = True
+
+        if event.subtype == "cancel":
+            self._logger.info("NavigationState: User Cancel requested")
+            if self._status_manager.state != State.idle:
+                self._logger.info("NavigationState: canceling (user)")
+                self.delegate.cancel_navigation()
+
+                def done_callback():
+                    self.in_navigation = False
+                    self.destination = None
+                    self._status_manager.set_state(State.idle)
+                    self._logger.info("NavigationState: canceled (user)")
+                self.cancel_navigation(done_callback)
+            else:
+                self._logger.info("NavigationState: state is not in action state={}".format(self._status_manager.state))
+            result = True
+
+        if event.subtype in {"resume", "resume_or_stop_reason"}:
+            if self.destination is not None:
+                self._logger.info("NavigationState: User Resume requested")
+                if self._status_manager.state == State.in_pause:
+                    self._logger.info("NavigationState: resuming (user)")
+                    self.delegate.resume_navigation()
+                    self._status_manager.set_state(State.in_action)
+                    self.resume_navigation()
+                    self._logger.info("NavigationState: resumed (user)")
+                    result = True
+                elif self._status_manager.state == State.in_pausing:
+                    self.delegate.pausing_navigation()
+                    result = True
+#                else:
+#                    if event.subtype == "resume_or_stop_reason" and self._description.enabled:
+#                        request_stop_reason_description()
+#                    else:
+#                        self._logger.info("NavigationState: state is not in pause state")
+            else:
+                self._logger.info("NavigationState: Next")
+                e = NavigationEvent("next", None)
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
+                result = True
+
+        if result:
+            # activate control
+            self._logger.info("NavigationState: Pause control = False")
+            self.delegate.set_pause_control(False)
+            self.set_pause_control(False)
+
+        return result
+
+    def process_navigation_event(self, event):
         '''cabot navigation event'''
         # do not provide social navigation messages while queue navigation
         if isinstance(self._current_goal, navgoal.QueueNavGoal):
@@ -508,10 +616,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self._logger.info("wait_resume_navigation")
                     self.wait_for_restart_timer.cancel()
                     self.resume_navigation()
+                self._status_manager.set_state(State.in_pause)
                 self._logger.info("wait_for_restart_navigation done_callback")
                 self.wait_for_restart_timer = self._node.create_timer(2.0, wait_resume_navigation)
 
-            self.delegate.system_pause_navigation(done_callback)
+                self._status_manager.set_state(State.in_pausing)
+            self.pause_navigation(done_callback)
 
     def _plan_callback(self, path):
         try:
@@ -581,9 +691,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if self._current_goal:
             self._current_goal.update_goal(msg)
 
-    def request_defult_params(self):
-        with self._process_queue_lock:
-            self._process_queue.append((self._request_default_params, ))
+    def request_default_params(self):
+        self._process_queue.add(self._request_default_params)
 
     def _request_default_params(self):
         # dummy Goal instance
@@ -600,53 +709,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # public interfaces
 
-    def set_handle_side(self, side):
-        self._logger.info("set_handle_side is called")
-        with self._process_queue_lock:
-            self._process_queue.append((self._set_handle_side, side))
-
-    def _set_handle_side(self, side):
-        self._logger.info("_set_handle_side is called")
-
-        def callback(result):
-            self.delegate.activity_log("cabot/navigation", "set_handle_side", "side")
-            self._logger.info(f"set_handle_side {side=}, {result=}")
-        if side == "left":
-            offset_sign = +1.0
-        elif side == "right":
-            offset_sign = -1.0
-        else:
-            self._logger.info(f"set_handle_side {side=} should be 'left' or 'right'")
-            return
-        self.change_parameters({
-            "/footprint_publisher": {
-                "offset_sign": offset_sign
-            }
-        }, callback)
-
-    def set_touch_mode(self, mode):
-        self._logger.info("set_touch_mode is called")
-        with self._process_queue_lock:
-            self._process_queue.append((self._set_touch_mode, mode))
-
-    def _set_touch_mode(self, mode):
-        self._logger.info("_set_touch_mode is called")
-
-        def callback(result):
-            self.delegate.activity_log("cabot/navigation", "set_touch_mode", "mode")
-            self._logger.info(f"set_touch_mode {mode=}, {result=}")
-        self.change_parameters({
-            "/cabot/cabot_can": {
-                "touch_mode": mode
-            }
-        }, callback)
-
     # wrap execution by a queue
     def set_destination(self, destination):
         self.destination = destination
         self.social_navigation.set_active(True)
-        with self._process_queue_lock:
-            self._process_queue.append((self._set_destination, destination))
+        self._process_queue.add(self._set_destination, destination)
 
     def reset_destination(self):
         if self.destination:
@@ -736,8 +803,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def retry_navigation(self):
-        with self._process_queue_lock:
-            self._process_queue.append((self._retry_navigation,))
+        self._process_queue.add(self._retry_navigation)
 
     def _retry_navigation(self):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -749,8 +815,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def pause_navigation(self, callback):
-        with self._process_queue_lock:
-            self._process_queue.append((self._pause_navigation, callback))
+        self._process_queue.add(self._pause_navigation, callback)
 
     def _pause_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -769,8 +834,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
-        with self._process_queue_lock:
-            self._process_queue.append((self._resume_navigation, callback))
+        self._process_queue.add(self._resume_navigation, callback)
 
     def _resume_navigation(self, callback):
         self._logger.info(F"navigation.{util.callee_name()} called")
@@ -789,8 +853,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     # wrap execution by a queue
     def cancel_navigation(self, callback=None):
-        with self._process_queue_lock:
-            self._process_queue.append((self._cancel_navigation, callback))
+        self._process_queue.add(self._cancel_navigation, callback)
         self.social_navigation.set_active(False)
 
     def _cancel_navigation(self, callback):
@@ -813,7 +876,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("navigation is canceled")
             return
 
-        if self._sub_goals and self._goal_index+1 < len(self._sub_goals):
+        if self._sub_goals and self._goal_index + 1 < len(self._sub_goals):
             self.delegate.activity_log("cabot/navigation", "next_sub_goal")
             self._goal_index += 1
             self._current_goal = self._sub_goals[self._goal_index]
@@ -822,6 +885,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         self._current_goal = None
+        self._status_manager.set_state(State.idle)
         self.delegate.have_completed()
         self.delegate.activity_log("cabot/navigation", "completed")
         self.social_navigation.set_active(False)
@@ -870,17 +934,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._loop_handle = None
             self.lock.release()
 
-    def _process_queue_func(self):
-        process = None
-        with self._process_queue_lock:
-            if len(self._process_queue) > 0:
-                process = self._process_queue.pop(0)
-        try:
-            if process:
-                process[0](*process[1:])
-        except:  # noqa: 722
-            self._logger.error(traceback.format_exc())
-
     # Main loop of navigation
     GOAL_POSITION_TORELANCE = 1
 
@@ -918,17 +971,18 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.debug("datautil is not analyzed", throttle_duration_sec=1)
             return
 
-        if not self.i_am_ready and \
+        if not self.ready and \
            self.localize_status != MFLocalizeStatus.TRACKING:
             self._logger.debug("not ready and initialize localization", throttle_duration_sec=1)
             return
 
         # say I am ready once
-        if not self.i_am_ready:
-            self.i_am_ready = True
+        if not self.ready:
+            self._ready = True
             self._logger.debug("i am ready")
+            self._status_manager.set_state(State.idle)
             self.delegate.i_am_ready()
-            self.request_defult_params()
+            self.request_default_params()
 
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
@@ -1215,7 +1269,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._stop_loop()
             self._current_goal = None
             self._goal_index = max(-1, self._goal_index - 1)
-            self.delegate.goal_canceled(goal)
+            # unexpected cancel, may need to retry
+            if self._status_manager.state == State.in_action:
+                self._logger.info("NavigationState: canceled (system)")
+                self._status_manager.set_state(State.in_pausing)
+                self._retry_count += 1
+                self._logger.info("NavigationState: retrying (system)")
+                self._status_manager.set_state(State.in_action)
+                self.retry_navigation()
+                self._logger.info("NavigationState: retried (system)")
+                return
+            self._logger.info("NavigationState: canceled (user)")
             self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
             return
 
@@ -1458,7 +1522,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         gh_callback(task)
 
     def set_pause_control(self, flag):
-        self._logger.info("set_pause_control")
+        self._logger.info(f"set_pause_control {flag=}")
         self.delegate.activity_log("cabot/navigation", "pause_control", str(flag))
         self.pause_control_msg.data = flag
         self.pause_control_pub.publish(self.pause_control_msg)
