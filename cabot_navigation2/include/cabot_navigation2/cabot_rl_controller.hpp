@@ -53,6 +53,7 @@ public:
   // void reset() {}
 
 private:
+  int configure_count = 0;
   rclcpp::Logger logger_ = rclcpp::get_logger("CaBotRLController");
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_;

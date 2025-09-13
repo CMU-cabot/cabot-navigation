@@ -147,6 +147,7 @@ void CaBotSamplingMPCController::configure(
 
   RCLCPP_INFO(logger_, "MPC controller configured with prediction horizon: %.2f, sampling rate: %.2f",
     prediction_horizon_, sampling_rate_);
+
 }
 
 void CaBotSamplingMPCController::groupPredictionCallback(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group)
@@ -190,6 +191,9 @@ void CaBotSamplingMPCController::localGoalVisualizationCallback()
   auto node = node_.lock();
   auto vis_msg = visualization_msgs::msg::Marker();
 
+  RCLCPP_DEBUG(logger_, "Visualizing local goal at x: %.2f, y: %.2f",
+    curr_local_goal_.pose.position.x, curr_local_goal_.pose.position.y);
+
   double marker_size = 0.75;
 
   vis_msg.header.stamp = node->now();
@@ -198,7 +202,8 @@ void CaBotSamplingMPCController::localGoalVisualizationCallback()
   vis_msg.id = 0;
   vis_msg.type = 2;
   vis_msg.action = 0;
-  vis_msg.pose = curr_local_goal_.pose;
+  vis_msg.pose.position.x = curr_local_goal_.pose.position.x;
+  vis_msg.pose.position.y = curr_local_goal_.pose.position.y;
   vis_msg.scale.x = marker_size;
   vis_msg.scale.y = marker_size;
   vis_msg.scale.z = marker_size;
@@ -206,6 +211,7 @@ void CaBotSamplingMPCController::localGoalVisualizationCallback()
   vis_msg.color.g = 0.0;
   vis_msg.color.b = 0.0;
   vis_msg.color.a = 1.0;
+  vis_msg.lifetime = rclcpp::Duration(0, 0); 
 
   local_goal_visualization_pub_->publish(vis_msg);
 }
@@ -262,6 +268,7 @@ geometry_msgs::msg::TwistStamped CaBotSamplingMPCController::computeVelocityComm
 
   if (global_plan.poses.size() == 0)
   {
+    curr_local_goal_ = pose;
     return velocity_cmd;
   }
 

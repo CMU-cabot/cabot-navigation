@@ -26,6 +26,9 @@ void CaBotRLController::configure(
   costmap_ros_ = costmap_ros.get();  // Get pointer to the costmap
   name_ = name;
   tf_ = tf;
+  
+  configure_count++;
+  RCLCPP_INFO(logger_, "Configure called - count: %d", configure_count);
 
   // Load parameters
   // declare_parameter_if_not_declared(
@@ -66,8 +69,8 @@ void CaBotRLController::configure(
   local_goal_visualization_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(loc_goal_vis_topic_, 10);
   loc_goal_vis_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotRLController::localGoalVisualizationCallback, this));
 
-  auto current_command = geometry_msgs::msg::Twist();
-  auto robot_info = lidar_process_msgs::msg::RobotMessage();
+  current_command = geometry_msgs::msg::Twist();
+  robot_info = lidar_process_msgs::msg::RobotMessage();
 }
 
 void CaBotRLController::localGoalVisualizationCallback()
@@ -107,16 +110,20 @@ void CaBotRLController::rlInfoCallback()
 {
   auto node = node_.lock();
 
-  if (robot_info.robot_pos.x == 0) {
-    robot_info.robot_pos.x = 0.0;
-    robot_info.robot_pos.y = 0.0;
-    robot_info.robot_vel.x = 0.0;
-    robot_info.robot_vel.y = 0.0;
-    robot_info.robot_goal.x = 0.0;
-    robot_info.robot_goal.y = 0.0;
-    robot_info.robot_th = 0.0;
-  }
-  
+  // if (robot_info.robot_pos.x == 0) {
+  //   robot_info.robot_pos.x = 0.0;
+  //   robot_info.robot_pos.y = 0.0;
+  //   robot_info.robot_vel.x = 0.0;
+  //   robot_info.robot_vel.y = 0.0;
+  //   robot_info.robot_goal.x = 0.0;
+  //   robot_info.robot_goal.y = 0.0;
+  //   robot_info.robot_th = 0.0;
+  // }
+  RCLCPP_INFO(logger_, "Publishing RL Info: Pos(%.2f, %.2f), Vel(%.2f, %.2f), Goal(%.2f, %.2f), Th(%.2f)",
+    robot_info.robot_pos.x, robot_info.robot_pos.y,
+    robot_info.robot_vel.linear.x, robot_info.robot_vel.angular.z,
+    robot_info.robot_goal.x, robot_info.robot_goal.y,
+    robot_info.robot_th);
   rl_info_pub_->publish(robot_info);
 }
 
@@ -183,8 +190,8 @@ geometry_msgs::msg::TwistStamped CaBotRLController::computeVelocityCommands(
   robot_info.robot_pos.x = pose.pose.position.x;
   robot_info.robot_pos.y = pose.pose.position.y;
   robot_info.robot_th = tf2::getYaw(pose.pose.orientation);
-  robot_info.robot_vel.x = velocity.linear.x * std::cos(velocity.angular.z);
-  robot_info.robot_vel.y = velocity.linear.x * std::sin(velocity.angular.z);
+  robot_info.robot_vel.linear.x = velocity.linear.x;
+  robot_info.robot_vel.angular.z = velocity.angular.z;
   robot_info.robot_goal.x = local_goal.pose.position.x;
   robot_info.robot_goal.y = local_goal.pose.position.y;
 
@@ -241,22 +248,22 @@ geometry_msgs::msg::PoseStamped CaBotRLController::getLookaheadPoint(
   geometry_msgs::msg::PoseStamped lookahead_point;
   lookahead_point = global_plan.poses.back();
 
-  // double current_x = current_pose.pose.position.x;
-  // double current_y = current_pose.pose.position.y;
+  double current_x = current_pose.pose.position.x;
+  double current_y = current_pose.pose.position.y;
 
-  // for (size_t i = last_visited_index_; i < global_plan.poses.size(); ++i)
-  // {
-  //   double dx = global_plan.poses[i].pose.position.x - current_x;
-  //   double dy = global_plan.poses[i].pose.position.y - current_y;
-  //   double distance = std::sqrt(dx * dx + dy * dy);
+  for (size_t i = last_visited_index_; i < global_plan.poses.size(); ++i)
+  {
+    double dx = global_plan.poses[i].pose.position.x - current_x;
+    double dy = global_plan.poses[i].pose.position.y - current_y;
+    double distance = std::sqrt(dx * dx + dy * dy);
 
-  //   if (distance >= lookahead_distance_)
-  //   {
-  //     lookahead_point = global_plan.poses[i];
-  //     last_visited_index_ = i;  // Update last visited index
-  //     break;
-  //   }
-  // }
+    if (distance >= lookahead_distance_)
+    {
+      lookahead_point = global_plan.poses[i];
+      last_visited_index_ = i;  // Update last visited index
+      break;
+    }
+  }
 
   return lookahead_point;
 }

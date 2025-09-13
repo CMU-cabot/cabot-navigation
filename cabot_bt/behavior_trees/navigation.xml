@@ -65,8 +65,8 @@
           </RateController>
 
           <!-- follow path -->
-          <FollowPath path="{path}" controller_id="MPCFollowPath" goal_checker_id="cabot_goal_checker" />
-          <!-- <FollowPath path="{path}" controller_id="RLFollowPath" goal_checker_id="cabot_goal_checker" /> -->
+          <!-- <FollowPath path="{path}" controller_id="MPCFollowPath" goal_checker_id="cabot_goal_checker" /> -->
+          <FollowPath path="{path}" controller_id="RLFollowPath" goal_checker_id="cabot_goal_checker" />
           <!-- <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="cabot_goal_checker" /> -->
         </PipelineSequence>
 
