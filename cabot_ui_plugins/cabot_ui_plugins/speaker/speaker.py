@@ -8,6 +8,7 @@ import std_msgs.msg
 
 from cabot_ui.event import NavigationEvent
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 
 class Speaker:
@@ -28,6 +29,9 @@ class Speaker:
         else:
             wav_files = []
         self.audio_files = ",".join(wav_files)
+        node = node_manager.get_node()
+        self._eventPub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
         self.send_speaker_audio_files()
 
     @property
@@ -35,32 +39,38 @@ class Speaker:
         return True
 
     def process_event(self, event) -> bool:
+        if event.subtype == "reqfeatures":
+            self.send_speaker_audio_files()
+            return False
+
         if event.subtype == "getspeakeraudiofiles":
             return True
 
         if event.subtype == "speaker_enable":
             self.enable_speaker(event.param)
-            return
+            return True
 
         if event.subtype == "speaker_alert":
             self.speaker_alert()
-            return
+            return True
 
         if event.subtype == "speaker_audio_file":
             self.set_audio_file(event.param)
-            return
+            return True
 
         if event.subtype == "speaker_volume":
             self.set_speaker_volume(event.param)
-            return
+            return True
+
+        return False
 
     def enable_speaker(self, enable_speaker: str):
         self._enable_speaker = enable_speaker.lower() == "true"
-        self._activity_log("change speaker config", "enable speaker", str(self._enable_speaker), visualize=True)
+        self.delegate.activity_log("change speaker config", "enable speaker", str(self._enable_speaker), visualize=True)
 
     def set_audio_file(self, filename):
         self._audio_file_path = os.path.join(self._audio_dir, filename)
-        self._activity_log("change speaker config", "audio file", str(self._audio_file_path), visualize=True)
+        self.delegate.activity_log("change speaker config", "audio file", str(self._audio_file_path), visualize=True)
 
     def set_speaker_volume(self, volume):
         try:
@@ -91,7 +101,7 @@ class Speaker:
             CaBotRclpyUtil.error(f"Failed to adjust volume via pactl: {e}")
             return
 
-        self._activity_log("change speaker config", "volume (%)", str(self._speaker_volume), visualize=True)
+        self.delegate.activity_log("change speaker config", "volume (%)", str(self._speaker_volume), visualize=True)
 
     def speaker_alert(self):
         if not self._enable_speaker:
@@ -107,6 +117,7 @@ class Speaker:
             return
 
         try:
+            self.delegate.activity_log("speaker_alert", self._audio_file_path)
             sound = AudioSegment.from_wav(self._audio_file_path)
             CaBotRclpyUtil.info(F"Playing {self._audio_file_path} (volume: {self._speaker_volume}%)")
             pydub.playback.play(sound)
@@ -114,8 +125,9 @@ class Speaker:
             CaBotRclpyUtil.error(F"Playback failed: {e}")
 
     def send_speaker_audio_files(self):
+        CaBotRclpyUtil.info("send_speaker_audio_files")
         if self.audio_files:
-            e = NavigationEvent("getspeakeraudiofiles", self._interface.audio_files)
+            e = NavigationEvent("getspeakeraudiofiles", self.audio_files)
             msg = std_msgs.msg.String()
             msg.data = str(e)
             self._eventPub.publish(msg)

@@ -233,8 +233,8 @@ class UserInterface(object):
 
     # navigate interface
 
-    def activity_log(self, category="", text="", memo=""):
-        self._activity_log(category, text, memo)
+    def activity_log(self, category="", text="", memo="", visualize=False):
+        self._activity_log(category, text, memo, visualize=visualize)
 
     def in_preparation(self):
         self._activity_log("cabot/interface", "status", "prepare")
@@ -305,18 +305,12 @@ class UserInterface(object):
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"), priority=SpeechPriority.NORMAL)
 
     def have_arrived(self, goal):
-        raise RuntimeError("Should no use this func")
-        name = goal.goal_name_pron
-        desc = goal.goal_description
+        # do nothing
+        pass
 
-        if name:
-            if desc:
-                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME_AND_DESCRIPTION").format(name, desc), priority=SpeechPriority.HIGH)
-            else:
-                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME").format(name), priority=SpeechPriority.HIGH)
-        else:
-            self.speak(i18n.localized_string("YOU_HAVE_ARRIVED"), priority=SpeechPriority.HIGH)
-        self._activity_log("cabot/interface", "navigation", "arrived")
+    def have_completed(self):
+        # do nothing
+        pass
 
     def get_speech_priority(self, poi):
         if isinstance(poi, cabot_ui.geojson.Entrance):

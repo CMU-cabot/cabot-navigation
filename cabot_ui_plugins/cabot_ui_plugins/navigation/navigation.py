@@ -55,7 +55,6 @@ from action_msgs.msg import GoalStatus
 from cabot_common import util
 from cabot_ui.event import NavigationEvent
 from cabot_ui.node_manager import NodeManager
-from cabot_ui.plugin import NavigationInterface
 from cabot_ui.process_queue import ProcessQueue
 from cabot_ui import visualizer, geoutil, geojson, datautil
 from cabot_ui.turn_detector import TurnDetector, Turn
@@ -155,7 +154,6 @@ class ControlBase(object):
         self._logger = node.get_logger()
         self.visualizer = visualizer.instance(node)
 
-        self.delegate: NavigationInterface = NavigationInterface()
         self.buffer = BufferProxy(tf_node)
 
         # TF listening is at high frequency and increases the CPU usage substantially
@@ -283,6 +281,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         soc_node = node_manager.get_node("soc", True)
 
         self._ready = False
+        self.destination = None
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
         self.current_floor = None
@@ -389,6 +388,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._touchModeProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
         self._userSpeedEnabledProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/user_speed_enabled", callback_group=MutuallyExclusiveCallbackGroup())
 
+        self._eventPub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
         self._process_queue = ProcessQueue(act_node)
         self._start_loop()
 
@@ -438,8 +439,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
                 def done_callback():
                     self._status_manager.set_state(State.idle)
-                    self._process_navigation_event(event)
-                self._navigation.cancel_navigation(done_callback)
+                    self.process_event(event)
+                self.cancel_navigation(done_callback)
                 return True
 
             self._logger.info(F"Destination: {event.param}")
@@ -476,7 +477,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
                 def done_callback():
                     self._status_manager.set_state(State.idle)
-                    self._process_navigation_event(event)
+                    self.process_event(event)
                 self.cancel_navigation(done_callback)
                 return True
 
@@ -887,6 +888,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._current_goal = None
         self._status_manager.set_state(State.idle)
         self.delegate.have_completed()
+        # notify external nodes about arrival
+        e = NavigationEvent("arrived", None)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
         self.delegate.activity_log("cabot/navigation", "completed")
         self.social_navigation.set_active(False)
 

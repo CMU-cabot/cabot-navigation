@@ -53,7 +53,6 @@ from cabot_ui.node_manager import NodeManager
 from cabot_ui.event import MenuEvent, NavigationEvent, ExplorationEvent
 from cabot_ui.menu import Menu
 from cabot_ui.interface import UserInterface
-from cabot_ui.plugin import NavigationInterface
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
@@ -62,6 +61,8 @@ from diagnostic_msgs.msg import DiagnosticStatus
 
 class NavigationPlugins():
     def __init__(self, plugins, node_manager, delegate):
+        self._node = node_manager.get_node()
+        self._logger = self._node.get_logger()
         eps = entry_points(group="cabot_ui.plugins")
         self._plugins = []
 
@@ -88,11 +89,16 @@ class NavigationPlugins():
 
     def process_event(self, event):
         for p in self._plugins:
-            if p.process_event(event):
-                break
+            try:
+                result = p.process_event(event)
+                self._logger.info(f"process_event {result=}, {type(p)=}, {str(event)}")
+                if result:
+                    break
+            except:  # noqa
+                self._logger.error(traceback.format_exc())
 
 
-class CabotUIManager(NavigationInterface, object):
+class CabotUIManager(object):
     def __init__(self, node_manager):
         self._node = node_manager.get_node()
         self._logger = self._node.get_logger()
@@ -102,15 +108,14 @@ class CabotUIManager(NavigationInterface, object):
 
         self._handle_button_mapping = self._node.declare_parameter('handle_button_mapping', 2).value
         if self._handle_button_mapping == 2:
-            self._event_mapper = EventMapper2()
+            self._event_mapper = EventMapper2(callback=self.process_event)
         else:
-            self._event_mapper = EventMapper1()
-        self._event_mapper.delegate = self
+            self._event_mapper = EventMapper1(callback=self.process_event)
+
         self._interface = UserInterface(self._node)
-        self._interface.delegate = self
 
         plugins = self._node.declare_parameter('navigation_plugins', ["navigation", "feature", "description", "speaker"]).value
-        self._navigation_plugins = NavigationPlugins(plugins, node_manager, self)
+        self._navigation_plugins = NavigationPlugins(plugins, node_manager, self._interface)
         # self._exploration = Exploration()
         # self._exploration.delegate = self
 
@@ -179,118 +184,6 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.info("create_menu completed")
         except:  # noqa: #722
             self._logger.error(traceback.format_exc())
-
-    # region NavigationInterface
-    def activity_log(self, category="", text="", memo=""):
-        self._interface.activity_log(category, text, memo)
-
-    def change_language(self, lang):
-        self._interface.change_language(lang)
-
-    def i_am_ready(self):
-        self._interface.i_am_ready()
-
-    def start_navigation(self):
-        self._logger.info("self._interface.start_navigation()")
-        self._interface.start_navigation()
-
-    def update_pose(self, **kwargs):
-        self._interface.update_pose(**kwargs)
-
-    def notify_turn(self, device=None, turn=None):
-        self._interface.notify_turn(device=device, turn=turn)
-
-    def notify_human(self, angle=0):
-        self._interface.notify_human(angle=angle)
-
-    def have_arrived(self, goal):
-        # do not read arrival message from robot
-        # self._logger.info("delegate have_arrived called")
-        # self._interface.have_arrived(goal)
-        pass
-
-    def have_completed(self):
-        # send navigation_arrived event when all goals are completed
-        self._logger.info("NavigationState: arrived")
-        # notify external nodes about arrival
-        e = NavigationEvent("arrived", None)
-        msg = std_msgs.msg.String()
-        msg.data = str(e)
-        self._eventPub.publish(msg)
-
-    def approaching_to_poi(self, poi=None):
-        self._interface.approaching_to_poi(poi=poi)
-
-    def approached_to_poi(self, poi=None):
-        self._interface.approached_to_poi(poi=poi)
-
-    def passed_poi(self, poi=None):
-        self._interface.passed_poi(poi=poi)
-
-    def could_not_get_current_location(self):
-        self._interface.could_not_get_current_location()
-
-    def please_call_elevator(self, pos):
-        self._interface.please_call_elevator(pos)
-
-    def enter_goal(self, goal):
-        self._interface.enter_goal(goal)
-
-    def exit_goal(self, goal):
-        self._interface.exit_goal(goal)
-
-    def elevator_opening(self):
-        self._interface.elevator_opening()
-
-    def floor_changed(self, floor):
-        self._interface.floor_changed(floor)
-
-    def queue_start_arrived(self):
-        self._interface.queue_start_arrived()
-
-    def queue_proceed(self):
-        self._interface.queue_proceed()
-
-    def queue_target_arrived(self):
-        self._interface.queue_target_arrived()
-
-    def please_pass_door(self):
-        self._interface.please_pass_door()
-
-    def door_passed(self):
-        self._interface.door_passed()
-
-    def please_follow_behind(self):
-        self._interface.please_follow_behind()
-
-    def please_return_position(self):
-        self._interface.please_return_position()
-
-    def announce_social(self, message):
-        self._interface.announce_social(message)
-
-    def request_sound(self, sound):
-        self._interface.request_sound(sound)
-
-    def set_pause_control(self, pause: bool):
-        self._interface.set_pause_control(pause)
-
-    def in_preparation(self):
-        self._interface.in_preparation()
-
-    def pause_navigation(self):
-        self._interface.pause_navigation()
-
-    def pausing_navigation(self):
-        self._interface.pausing_navigation()
-
-    def cancel_navigation(self):
-        self._interface.cancel_navigation()
-
-    def resume_navigation(self):
-        self._interface.resume_navigation()
-
-    # endregion NavigationInterface
 
     def _event_callback(self, msg):
         event = BaseEvent.parse(msg.data)
@@ -367,8 +260,9 @@ class CabotUIManager(NavigationInterface, object):
 
 
 class EventMapper1(object):
-    def __init__(self):
+    def __init__(self, callback):
         self.description_duration = 0
+        self.callback = callback
 
     def push(self, event):
         if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
@@ -378,7 +272,7 @@ class EventMapper1(object):
         # simplify the control
         mevent = self.map_button_to_navigation(event)
         if mevent:
-            self.delegate.process_event(mevent)
+            self.callback(mevent)
 
     def map_button_to_navigation(self, event):
         if event.type == "button" and not event.down and self.description_duration > 0:
@@ -408,9 +302,10 @@ class EventMapper1(object):
 
 
 class EventMapper2(object):
-    def __init__(self):
+    def __init__(self, callback):
         self.button_hold_down_duration = 0
         self.button_hold_down_duration_prev = 0
+        self.callback = callback
 
     def push(self, event):
         if event.type not in {ButtonEvent.TYPE, ClickEvent.TYPE, HoldDownEvent.TYPE}:
@@ -419,7 +314,7 @@ class EventMapper2(object):
         # simplify the control
         mevent = self.map_button_to_navigation(event)
         if mevent:
-            self.delegate.process_event(mevent)
+            self.callback(mevent)
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:

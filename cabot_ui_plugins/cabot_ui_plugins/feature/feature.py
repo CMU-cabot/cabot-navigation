@@ -43,8 +43,7 @@ class Feature():
         if event.subtype == "reqfeatures":
             self._send_handleside()
             self._send_touchmode()
-            self.send_speaker_audio_files()
-            return True
+            return False   # can be handled by other plugins
 
         # ignore get event
         if event.subtype == "getlanguage":

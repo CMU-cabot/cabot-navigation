@@ -49,6 +49,7 @@ class Description:
 
     def __init__(self, node_manager):
         self.node = node_manager.get_node("description", True)
+        self.delegate = None
         self.bridge = CvBridge()
         self.max_size = 512
         self.max_distance = self.node.declare_parameter("description_max_distance", 20).value
@@ -121,76 +122,79 @@ class Description:
             try:
                 if result:
                     self._logger.info(f"description - {result=}")
-                    self._interface.describe_surround(result['translated'])
+                    self.delegate.describe_surround(result['translated'])
                 else:
                     self._logger.info("description - Error")
-                    self._interface.describe_error()
+                    self.delegate.describe_error()
             except:   # noqa: #722
                 self._logger.error(traceback.format_exc())
 
-        if event.subtype == "description" and self._description.enabled:
+        if event.subtype == "description" and self.enabled:
             # TODO: needs to reset last_plan_distance when arrived/paused
             self._logger.info(F"Request Description duration={event.param}")
-            if self._interface.last_pose:
-                gp = self._interface.last_pose['global_position']
-                cf = self._interface.last_pose['current_floor']
+            if self.delegate.last_pose:
+                gp = self.delegate.last_pose['global_position']
+                cf = self.delegate.last_pose['current_floor']
                 length_index = min(2, int(event.param) - 1)   # 1 sec -> 0, 2 sec -> 1, < 3 sec -> 2
-                if self._description.stop_reason_enabled and self._description.surround_enabled:
+                if self.stop_reason_enabled and self.surround_enabled:
                     if length_index <= 1:
-                        self._interface.requesting_describe_surround_stop_reason()
+                        self.delegate.requesting_describe_surround_stop_reason()
                     else:
-                        self._interface.requesting_describe_surround()
-                elif self._description.stop_reason_enabled and not self._description.surround_enabled:
-                    self._interface.requesting_describe_surround_stop_reason()
-                elif not self._description.stop_reason_enabled and self._description.surround_enabled:
-                    self._interface.requesting_describe_surround()
-                self._description.request_description_with_images1(gp, cf, self._interface.lang, length_index=length_index, callback=description_callback)
+                        self.delegate.requesting_describe_surround()
+                elif self.stop_reason_enabled and not self.surround_enabled:
+                    self.delegate.requesting_describe_surround_stop_reason()
+                elif not self.stop_reason_enabled and self.surround_enabled:
+                    self.delegate.requesting_describe_surround()
+                self.request_description_with_images1(gp, cf, self.delegate.lang, length_index=length_index, callback=description_callback)
 
         # request description internal functions
         def request_stop_reason_description():
             self._logger.info("description - Request Stop Reason Description")
             try:
-                if self._interface.last_pose:
-                    gp = self._interface.last_pose['global_position']
-                    cf = self._interface.last_pose['current_floor']
-                    if self._description.request_description_with_images2(
+                if self.delegate.last_pose:
+                    gp = self.delegate.last_pose['global_position']
+                    cf = self.delegate.last_pose['current_floor']
+                    if self.request_description_with_images2(
                             gp,
                             cf,
                             "stop_reason",
-                            self._interface.lang,
+                            self.delegate.lang,
                             length_index=0,
                             callback=description_callback):
-                        self._interface.requesting_describe_surround_stop_reason()
+                        self.delegate.requesting_describe_surround_stop_reason()
                     else:
-                        self._interface.requesting_please_wait()
+                        self.delegate.requesting_please_wait()
             except:  # noqa: #722
                 self._logger.error(traceback.format_exc())
 
         def request_surround_description():
             self._logger.info(F"description - Request Surround Description (Duration: {event.param})")
             try:
-                if self._interface.last_pose:
+                if self.delegate.last_pose:
                     length_index = event.param
-                    gp = self._interface.last_pose['global_position']
-                    cf = self._interface.last_pose['current_floor']
-                    if self._description.request_description_with_images2(
+                    gp = self.delegate.last_pose['global_position']
+                    cf = self.delegate.last_pose['current_floor']
+                    if self.request_description_with_images2(
                             gp,
                             cf,
                             "surround",
-                            self._interface.lang,
+                            self.delegate.lang,
                             length_index=length_index,
                             callback=description_callback):
-                        self._interface.requesting_describe_surround()
+                        self.delegate.requesting_describe_surround()
                     else:
-                        self._interface.requesting_please_wait()
+                        self.delegate.requesting_please_wait()
             except:  # noqa: #722
                 self._logger.error(traceback.format_exc())
 
-        if event.subtype == "description_stop_reason" and self._description.enabled:
+        if event.subtype == "description_stop_reason" and self.enabled:
             request_stop_reason_description()
 
-        if event.subtype == "description_surround" and self._description.enabled:
+        if event.subtype == "description_surround" and self.enabled:
             request_surround_description()
+
+        if event.subtype == "resume_or_stop_reason" and self.enabled:
+            request_stop_reason_description()
 
     @property
     def is_requesting(self):
