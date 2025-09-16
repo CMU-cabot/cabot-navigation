@@ -1168,7 +1168,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         msg = cabot_msgs.msg.SignalState()
         msg.header.stamp = self._node.get_clock().now().to_msg()
         msg.state = state
-        msg.remaining_time = remaining_time
+        msg.remaining_time = float(remaining_time)
         self.signal_state_pub.publish(msg)
 
     def _check_turn(self, current_pose):
