@@ -39,6 +39,7 @@ import signal
 import sys
 import threading
 import traceback
+import types
 import yaml
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
@@ -113,7 +114,11 @@ class CabotUIManager(object):
             self._event_mapper = EventMapper1(callback=self.process_event)
 
         self._interface = UserInterface(self._node)
-        self._interface.user_speed = lambda _self: _self.speed_menu.value
+
+        # workaround to make user_speed method to access the speed_menu instance
+        def user_speed(self):
+            return self.speed_menu.value
+        self._interface.user_speed = types.MethodType(user_speed, self)
 
         plugins = self._node.declare_parameter('navigation_plugins', ["navigation", "feature", "description", "speaker"]).value
         self._navigation_plugins = NavigationPlugins(plugins, node_manager, self._interface)
