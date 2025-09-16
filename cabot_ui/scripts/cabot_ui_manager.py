@@ -113,6 +113,7 @@ class CabotUIManager(object):
             self._event_mapper = EventMapper1(callback=self.process_event)
 
         self._interface = UserInterface(self._node)
+        self._interface.user_speed = lambda _self: _self.speed_menu.value
 
         plugins = self._node.declare_parameter('navigation_plugins', ["navigation", "feature", "description", "speaker"]).value
         self._navigation_plugins = NavigationPlugins(plugins, node_manager, self._interface)

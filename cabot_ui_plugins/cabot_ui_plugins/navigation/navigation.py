@@ -63,6 +63,7 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui.social_navigation import SocialNavigation, SNMessage
 from cabot_ui.status import State, StatusManager
 from cabot_msgs.srv import LookupTransform
+import cabot_msgs.msg
 import queue_msgs.msg
 from mf_localization_msgs.msg import MFLocalizeStatus
 
@@ -295,6 +296,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.info_pois = []
         self.queue_wait_pois = []
         self.speed_pois = []
+        self.signal_pois = []
         self.turns = []
         self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
@@ -344,6 +346,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.pause_control_pub = node.create_publisher(std_msgs.msg.Bool, pause_control_output, 10, callback_group=MutuallyExclusiveCallbackGroup())
         map_speed_output = node.declare_parameter("map_speed_topic", "/cabot/map_speed").value
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
@@ -904,6 +907,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.visualizer.pois = goal.pois
             self.visualizer.visualize()
             self.speed_pois = [x for x in goal.pois if isinstance(x, geojson.SpeedPOI)]
+            self.signal_pois = [x for x in goal.pois if isinstance(x, geojson.SignalPOI)]
             self.info_pois = [x for x in goal.pois if not isinstance(x, geojson.SpeedPOI)]
             self.queue_wait_pois = [x for x in goal.pois if isinstance(x, geojson.QueueWaitPOI)]
             self.gradient = goal.gradient
@@ -1106,9 +1110,66 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self._logger.debug(F"speed poi dist={dist:.2f}m, limit={limit:.2f}")
                     self.delegate.activity_log("cabot/navigation", "speed_poi", f"{limit}")
 
+        if self.signal_pois:
+            self.visualizer.visualize()
+
+        goal_dist = 999
+        expected_time = 999
+        user_speed = self.delegate.user_speed()
+        if self._current_goal.current_target():
+            current_target = self._current_goal.current_target().pose.position
+            dx = current_target.x - current_pose.x
+            dy = current_target.y - current_pose.y
+            goal_dist = math.sqrt(dx * dx + dy * dy)
+            margin = 3.0
+            rate = 0.9
+            expected_time = goal_dist / user_speed / rate + margin
+
+        state = "None"
+        remaining_time = -1.0
+        for poi in self.signal_pois:
+            dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
+            if dist >= 5.0:
+                continue
+            if not poi.in_angle(current_pose):
+                continue
+            temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
+
+            if poi.signal is None:
+                limit = temp_limit
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
+                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                state = "NO_SIGNAL_INFO"
+            elif poi.signal.state == geojson.Signal.GREEN:
+                remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s")
+
+                if remaining_time < expected_time:
+                    limit = temp_limit
+                    self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)")
+                    self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                    state = "GREEN_SIGNAL_SHORT"
+            elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
+                remaining_time = poi.signal.remaining_seconds
+                limit = temp_limit
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)")
+                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                state = "GREEN_SIGNAL_SHORT"
+            elif poi.signal.state == geojson.Signal.RED:
+                remaining_time = poi.signal.remaining_seconds
+                limit = temp_limit
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)")
+                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                state = "RED_SIGNAL"
+
         msg = std_msgs.msg.Float32()
         msg.data = limit
         self.speed_limit_pub.publish(msg)
+        msg = cabot_msgs.msg.SignalState()
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.state = state
+        msg.remaining_time = remaining_time
+        self.signal_state_pub.publish(msg)
 
     def _check_turn(self, current_pose):
         # provide turn tactile notification
