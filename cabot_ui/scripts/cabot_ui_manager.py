@@ -208,6 +208,9 @@ class CabotUIManager(NavigationInterface, object):
             self._logger.error(traceback.format_exc())
 
     # region NavigationInterface
+    def user_speed(self):
+        return self.speed_menu.value
+
     def activity_log(self, category="", text="", memo=""):
         self._interface.activity_log(category, text, memo)
 

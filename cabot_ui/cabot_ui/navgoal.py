@@ -744,7 +744,7 @@ class Nav2Params:
 /footprint_publisher:
     footprint_mode: 3
 /controller_server:
-    FollowPath.max_vel_x: 1.0
+    FollowPath.max_vel_x: 2.75
     FollowPath.sim_time: 0.37
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
@@ -884,7 +884,7 @@ class NavGoal(Goal):
             if isinstance(item, geojson.RouteLink):
                 CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
+                    CaBotRclpyUtil.debug(f"{['  ', type(poi), poi._id]}")
                 temp.extend(item.pois)
         return temp
 
@@ -1015,6 +1015,9 @@ class NavGoal(Goal):
         # CaBotRclpyUtil.info(F"NavGoal.completed distance_to ({pose}) = {self.distance_to(pose)}")
         return floor == self._floor and \
             self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+
+    def current_target(self):
+        return self.navcog_routes[self.route_index][1]
 
 
 class TurnGoal(Goal):
