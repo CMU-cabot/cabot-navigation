@@ -634,6 +634,9 @@ class Goal(geoutil.TargetPlace):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
         return False
 
+    def current_target(self):
+        return None
+
 
 class Nav2Params:
     @classmethod

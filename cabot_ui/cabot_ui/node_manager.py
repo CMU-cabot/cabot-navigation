@@ -3,7 +3,7 @@ import traceback
 
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor, ExternalShutdownException
 
 
 class NodeManager:
@@ -47,6 +47,8 @@ class NodeManager:
                     executor.spin_once()
             except KeyboardInterrupt:
                 target_node.get_logger().info(f"Shutting down {name} node")
+            except ExternalShutdownException:
+                pass
             except:  # noqa: 722
                 target_node.get_logger().error(traceback.format_exc())
             target_node.destroy_node()

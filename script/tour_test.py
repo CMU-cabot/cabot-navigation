@@ -47,9 +47,10 @@ from tourdata import load_tourdata
 from cabot_common import util
 from cabot_ui import datautil, event, geoutil, geojson, i18n
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
-from cabot_ui.navigation import Navigation, NavigationInterface
-from cabot_ui.navgoal import NavGoal, TurnGoal, DoorGoal
-from cabot_ui.navgoal import ElevatorGoal, ElevatorWaitGoal, ElevatorInGoal, ElevatorTurnGoal, ElevatorFloorGoal, ElevatorOutGoal
+from cabot_ui.node_manager import NodeManager
+from cabot_ui_plugins.navigation import Navigation
+from cabot_ui_plugins.navigation import NavGoal, TurnGoal
+from cabot_ui_plugins.navigation import ElevatorWaitGoal, ElevatorInGoal, ElevatorTurnGoal, ElevatorFloorGoal, ElevatorOutGoal
 
 
 class TaskScheduler:
@@ -188,9 +189,9 @@ class DummyNavigation(Navigation):
             self.future.delay_done()
             return self.future
 
-    def __init__(self, node, interval):
+    def __init__(self, node_manager, interval):
         self._interval = interval
-        super().__init__(node, node, node, node, node)
+        super().__init__(node_manager)
         self._current_pose = geoutil.Pose(x=0, y=0, r=0)
         self._dummy_poses = None
         self._dummy_poses_lock = threading.Lock()
@@ -419,9 +420,10 @@ class DummyNavigation(Navigation):
             self._logger.error(f"Unsupported goal type: {self._current_goal.__class__}")
 
 
-class TourTestNode(rclpy.node.Node, NavigationInterface):
-    def __init__(self):
+class TourTestNode(rclpy.node.Node):
+    def __init__(self, node_manager):
         super().__init__("tour_test_node")
+        self.node_manager = node_manager
         self._tour_manager = None
         self._done_callback = None
 
@@ -429,7 +431,7 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
         self.debug = debug
         i18n.set_language(lang)
         i18n.load_from_packages(['cabot_ui'])
-        self.navigation = DummyNavigation(self, interval)
+        self.navigation = DummyNavigation(self.node_manager, interval)
         self.navigation.delegate = self
 
     def tour(self, tour_id):
@@ -461,6 +463,9 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
                 self.navigation._started = False
                 self.navigation.set_destination(goal)
         geojson.Object.get_object_by_id(start, callback)
+
+    def user_speed(self):
+        return 1.0
 
     def update_pose(self, *args, **kwargs):
         pass
@@ -554,7 +559,8 @@ class TourTestNode(rclpy.node.Node, NavigationInterface):
 
 
 class TourManager:
-    def __init__(self, node, start, tour, tourdata, lang):
+    def __init__(self, tester, node, start, tour, tourdata, lang):
+        self.tester = tester
         self.node = node
         self.start = start
         self.tour = tour
@@ -578,7 +584,7 @@ class TourManager:
             return
         dest = self.tour.destinations[self.index]
         self.current_destination = self.tourdata.get_destination(dest.ref)
-        self.node.navigate(self.start, self.current_destination.value, callback)
+        self.tester.navigate(self.start, self.current_destination.value, callback)
         self.start = self.current_destination.value  # update start
 
     def _check_message(self, message_type):
@@ -588,21 +594,21 @@ class TourManager:
         message = self.tourdata.get_message(ref, message_type)
         if message and message.read is False:
             message.read = True
-            self.node.item(f"({message_type}) {i18nText(message.text, self.lang)}")
+            self.tester.item(f"({message_type}) {i18nText(message.text, self.lang)}")
 
     def take_elevator(self):
-        self.node.item(f"**{i18n.localized_string('TAKE_ELEVATOR')}**")
+        self.tester.item(f"**{i18n.localized_string('TAKE_ELEVATOR')}**")
 
     def exit_elevator(self):
-        self.node.item(f"**{i18n.localized_string('EXIT_ELEVATOR')}**")
+        self.tester.item(f"**{i18n.localized_string('EXIT_ELEVATOR')}**")
 
     def start_navigation(self):
-        self.node.item(f"**{i18n.localized_string('START_NAVIGATION')}**")
+        self.tester.item(f"**{i18n.localized_string('START_NAVIGATION')}**")
         self._check_message("startMessage")
         pass
 
     def have_arrived(self, goal):
-        self.node.item(f"**{i18n.localized_string('ARRIVE_DESTINATON')}**")
+        self.tester.item(f"**{i18n.localized_string('ARRIVE_DESTINATON')}**")
         self._check_message("arriveMessage")
         pass
 
@@ -637,11 +643,14 @@ def main(args):
         "--log-level",
         "INFO" if args.debug else "ERROR",
     ])
-    node = TourTestNode()
+    node_manager = NodeManager()
+    tester = TourTestNode(node_manager)
+    node = node_manager.get_node()
     CaBotRclpyUtil.initialize(node)
     scheduler = TaskScheduler.get_instance(node, interval=args.interval)
 
-    node.initialize(lang=args.lang, debug=args.debug, interval=args.interval)
+    node.get_logger().info(f"### Tour Test Node initialized (debug={args.debug})")
+    tester.initialize(lang=args.lang, debug=args.debug, interval=args.interval)
     tourdata = load_tourdata()
 
     def red(msg):
@@ -677,8 +686,8 @@ def main(args):
         if args.start is None:
             print(red("Please specify both start and goal nodes."))
             return
-        node.navigate(args.start, args.goal, callback)
-        spin(node)
+        tester.navigate(args.start, args.goal, callback)
+        node_manager.join()
         return
 
     if args.tour_id:
@@ -687,9 +696,9 @@ def main(args):
             return
         tour = next((t for t in tourdata.tours if t.tour_id == args.tour_id), None)
         if tour:
-            manager = TourManager(node, args.start, tour, tourdata, args.lang)
-            node._tour_manager = manager
-            spin(node)
+            manager = TourManager(tester, node, args.start, tour, tourdata, args.lang)
+            tester._tour_manager = manager
+            node_manager.join()
             return
         print(red(f"Tour with id '{args.tour_id}' not found."))
         list_tours(tourdata)
@@ -697,6 +706,8 @@ def main(args):
 
     print(red("You need to specify a start and either a goal or a tour ID"))
     list_tours(tourdata)
+    rclpy.shutdown()
+    node_manager.join()
 
 
 if __name__ == "__main__":
@@ -710,5 +721,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--interval", type=float, default=0.0001, help="Interval for processing queue")
     parser.add_argument("-L", "--landmarks", action="store_true", help="Show landmarks")
     parser.add_argument("-M", "--messages", action="store_true", help="Show messages")
+    parser.add_argument("-S", "--site", type=str, default=None, help="Site package name (overrides CABOT_SITE environment variable)")
     args = parser.parse_args()
+    os.environ["CABOT_SITE"] = args.site if args.site else os.environ.get("CABOT_SITE", "")
     main(args)
