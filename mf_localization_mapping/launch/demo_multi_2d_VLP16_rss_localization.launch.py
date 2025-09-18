@@ -65,10 +65,19 @@ def generate_launch_description():
     pressure_available = LaunchConfiguration('pressure_available')
     verbose = LaunchConfiguration('verbose')
     use_gnss = LaunchConfiguration('use_gnss')
-    use_global_localizer = LaunchConfiguration('use_global_localizer')
     gnss_fix = LaunchConfiguration('gnss_fix')
     gnss_fix_velocity = LaunchConfiguration('gnss_fix_velocity')
     navsat = LaunchConfiguration('navsat')
+    use_global_localizer = LaunchConfiguration('use_global_localizer')
+    stop_global_localizer_after_use = LaunchConfiguration('stop_global_localizer_after_use')
+    # global localizer
+    decompress_image = LaunchConfiguration("decompress_image")
+    image1 = LaunchConfiguration("image1")
+    image2 = LaunchConfiguration("image2")
+    image3 = LaunchConfiguration("image3")
+    image1_compressed = LaunchConfiguration("image1_compressed")
+    image2_compressed = LaunchConfiguration("image2_compressed")
+    image3_compressed = LaunchConfiguration("image3_compressed")
     # cartographer
     scan = LaunchConfiguration('scan')
     imu = LaunchConfiguration('imu')
@@ -91,6 +100,7 @@ def generate_launch_description():
 
     # rviz
     # site = LaunchConfiguration('site')  # not used
+    rviz_config_file = LaunchConfiguration('rviz_config_file')
 
     # run multi_floor_manager
     multi_floor_config_filename = LaunchConfiguration('multi_floor_config_filename')
@@ -98,6 +108,9 @@ def generate_launch_description():
     # robot localization
     compute_odometry_filtered = LaunchConfiguration('compute_odometry_filtered')
     republish_odometry_filtered = LaunchConfiguration('republish_odometry_filtered')
+
+    # global_localization
+    run_global_localizer = LaunchConfiguration('run_global_localizer')
 
     param_files = [
         ParameterFile(
@@ -145,6 +158,9 @@ def generate_launch_description():
             'mf_navsat:=mf_navsat_temp',
             'ublox_converter/num_active_sv:=ublox_converter/num_active_sv_temp',
             'ublox_converter/sv_status:=ublox_converter/sv_status_temp',
+            # global_localizer
+            'global_localizer/global_pose:=global_localizer/global_pose_temp',
+            'global_localizer/local_pose:=global_localizer/local_pose_temp',
         ])
         if convert_points.perform(context) == 'true':
             cmd.append([points2, ':=', points2_temp])
@@ -178,6 +194,15 @@ def generate_launch_description():
         DeclareLaunchArgument('gnss_fix', default_value='gnss_fix'),
         DeclareLaunchArgument('gnss_fix_velocity', default_value='gnss_fix_velocity'),
         DeclareLaunchArgument('navsat', default_value='ublox/navsat'),
+        DeclareLaunchArgument('stop_global_localizer_after_use', default_value='false'),
+        # global localizer
+        DeclareLaunchArgument('decompress_image', default_value='true'),
+        DeclareLaunchArgument('image1', default_value='rs1/color/image_raw'),
+        DeclareLaunchArgument('image2', default_value='rs2/color/image_raw'),
+        DeclareLaunchArgument('image3', default_value='rs3/color/image_raw'),
+        DeclareLaunchArgument('image1_compressed', default_value=[image1, '/compressed']),
+        DeclareLaunchArgument('image2_compressed', default_value=[image2, '/compressed']),
+        DeclareLaunchArgument('image3_compressed', default_value=[image3, '/compressed']),
         # cartographer
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
         DeclareLaunchArgument('imu', default_value='imu/data'),
@@ -197,6 +222,7 @@ def generate_launch_description():
 
         # rviz
         DeclareLaunchArgument('site', default_value=''),
+        DeclareLaunchArgument('rviz_config_file', default_value=[pkg_dir, '/configuration_files/rviz/demo_2d_floors.rviz']),
 
         DeclareLaunchArgument('multi_floor_config_filename',
                               default_value='multi_floor_manager.yaml'),
@@ -205,6 +231,9 @@ def generate_launch_description():
         DeclareLaunchArgument('compute_odometry_filtered', default_value='false'),
 
         DeclareLaunchArgument('republish_odometry_filtered', default_value='false'),
+
+        # global localizer
+        DeclareLaunchArgument('run_global_localizer', default_value='false'),
 
         # debug
         DeclareLaunchArgument('log_level', default_value='info', description="logging level"),
@@ -310,6 +339,7 @@ def generate_launch_description():
                         'verbose': verbose,
                         'use_gnss': use_gnss,
                         'use_global_localizer': use_global_localizer,
+                        'stop_global_localizer_after_use': stop_global_localizer_after_use,
                     }
                 ],
                 remappings=[
@@ -431,6 +461,55 @@ def generate_launch_description():
             }.items()
         ),
 
+        # image decompress
+        Node(
+            package='image_transport',
+            executable='republish',
+            name="image_republisher_1",
+            arguments=['compressed', 'raw'],
+            remappings=[
+                ('in/compressed', image1_compressed),
+                ('out', image1),
+            ],
+            condition=IfCondition(decompress_image),
+        ),
+        Node(
+            package='image_transport',
+            executable='republish',
+            name="image_republisher_2",
+            arguments=['compressed', 'raw'],
+            remappings=[
+                ('in/compressed', image2_compressed),
+                ('out', image2),
+            ],
+            condition=IfCondition(decompress_image),
+        ),
+        Node(
+            package='image_transport',
+            executable='republish',
+            name="image_republisher_3",
+            arguments=['compressed', 'raw'],
+            remappings=[
+                ('in/compressed', image3_compressed),
+                ('out', image3),
+            ],
+            condition=IfCondition(decompress_image),
+        ),
+
+        # global localizer
+        IncludeLaunchDescription(
+            AnyLaunchDescriptionSource(PathJoinSubstitution([mf_localization_dir, 'launch', 'global_localizer.launch.py'])),
+            launch_arguments=[
+                ('use_sim_time', use_sim_time),
+                ('map_config_file', map_config_file),
+                ('points2', points2),
+                ('wifi', wifi_topic),
+                ('beacons', beacon_topic),
+                ('fix', gnss_fix),
+            ],
+            condition=IfCondition(run_global_localizer),
+        ),
+
         # rename imu frame_id
         Node(
             package='mf_localization',
@@ -459,6 +538,6 @@ def generate_launch_description():
         Node(
             package='rviz2',
             executable='rviz2',
-            arguments=['-d', [pkg_dir, '/configuration_files/rviz/demo_2d_floors.rviz']],
+            arguments=['-d', rviz_config_file],
         ),
     ])

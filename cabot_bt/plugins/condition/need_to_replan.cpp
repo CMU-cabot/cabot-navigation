@@ -133,8 +133,6 @@ public:
       }
     }
     if (last_obstacles_) {
-      auto people_transform = tf_buffer_->lookupTransform(
-        path.header.frame_id, last_people_->header.frame_id, last_people_->header.stamp, rclcpp::Duration(1s));
       auto obstacle_transform = tf_buffer_->lookupTransform(
         path.header.frame_id, last_obstacles_->header.frame_id, last_obstacles_->header.stamp, rclcpp::Duration(1s));
       for (auto obstacle = last_obstacles_->people.begin(); obstacle != last_obstacles_->people.end(); obstacle++) {
@@ -145,6 +143,8 @@ public:
         tf2::doTransform(obstacle->position, transformed_obstacle_position, obstacle_transform);
         bool flag_person = false;
         if (last_people_) {
+          auto people_transform = tf_buffer_->lookupTransform(
+            path.header.frame_id, last_people_->header.frame_id, last_people_->header.stamp, rclcpp::Duration(1s));
           for (auto person = last_people_->people.begin(); person != last_people_->people.end(); person++) {
             geometry_msgs::msg::Point transformed_person_position;
             tf2::doTransform(person->position, transformed_person_position, people_transform);

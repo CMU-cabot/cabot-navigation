@@ -27,7 +27,7 @@ namespace cabot_navigation2
 {
 rclcpp::Logger util_logger_{rclcpp::get_logger("NavCogPathUtil")};
 
-nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
+nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path, double min_length)
 {
   nav_msgs::msg::Path temp;
 
@@ -40,7 +40,8 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
     auto n2 = temp.poses[i + 1];
     auto dx = n2.pose.position.x - n1.pose.position.x;
     auto dy = n2.pose.position.y - n1.pose.position.y;
-    if (std::hypot(dx, dy) > 1.0) {
+    // RCLCPP_INFO(util_logger_, "dx = %.2f, dy = %.2f, std::hypot(dx, dy) = %.2f", dx, dy, std::hypot(dx, dy));
+    if (std::hypot(dx, dy) > min_length) {
       geometry_msgs::msg::PoseStamped newPose;
       newPose.header = n1.header;
       newPose.pose.position.x = n1.pose.position.x + dx / 2;
@@ -51,7 +52,9 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
     }
   }
   temp.poses.push_back(path.poses.back());
-
+  temp.header = path.header;
+  return temp;
+  /*
   nav_msgs::msg::Path normalized;
   normalized.header = path.header;
 
@@ -67,7 +70,7 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
 
     if (it2 + 1 < temp.poses.end()) {
       if (fabs(angles::shortest_angular_distance(prev, curr)) < M_PI / 10) {
-        if (distance < 10) {
+        if (distance < 1) {
           continue;
         }
       }
@@ -81,9 +84,12 @@ nav_msgs::msg::Path normalizedPath(const nav_msgs::msg::Path & path)
     normalized.poses.push_back(*it1);
   }
   return normalized;
+  */
 }
 
-nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & start)
+nav_msgs::msg::Path adjustedPathByStart(
+  const nav_msgs::msg::Path & path, const geometry_msgs::msg::PoseStamped & start,
+  bool smooth_start, nav2_costmap_2d::Costmap2D * costmap)
 {
   nav_msgs::msg::Path ret;
   ret.header = path.header;
@@ -106,11 +112,59 @@ nav_msgs::msg::Path adjustedPathByStart(const nav_msgs::msg::Path & path, const 
     }
   }
 
-  if (mindist > FIRST_LINK_THRETHOLD) {
+  // check if the look ahead pose is same direction with the current pose
+  auto start_yaw = tf2::getYaw(start.pose.orientation);
+
+  RCLCPP_INFO(
+    util_logger_, "smooth_start = %s, start_yaw = %.2f",
+    smooth_start ? "true" : "false", start_yaw);
+  if (smooth_start && path.poses.size() > 10) {
+    auto last_pose = minpose;
+    auto dist = 0.0;
+    auto next = minit + 1;
+    for (; next < path.poses.end() && dist < 3.0; next++) {
+      auto next_pose = *next;
+      // if the path is not straight
+      auto look_ahead_yaw = tf2::getYaw(next_pose.pose.orientation);
+      RCLCPP_INFO(
+        util_logger_, "dist = %.2f, look_ahead_yaw = %.2f, normalized_diff = %.2f",
+        dist, look_ahead_yaw, normalized_diff(start_yaw, look_ahead_yaw));
+      if (fabs(normalized_diff(start_yaw, look_ahead_yaw)) > M_PI / 6) {
+        break;
+      }
+      auto dx = last_pose.pose.position.x - next_pose.pose.position.x;
+      auto dy = last_pose.pose.position.y - next_pose.pose.position.y;
+      dist += std::hypot(dx, dy);
+
+      geometry_msgs::msg::PoseStamped new_pose = start;
+      new_pose.pose.position.x += dist * cos(start_yaw);
+      new_pose.pose.position.y += dist * sin(start_yaw);
+      if (costmap != nullptr) {
+        // if the path is going into lethal
+        auto wx = new_pose.pose.position.x;
+        auto wy = new_pose.pose.position.y;
+        unsigned int mx, my;
+        if (costmap->worldToMap(wx, wy, mx, my)) {
+          RCLCPP_INFO(
+            util_logger_, "costmap->getCost(mx=%d, my=%d) = %d",
+            mx, my, costmap->getCost(mx, my));
+          if (costmap->getCost(mx, my) >= 127) {
+            break;
+          }
+        }
+      }
+      ret.poses.push_back(new_pose);
+
+      last_pose = next_pose;
+    }
+    for (; next < path.poses.end(); next++) {
+      ret.poses.push_back(*next);
+    }
+  } else {
     ret.poses.push_back(minpose);
-  }
-  for (auto next = minit + 1; next < path.poses.end(); next++) {
-    ret.poses.push_back(*next);
+    for (auto next = minit + 1; next < path.poses.end(); next++) {
+      ret.poses.push_back(*next);
+    }
   }
 
   return ret;

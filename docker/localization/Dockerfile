@@ -218,6 +218,7 @@ RUN apt update && \
     python3-sklearn \
     ros-${ROS_DISTRO}-diagnostic-updater \
     ros-${ROS_DISTRO}-gazebo-msgs \
+    ros-${ROS_DISTRO}-image-transport-plugins \
     ros-${ROS_DISTRO}-realsense2-description \
     ros-${ROS_DISTRO}-rosbridge-suite \
     ros-${ROS_DISTRO}-tf-transformations \
@@ -269,6 +270,16 @@ RUN (cd RTKLIB/lib/iers/gcc/; make) && \
 RUN pip install --no-cache-dir \
     transforms3d==0.4.1 \
     pyserial \
+    # localization
+    einops \
+    fast-pytorch-kmeans \
+    torch \
+    torchvision \
+    h5py \
+    open3d \
+    pillow \
+    tqdm \
+    xformers \
     # pbstream edit
     imageio \
     tifffile \

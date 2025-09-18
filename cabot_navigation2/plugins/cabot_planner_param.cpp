@@ -397,14 +397,19 @@ void CaBotPlannerParam::setCost()
 
 bool CaBotPlannerParam::adjustPath()
 {
-  path = normalizedPath(navcog_path);
+  path = normalizedPath(navcog_path, costmap->getResolution());
   if (path.poses.empty()) {return false;}
   RCLCPP_INFO(logger, "adjustPath, path.poses.size() = %ld", path.poses.size());
 
   estimatePathWidthAndAdjust(path, costmap, pe_options);
   if (options.adjust_start) {
+    bool smooth_start = true;
+    if (options.max_iteration_count < 100) {
+      // if the iteration count is smaller, the path should be on the navcog path
+      smooth_start = false;
+    }
     RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld, start = (%.2f, %.2f)", path.poses.size(), start.pose.position.x, start.pose.position.y);
-    path = adjustedPathByStart(path, start);
+    path = adjustedPathByStart(path, start, smooth_start, costmap);
     RCLCPP_INFO(logger, "adjust_start, path.poses.size() = %ld", path.poses.size());
   }
 

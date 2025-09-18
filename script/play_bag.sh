@@ -37,6 +37,8 @@ function signal() {
 
 # environment variables
 : ${CABOT_SHOW_ROS2_LOCAL_RVIZ:=0}
+: ${CABOT_ROS2_RVIZ_CONFIG}
+: ${CABOT_ROS2_LOCAL_RVIZ_CONFIG}
 
 source $scriptdir/../install/setup.bash
 
@@ -106,6 +108,14 @@ for compressed_image_topic in "${compressed_image_topics[@]}"; do
     pids+=($!)
 done
 
+rviz_option=
+if [[ -n $CABOT_ROS2_RVIZ_CONFIG ]]; then
+    rviz_option+=" rviz_config_file:=$CABOT_ROS2_RVIZ_CONFIG"
+fi
+if [[ -n $CABOT_ROS2_LOCAL_RVIZ_CONFIG ]]; then
+    rviz_option+=" rviz_config_file2:=$CABOT_ROS2_LOCAL_RVIZ_CONFIG"
+fi
+
 com="ros2 launch cabot_debug play_bag.launch.py \
    bagfile:=$bag \
    start:=$start \
@@ -113,7 +123,8 @@ com="ros2 launch cabot_debug play_bag.launch.py \
    $map_path \
    $temp_file \
    $tf_frame \
-   show_local_rviz:=$CABOT_SHOW_ROS2_LOCAL_RVIZ &"
+   show_local_rviz:=$CABOT_SHOW_ROS2_LOCAL_RVIZ \
+   $rviz_option &"
 
 echo $com
 eval $com

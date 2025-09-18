@@ -2,7 +2,7 @@ repositories:
   cabot-common:
     type: git
     url: https://github.com/CMU-cabot/cabot-common
-    version: f163c7bb60628307b030c2e72728afbd615e1413
+    version: 3929da1ac586732d60cedf9fbe3de23fcc9cb64e
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description

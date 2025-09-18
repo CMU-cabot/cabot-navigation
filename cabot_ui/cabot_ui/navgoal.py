@@ -650,7 +650,8 @@ class Nav2Params:
 /footprint_publisher:
     footprint_mode: 0
 /controller_server:
-    FollowPath.max_vel_x: 1.0
+    FollowPath.max_vel_x: 2.75
+    FollowPath.max_speed_xy: 2.75
     FollowPath.sim_time: 1.7
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
@@ -658,12 +659,14 @@ class Nav2Params:
 /local_costmap/local_costmap:
     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
-    min_distance: 1.0
+    center_min_distance: 1.0
+    side_min_distance: 0.4
 /cabot/low_lidar_speed_control_node:
-    min_distance: 1.0
+    center_min_distance: 1.0
+    side_min_distance: 0.4
 /cabot/people_speed_control_node:
     social_distance_x: 2.0
-    social_distance_y: 0.5
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,false,true,true,false,true,true]
 """
@@ -683,16 +686,18 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.45
+    inflation_layer.inflation_radius: 0.55
 /local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.45
+    inflation_layer.inflation_radius: 0.55
 /cabot/lidar_speed_control_node:
-    min_distance: 0.60
+    center_min_distance: 0.6
+    side_min_distance: 0.4
 /cabot/low_lidar_speed_control_node:
-    min_distance: 0.60
+    center_min_distance: 0.6
+    side_min_distance: 0.4
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 0.50
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,true,true,true,false,true,true]
 """
@@ -712,16 +717,18 @@ class Nav2Params:
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.25
+    inflation_layer.inflation_radius: 0.35
 /local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.25
+    inflation_layer.inflation_radius: 0.35
 /cabot/lidar_speed_control_node:
-    min_distance: 0.60
+    center_min_distance: 0.6
+    side_min_distance: 0.4
 /cabot/low_lidar_speed_control_node:
-    min_distance: 0.60
+    center_min_distance: 0.6
+    side_min_distance: 0.4
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 0.50
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,true,true,true,false,true,true]
 """
@@ -738,30 +745,29 @@ class Nav2Params:
     footprint_mode: 3
 /controller_server:
     FollowPath.max_vel_x: 1.0
-    FollowPath.sim_time: 0.5
+    FollowPath.sim_time: 0.37
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.45
+    inflation_layer.inflation_radius: 0.75
 /local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.45
+    inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
     min_distance: 0.60
 /cabot/low_lidar_speed_control_node:
     min_distance: 0.60
 /cabot/people_speed_control_node:
     social_distance_x: 1.0
-    social_distance_y: 0.50
+    social_distance_y: 0.37
 /cabot/speed_control_node_touch_true:
     complete_stop: [false,false,false,true,true,true,false,true,true]
 """
         # if simualtion, check if 'speed_control_node_touch_true' or 'speed_control_node_touch_false' is used
-        if CaBotRclpyUtil.instance().use_sim_time:
-            CaBotRclpyUtil.info("parameters simulation mode")
-            # returns List[Tuple[node_name, namespace]]
-            nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
-            names = [name for name, ns in nodes]
-            if "speed_control_node_touch_false" in names:
-                params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
+        CaBotRclpyUtil.info("parameters simulation mode")
+        # returns List[Tuple[node_name, namespace]]
+        nodes = CaBotRclpyUtil.instance().node.get_node_names_and_namespaces()
+        names = [name for name, ns in nodes]
+        if "speed_control_node_touch_false" in names:
+            params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
 
         data = yaml.safe_load(params)
         return data

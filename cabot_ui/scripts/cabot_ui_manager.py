@@ -186,6 +186,22 @@ class CabotUIManager(NavigationInterface, object):
                 self.speed_menu = self.main_menu.get_menu_by_identifier("max_velocity_menu")
             else:
                 self._logger.error("menu is not initialized")
+            if self.speed_menu:
+                max_speed = min(2.75, self._node.declare_parameter("max_speed", 1.0).value)
+                self.speed_menu._max = max_speed
+                init_speed = self.speed_menu.value
+                try:
+                    desc = ParameterDescriptor()
+                    desc.type = ParameterType.PARAMETER_DOUBLE
+                    self._node.declare_parameter('init_speed', None, descriptor=desc)
+                    temp = self._node.get_parameter("init_speed").value
+                    if temp is not None:
+                        init_speed = min(temp, max_speed)
+                except:  # noqa: #722
+                    self._logger.error(traceback.format_exc())
+                    pass
+                self._logger.info(f"Initial Speed = {init_speed}")
+                self.speed_menu.set_value(init_speed)
             self.menu_stack = []
             self._logger.info("create_menu completed")
         except:  # noqa: #722
@@ -926,8 +942,10 @@ if __name__ == "__main__":
                         #                               f"  waitables {len(list(target_node.waitables))}\n",
                         #                               throttle_duration_sec=1.0)
                         executor.spin_once()
+                except KeyboardInterrupt:
+                    target_node.get_logger().info(f"Shutting down {name} node")
                 except:  # noqa: 722
-                    pass
+                    target_node.get_logger().error(traceback.format_exc())
                 target_node.destroy_node()
             return _run_node
 

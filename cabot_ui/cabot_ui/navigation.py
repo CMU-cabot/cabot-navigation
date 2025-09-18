@@ -291,7 +291,7 @@ class ControlBase(object):
         except RuntimeError:
             self._logger.debug("cannot get current_ros_pose")
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_pose(self, frame=None) -> geoutil.Pose:
@@ -310,7 +310,7 @@ class ControlBase(object):
         except RuntimeError:
             self._logger.debug("cannot get current_local_pose")
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_local_odom_pose(self):
@@ -326,7 +326,7 @@ class ControlBase(object):
         except RuntimeError:
             self._logger.debug("cannot get current_local_odom_pose")
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
         raise RuntimeError("no transformation")
 
     def current_global_pose(self):
@@ -388,7 +388,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self.restart_navigation_threthold_sec = node.declare_parameter("restart_navigation_threthold_sec", 5.0).value
 
-        self._max_speed = node.declare_parameter("max_speed", 1.1).value
+        self._max_speed = node.declare_parameter("max_speed", 2.0).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
         self._speed_poi_params = node.declare_parameter("speed_poi_params", [0.5, 0.5, 0.5]).value
 
@@ -910,7 +910,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("could not get position", throttle_duration_sec=3)
             return
         except:  # noqa: E722
-            self._logger.debug(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
             return
 
         # wait data is analyzed

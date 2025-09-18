@@ -689,7 +689,7 @@ nav_msgs::msg::Path CaBotPlanner::createPlan(CaBotPlannerParam & param)
 void CaBotPlanner::pathCallback(nav_msgs::msg::Path::SharedPtr path)
 {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
-  RCLCPP_DEBUG(logger_, "received navcog path");
+  RCLCPP_INFO(logger_, "received navcog path (CaBotPlanner)");
   navcog_path_ = path;
 }
 

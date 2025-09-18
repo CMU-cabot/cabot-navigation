@@ -146,6 +146,9 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
 	      fix_status_threshold:=${fix_status_threshold} \
 	      grid_resolution:=${MAPPING_RESOLUTION} \
+	      save_pose:=true \
+	      save_trajectory:=true \
+	      interpolate_samples_by_trajectory:=true \
 	      bag_filename:=$WORKDIR/${bag_file2}"
 
     if [ $cabot_model != "" ]; then
@@ -160,11 +163,8 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
               $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping_gnss.lua
 
         com="$com \
-            save_pose:=true \
-            save_trajectory:=true \
             fix:=$fix_filtered_topic \
             configuration_basename:=cartographer_2d_mapping_gnss.lua \
-            interpolate_samples_by_trajectory:=true \
             "
     fi
 

@@ -27,11 +27,23 @@ import copy
 import re
 
 
-def filter_samples(samples, beacon_pattern=".", wifi_pattern="."):
+def filter_samples(samples, beacon_pattern=".", wifi_pattern=".",
+                   min_timestamp=None,
+                   max_timestamp=None):
     samples_new = []
     for s in samples:
         s2 = copy.copy(s)
         s2_beacons = []
+
+        # remove out-of-range samples
+        timestamp = s["data"]["timestamp"]
+        if min_timestamp is not None:
+            if timestamp <= min_timestamp:
+                continue
+        if max_timestamp is not None:
+            if max_timestamp <= timestamp:
+                continue
+
         for e in s["data"]["beacons"]:
             if e["type"] == "iBeacon":
                 if re.match(beacon_pattern, e["id"]):
@@ -50,17 +62,24 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output")
     parser.add_argument("--wifi_pattern", default=r".")
     parser.add_argument("--beacon_pattern", default=r".")
+    parser.add_argument("--min_timestamp", default=None, type=float)
+    parser.add_argument("--max_timestamp", default=None, type=float)
     args = parser.parse_args()
 
     input_file = args.input
     output_file = args.output
     beacon_pattern = args.beacon_pattern
     wifi_pattern = args.wifi_pattern
+    min_timestamp = args.min_timestamp
+    max_timestamp = args.max_timestamp
 
     with open(input_file) as f:
         samples = json.load(f)
 
-    samples_new = filter_samples(samples, beacon_pattern=beacon_pattern, wifi_pattern=wifi_pattern)
+    samples_new = filter_samples(samples, beacon_pattern=beacon_pattern, wifi_pattern=wifi_pattern,
+                                 min_timestamp=min_timestamp,
+                                 max_timestamp=max_timestamp
+                                 )
 
     if output_file is not None:
         with open(output_file, "w") as f:

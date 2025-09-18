@@ -24,7 +24,9 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 using namespace std::chrono_literals;
 
@@ -39,12 +41,18 @@ public:
     cmdVelOutput_("/cmd_vel_limit"),
     userSpeedInput_("/user_speed"),
     mapSpeedInput_("/map_speed"),
+    odomInput_("/odom"),
+    need_stop_alert_(0),
+    lastVibrator1Time_(0, 0, get_clock()->get_clock_type()),
     userSpeedLimit_(2.0),
     mapSpeedLimit_(2.0),
+    completeStopThreshold_(0.005),
     targetRate_(40),
     currentLinear_(0.0),
     currentAngular_(0.0),
-    lastCmdVelInput_(0, 0, get_clock()->get_clock_type())
+    lastCmdVelInput_(0, 0, get_clock()->get_clock_type()),
+    timeout_(0.5),
+    decel_timeout_(0.5)
   {
     RCLCPP_INFO(get_logger(), "SpeedControlNodeClass Constructor");
     onInit();
@@ -108,6 +116,9 @@ private:
       if (completeStop_.size() <= index) {
         completeStop_.push_back(false);
       }
+      while (filteredSpeed_.size() < index) {
+        filteredSpeed_.push_back(0);
+      }
 
       enabled_.push_back(true);  // enabled at initial moment
       if (index < configurable_.size() && configurable_[index]) {
@@ -132,6 +143,16 @@ private:
 
       RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
     }
+    odomInput_ = declare_parameter("odom_input", odomInput_);
+    odomSub_ = create_subscription<nav_msgs::msg::Odometry>(
+      odomInput_, rclcpp::SystemDefaultsQoS(),
+      [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
+        double currentOdomLinear = msg->twist.twist.linear.x;
+        if (currentOdomLinear > 0.25 && currentLinear_ > 0) {
+          need_stop_alert_ = std::floor(currentOdomLinear / 0.25);
+        }
+      });
+    vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / targetRate_),
       std::bind(&SpeedControlNode::timerCallback, this));
@@ -169,9 +190,11 @@ private:
     }
 
     // force stop
-    if (get_clock()->now() - lastCmdVelInput_ > rclcpp::Duration(500ms)) {
-      currentLinear_ = 0;
-      currentAngular_ = 0;
+    auto delay = (get_clock()->now() - lastCmdVelInput_).nanoseconds() / 1e9;
+    if (delay > timeout_) {
+      auto r = std::max(0.0, 1.0 - std::min(decel_timeout_, delay - timeout_) / decel_timeout_);
+      currentLinear_ *= r;
+      currentAngular_ *= r;
     }
 
     double l = currentLinear_;
@@ -188,9 +211,19 @@ private:
           l = -limit;
         }
 
-        // if limit equals zero and complete stop is true then angular is also zero
-        if (limit == 0 && completeStop_[index]) {
-          r = 0;
+        filteredSpeed_[index] = filteredSpeed_[index] * 0.9 + limit * 0.1;
+        if (limit == 0) {
+          // if limit equals zero and complete stop is true then angular is also zero
+          if (limit == 0) {
+            if (completeStop_[index]) {
+              r = 0;
+            } else {
+              RCLCPP_INFO(get_logger(), "filteredSpeed_[%ld]=%f < completeStopThreshold_=%f", index, filteredSpeed_[index], completeStopThreshold_);
+              if (completeStopThreshold_ < filteredSpeed_[index]) {
+                r = 0;
+              }
+            }
+          }
         }
       }
     } else {
@@ -213,6 +246,16 @@ private:
 
     geometry_msgs::msg::Twist cmd_vel;
     cmd_vel.linear.x = l;
+
+    if (l == 0 && need_stop_alert_ > 0) {
+      if ((get_clock()->now() - lastVibrator1Time_).seconds() > 1.0) {
+        std_msgs::msg::UInt8 msg;
+        msg.data = need_stop_alert_ * 10;
+        vibrator1_pub_->publish(msg);
+        lastVibrator1Time_ = get_clock()->now();
+      }
+      need_stop_alert_ = 0;
+    }
 
     if (currentLinear_ != 0 && l != 0) {
       // to fit curve, adjust angular speed
@@ -253,12 +296,20 @@ private:
   std::vector<double> speedLimit_;
   std::vector<rclcpp::Time> callbackTime_;
   std::vector<double> speedTimeOut_;
+  std::vector<double> filteredSpeed_;
   std::vector<bool> completeStop_;
+  double completeStopThreshold_;
   std::vector<bool> enabled_;
   std::vector<bool> configurable_;
   std::vector<rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr> configureServices_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handler_;
+
+  std::string odomInput_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odomSub_;
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
+  int need_stop_alert_;
+  rclcpp::Time lastVibrator1Time_;
 
   double userSpeedLimit_;
   double mapSpeedLimit_;
@@ -267,6 +318,9 @@ private:
   double currentLinear_;
   double currentAngular_;
   rclcpp::Time lastCmdVelInput_;
+
+  double timeout_;
+  double decel_timeout_;
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmdVelPub;
 
