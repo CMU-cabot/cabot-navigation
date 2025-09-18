@@ -36,9 +36,11 @@ import scipy
 import scipy.spatial
 import numpy
 import numpy.linalg
+import time
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 import angles
 import geometry_msgs.msg
+import std_msgs.msg
 from cabot_ui import geoutil, i18n
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
@@ -814,6 +816,8 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = QueueWaitPOI
                 if category == '_nav_queue_target_':
                     cls = QueueTargetPOI
+                if category == '_nav_signal_':
+                    cls = SignalPOI
 
         if cls == POI:
             return cls(**dic)
@@ -1065,6 +1069,98 @@ class QueueTargetPOI(POI):
 
     def _set_exit_node(self, node):
         self.exit_node = node
+
+
+class Signal:
+    """Signal class"""
+
+    RED = "red"
+    GREEN = "green"
+    GREEN_BLINKING = "green_blinking"
+    UNKNOWN = "unknown"
+
+    @classmethod
+    def marshal(cls, dic):
+        """marshal Signal object"""
+        return cls(**dic)
+
+    def __init__(self, **dic):
+        self.group = dic['group'] if 'group' in dic else None
+        self.state = dic['state'] if 'state' in dic else None
+        self.remaining_seconds = dic['remaining_seconds'] if 'remaining_seconds' in dic else None
+        self.next_state = dic['next_state'] if 'next_state' in dic else None
+        self.next_programmed_seconds = dic['next_programmed_seconds'] if 'next_programmed_seconds' in dic else None
+
+    @property
+    def text(self):
+        return f"{self.state} ({self.remaining_seconds})"
+
+
+class SignalPOI(POI):
+    """Signal POI class"""
+
+    subscription = None
+    last_status = []
+
+    @classmethod
+    def marshal(cls, dic):
+        """marshal Signal POI object"""
+        return cls(**dic)
+
+    def __init__(self, **dic):
+        super(SignalPOI, self).__init__(**dic)
+        if SignalPOI.subscription is None:
+            def callback(msg):
+                try:
+                    status = json.loads(msg.data)
+                    if isinstance(status, list):
+                        SignalPOI.last_status = status
+                    else:
+                        CaBotRclpyUtil.error("signal status is not a list")
+                except:  # noqa E722
+                    CaBotRclpyUtil.error("cannot parse signal status")
+                    CaBotRclpyUtil.error(f"msg: {msg.data}")
+                    CaBotRclpyUtil.error(traceback.format_exc())
+
+            SignalPOI.subscription = CaBotRclpyUtil.create_subscription(
+                std_msgs.msg.String, "/signal_response_intersection_status", callback, 10)
+        self.id = None
+        self.group = None
+        hulop_content_json = json.loads(self.properties.hulop_content)
+        if "id" in hulop_content_json:
+            self.id = hulop_content_json["id"]
+        if "group" in hulop_content_json:
+            self.group = hulop_content_json["group"]
+
+        CaBotRclpyUtil.info(f"SignalPOI id:{self.id}, group:{self.group}")
+
+    @property
+    def signal(self):
+        # for safety, if no signal info, return 0.0
+        if not SignalPOI.last_status:
+            return None
+
+        timestamp = SignalPOI.last_status[0]['timestamp'] if 'timestamp' in SignalPOI.last_status[0] else None
+        if timestamp is None or (time.time() - timestamp) > 1.0:
+            SignalPOI.last_status = []
+            return None
+
+        status = None
+        for st in SignalPOI.last_status:
+            if 'id' in st and self.id == st['id']:
+                status = st
+                break
+        if not status:
+            return None
+
+        signals = status['signals'] if 'signals' in status else None
+        if not signals:
+            return None
+        signal = None
+        for item in signals:
+            if 'group' in item and item['group'] == self.group:
+                signal = item
+        return Signal.marshal(signal) if signal else None
 
 
 class Landmark(Facility):

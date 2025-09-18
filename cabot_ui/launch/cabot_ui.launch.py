@@ -193,6 +193,7 @@ def generate_launch_description():
             name="stop_reasons_node",
             output=output,
             parameters=[{
+                'use_sim_time': use_sim_time,
                 'announce_no_touch': announce_no_touch
             }],
         ),
