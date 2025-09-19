@@ -53,6 +53,7 @@ def visualize_features(features, node_map):
         node.get_logger().error("navcog_map: features is None")
         return False
 
+    server.clear()
     qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
     vis_pub = node.create_publisher(MarkerArray, "links", qos)
 
@@ -84,11 +85,11 @@ def visualize_features(features, node_map):
         s = Point()
         s.x = f.start_node.local_geometry.x
         s.y = f.start_node.local_geometry.y
-        s.z = raw_current_floor*meters_per_floor + 0.1
+        s.z = raw_current_floor * meters_per_floor + 0.1
         e = Point()
         e.x = f.end_node.local_geometry.x
         e.y = f.end_node.local_geometry.y
-        e.z = raw_current_floor*meters_per_floor + 0.1
+        e.z = raw_current_floor * meters_per_floor + 0.1
         marker.points.append(s)
         marker.points.append(e)
 
@@ -109,7 +110,7 @@ def visualize_features(features, node_map):
         marker.name = k
         marker.pose.position.x = f.local_geometry.x
         marker.pose.position.y = f.local_geometry.y
-        marker.pose.position.z = raw_current_floor*meters_per_floor + 0.1
+        marker.pose.position.z = raw_current_floor * meters_per_floor + 0.1
         marker.scale = 1.0
 
         sphere = Marker()
@@ -139,7 +140,7 @@ def process_feedback(feedback):
 def menu_callback(feedback):
     CaBotRclpyUtil.info(F"{feedback}")
     msg = std_msgs.msg.String()
-    msg.data = "navigation;destination;"+feedback.marker_name
+    msg.data = "navigation;destination;" + feedback.marker_name
     event_pub.publish(msg)
 
 
