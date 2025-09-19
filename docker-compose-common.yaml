@@ -354,6 +354,8 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+      - "-w"
+      - "1"
 
   gui-dev:
     extends: gui-dev-base
@@ -366,6 +368,8 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+      - "-w"
+      - "1"
 
   gui-prod:
     extends: gui-prod-base
