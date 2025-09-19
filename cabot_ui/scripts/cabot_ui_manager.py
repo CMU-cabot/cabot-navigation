@@ -347,4 +347,3 @@ if __name__ == "__main__":
     ui_manager = CabotUIManager(node_manager)
     node_manager.join()
     node_manager.get_node().get_logger().info("cabot_ui_manager terminated")
-

@@ -103,7 +103,6 @@ install(PROGRAMS
   scripts/cabot_keyboard.py
   scripts/cabot_ui_manager.py
   scripts/stop_reasons_node.py
-  scripts/list_plugins.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -25,6 +25,7 @@ from . import geoutil
 from . import geojson
 from . import interface
 from . import navgoal
+from . import param_manager
 from . import node_manager
 from . import status
 from . import turn_detector
@@ -39,6 +40,7 @@ __all__ = [
     "geojson",
     "interface",
     "navgoal",
+    "param_manager",
     "node_manager",
     "status",
     "turn_detector",

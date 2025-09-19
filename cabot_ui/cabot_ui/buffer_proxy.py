@@ -101,4 +101,3 @@ class BufferProxy():
         do_transform = tf2_ros.TransformRegistration().get(type(pose_stamped))
         transform = self.lookup_transform(target, pose_stamped.header.frame_id)
         return do_transform(pose_stamped, transform)
-
