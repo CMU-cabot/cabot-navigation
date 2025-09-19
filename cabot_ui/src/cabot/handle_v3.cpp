@@ -73,8 +73,6 @@ Handle::Handle(
     "turn_pose_prefer", rclcpp::SensorDataQoS(), std::bind(&Handle::turnPosePreferentialCallback, this, std::placeholders::_1));
   turn_type_sub_ = node->create_subscription<std_msgs::msg::String>(
     "turn_type", rclcpp::SensorDataQoS(), std::bind(&Handle::turnTypeCallback, this, std::placeholders::_1));
-  turn_end_sub_ = node->create_subscription<std_msgs::msg::Bool>(
-    "turn_end", rclcpp::SensorDataQoS(), std::bind(&Handle::turnEndCallback, this, std::placeholders::_1));
   rotation_complete_sub_ = node->create_subscription<std_msgs::msg::Bool>(
     "rotation_complete", rclcpp::SensorDataQoS(), std::bind(&Handle::rotationCompleteCallback, this, std::placeholders::_1));
   pause_control_sub_ = node->create_subscription<std_msgs::msg::Bool>(
@@ -483,18 +481,6 @@ void Handle::turnTypeCallback(std_msgs::msg::String::SharedPtr msg)
   } else if (turn_type == "Type.Avoiding") {
     last_turn_type_ = turn_type_::AVOIDING;
     RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "Turn_type: Avoiding");
-  }
-}
-
-void Handle::turnEndCallback(std_msgs::msg::Bool::SharedPtr msg)
-{
-  bool is_turn_end = msg->data;
-  if (is_turn_end) {
-    if (di.control_mode == "both" || di.control_mode == "local") {
-      di.is_controlled_exclusive = false;
-    } else {
-      resetServoPosition();
-    }
   }
 }
 

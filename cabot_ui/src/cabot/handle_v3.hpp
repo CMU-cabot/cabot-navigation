@@ -195,7 +195,6 @@ private:
   void turnPoseCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void turnPosePreferentialCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void turnTypeCallback(std_msgs::msg::String::SharedPtr msg);
-  void turnEndCallback(std_msgs::msg::Bool::SharedPtr msg);
   void rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg);
   void pauseControlCallback(std_msgs::msg::Bool::SharedPtr msg);
   void localPlanCallback(nav_msgs::msg::Path::SharedPtr msg);
@@ -238,7 +237,6 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_prefer_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr turn_type_sub_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr turn_end_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr rotation_complete_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr pause_control_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr change_di_control_mode_sub_;
