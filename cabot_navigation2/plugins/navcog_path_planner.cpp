@@ -129,7 +129,7 @@ NavCogPathPlanner::createPlan(const geometry_msgs::msg::PoseStamped & start, con
     return nav_msgs::msg::Path();
   }
 
-  estimatePathWidthAndAdjust(path, costmap_, options_);
+  // estimatePathWidthAndAdjust(path, costmap_, options_);
 
   path = adjustedPathByStart(path, start);
 
@@ -147,7 +147,7 @@ NavCogPathPlanner::createPlan(const geometry_msgs::msg::PoseStamped & start, con
 void NavCogPathPlanner::pathCallBack(nav_msgs::msg::Path::SharedPtr path)
 {
   navcog_path_ = path;
-  RCLCPP_INFO(logger_, "received navcog path");
+  RCLCPP_DEBUG(logger_, "received navcog path");
 }
 
 // private functions

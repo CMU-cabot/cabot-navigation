@@ -20,6 +20,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
+"""
+This module is not used currently.
+Please check src/stop_reasoner.cpp instead.
+"""
+
+
 import code
 import enum
 import logging
@@ -222,8 +229,8 @@ class StopReasonFilter():
 
 class StopReasoner:
     FILTER_DURATION = 1.0
-    LONG_FILTER_DURATION = 5.0
-    STOP_DURATION_THRESHOLD = 3.0
+    LONG_FILTER_DURATION = 1.0
+    STOP_DURATION_THRESHOLD = 1.0
     REPLAN_REASON_COUNT = 2
     STOP_LINEAR_VELOCITY_THRESHOLD = 0.2
     STOP_ANGULAR_VELOCITY_THRESHOLD = 0.2

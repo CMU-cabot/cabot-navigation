@@ -36,17 +36,15 @@ from packaging.version import Version
 import sys
 import signal
 import threading
-from typing import Optional
-# import traceback
+import traceback
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import rclpy
 import rclpy.client
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.parameter import Parameter
 import rclpy.time
 from rclpy.qos import QoSProfile, qos_profile_sensor_data
@@ -62,6 +60,7 @@ import tf2_ros
 import tf_transformations
 import message_filters
 from std_msgs.msg import String, Int64, Float64
+from std_srvs.srv import SetBool
 from geometry_msgs.msg import TransformStamped, Vector3, Quaternion, Point, Pose
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import TwistWithCovarianceStamped  # gnss_fix_velocity
@@ -70,21 +69,16 @@ from sensor_msgs.msg import NavSatFix, NavSatStatus, FluidPressure
 from tf2_geometry_msgs import PoseStamped
 from tf2_geometry_msgs import PointStamped, Vector3Stamped
 
-from cartographer_ros_msgs.msg import TrajectoryStates
 from cartographer_ros_msgs.msg import StatusCode
-from cartographer_ros_msgs.srv import GetTrajectoryStates
-from cartographer_ros_msgs.srv import FinishTrajectory
-from cartographer_ros_msgs.srv import StartTrajectory
-from cartographer_ros_msgs.srv import ReadMetrics
-from cartographer_ros_msgs.srv import TrajectoryQuery
 
 import mf_localization.geoutil as geoutil
 import mf_localization.resource_utils as resource_utils
 
 # from mf_localization.wireless_utils import extract_samples
-from wireless_rss_localizer import create_wireless_rss_localizer
+from mf_localization.wireless_rss_localizer import create_wireless_rss_localizer
 
 from mf_localization_msgs.msg import MFGlobalPosition
+from mf_localization_msgs.msg import MFGlobalPosition2
 from mf_localization_msgs.msg import MFLocalizeStatus
 from mf_localization_msgs.msg import MFNavSAT
 from mf_localization_msgs.srv import ConvertLocalToGlobal
@@ -100,6 +94,8 @@ from mf_localization.altitude_manager import AltitudeFloorEstimatorParameters
 from mf_localization.altitude_manager import AltitudeFloorEstimatorResult
 from mf_localization.altitude_manager import BalancedSampler
 from mf_localization.altitude_manager import FloorHeightMapper
+from mf_localization.cartographer_client import CartographerClient
+from mf_localization.rclpy_utils import call_service
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
@@ -147,79 +143,6 @@ class IndoorOutdoorMode(Enum):
 class RSSType(Enum):
     iBeacon = 0
     WiFi = 1
-
-
-def call_service(service: rclpy.client, request, timeout_sec: Optional[float] = None,
-                 max_retries: int = 1,
-                 logger: Optional[RcutilsLogger] = None):
-    '''
-    call_service function that executes a service call with optional timeout.
-
-    Args:
-        service: The service object to be called.
-        request: The request to be sent to the service.
-        timeout_sec (Optional[float]): Optional timeout in seconds for the service call.
-        max_retries: The maximum number of times a service call will be retried.
-        logger: rclpy logger.
-
-    Returns:
-        The result of the service call, if successful.
-
-    Raises:
-        TimeoutError: If a service call timeouts.
-        Exception: Exception on future object.
-    '''
-
-    if max_retries == 1:
-        return call_service_once(service, request, timeout_sec)
-    else:
-        exception = RuntimeError("call service fails to catch exception.")
-        for i in range(max_retries):
-            try:
-                return call_service_once(service, request, timeout_sec)
-            except TimeoutError or Exception as e:
-                if logger is not None:
-                    logger.info(F"failed to call {service.srv_name}. retries={i}")
-                exception = e
-
-        raise exception
-
-
-def call_service_once(service: rclpy.client, request, timeout_sec: Optional[float] = None):
-    '''
-    call_service_once function that executes a service call with optional timeout.
-
-    Args:
-        service: The service object to be called.
-        request: The request to be sent to the service.
-        timeout_sec (Optional[float]): Optional timeout in seconds for the service call.
-
-    Returns:
-        The result of the service call, if successful.
-
-    Raises:
-        TimeoutError: If a service call timeouts.
-        Exception: Exception on future object.
-    '''
-    # service call with timeout
-    event = threading.Event()
-
-    def unblock(future) -> None:
-        nonlocal event
-        event.set()
-
-    future = service.call_async(request)
-    future.add_done_callback(unblock)
-
-    if not future.done():
-        if not event.wait(timeout_sec):
-            service.remove_pending_request(future)
-            raise TimeoutError("service call timeout")
-
-    exception = future.exception()
-    if exception is not None:
-        raise exception
-    return future.result()
 
 
 def extract_samples_ble_wifi_other(samples):
@@ -298,40 +221,13 @@ def convert_samples_coordinate(samples, from_anchor, to_anchor, floor):
     return samples2
 
 
-def compute_relative_pose(pose1: Pose, pose2: Pose) -> Pose:
-    relative_position = [
-        pose2.position.x - pose1.position.x,
-        pose2.position.y - pose1.position.y,
-        pose2.position.z - pose1.position.z,
-        1  # for homogeneous transformation
-    ]
-    q1 = [pose1.orientation.x, pose1.orientation.y, pose1.orientation.z, pose1.orientation.w]
-    q2 = [pose2.orientation.x, pose2.orientation.y, pose2.orientation.z, pose2.orientation.w]
-    q1_inv = tf_transformations.quaternion_inverse(q1)
-    R = tf_transformations.quaternion_matrix(q1_inv)  # homogeneous rotation matrix
-    rotated_relative_position = R.dot(relative_position)
-    relative_orientation = tf_transformations.quaternion_multiply(q1_inv, q2)
-
-    relative_pose = Pose()
-    relative_pose.position.x = rotated_relative_position[0]
-    relative_pose.position.y = rotated_relative_position[1]
-    relative_pose.position.z = rotated_relative_position[2]
-    relative_pose.orientation.x = relative_orientation[0]
-    relative_pose.orientation.y = relative_orientation[1]
-    relative_pose.orientation.z = relative_orientation[2]
-    relative_pose.orientation.w = relative_orientation[3]
-
-    return relative_pose
-
-
 class FloorManager:
     def __init__(self):
         self.node_id = None
         self.frame_id = None
-        self.localizer = None
+        self.ble_localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
-        self.min_hist_count = 1
 
         # publisher
         self.initialpose_pub = None
@@ -340,23 +236,16 @@ class FloorManager:
         self.odom_pub = None
         self.fix_pub = None
 
-        # services
-        self.get_trajectory_states: rclpy.client.Client = None
-        self.finish_trajectory: rclpy.client.Client = None
-        self.start_trajectory: rclpy.client.Client = None
-        self.read_metrics: rclpy.client.Client = None
-        self.trajectory_query: rclpy.client.Client = None
+        # cartographer client
+        self.cartographer_client: CartographerClient = None
 
         # variables
         self.previous_fix_local_published = None
         self.trajectory_initial_pose = None  # variable to keep the initial pose from /trajectory_query
 
-        # variables - optimization
-        self.constraints_count = 0
-
     def reset_states(self):
         self.previous_fix_local_published = None
-        self.constraints_count = 0
+        self.cartographer_client.reset_states()
 
 
 class TFAdjuster:
@@ -417,6 +306,18 @@ class GNSSParameters:
 
     # gnss reset service timeout
     gnss_reset_timeout: float = 1.0  # [s]
+
+
+@dataclass
+class GlobalLocalizerParameters:
+    confidence_high_threshold: float = 0.7
+    confidence_low_threshold: float = 0.3
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        field_names = {f.name for f in fields(cls)}
+        filtered_data = {k: v for k, v in data.items() if k in field_names}
+        return cls(**filtered_data)
 
 
 @dataclass
@@ -525,7 +426,7 @@ class MultiFloorManager:
         self.spin_count = 0
         self.prev_spin_count = None
 
-        self.ble_localizer_dict = {}
+        self.floor_manager_dict = {}
         self.ble_floor_localizer = None
         self.wifi_floor_localizer = None
 
@@ -578,6 +479,7 @@ class MultiFloorManager:
         self.odom_frame = "odom"
         self.published_frame = "base_control_shift"
         self.base_link_frame = "base_link"
+        self.tracking_frame = "imu_frame"
         self.global_position_frame = "base_link"  # frame_id to compute global position
         # unknown frame to temporarily cut a TF tree
         self.unknown_frame = "unknown"
@@ -605,8 +507,8 @@ class MultiFloorManager:
         # for gnss localization
         # parameters
         self.gnss_params = GNSSParameters()
+        self.use_gnss = False
         # variables
-        self.gnss_adjuster_dict = {}
         self.prev_navsat_msg = None
         self.prev_navsat_status = False
         self.prev_mf_navsat_msg = None
@@ -618,6 +520,13 @@ class MultiFloorManager:
         self.gnss_navsat_time = None
         self.gnss_balanced_floor_sampler = BalancedSampler()
 
+        # for global localizer
+        self.global_localization_parameters = GlobalLocalizerParameters()
+        self.use_global_localizer = False
+        self.global_localizer_is_active = False
+        self.global_localizer_set_enabled_service: rclpy.client.Client = None
+
+        # diagnostic
         self.updater = Updater(self.node)
 
         def localize_status(stat):
@@ -695,6 +604,18 @@ class MultiFloorManager:
             self.current_frame_pub.publish(current_frame_msg)
             self.send_local_map_tf()
 
+    def get_floor_manager(self, floor, area, mode) -> FloorManager:
+        return self.floor_manager_dict[floor][area][mode]
+
+    def set_floor_manager(self, floor, area, mode, floor_manager):
+        if floor not in self.floor_manager_dict:
+            self.floor_manager_dict[floor] = {}
+
+        if area not in self.floor_manager_dict[floor]:
+            self.floor_manager_dict[floor][area] = {}
+
+        self.floor_manager_dict[floor][area][mode] = floor_manager
+
     # broadcast tf from global_map_frame to each (local) map_frame
     def send_static_transforms(self):
         for t in self.transforms:
@@ -759,6 +680,24 @@ class MultiFloorManager:
             msg.status = value
             self.localize_status_pub.publish(msg)
 
+    def get_local_pose(self, target_frame, source_frame, no_cache=False) -> Pose:
+        try:
+            local_transform = tfBuffer.lookup_transform(target_frame, source_frame,
+                                                        rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type),
+                                                        no_cache=no_cache)
+            # create local_pose instance
+            v3 = local_transform.transform.translation  # Vector3
+            position = Point(x=v3.x, y=v3.y, z=v3.z)
+            orientation = local_transform.transform.rotation  # Quaternion
+            local_pose = Pose(position=position, orientation=orientation)
+            return local_pose
+        except TimeoutError as e:
+            self.logger.error(F'LookupTransform Timeout from {target_frame} to {source_frame}')
+            raise e
+        except RuntimeError as e:
+            self.logger.error(F'LookupTransform Error from {target_frame} to {source_frame}')
+            raise e
+
     def initialpose_callback(self, pose_with_covariance_stamped_msg: PoseWithCovarianceStamped):
         if self.verbose:
             self.logger.info(f"multi_floor_manager.initialpose_callback: initialpose = {pose_with_covariance_stamped_msg}")
@@ -778,11 +717,16 @@ class MultiFloorManager:
                 converted_pose_stamped = tfBuffer.transform(pose_stamped_msg, self.global_map_frame, timeout=Duration(seconds=1.0))  # timeout 1.0 s
                 pose_with_covariance_stamped_msg.header.frame_id = self.global_map_frame
                 pose_with_covariance_stamped_msg.pose.pose = converted_pose_stamped.pose
-            except RuntimeError:
+            except (TimeoutError, RuntimeError) as e:
                 # do not update pose_with_covariance_stamped_msg
-                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. Assuming initialpose is published on the global frame({self.global_map_frame}).")
+                self.logger.info((F"LookupTransform Error (error={type(e).__name__}({e})) {pose_stamped_msg.header.frame_id} -> {self.global_map_frame} in initialpose_callback. "
+                                  F"Assuming initialpose is published on the global frame({self.global_map_frame})."))
 
-        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
+        try:
+            status_code = self.initialize_with_global_pose(pose_with_covariance_stamped_msg, mode=LocalizationMode.TRACK)
+        except (TimeoutError, Exception) as e:
+            self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+            status_code = StatusCode.CANCELLED
 
         # set is_active to True if succeeded to start trajectory
         if status_code == 0:
@@ -823,7 +767,7 @@ class MultiFloorManager:
                 self.logger.info(f"multi_floor_manager.initialize_with_global_pose: mode={target_mode}, floor={target_floor}, area={target_area}")
 
             # get information from floor_manager
-            floor_manager = self.ble_localizer_dict[target_floor][target_area][target_mode]
+            floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
             frame_id = floor_manager.frame_id
             map_filename = floor_manager.map_filename
             node_id = floor_manager.node_id
@@ -832,10 +776,15 @@ class MultiFloorManager:
             try:
                 # this assumes frame_id of pose_stamped_msg is correctly set.
                 local_pose_stamped = tfBuffer.transform(pose_stamped_msg, frame_id, timeout=Duration(seconds=1.0))  # timeout 1.0 s
-            except RuntimeError:
+            except TimeoutError as e:
+                # abort when transform service is unavailable or timeouts.
+                self.logger.info(F"{type(e).__name__}({e})")
+                raise e
+            except RuntimeError:  # transform service returned an error
                 # when the frame_id of pose_stamped_msg is not correctly set (e.g. frame_id = map), assume the initial pose is published on the target frame.
                 # this workaround behaves intuitively in typical cases.
-                self.logger.info(F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. Assuming initial pose is published on the target frame ({frame_id}).")
+                self.logger.info((F"LookupTransform Error {pose_stamped_msg.header.frame_id} -> {frame_id} in initialize_with_global_pose. "
+                                  F"Assuming initial pose is published on the target frame ({frame_id})."))
                 local_pose_stamped = PoseStamped()
                 local_pose_stamped.header = pose_stamped_msg.header
                 local_pose_stamped.header.frame_id = frame_id
@@ -848,20 +797,21 @@ class MultiFloorManager:
             try:
                 if self.area is not None:
                     self.finish_trajectory()  # finish trajectory before updating area value
-            except TimeoutError or Exception as e:
+            except (TimeoutError, Exception) as e:
                 self.logger.error(F"failed to call finish_trajectory. Error={e}")
-                return StatusCode.CANCELLED
+                raise e
 
             try:
                 status_code = self.start_trajectory_with_pose(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
-            except TimeoutError or Exception as e:
+            except (TimeoutError, Exception) as e:
                 self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
-                return StatusCode.CANCELLED
+                raise e
 
             self.logger.info(F"called /{node_id}/{self.mode}/start_trajectory")
 
             # reset altitude_floor_estimator in floor initialization process
             self.altitude_floor_estimator.reset(floor_est=self.floor)
+            self.latest_floor_estimation_result = None
 
             # set current_frame and publish it in the setter
             self.current_frame = frame_id
@@ -889,7 +839,7 @@ class MultiFloorManager:
         # set z = 0 to ensure 2D position on the local map
         local_pose.position.z = 0.0
 
-        floor_manager = self.ble_localizer_dict[_target_floor][_target_area][_target_mode]
+        floor_manager = self.get_floor_manager(_target_floor, _target_area, _target_mode)
         frame_id = floor_manager.frame_id
         map_filename = floor_manager.map_filename
 
@@ -905,9 +855,9 @@ class MultiFloorManager:
         self.resetpose_pub.publish(pose_cov_stamped)  # publish local_pose for visualization
         try:
             status_code_start_trajectory = self.start_trajectory_with_pose(local_pose, _target_floor, _target_area, _target_mode)
-        except TimeoutError or Exception as e:
+        except (TimeoutError, Exception) as e:
             self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
-            return StatusCode.CANCELLED
+            raise e
         self.logger.info(F"called /{floor_manager.node_id}/{_target_mode}/start_trajectory, code={status_code_start_trajectory}")
 
         # set current_frame and publish it in the setter
@@ -966,7 +916,7 @@ class MultiFloorManager:
             # get robot pose
             try:
                 robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-            except RuntimeError as e:
+            except (TimeoutError, RuntimeError) as e:
                 self.logger.warn(F"{e}")
                 return
         else:
@@ -984,17 +934,20 @@ class MultiFloorManager:
 
         # log floor change event
         if floor_change_event is not None:
+            self.logger.info(F"pressure_callback: altitude_floor_estimator result = {result}")
             self.logger.info(F"pressure_callback: floor_change_event (floor_est={target_floor}) detected. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
-            self.latest_floor_estimation_result = result  # store floor change event to prepare for service call failure
         else:
             if self.latest_floor_estimation_result is not None:
-                target_floor = self.latest_floor_estimation_result.floor_est
-                floor_change_event = self.latest_floor_estimation_result.floor_change_event
-                self.logger.info(F"pressure_callback: floor_change_event was not detected, but latest_floor_change_event was found. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
+                result = self.latest_floor_estimation_result
+                target_floor = result.floor_est
+                floor_change_event = result.floor_change_event
+                self.logger.info(F"pressure_callback: floor_change_event was not detected, but latest_floor_change_event (floor_est={target_floor}) was found. (current_floor={self.floor}, floor_list={floor_list}, height_list={height_list})")
 
         if self.floor is not None:
             if self.floor != target_floor \
                     and (floor_change_event is not None):
+                # store floor change event to prepare for trajectory service call failure
+                self.latest_floor_estimation_result = result
 
                 # detect area in target_floor
                 x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(target_floor) * self.area_floor_const]]  # [x,y,floor]
@@ -1017,37 +970,37 @@ class MultiFloorManager:
                 target_mode = self.mode
 
                 # check the availablity of local_pose on the target frame
-                floor_manager = self.ble_localizer_dict[target_floor][target_area][target_mode]
+                floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
                 frame_id = floor_manager.frame_id  # target frame_id
-                local_transform = None
+                # tf from the origin of the target floor to the robot pose
                 try:
-                    # tf from the origin of the target floor to the robot pose
-                    local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                    local_pose = self.get_local_pose(frame_id, self.tracking_frame)
                 except RuntimeError as e:
-                    self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}. error=RuntimeError({e})')
+                    self.logger.error(F"failed to call get_local_pose. Error={e}")
                     return
 
-                # update the trajectory only when local_transform is available
-                if local_transform is not None:
-                    # create local_pose instance
-                    v3 = local_transform.transform.translation  # Vector3
-                    position = Point(x=v3.x, y=v3.y, z=v3.z)
-                    orientation = local_transform.transform.rotation  # Quaternion
-                    local_pose = Pose(position=position, orientation=orientation)
+                # try to finish the current trajectory before updating state variables
+                try:
+                    self.finish_trajectory()
+                except (TimeoutError, Exception) as e:
+                    self.logger.error(F"failed to call finish_trajecotry. Error={e}")
+                    return
 
-                    # try to finish the current trajectory before updating state variables
-                    try:
-                        self.finish_trajectory()
-                    except TimeoutError or Exception as e:
-                        self.logger.error(F"failed to call finish_trajecotry. Error={e}")
-                        return
-
-                    # restart trajectory with the updated state variables
+                # restart trajectory with the updated state variables
+                try:
                     status_code = self.restart_floor(local_pose, target_floor=target_floor, target_area=target_area, target_mode=target_mode)
+                except (TimeoutError, Exception) as e:
+                    self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
+                    return
 
-                    # release floor change event after restart floor success
-                    if status_code == StatusCode.OK:
-                        self.latest_floor_estimation_result = None
+                # release floor change event after restart floor success
+                if status_code == StatusCode.OK:
+                    self.latest_floor_estimation_result = None
+        else:
+            if self.latest_floor_estimation_result is not None:
+                # release latest floor change event when it is unnecessary to stop/start trajectories.
+                self.latest_floor_estimation_result = None
+                self.logger.info("pressure_callback: cleared latest_floor_change_event")
 
     def beacons_callback(self, message):
         self.valid_beacon = True
@@ -1139,9 +1092,9 @@ class MultiFloorManager:
             # coarse initial localization on local frame (frame_id)
             localizer = None
             if rss_type == RSSType.iBeacon:
-                localizer = self.ble_localizer_dict[floor][area][LocalizationMode.INIT].localizer
+                localizer = self.get_floor_manager(floor, area, LocalizationMode.INIT).ble_localizer
             elif rss_type == RSSType.WiFi:
-                localizer = self.ble_localizer_dict[floor][area][LocalizationMode.INIT].wifi_localizer
+                localizer = self.get_floor_manager(floor, area, LocalizationMode.INIT).wifi_localizer
 
             # local_loc is on the local coordinate on frame_id
             local_loc = localizer.predict(beacons)
@@ -1163,88 +1116,73 @@ class MultiFloorManager:
             orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)  # orientation is unknown.
             local_pose = Pose(position=position, orientation=orientation)
 
-            status_code = self.restart_floor(local_pose, target_floor, target_area, target_mode)
-            if status_code != StatusCode.OK:
-                self.logger.error(F"Failed restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode})")
+            try:
+                _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
+            except (TimeoutError, Exception) as e:
+                self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
                 return
 
             # reset altitude_floor_estimator in floor initialization process
             self.altitude_floor_estimator.reset(floor_est=floor)
+            self.latest_floor_estimation_result = None
 
-        # floor change or init->track
-        elif ((self.altitude_manager.is_height_changed() or not self.pressure_available) and self.floor != floor) \
-                or (self.mode == LocalizationMode.INIT and self.optimization_detected):
+        # floor change
+        elif ((self.altitude_manager.is_height_changed() or not self.pressure_available) and self.floor != floor):
             # skip if not activated
             if not rss_loc_params.continuous_localization:
                 self.logger.info(F"rss_callback({rss_type}): skipping continuous localization", throttle_duration_sec=5.0)
                 return
 
-            _floor_change_detected = self.floor != floor
+            self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
 
-            if _floor_change_detected:
-                self.logger.info(F"floor change detected ({self.floor} -> {floor}).")
-
-                # check if the candidate pose is reachable
-                # get robot pose
-                try:
-                    robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError as e:
-                    self.logger.warn(F"{e}")
-                    return
-                # detect area in target_floor
-                x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(floor) * self.area_floor_const]]  # [x,y,floor]
-                # find area candidates
-                neigh_dists, neigh_indices = self.area_localizer.kneighbors(x_area, n_neighbors=1)
-                area_candidates = self.Y_area[neigh_indices]
-                neigh_dist = neigh_dists[0][0]
-                area = area_candidates[0][0]
-                # reject if the candidate area may be unreachable.
-                if self.area_distance_threshold < neigh_dist:
-                    if self.verbose:
-                        self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
-                    return
-            else:
-                self.logger.info("optimization_detected. change localization mode init->track")
+            # check if the candidate pose is reachable
+            # get robot pose
+            try:
+                robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+            except (TimeoutError, RuntimeError) as e:
+                self.logger.warn(F"{e}")
+                return
+            # detect area in target_floor
+            x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(floor) * self.area_floor_const]]  # [x,y,floor]
+            # find area candidates
+            neigh_dists, neigh_indices = self.area_localizer.kneighbors(x_area, n_neighbors=1)
+            area_candidates = self.Y_area[neigh_indices]
+            neigh_dist = neigh_dists[0][0]
+            area = area_candidates[0][0]
+            # reject if the candidate area may be unreachable.
+            if self.area_distance_threshold < neigh_dist:
+                if self.verbose:
+                    self.logger.info(F"rss_callback: rejected unreachable floor change ({self.floor}, {self.area}) -> ({floor}, {area})")
+                return
 
             # set temporal variables
             target_floor = floor
             target_area = area
-            target_mode = LocalizationMode.TRACK
+            target_mode = self.mode
 
             # check the availablity of local_pose on the target frame
-            floor_manager = self.ble_localizer_dict[target_floor][target_area][target_mode]
+            floor_manager = self.get_floor_manager(target_floor, target_area, target_mode)
             frame_id = floor_manager.frame_id  # target frame_id
-            local_transform = None
+            # tf from the origin of the target floor to the robot pose
             try:
-                # tf from the origin of the target floor to the robot pose
-                local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type), no_cache=True)
-            except RuntimeError:
-                self.logger.error(F'LookupTransform Error from {frame_id} to {self.base_link_frame}')
+                local_pose = self.get_local_pose(frame_id, self.tracking_frame, no_cache=True)
+            except (TimeoutError, RuntimeError) as e:
+                self.logger.error(F"failed to call get_local_pose. Error={e}")
+                return
 
-            # update the trajectory only when local_transform is available
-            if local_transform is not None:
-                # create local_pose instance
-                v3 = local_transform.transform.translation  # Vector3
-                position = Point(x=v3.x, y=v3.y, z=v3.z)
-                orientation = local_transform.transform.rotation  # Quaternion
-                local_pose = Pose(position=position, orientation=orientation)
+            # try to finish the current trajectory before updating state variables
+            try:
+                self.finish_trajectory()
+            except (TimeoutError, Exception) as e:
+                self.logger.error(F"failed to call finish_trajectory. Error={e}")
+                return
 
-                # try to finish the current trajectory before updating state variables
-                try:
-                    self.finish_trajectory()
-                except TimeoutError or Exception as e:
-                    self.logger.error(F"failed to call finish_trajectory. Error={e}")
-                    return
-
-                # restart trajectory with the updated state variables
-                status_code = self.restart_floor(local_pose, target_floor, target_area, target_mode)
-                if status_code != StatusCode.OK:
-                    self.logger.error(F"Failed restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode})")
-                    return
-
-                # update instance variables after restart_floor succeed
-                if not _floor_change_detected:  # optimization
-                    self.optimization_detected = False
+            # restart trajectory with the updated state variables
+            try:
+                _ = self.restart_floor(local_pose, target_floor, target_area, target_mode)
+            except (TimeoutError, Exception) as e:
+                self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, floor={target_floor}, area={target_area}, mode={target_mode}). Error={e}")
+                return
         else:
             # skip if not activated
             if not rss_loc_params.failure_detection:
@@ -1253,15 +1191,16 @@ class MultiFloorManager:
 
             # check localization failure
             try:
-                t = tfBuffer.lookup_transform(self.global_map_frame, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
+                t = tfBuffer.lookup_transform(self.global_map_frame, self.tracking_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
                 loc2D_track = np.array([t.transform.translation.x, t.transform.translation.y])
                 loc2D_beacon = np.array([loc[0, 0], loc[0, 1]])
                 failure_detected = self.check_localization_failure(loc2D_track, loc2D_beacon)
                 if failure_detected and self.auto_relocalization:
                     self.restart_localization()
                     self.logger.error("Auto-relocalization. (localization failure detected)")
-            except RuntimeError:
-                self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.base_link_frame}")
+            except (TimeoutError, RuntimeError):
+                self.logger.info(F"LookupTransform Error from {self.global_map_frame} to {self.tracking_frame}")
+                return
 
     # periodically check and update internal state variables (area and mode)
     def check_and_update_states(self):
@@ -1292,7 +1231,7 @@ class MultiFloorManager:
             # get robot pose
             try:
                 robot_pose = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-            except RuntimeError as e:
+            except (TimeoutError, RuntimeError) as e:
                 self.logger.warn(F"{e}")
                 return
 
@@ -1329,35 +1268,33 @@ class MultiFloorManager:
                 target_area = area
                 target_mode = LocalizationMode.TRACK
                 # check the availablity of local_pose on the target frame
-                floor_manager = self.ble_localizer_dict[self.floor][target_area][target_mode]
+                floor_manager = self.get_floor_manager(self.floor, target_area, target_mode)
                 frame_id = floor_manager.frame_id  # target frame_id
-                local_transform = None
+                # tf from the origin of the target floor to the robot pose
                 try:
-                    # tf from the origin of the target floor to the robot pose
-                    local_transform = tfBuffer.lookup_transform(frame_id, self.base_link_frame, rclpy.time.Time(seconds=0, nanoseconds=0, clock_type=self.clock.clock_type))
-                except RuntimeError:
-                    self.logger.error('LookupTransform Error from ' + frame_id + " to " + self.base_link_frame)
+                    local_pose = self.get_local_pose(frame_id, self.tracking_frame)
+                except (TimeoutError, RuntimeError) as e:
+                    self.logger.error(F"failed to call get_local_pose. Error={e}")
+                    return
 
-                # update the trajectory only when local_transform is available
-                if local_transform is not None:
-                    # create local_pose instance
-                    v3 = local_transform.transform.translation  # Vector3
-                    position = Point(x=v3.x, y=v3.y, z=v3.z)
-                    orientation = local_transform.transform.rotation  # Quaternion
-                    local_pose = Pose(position=position, orientation=orientation)
-                    # try to finish the current trajectory before updating state variables
-                    try:
-                        self.finish_trajectory()
-                    except TimeoutError or Exception as e:
-                        self.logger.error(F"failed to call finish_trajectory. Error={e}")
-                        return
-                    # restart trajectory with the updated state variables
+                # try to finish the current trajectory before updating state variables
+                try:
+                    self.finish_trajectory()
+                except (TimeoutError, Exception) as e:
+                    self.logger.error(F"failed to call finish_trajectory. Error={e}")
+                    return
+                # restart trajectory with the updated state variables
+                try:
                     status_code = self.restart_floor(local_pose, self.floor, target_area, target_mode)
-                    if status_code == StatusCode.OK:
-                        # update condition variables
-                        self.optimization_detected = False
-                        self.initial_localization_timeout_detected = False
-                        self.gnss_init_timeout_detected = False
+                except (TimeoutError, Exception) as e:
+                    self.logger.error(F"failed to call restart_floor (local_pose={local_pose}, self.floor={self.floor}, area={target_area}, mode={target_mode}). Error={e}")
+                    return
+
+                if status_code == StatusCode.OK:
+                    # update condition variables
+                    self.optimization_detected = False
+                    self.initial_localization_timeout_detected = False
+                    self.gnss_init_timeout_detected = False
         return
 
     # publish global position
@@ -1399,28 +1336,42 @@ class MultiFloorManager:
             global_position.heading = heading
             global_position.speed = v_xy
             self.global_position_pub.publish(global_position)
-        except RuntimeError as e:
-            self.logger.info(F"LookupTransform Error {self.global_map_frame}-> {self.global_position_frame}. error=RuntimeError({e})")
+        except (TimeoutError, RuntimeError) as e:
+            self.logger.info(F"LookupTransform Error (error={type(e).__name__}({e})) {self.global_map_frame}-> {self.global_position_frame}. error={type(e).__name__}({e})")
         except tf2_ros.TransformException as e:
             self.logger.info(F"{e}")
 
     def stop_localization_callback(self, request, response):
+        self.logger.info("stop_localization_callback")
         if not self.is_active:
             response.status.code = 1
             response.status.message = "Stop localization failed. (localization is aleady stopped.)"
             return response
         try:
             self.is_active = False
-            self.finish_trajectory()
+            if self.use_global_localizer:
+                self.gnss_is_active = False
+                self.global_localizer_is_active = False
+            try:
+                self.finish_trajectory()
+            except Exception as e:
+                # if failed to finish trajectory
+                self.is_active = True
+                if self.use_global_localizer:
+                    self.gnss_is_active = True
+                    self.global_localizer_is_active = True
+                raise e
             self.reset_states()
             response.status.code = 0
             response.status.message = "Stopped localization."
         except:  # noqa: E722
             response.status.code = 1
             response.status.message = "Stop localization failed."
+            self.logger.error(F"stop_localization_callback failed with exception. {traceback.format_exc()}")
         return response
 
     def start_localization_callback(self, request, response):
+        self.logger.info("start_localization_callback")
         if self.is_active:
             response.status.code = 1
             response.status.message = "Start localization failed. (localization is aleady started.)"
@@ -1430,54 +1381,30 @@ class MultiFloorManager:
         else:
             self.floor = int(request.floor)
             response.status.message = f"Starting localization with floor={request.floor}."
-        self.is_active = True
+
+        if self.use_global_localizer:
+            self.is_active = False
+            self.gnss_is_active = False
+            self.global_localizer_is_active = True
+        else:
+            self.is_active = True
         response.status.code = 0
 
         return response
 
     def finish_trajectory(self):
         # try to finish the current trajectory
-        floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
-
-        # wait for services
-        get_trajectory_states = floor_manager.get_trajectory_states
-        self.logger.info(F"wait for {get_trajectory_states.srv_name} service")
-        get_trajectory_states.wait_for_service()
-        finish_trajectory = floor_manager.finish_trajectory
-        self.logger.info(F"wait for {finish_trajectory.srv_name} service")
-        finish_trajectory.wait_for_service()
-
-        req = GetTrajectoryStates.Request()
-        try:
-            res0: GetTrajectoryStates.Response = call_service(get_trajectory_states, req, timeout_sec=self.params.service_call_timeout_sec)
-        except TimeoutError or Exception as e:
-            self.logger.error(F"Failed to call get_trajectory_states. Error={e}")
-            raise e
-        self.logger.info(F"{res0}")
-        last_trajectory_id = res0.trajectory_states.trajectory_id[-1]
-        last_trajectory_state = res0.trajectory_states.trajectory_state[-1]  # uint8 -> int
-
-        # finish trajectory only if the trajectory is active.
-        if last_trajectory_state in [TrajectoryStates.ACTIVE]:
-            trajectory_id_to_finish = last_trajectory_id
-            req = FinishTrajectory.Request(trajectory_id=trajectory_id_to_finish)
-            try:
-                res1: FinishTrajectory.Response = call_service(finish_trajectory, req,
-                                                               timeout_sec=self.params.service_call_timeout_sec,
-                                                               max_retries=self.params.service_call_max_retries,
-                                                               logger=self.logger,
-                                                               )
-            except TimeoutError or Exception as e:
-                self.logger.error(F"Failed to call finish_trajectory. Error={e}")
-                raise e
-            self.logger.info(F"{res1}")
-
-        # reset floor_manager
-        floor_manager.reset_states()
-
-        # reset gnss adjuster and publish
-        self.gnss_adjuster_dict[self.floor][self.area].reset()
-        self.publish_map_frame_adjust_tf()
+        if all(v is not None for v in [self.floor, self.area, self.mode]):
+            floor_manager: FloorManager = self.get_floor_manager(self.floor, self.area, self.mode)
+            floor_manager.cartographer_client.finish_trajectory(timeout_sec=self.params.service_call_timeout_sec,
+                                                                max_retries=self.params.service_call_max_retries,
+                                                                )
+            # reset floor_manager
+            floor_manager.reset_states()
+            return True
+        else:
+            self.logger.info("finish_trajectory called but trajectory is not active.")
+            return False
 
     def start_trajectory_with_pose(self, initial_pose: Pose,
                                    target_floor=None,
@@ -1488,60 +1415,11 @@ class MultiFloorManager:
         _target_area = self.area if target_area is None else target_area
         _target_mode = self.mode if target_mode is None else target_mode
 
-        floor_manager: FloorManager = self.ble_localizer_dict[_target_floor][_target_area][_target_mode]
-        start_trajectory = floor_manager.start_trajectory
-        self.logger.info(F"wait for {start_trajectory.srv_name} service")
-        start_trajectory.wait_for_service()
-
-        # start trajectory
-        configuration_directory = floor_manager.configuration_directory
-        configuration_basename = floor_manager.configuration_basename
-        use_initial_pose = True
-        relative_to_trajectory_id = 0
-
-        # compute relative pose
-        if floor_manager.trajectory_initial_pose is None:
-            # trajectory query (for the first time)
-            trajectory_query = floor_manager.trajectory_query
-            self.logger.info(F"wait for {trajectory_query.srv_name} service")
-            trajectory_query.wait_for_service()
-            req = TrajectoryQuery.Request(
-                trajectory_id=relative_to_trajectory_id
-            )
-            try:
-                res: TrajectoryQuery.Response = call_service(trajectory_query, req, timeout_sec=self.params.service_call_timeout_sec)
-            except TimeoutError or Exception as e:
-                self.logger.error(F"Failed to call trajectory_query. Error={e}")
-                raise e
-            trajectory = res.trajectory
-            trajectory_initial_pose: PoseStamped = trajectory[0]
-
-            self.logger.info(F"trajectory {relative_to_trajectory_id} initial pose = {trajectory_initial_pose}")
-            floor_manager.trajectory_initial_pose = trajectory_initial_pose
-
-        # compute relative pose to trajectory initial pose
-        relative_pose = compute_relative_pose(floor_manager.trajectory_initial_pose.pose, initial_pose)
-        self.logger.info(F"converted initial_pose ({initial_pose}) to relative_pose ({relative_pose}) on trajectory {relative_to_trajectory_id}")
-
-        self.logger.info("prepare request")
-        req = StartTrajectory.Request(
-            configuration_directory=configuration_directory,
-            configuration_basename=configuration_basename,
-            use_initial_pose=use_initial_pose,
-            initial_pose=relative_pose,
-            relative_to_trajectory_id=relative_to_trajectory_id)
-        try:
-            res2: StartTrajectory.Response = call_service(start_trajectory, req,
-                                                          timeout_sec=self.params.service_call_timeout_sec,
-                                                          max_retries=self.params.service_call_max_retries,
-                                                          logger=self.logger,
-                                                          )
-        except TimeoutError or Exception as e:
-            self.logger.error(F"Failed to call start_trajectory. Error={e}")
-            raise e
-        self.logger.info(F"start_trajectory response = {res2}")
-        status_code = res2.status.code
-
+        floor_manager: FloorManager = self.get_floor_manager(_target_floor, _target_area, _target_mode)
+        status_code = floor_manager.cartographer_client.start_trajectory(initial_pose,
+                                                                         timeout_sec=self.params.service_call_timeout_sec,
+                                                                         max_retries=self.params.service_call_max_retries,
+                                                                         )
         tfBuffer.clear()  # clear buffered tf to avoid the effect of the finished trajectory
 
         # update variables after success
@@ -1569,13 +1447,30 @@ class MultiFloorManager:
         self.gnss_init_timeout_detected = False
         self.gnss_localization_time = None
         self.gnss_navsat_time = None
+        if self.use_gnss:
+            self.gnss_is_active = True
         if self.gnss_is_active:
             self.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
         else:
             self.indoor_outdoor_mode = IndoorOutdoorMode.INDOOR
 
+        # global localizer
+        if self.use_global_localizer:
+            self.gnss_is_active = False
+
+        if self.global_localizer_set_enabled_service is not None:
+            _ = call_service(self.global_localizer_set_enabled_service,
+                             SetBool.Request(data=True),  # enable
+                             timeout_sec=5.0,
+                             max_retries=10,
+                             )
+
+        # rss-based floor estimation smoothing
         self.floor_queue = []
+
+        # altitude floor estimator
         self.altitude_floor_estimator.reset()
+        self.latest_floor_estimation_result = None
 
         self.spin_count = 0
         self.prev_spin_count = None
@@ -1589,9 +1484,15 @@ class MultiFloorManager:
         self.reset_states()
         if floor_value is not None:
             self.floor = floor_value
-        self.is_active = True
+
+        if self.use_global_localizer:
+            self.is_active = False
+            self.gnss_is_active = False
+        else:
+            self.is_active = True
 
     def restart_localization_callback(self, request, response):
+        self.logger.info("restart_localization_callback")
         try:
             response.status.code = 0
             if request.floor == RestartLocalization.Request.FLOOR_UNKNOWN:
@@ -1603,7 +1504,8 @@ class MultiFloorManager:
             response.status.code = 0
         except Exception as e:  # noqa: E722
             response.status.code = 1
-            response.status.message = f"Restart localization failed with exception = {e}."
+            response.status.message = f"Restart localization failed with exception = {type(e).__name__}({e})."
+            self.logger.error(F"restart_localization failed with exception. {traceback.format_exc()}")
         return response
 
     def enable_relocalization_callback(self, request, response):
@@ -1674,8 +1576,7 @@ class MultiFloorManager:
     #      MFGlobalPosition global_position
     # input:
     #      MFLocalPosition local_position
-    def convert_local_to_global_callback(self, request, response):
-        averaging_interval = self.global_position_averaging_interval  # noqa: F841
+    def convert_local_to_global_callback(self, request: ConvertLocalToGlobal.Request, response: ConvertLocalToGlobal.Response):
         try:
             pos = PointStamped()
             vel = Vector3Stamped()
@@ -1705,15 +1606,27 @@ class MultiFloorManager:
             response.global_position.header.frame_id = self.global_position_frame
             response.global_position.latitude = latlng.lat
             response.global_position.longitude = latlng.lng
-            response.global_position.floor = floor
+            response.global_position.floor = int(floor)
             response.global_position.heading = heading
             response.global_position.speed = speed
             return response
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {self.global_position_frame}")
-            return None
-        except tf2_ros.TransformException:
-            return None
+            status_message = F"LookupTransform Error {self.global_map_frame} -> {self.global_position_frame}"
+            self.logger.info(status_message)
+            response.status.code = 1
+            response.status.message = status_message
+            return response
+        except tf2_ros.TransformException as e:
+            self.logger.error(F"{e}")
+            response.status.code = 1
+            response.status.message = F"tf2_ros.TransformException({e})"
+            return response
+        except Exception as e:
+            status_message = F"{type(e).__name__}({e})"
+            self.logger.error(status_message)
+            response.status.code = 1
+            response.status.message = status_message
+            return response
 
     def navsat_callback(self, msg: NavSAT):
         self.prev_navsat_msg = msg
@@ -1770,7 +1683,7 @@ class MultiFloorManager:
         # start converting gnss_fix message to global_map_frame and publish it for visualization
         # read message
         now = self.clock.now()
-        stamp = fix.header.stamp
+        # stamp = fix.header.stamp
         gnss_frame = fix.header.frame_id
         latitude = fix.latitude
         longitude = fix.longitude
@@ -1884,13 +1797,6 @@ class MultiFloorManager:
             self.prev_mf_navsat_msg = None
             self.gnss_navsat_time = now
 
-        # disable gnss adjust in indoor invironments
-        if self.indoor_outdoor_mode == IndoorOutdoorMode.INDOOR:
-            # reset all gnss adjust
-            for _floor in self.gnss_adjuster_dict.keys():
-                for _area in self.gnss_adjuster_dict[_floor].keys():
-                    self.gnss_adjuster_dict[_floor][_area].reset()
-
         # use different covariance threshold for initial localization and tracking
         if (self.gnss_localization_time is None) and (self.mode is None):
             # initial localization
@@ -1924,7 +1830,7 @@ class MultiFloorManager:
 
         # publish gnss fix to localizer node
         if self.floor is not None and self.area is not None and self.mode is not None:
-            floor_manager = self.ble_localizer_dict[self.floor][self.area][self.mode]
+            floor_manager = self.get_floor_manager(self.floor, self.area, self.mode)
             if fix.status.status >= self.gnss_params.gnss_status_threshold \
                     and self.prev_navsat_status:
                 fix_pub = floor_manager.fix_pub
@@ -1947,17 +1853,8 @@ class MultiFloorManager:
                         self.gnss_init_time = None
                         self.gnss_init_timeout_detected = True
 
-        # Forcibly prevent the tracked trajectory from going far away from the gnss position history
+        # tracking error detection
         track_error_detected = False
-        # Prevent too large adjust
-        large_adjust_detected = False
-
-        update_gnss_adjust = False
-        gnss_adjust_x = None
-        gnss_adjust_y = None
-        gnss_adjust_yaw = None
-        may_stable_Rt = False
-
         tf_available = False
 
         # lookup tf
@@ -1968,17 +1865,9 @@ class MultiFloorManager:
             trans_pos = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, end_time)
             # gnss pose
             transform_gnss = tfBuffer.lookup_transform(self.global_map_frame, gnss_frame, end_time)
-
-            # get tf required to compute gnss adjust
-            # gnss adjuster
-            gnss_adjuster = self.gnss_adjuster_dict[self.floor][self.area]
-            tf_global2local = tfBuffer.lookup_transform(self.global_map_frame, gnss_adjuster.frame_id, end_time)
-            tf_adjust2odom = tfBuffer.lookup_transform(gnss_adjuster.map_frame_adjust, self.odom_frame, end_time)
-            tf_odom2gnss = tfBuffer.lookup_transform(self.odom_frame, gnss_frame, end_time)
-
             tf_available = True
-        except RuntimeError as e:
-            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error=RuntimeError({e})")
+        except (TimeoutError, RuntimeError) as e:
+            self.logger.info(F"LookupTransform Error {self.global_map_frame} -> {gnss_frame}. error={type(e).__name__}({e})")
         except tf2_ros.TransformException as error:
             self.logger.info(F"{error=}")
         except KeyError as error:
@@ -1989,148 +1878,27 @@ class MultiFloorManager:
             euler_angles_pos = tf_transformations.euler_from_quaternion([trans_pos.transform.rotation.x, trans_pos.transform.rotation.y, trans_pos.transform.rotation.z, trans_pos.transform.rotation.w], 'sxyz')
             yaw_pos = euler_angles_pos[2]  # [roll, pitch, yaw] radien (0 -> x-axis, counter-clock-wise
 
-            # gnss pose
-            euler_angles_gnss = tf_transformations.euler_from_quaternion([transform_gnss.transform.rotation.x, transform_gnss.transform.rotation.y, transform_gnss.transform.rotation.z, transform_gnss.transform.rotation.w], 'sxyz')
-            yaw_angle = euler_angles_gnss[2]  # [roll, pitch, yaw] radien (0 -> x-axis, counter-clock-wise)
-
             # calculate error
             xy_error = np.linalg.norm([transform_gnss.transform.translation.x - gnss_xy.x, transform_gnss.transform.translation.y - gnss_xy.y])
-            cosine = np.cos(gnss_yaw)*np.cos(yaw_angle) + np.sin(gnss_yaw)*np.sin(yaw_angle)
-            cosine = np.clip(cosine, -1.0, 1.0)
-            # yaw_error = np.arccos(cosine)
-            # self.logger.info("xy_error="+str(xy_error)+", yaw_error="+str(yaw_error))
-
-            # gnss adjuster
-            gnss_adjuster = self.gnss_adjuster_dict[self.floor][self.area]
-
-            # estimate map_local -> map_adjust
-            # global_map_frame -> local_map_frame (gnss_adjuster.frame_id) -> map_frame_adjust -> odom_frame -> base_link -> ... -> gnss
-
-            euler_global2local = tf_transformations.euler_from_quaternion([tf_global2local.transform.rotation.x, tf_global2local.transform.rotation.y, tf_global2local.transform.rotation.z, tf_global2local.transform.rotation.w], 'sxyz')
-            euler_adjust2odom = tf_transformations.euler_from_quaternion([tf_adjust2odom.transform.rotation.x, tf_adjust2odom.transform.rotation.y, tf_adjust2odom.transform.rotation.z, tf_adjust2odom.transform.rotation.w], 'sxyz')
-            euler_odom2gnss = tf_transformations.euler_from_quaternion([tf_odom2gnss.transform.rotation.x, tf_odom2gnss.transform.rotation.y, tf_odom2gnss.transform.rotation.z, tf_odom2gnss.transform.rotation.w], 'sxyz')
-
-            global2local = [stamp.nanosec/1e9, tf_global2local.transform.translation.x, tf_global2local.transform.translation.y, euler_global2local[2]]
-            adjust2odom = [stamp.nanosec/1e9, tf_adjust2odom.transform.translation.x, tf_adjust2odom.transform.translation.y, euler_adjust2odom[2]]
-            odom2gnss = [stamp.nanosec/1e9, tf_odom2gnss.transform.translation.x, tf_odom2gnss.transform.translation.y, euler_odom2gnss[2]]
-
-            Tglobal2local = toTransmat(global2local[1], global2local[2], global2local[3])
-            Tadjust2odom = toTransmat(adjust2odom[1], adjust2odom[2], adjust2odom[3])
-
-            # jump detection and small motion filtering
-            if len(gnss_adjuster.gnss_fix_list) > 0:
-                diff = np.linalg.norm([gnss_adjuster.local_odom_list[-1][1] - odom2gnss[1],
-                                       gnss_adjuster.local_odom_list[-1][2] - odom2gnss[2]])
-                # self.logger.info(F"diff={diff}")
-                if diff > self.gnss_params.gnss_odom_jump_threshold:  # if the local slam is jumped
-                    self.logger.info(F"detected local slam jump. diff={diff}.")
-                    gnss_adjuster.gnss_fix_list = []
-                    gnss_adjuster.local_odom_list = []
-                    gnss_adjuster.gnss_fix_list.append(fix_local)
-                    gnss_adjuster.local_odom_list.append(odom2gnss)
-                    gnss_adjuster.gnss_total_count += 1
-                    update_gnss_adjust = True
-                elif diff <= self.gnss_params.gnss_odom_small_threshold:  # if the movement is too small.
-                    pass
-                else:
-                    gnss_adjuster.gnss_fix_list.append(fix_local)
-                    gnss_adjuster.local_odom_list.append(odom2gnss)
-                    gnss_adjuster.gnss_total_count += 1
-                    update_gnss_adjust = True
-            else:
-                gnss_adjuster.gnss_fix_list.append(fix_local)
-                gnss_adjuster.local_odom_list.append(odom2gnss)
-                gnss_adjuster.gnss_total_count += 1
-                update_gnss_adjust = True
-
-            def apply_deadzone(x, deadzone):
-                x_new = 0.0
-                if deadzone <= x:
-                    x_new = x - deadzone
-                elif x <= -deadzone:
-                    x_new = x + deadzone
-                return x_new
-
-            # estimate gnss_adjust
-            if update_gnss_adjust:
-                if 2 <= len(gnss_adjuster.gnss_fix_list):  # use at least two points to calculate R, t
-
-                    W = []  # odom_frame -> gnss_frame
-                    Z = []  # global_map_frame -> gnss_frame
-
-                    for idx in range(np.min([self.gnss_params.gnss_n_max_correspondences, len(gnss_adjuster.gnss_fix_list)])):
-                        W.append([gnss_adjuster.local_odom_list[-idx-1][1], gnss_adjuster.local_odom_list[-idx-1][2], 1])
-                        Z.append([gnss_adjuster.gnss_fix_list[-idx-1][1], gnss_adjuster.gnss_fix_list[-idx-1][2], 1])
-
-                    W = np.array(W)
-                    Z = np.array(Z)
-
-                    X = W @ Tadjust2odom.transpose()
-                    Y = (np.linalg.inv(Tglobal2local) @ Z.transpose()).transpose()
-
-                    R, t = self.estimateRt(X[:, :2], Y[:, :2])
-
-                    gnss_adjust_x = t[0]
-                    gnss_adjust_y = t[1]
-                    gnss_adjust_yaw = np.arctan2(R[1, 0], R[0, 0])  # [-pi, pi]
-
-                    # apply dead zone
-                    gnss_adjust_x = apply_deadzone(gnss_adjust_x, self.gnss_params.gnss_track_error_adjust)
-                    gnss_adjust_y = apply_deadzone(gnss_adjust_y, self.gnss_params.gnss_track_error_adjust)
-
-                    # apply zero adjust weight
-                    if gnss_adjuster.zero_adjust_uncertainty < 1.0:
-                        alpha = gnss_adjuster.zero_adjust_uncertainty
-                        gnss_adjust_x = (1.0-alpha)*0.0 + alpha*gnss_adjust_x
-                        gnss_adjust_y = (1.0-alpha)*0.0 + alpha*gnss_adjust_y
-                        gnss_adjust_yaw = (1.0-alpha)*0.0 + alpha*gnss_adjust_yaw
-                        # update zero_adjust_uncertainty
-                        gnss_adjuster.zero_adjust_uncertainty += 1.0/self.gnss_params.gnss_n_max_correspondences
-                        gnss_adjuster.zero_adjust_uncertainty = np.min([gnss_adjuster.zero_adjust_uncertainty, 1.0])  # clipping
-
-                    # update gnss adjust values when the uncertainty of those values is high (initial stage) or those values are very stable (tracking stage).
-                    may_stable_Rt = self.gnss_params.gnss_n_min_correspondences_stable <= len(gnss_adjuster.gnss_fix_list)
-                    if gnss_adjuster.gnss_total_count < self.gnss_params.gnss_n_min_correspondences_stable \
-                            or may_stable_Rt:
-                        if gnss_adjuster.adjust_tf:
-                            gnss_adjuster.gnss_adjust_x = gnss_adjust_x
-                            gnss_adjuster.gnss_adjust_y = gnss_adjust_y
-                            gnss_adjuster.gnss_adjust_yaw = gnss_adjust_yaw
-                            self.logger.info(F"gnss_adjust updated: gnss_adjust_x={gnss_adjust_x}, gnss_adjust_y={gnss_adjust_y}, gnss_adjust_yaw={gnss_adjust_yaw}")
-                        else:
-                            self.logger.info(F"gnss_adjust NOT updated: gnss_adjust_x={gnss_adjust_x}, gnss_adjust_y={gnss_adjust_y}, gnss_adjust_yaw={gnss_adjust_yaw}")
 
             if np.sqrt(position_covariance[0]) + self.gnss_params.gnss_track_error_threshold <= xy_error:
                 self.logger.info(F"gnss tracking error detected. sqrt(position_covariance[0])={np.sqrt(position_covariance[0])} + gnss_track_error_threshold={self.gnss_params.gnss_track_error_threshold} < xy_error={xy_error}")
                 track_error_detected = True
 
-            if may_stable_Rt:
-                if np.sqrt(position_covariance[0]) + self.gnss_params.gnss_track_error_threshold <= np.sqrt(gnss_adjuster.gnss_adjust_x**2 + gnss_adjuster.gnss_adjust_y**2) \
-                        or self.gnss_params.gnss_track_yaw_threshold < np.abs(gnss_adjuster.gnss_adjust_yaw):
-                    self.logger.info("gnss map adjustment becomes too large.")
-                    large_adjust_detected = True
-
             # update pose for reset
-            if may_stable_Rt:
-                q = tf_transformations.quaternion_from_euler(0, 0, yaw_pos, 'sxyz')
-                pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+            q = tf_transformations.quaternion_from_euler(0, 0, yaw_pos, 'sxyz')
+            pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
-        # publish (possibly) updated map adjust
+        # reset trajectory if necessary
         reset_trajectory = False
-        reset_zero_adjust_uncertainty = False  # set zero adjust uncertainty to 1 (unknown) when gnss adjust is completely unknown (e.g. initialization, large error with estimated gnss adjust)
 
         if self.floor is None:  # run one time
             reset_trajectory = True
-            reset_zero_adjust_uncertainty = True
         elif self.floor is not None and \
                 self.area is None:
             # self.floor is specified but area and mode are unknown
             reset_trajectory = True
-            reset_zero_adjust_uncertainty = True
         elif track_error_detected:
-            reset_trajectory = True
-            reset_zero_adjust_uncertainty = True
-        elif large_adjust_detected:
             reset_trajectory = True
         else:
             reset_trajectory = False
@@ -2138,6 +1906,7 @@ class MultiFloorManager:
         if not reset_trajectory:
             return
 
+        # prevent frequent gnss-based trajectory restart
         if self.gnss_localization_time is not None:
             if now - self.gnss_localization_time < Duration(seconds=self.gnss_params.gnss_localization_interval):
                 return
@@ -2147,9 +1916,6 @@ class MultiFloorManager:
         if self.mode is None:
             target_mode = LocalizationMode.INIT
             self.gnss_init_time = now
-        elif self.mode == LocalizationMode.INIT \
-                and may_stable_Rt:  # change mode INIT -> TRACK if mode has not been updated by optimization
-            target_mode = LocalizationMode.TRACK
 
         # if floor, area, and mode are active, try to finish the trajectory.
         if self.floor is not None and self.area is not None:
@@ -2162,8 +1928,6 @@ class MultiFloorManager:
                 self.logger.error(F"failed to call finish_trajectory. Error={e}")
                 return
 
-            gnss_adjuster = self.gnss_adjuster_dict[self.floor][self.area]
-
             # temporarily cut TF tree between map_adjust -> odom_frame
             t = TransformStamped()
             t.header.stamp = now.to_msg()
@@ -2173,57 +1937,31 @@ class MultiFloorManager:
             t.transform.rotation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
             broadcaster.sendTransform([t])
 
-        # if target_mode is not None:
-        #     self.mode = target_mode  # set mode after finishing old trajectory
+        try:
+            status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, mode=target_mode, floor=floor)  # reset pose on the global frame
+        except (TimeoutError, Exception) as e:
+            self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+            status_code = StatusCode.CANCELLED
 
-        # reset all gnss adjust
-        for _floor in self.gnss_adjuster_dict.keys():
-            for _area in self.gnss_adjuster_dict[_floor].keys():
-                gnss_adjuster = self.gnss_adjuster_dict[_floor][_area]
-                gnss_adjuster.reset()
-                if reset_zero_adjust_uncertainty:
-                    gnss_adjuster.zero_adjust_uncertainty = 1.0
-
-        # self.publish_map_frame_adjust_tf()
-        # here, map_adjust -> ... -> published_frame TF must be disabled.
-        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, mode=target_mode, floor=floor)  # reset pose on the global frame
         if status_code == StatusCode.OK:
             self.gnss_localization_time = now
-
-    def publish_map_frame_adjust_tf(self):
-        # prevent publishing redundant tf
-        stamp = self.clock.now().to_msg()
-        if self.prev_publish_map_frame_adjust_timestamp is not None:
-            if self.prev_publish_map_frame_adjust_timestamp == stamp:
-                return
-
-        transform_list = []
-        for floor in self.ble_localizer_dict.keys():
-            for area in self.ble_localizer_dict[floor].keys():
-                gnss_adjuster = self.gnss_adjuster_dict[floor][area]
-
-                parent_frame_id = gnss_adjuster.frame_id
-                child_frame_id = gnss_adjuster.map_frame_adjust
-
-                t = TransformStamped()
-                t.header.stamp = stamp
-                t.header.frame_id = parent_frame_id
-                t.child_frame_id = child_frame_id
-                t.transform.translation = Vector3(x=gnss_adjuster.gnss_adjust_x, y=gnss_adjuster.gnss_adjust_y, z=0.0)
-                q = tf_transformations.quaternion_from_euler(0.0, 0.0, gnss_adjuster.gnss_adjust_yaw, 'sxyz')
-                t.transform.rotation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
-
-                transform_list.append(t)
-
-        broadcaster.sendTransform(transform_list)
-        self.prev_publish_map_frame_adjust_timestamp = stamp
-
-    def map_frame_adjust_callback(self):
-        self.publish_map_frame_adjust_tf()
+        else:
+            # if failed, reset instances that maintain states
+            self.gnss_balanced_floor_sampler.reset()
 
     # input:
     #      MFLocalPosition global_position
-    def global_localizer_global_pose_callback(self, msg):
+    def global_localizer_global_pose_callback(self, msg: MFGlobalPosition2):
+        self.logger.info("global_localizer_global_pose_callback")
+
+        if not self.global_localizer_is_active:
+            self.logger.info(F"do not start trajectory. global_localizer_is_active = {self.global_localizer_is_active}")
+            return
+
+        if self.is_active or self.gnss_is_active:
+            self.logger.info(F"do not start trajectory. is_active = {self.is_active} gnss_is_active = {self.gnss_is_active}")
+            return
+
         self.logger.info(F"received global_pose from global_localizer: global_pose={msg}")
 
         stamp = msg.header.stamp
@@ -2231,35 +1969,69 @@ class MultiFloorManager:
         longitude = msg.longitude
         floor_val = msg.floor  # noqa: F841
         heading = msg.heading
+        confidence = msg.confidence
 
-        frame_id = self.global_map_frame
-        anchor = self.global_anchor
+        stop_global_localizer = False
 
-        # lat,lng -> x,y
-        latlng = geoutil.Latlng(lat=latitude, lng=longitude)
-        xy = geoutil.global2local(latlng, anchor)
+        # determine whether to start trajectory based on global pose confidence
+        if self.global_localization_parameters.confidence_high_threshold <= confidence:
+            frame_id = self.global_map_frame
+            anchor = self.global_anchor
 
-        # heading -> yaw
-        anchor_rotation = anchor.rotate
-        yaw_degrees = anchor_rotation + 90.0 - heading
-        yaw_degrees = yaw_degrees % 360
-        yaw = np.radians(yaw_degrees)
+            # lat,lng -> x,y
+            latlng = geoutil.Latlng(lat=latitude, lng=longitude)
+            xy = geoutil.global2local(latlng, anchor)
 
-        # x,y,yaw -> PoseWithCovarianceStamped message
-        pose_with_covariance_stamped = PoseWithCovarianceStamped()
-        pose_with_covariance_stamped.header.stamp = stamp
-        pose_with_covariance_stamped.header.frame_id = frame_id
-        pose_with_covariance_stamped.pose.pose.position.x = xy.x
-        pose_with_covariance_stamped.pose.pose.position.y = xy.y
-        pose_with_covariance_stamped.pose.pose.position.z = 0.0
-        q = tf_transformations.quaternion_from_euler(0, 0, yaw, 'sxyz')
-        pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+            # heading -> yaw
+            anchor_rotation = anchor.rotate
+            yaw_degrees = anchor_rotation + 90.0 - heading
+            yaw_degrees = yaw_degrees % 360
+            yaw = np.radians(yaw_degrees)
 
-        # start localization
-        status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)
+            # x,y,yaw -> PoseWithCovarianceStamped message
+            pose_with_covariance_stamped = PoseWithCovarianceStamped()
+            pose_with_covariance_stamped.header.stamp = stamp
+            pose_with_covariance_stamped.header.frame_id = frame_id
+            pose_with_covariance_stamped.pose.pose.position.x = xy.x
+            pose_with_covariance_stamped.pose.pose.position.y = xy.y
+            pose_with_covariance_stamped.pose.pose.position.z = 0.0
+            q = tf_transformations.quaternion_from_euler(0, 0, yaw, 'sxyz')
+            pose_with_covariance_stamped.pose.pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
 
-        if status_code == StatusCode.OK:
+            # start localization
+            try:
+                status_code = self.initialize_with_global_pose(pose_with_covariance_stamped, floor=floor_val)  # reset pose on the global frame
+            except (TimeoutError, Exception) as e:
+                self.logger.error(F"failed to call initialize_with_global_pose. Error={e}")
+                status_code = StatusCode.CANCELLED
+
+            if status_code == StatusCode.OK:
+                self.is_active = True
+                if self.use_gnss:
+                    self.gnss_is_active = True
+                if self.global_localizer_set_enabled_service is not None:
+                    stop_global_localizer = True
+        elif confidence < self.global_localization_parameters.confidence_low_threshold:
+            self.logger.info("failed to get initial location from global_localizer. fallback to default mode.")
+            # fallback to default localization mode
             self.is_active = True
+            if self.use_gnss:
+                self.gnss_is_active = True
+            # stop global localizer
+            if self.global_localizer_set_enabled_service is not None:
+                stop_global_localizer = True
+        else:  # confidence_low_threshold <= confidnce < confidence_high_threshold
+            # wait next global pose input
+            self.logger.info("skipped starting trajectory. global localizer confidence = {confidence}")
+
+        # stop global localizer if necessary
+        if stop_global_localizer:
+            _ = call_service(self.global_localizer_set_enabled_service,
+                             SetBool.Request(data=False),
+                             timeout_sec=5.0,
+                             max_retries=10,
+                             )
+            self.logger.info("global_localizer_global_pose_callback: stopped global localizer.")
 
     # check if pose graph is optimized
     def is_optimized(self):
@@ -2267,43 +2039,8 @@ class MultiFloorManager:
             self.logger.info(f"localization mode is not init. mode={self.mode}")
             return False
 
-        floor_manager: FloorManager = self.ble_localizer_dict[self.floor][self.area][self.mode]
-        read_metrics = floor_manager.read_metrics
-        self.logger.info(F"wait for {read_metrics.srv_name} service")
-        read_metrics.wait_for_service()
-
-        req = ReadMetrics.Request()
-        self.logger.info("request read_metrics")
-        try:
-            res: ReadMetrics.Response = call_service(read_metrics, req, timeout_sec=self.params.service_call_timeout_sec)
-        except TimeoutError or Exception as e:
-            self.logger.error(F"failed to call read_metrics. Error={e}")
-            return False
-
-        if res.status.code != 0:  # OK
-            self.logger.info(f"read_metrics fails {res.status}")
-            return False
-
-        # comment out the following two lines to debug
-        # from rosidl_runtime_py import message_to_yaml
-        # self.logger.info(message_to_yaml(res))
-
-        # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
-        # because this value is updated after running optimization
-        optimized = False
-        for metric_family in res.metric_families:
-            if metric_family.name == "mapping_2d_pose_graph_constraints":
-                for metric in metric_family.metrics:
-                    # inter_submap -> different trajectory
-                    if metric.labels[0].key == "tag" and metric.labels[0].value == "inter_submap" \
-                            and metric.labels[1].key == "trajectory" and metric.labels[1].value == "different":
-                        self.logger.info(f"inter_submap different trajectory constraints. count={metric.value}")
-                        # check if the number of constraints changed
-                        if floor_manager.constraints_count != metric.value:
-                            floor_manager.constraints_count = metric.value
-                            if metric.value >= floor_manager.min_hist_count:
-                                optimized = True
-                                self.logger.info("pose graph optimization detected.")
+        floor_manager: FloorManager = self.get_floor_manager(self.floor, self.area, self.mode)
+        optimized = floor_manager.cartographer_client.is_optimized(timeout_sec=self.params.service_call_timeout_sec)
         return optimized
 
 
@@ -2492,44 +2229,35 @@ class BufferProxy():
         self.countPub = node.create_publisher(std_msgs.msg.Int32, "transform_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.transformMap = {}
         self.min_interval = rclpy.duration.Duration(seconds=0.2)
-        self.lookup_transform_service_call_timeout_sec = 1.0
-        self.lookup_transform_service_wait_timeout_sec = 5.0
+        # lookup transform
+        self.lookup_transform_service_call_timeout_sec = 1.0  # [s]
+        self.lookup_transform_service_wait_timeout_sec = 5.0  # [s]
+        self.lookup_transform_service_max_retries = 1  # [times]
 
-    def call(self, service, request, timeout_sec: Optional[float] = None):
-        # service call with timeout
-        event = threading.Event()
-
-        def unblock(future) -> None:
-            nonlocal event
-            event.set()
-
-        future = service.call_async(request)
-        future.add_done_callback(unblock)
-
-        if not future.done():
-            if not event.wait(timeout_sec):
-                service.remove_pending_request(future)
-                raise TimeoutError("service call timeout")
-
-        exception = future.exception()
-        if exception is not None:
-            raise exception
-        return future.result()
-
-    def lookup_transform_service_call(self, request, timeout_sec: Optional[float] = None):
-        return self.call(self.lookup_transform_service, request, timeout_sec)
+        # clear transform
+        self.clear_transform_buffer_call_timeout_sec = 1.0  # [s]
+        self.clear_transform_buffer_wait_timeout_sec = 5.0  # [s]
+        self.clear_transform_buffer_max_retries = 60  # [times]
 
     def clear(self):
         # clear local transform cache
         self.transformMap = {}
 
         # clear TF buffer in lookup transform node
-        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.lookup_transform_service_wait_timeout_sec)
+        service_available = self.clear_transform_buffer_service.wait_for_service(timeout_sec=self.clear_transform_buffer_wait_timeout_sec)
         if not service_available:
-            self._logger.error("clear_transform_buffer_service timeout error")
+            self._logger.error(F"{self.clear_transform_buffer_service.srv_name} service timeout error")
             return
         req = Trigger.Request()
-        self.clear_transform_buffer_service.call(req)
+
+        try:
+            call_service(self.clear_transform_buffer_service, req,
+                         timeout_sec=self.clear_transform_buffer_call_timeout_sec,
+                         max_retries=self.clear_transform_buffer_max_retries,
+                         logger=self._logger,
+                         )
+        except (TimeoutError, Exception) as e:
+            self._logger.error(F"failed to call {self.clear_transform_buffer_service.srv_name} service. Error={e}")
 
     def debug(self):
         if not hasattr(self, "count"):
@@ -2541,6 +2269,20 @@ class BufferProxy():
 
     # buffer interface
     def lookup_transform(self, target, source, time=None, no_cache=False):
+        """
+        Args:
+            target
+            source
+            time
+            no_cache
+
+        Returns:
+            transform
+
+        Raises
+            TimeoutError: If a service call timeout
+            RuntimeError: If an error exists in the result of the service call
+        """
         # find the latest saved transform first
         key = f"{target}-{source}"
         now = self._clock.now()
@@ -2559,11 +2301,15 @@ class BufferProxy():
         req.source_frame = source
         lookup_transform_service_available = self.lookup_transform_service.wait_for_service(timeout_sec=self.lookup_transform_service_wait_timeout_sec)
         if not lookup_transform_service_available:
-            raise RuntimeError("lookup_transform service unavailable (wait_for_service timeout).")
+            raise TimeoutError("lookup_transform service unavailable (wait_for_service timeout).")
         try:
-            result = self.lookup_transform_service_call(req, timeout_sec=self.lookup_transform_service_call_timeout_sec)
+            result = call_service(self.lookup_transform_service, req,
+                                  timeout_sec=self.lookup_transform_service_call_timeout_sec,
+                                  max_retries=self.lookup_transform_service_max_retries,
+                                  logger=self._logger,
+                                  )
         except TimeoutError as e:
-            raise RuntimeError(f"lookup_transform service call timeout. error=TimeoutError({e}).")
+            raise TimeoutError(f"lookup_transform service call timeout. error=TimeoutError({e}).")
         if result.error.error > 0:
             raise RuntimeError(result.error.error_string)
 
@@ -2643,6 +2389,7 @@ if __name__ == "__main__":
     multi_floor_manager.global_map_frame = node.declare_parameter("global_map_frame", "map").value
     multi_floor_manager.odom_frame = node.declare_parameter("odom_frame", "odom").value
     multi_floor_manager.published_frame = node.declare_parameter("published_frame", "base_link").value
+    multi_floor_manager.tracking_frame = node.declare_parameter("tracking_frame", "imu_frame").value
     multi_floor_manager.global_position_frame = node.declare_parameter("global_position_frame", "base_link").value
     meters_per_floor = node.declare_parameter("meters_per_floor", 5).value
     multi_floor_manager.floor_queue_size = node.declare_parameter("floor_queue_size", 3).value  # [seconds]
@@ -2692,6 +2439,7 @@ if __name__ == "__main__":
     # external localizer parameters
     use_gnss = node.declare_parameter("use_gnss", False).value
     use_global_localizer = node.declare_parameter("use_global_localizer", False).value
+    stop_global_localizer_after_use = node.declare_parameter("stop_global_localizer_after_use", True).value  # enabled by default
 
     # auto-relocalization parameters
     multi_floor_manager.auto_relocalization = node.declare_parameter("auto_relocalization", False).value
@@ -2846,6 +2594,10 @@ if __name__ == "__main__":
         use_gnss_adjust = map_dict["use_gnss_adjust"] if "use_gnss_adjust" in map_dict else False
         min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 1
 
+        # warning
+        if use_gnss_adjust:
+            logger.warn("use_gnss_adjust feature was removed and is no longer available.")
+
         # check value
         if environment not in ["indoor", "outdoor"]:
             raise RuntimeError(
@@ -2888,17 +2640,6 @@ if __name__ == "__main__":
         else:
             samples_wifi = []
 
-        if floor not in multi_floor_manager.ble_localizer_dict:
-            multi_floor_manager.ble_localizer_dict[floor] = {}
-
-        multi_floor_manager.ble_localizer_dict[floor][area] = {}
-
-        # gnss adjust
-        map_frame_adjust = frame_id + "_adjust"
-        if floor not in multi_floor_manager.gnss_adjuster_dict:
-            multi_floor_manager.gnss_adjuster_dict[floor] = {}
-        multi_floor_manager.gnss_adjuster_dict[floor][area] = TFAdjuster(frame_id, map_frame_adjust, use_gnss_adjust)
-
         # run ros nodes
         for mode in modes:
             namespace = node_id+"/"+str(mode)
@@ -2911,8 +2652,6 @@ if __name__ == "__main__":
 
             # update config variables if needed
             options_map_frame = frame_id
-            if use_gnss:
-                options_map_frame = map_frame_adjust
 
             # load cartographer_parameters
             cartographer_parameters = cartographer_parameter_converter.get_parameters(node_id, mode)
@@ -2969,23 +2708,20 @@ if __name__ == "__main__":
             floor_manager = FloorManager()
             floor_manager.configuration_directory = configuration_directory
             floor_manager.configuration_basename = tmp_configuration_basename
-            multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
+            multi_floor_manager.set_floor_manager(floor, area, mode, floor_manager)
 
         # set values to floor_manager
         for mode in modes:
-            floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
+            floor_manager = multi_floor_manager.get_floor_manager(floor, area, mode)
 
-            floor_manager.localizer = ble_localizer_floor
+            floor_manager.ble_localizer = ble_localizer_floor
             floor_manager.wifi_localizer = wifi_localizer_floor
             floor_manager.node_id = node_id
             floor_manager.frame_id = frame_id
             floor_manager.map_filename = map_filename
-            floor_manager.min_hist_count = min_hist_count
             # publishers
             floor_manager.initialpose_pub = node.create_publisher(PoseWithCovarianceStamped, node_id+"/"+str(mode)+initialpose_topic_name, 10, callback_group=MutuallyExclusiveCallbackGroup())
             floor_manager.fix_pub = node.create_publisher(NavSatFix, node_id+"/"+str(mode)+fix_topic_name, 10, callback_group=MutuallyExclusiveCallbackGroup())
-
-            multi_floor_manager.ble_localizer_dict[floor][area][mode] = floor_manager
 
         # convert samples to the coordinate of global_anchor
         samples_ble_global = convert_samples_coordinate(samples_ble, anchor, global_anchor, floor)
@@ -3030,15 +2766,14 @@ if __name__ == "__main__":
             continue
 
         for mode in modes:
-            floor_manager = multi_floor_manager.ble_localizer_dict[floor][area][mode]
+            floor_manager = multi_floor_manager.get_floor_manager(floor, area, mode)
             # rospy service
             # define callback group accessing the same ros node
-            node_service_callback_group = MutuallyExclusiveCallbackGroup()
-            floor_manager.get_trajectory_states = node.create_client(GetTrajectoryStates, node_id+"/"+str(mode)+'/get_trajectory_states', callback_group=node_service_callback_group)
-            floor_manager.finish_trajectory = node.create_client(FinishTrajectory, node_id+"/"+str(mode)+'/finish_trajectory', callback_group=node_service_callback_group)
-            floor_manager.start_trajectory = node.create_client(StartTrajectory, node_id+"/"+str(mode)+'/start_trajectory', callback_group=node_service_callback_group)
-            floor_manager.read_metrics = node.create_client(ReadMetrics, node_id+"/"+str(mode)+'/read_metrics', callback_group=node_service_callback_group)
-            floor_manager.trajectory_query = node.create_client(TrajectoryQuery, node_id+"/"+str(mode)+'/trajectory_query', callback_group=node_service_callback_group)
+            floor_manager.cartographer_client = CartographerClient(node, logger, node_id, mode,
+                                                                   floor_manager.configuration_directory,
+                                                                   floor_manager.configuration_basename,
+                                                                   min_hist_count
+                                                                   )
 
     multi_floor_manager.floor_list = list(floor_set)
 
@@ -3121,6 +2856,7 @@ if __name__ == "__main__":
         multi_floor_manager.gnss_params = GNSSParameters(**gnss_config)
         logger.info(F"gnss_config={gnss_config}, multi_floor_manager.gnss_params={multi_floor_manager.gnss_params}")
     if use_gnss:
+        multi_floor_manager.use_gnss = True
         multi_floor_manager.gnss_is_active = True
         multi_floor_manager.indoor_outdoor_mode = IndoorOutdoorMode.UNKNOWN
         gnss_fix_sub = message_filters.Subscriber(node, NavSatFix, "gnss_fix", callback_group=state_update_callback_group)
@@ -3134,15 +2870,18 @@ if __name__ == "__main__":
         # map_frame_adjust_time = node.create_timer(0.1, multi_floor_manager.map_frame_adjust_callback) # 10 Hz
 
     if use_global_localizer:
-        multi_floor_manager.is_active = False  # deactivate multi_floor_manager
-        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
-        # call external global localization service
-        logger.info("wait for service /global_localizer/request_localization")
-        global_localizer_request_localization = node.create_client(MFSetInt, '/global_localizer/request_localization', callback_group=MutuallyExclusiveCallbackGroup())
-        global_localizer_request_localization.wait_for_service()
-        n_compute_global_pose = 1  # request computing global_pose once
-        resp = global_localizer_request_localization(n_compute_global_pose)
-        logger.info("called /global_localizer/request_localization")
+        # config
+        multi_floor_manager.global_localization_parameters = GlobalLocalizerParameters.from_dict(map_config.get("global_localizer", {}))
+        logger.info(F"multi_floor_manager: use_global_localizer = {use_global_localizer}, parameters = {multi_floor_manager.global_localization_parameters}")
+        multi_floor_manager.is_active = False  # deactivate rss_callback initial localization
+        multi_floor_manager.gnss_is_active = False  # deactivate gnss_fix_callback initial localization
+        multi_floor_manager.use_global_localizer = True
+        multi_floor_manager.global_localizer_is_active = True
+        global_localizer_global_pose_sub = node.create_subscription(MFGlobalPosition2, "/global_localizer/global_pose", multi_floor_manager.global_localizer_global_pose_callback, 10, callback_group=state_update_callback_group)
+
+        # global localizer service
+        if stop_global_localizer_after_use:
+            multi_floor_manager.global_localizer_set_enabled_service = node.create_client(SetBool, "/global_localizer/set_enabled", callback_group=MutuallyExclusiveCallbackGroup())
 
     # publish global_map->local_map by /tf_static
     multi_floor_manager.send_static_transforms()
@@ -3172,10 +2911,6 @@ if __name__ == "__main__":
 
         # detect area and mode switching
         multi_floor_manager.check_and_update_states()  # 1 Hz
-
-        # publish adjustment tf for outdoor mode
-        if use_gnss:
-            multi_floor_manager.publish_map_frame_adjust_tf()
 
     main_timer = node.create_timer(1.0 / spin_rate, main_loop, callback_group=state_update_callback_group)
 

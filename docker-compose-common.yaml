@@ -53,6 +53,7 @@ services:
       - CABOT_LANG
       - CABOT_LOW_OBSTABLE_DETECT_VERSION
       - CABOT_PUBLISH_LOW_OBSTABLE_GROUND
+      - CABOT_FOOTPRINT_PUBLISHER_VERSION
       - CABOT_OFFSET
       - CABOT_ANNOUNCE_NO_TOUCH
       - CABOT_INIT_SPEED
@@ -78,6 +79,7 @@ services:
       - CABOT_USE_GNSS
       - CABOT_USE_DIRECTIONAL_INDICATOR
       - CABOT_VIBRATOR_TYPE
+      - CABOT_MAX_SPEED
 # ROS2/DDS
       - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
@@ -128,6 +130,7 @@ services:
       - DISPLAY
       - XAUTHORITY=/tmp/.docker.xauth
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
+      - NVIDIA_VISIBLE_DEVICES=all
       - ROS_LOG_DIR
 # CaBot
       - CABOT_GAZEBO=1
@@ -135,6 +138,8 @@ services:
       - CABOT_PRESSURE_AVAILABLE=${CABOT_PRESSURE_AVAILABLE:-0}
       - CABOT_ROSBAG_COMPRESSION
       - CABOT_USE_GNSS=${CABOT_USE_GNSS:-0}
+      - CABOT_GLOBAL_LOCALIZER_RUN=${CABOT_GLOBAL_LOCALIZER_RUN:-0}
+      - CABOT_GLOBAL_LOCALIZER_USE=${CABOT_GLOBAL_LOCALIZER_USE:-0}
       - CABOT_MODEL
       - CABOT_SITE
       - CABOT_SITE_TAGS
@@ -159,6 +164,11 @@ services:
       - NTRIP_USERNAME
       - NTRIP_PASSWORD
       - NTRIP_STR2STR_RELAY_BACK=${NTRIP_STR2STR_RELAY_BACK:-0}
+      # image
+      - CABOT_IMAGE_ROTATE_LEFT=${CABOT_IMAGE_DESCRIPTION_ROTATE_LEFT:-""}
+      - CABOT_IMAGE_ROTATE_FRONT=${CABOT_IMAGE_DESCRIPTION_ROTATE_FRONT:-""}
+      - CABOT_IMAGE_ROTATE_RIGHT=${CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT:-""}
+      - EMBEDDING_SERVER_URL
     volumes:
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
@@ -176,6 +186,51 @@ services:
       # - "-C"                                # launch cvi client
       # - "-N"                                # start ROS1 navigation for development
 
+  embedding-base:
+    image: cmucal/cabot-embedding:${CABOT_LAUNCH_IMAGE_TAG:-latest}
+    build:
+      context: ./docker/embedding
+      additional_contexts:
+        cabot_src: ./
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-embedding
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
+    # ports:
+    #   - "127.0.0.1:8000:8000"  # only localhost can access to the server
+    environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
+      - DISPLAY
+      - EMBEDDING_SERVER_PORT
+      - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
+      - NVIDIA_VISIBLE_DEVICES=all
+    # network
+    privileged: true
+    network_mode: host
+    command: uvicorn server.app:app --host 127.0.0.1 --port ${EMBEDDING_SERVER_PORT:-8001}
+
+  embedding:
+    extends: embedding-base
+
+  embedding-dev:
+    extends: embedding
+    volumes:
+      - ./mf_app:/home/developer/mf_app
+      - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
+    command: uvicorn server.app:app --host 127.0.0.1 --port ${EMBEDDING_SERVER_PORT:-8001} --reload
+
+  embedding-prod:
+    extends: embedding
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
 
   navigation-base:
     extends: ros2-base
@@ -231,6 +286,7 @@ services:
       - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
       - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
       - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
+      - ./cabot_ui_plugins:/home/developer/ros2_ws/src/cabot_ui_plugins
       - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
       - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
       - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
@@ -261,6 +317,7 @@ services:
     extends: navigation-prod-base
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
 
 
   gazebo-dev-base:
@@ -298,6 +355,8 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+      - "-w"
+      - "1"
 
   gui-dev:
     extends: gui-dev-base
@@ -310,6 +369,8 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+      - "-w"
+      - "1"
 
   gui-prod:
     extends: gui-prod-base
@@ -364,6 +425,7 @@ services:
     extends: localization-prod-base
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
 
 
   rtk_gnss-dev-base:

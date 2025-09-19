@@ -73,6 +73,7 @@ install(TARGETS
 
 install(PROGRAMS
   script/fix_filter.py
+  script/global_localizer_node.py
   script/imu_frame_renamer.py
   script/multi_floor_manager.py
   script/multi_floor_map_server.py
@@ -86,7 +87,6 @@ install(PROGRAMS
   script/str2str_node.py
   script/ublox_converter.py
   script/wireless_rss_localizer_node.py
-  script/wireless_rss_localizer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -44,7 +44,7 @@ platform=
 base_name=cabot-base
 local=0
 tags=
-services="navigation localization debug map_server location_tools"
+services="navigation localization debug map_server location_tools embedding"
 
 while getopts "hb:ilP:t:" arg; do
     case $arg in

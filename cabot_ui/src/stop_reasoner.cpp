@@ -95,6 +95,7 @@ StopReasoner::StopReasoner(const std::shared_ptr<rclcpp::Node> node)
   stopped_time_(0, 0, RCL_SYSTEM_TIME),
   prev_code_(StopReason::NONE),
   is_navigating_(false),
+  is_preparing_(true),
   is_waiting_for_elevator_(false),
   navigation_timeout_(0),
   last_log_(""),
@@ -103,7 +104,7 @@ StopReasoner::StopReasoner(const std::shared_ptr<rclcpp::Node> node)
   angular_velocity_(Constant::FILTER_DURATION_SHORT),
   cmd_vel_linear_(Constant::FILTER_DURATION_SHORT),
   cmd_vel_angular_(Constant::FILTER_DURATION_SHORT),
-  people_speed_(Constant::FILTER_DURATION_LONG),
+  people_speed_(Constant::FILTER_DURATION_SHORT),
   touch_speed_(Constant::FILTER_DURATION_LONG),
   replan_reason_(Constant::FILTER_DURATION_LONG)
 {
@@ -243,10 +244,16 @@ void StopReasoner::input_current_frame(std_msgs::msg::String & msg)
   current_frame_ = msg.data;
 }
 
+void StopReasoner::input_signal_state(cabot_msgs::msg::SignalState & msg)
+{
+  signal_state_ = msg.state;
+}
+
 std::tuple<double, StopReason> StopReasoner::update()
 {
   if (is_navigating_ == false) {
     is_stopped_ = false;
+    is_preparing_ = true;
     stopped_time_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
     return std::make_tuple(0.0, StopReason::NO_NAVIGATION);
   }
@@ -255,7 +262,18 @@ std::tuple<double, StopReason> StopReasoner::update()
     navigation_timeout_ < get_current_time())
   {
     is_navigating_ = false;
+    is_preparing_ = true;
     navigation_timeout_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
+  }
+
+  if (is_preparing_) {
+    if (linear_velocity_.latest(get_current_time()) > Constant::STOP_LINEAR_VELOCITY_THRESHOLD ||
+      angular_velocity_.latest(get_current_time()) > Constant::STOP_ANGULAR_VELOCITY_THRESHOLD)
+    {
+      is_preparing_ = false;
+    } else {
+      return std::make_tuple(0.0, StopReason::NOT_STOPPED);
+    }
   }
 
   // average velocity is under threshold
@@ -292,6 +310,16 @@ std::tuple<double, StopReason> StopReasoner::update()
     return std::make_tuple(duration, StopReason::STOPPED_BUT_UNDER_THRESHOLD);
   }
 
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::RED_SIGNAL)) {
+    return std::make_tuple(duration, StopReason::RED_SIGNAL);
+  }
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::GREEN_SIGNAL_SHORT)) {
+    return std::make_tuple(duration, StopReason::GREEN_SIGNAL_SHORT);
+  }
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::NO_SIGNAL_INFO)) {
+    return std::make_tuple(duration, StopReason::NO_SIGNAL_INFO);
+  }
+
   auto ts_latest = touch_speed_.latest(get_current_time());
   auto ts_average = touch_speed_.average(get_current_time());
   if (ts_latest >= 0 && ts_average >= 0 &&
@@ -308,15 +336,13 @@ std::tuple<double, StopReason> StopReasoner::update()
     return update();
   }
 
-  if (people_speed_.minimum(get_current_time()) >= 0) {
-    if (people_speed_.minimum(get_current_time()) < 0.9) {
-      RCLCPP_DEBUG(
-        logger_, "%.2f, people_speed minimum=%.2f, average=%.2f",
-        get_current_time().nanoseconds() / 1e9,
-        people_speed_.minimum(get_current_time()),
-        people_speed_.average(get_current_time()));
-      return std::make_tuple(duration, StopReason::THERE_ARE_PEOPLE_IN_THE_PATH);
-    }
+  if (people_speed_.minimum(get_current_time()) == 0) {
+    RCLCPP_INFO(
+      logger_, "%.2f, people_speed minimum=%.2f, average=%.2f",
+      get_current_time().nanoseconds() / 1e9,
+      people_speed_.minimum(get_current_time()),
+      people_speed_.average(get_current_time()));
+    return std::make_tuple(duration, StopReason::THERE_ARE_PEOPLE_IN_THE_PATH);
   }
 
   if (is_waiting_for_elevator_) {
@@ -329,6 +355,10 @@ std::tuple<double, StopReason> StopReasoner::update()
 
   if (replan_reason_.majority(get_current_time()) != StopReason::NONE) {
     return std::make_tuple(duration, replan_reason_.majority(get_current_time()));
+  }
+
+  if (duration < Constant::UNKNOWN_DURATION_THRESHOLD) {
+    return std::make_tuple(duration, StopReason::STOPPED_BUT_UNDER_THRESHOLD);
   }
 
   return std::make_tuple(duration, StopReason::UNKNOWN);

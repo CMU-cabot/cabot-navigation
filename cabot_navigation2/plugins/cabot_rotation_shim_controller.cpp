@@ -53,6 +53,33 @@ CaBotRotationShimController::computeRotateToHeadingCommand(
   return cmd_vel;
 }
 
+void CaBotRotationShimController::setPlan(const nav_msgs::msg::Path & path)
+{
+  auto path_updated = isGoalChanged(path);
+  RotationShimController::setPlan(path);
+  path_updated_ = path_updated;
+
+  RCLCPP_INFO(logger_, "Path updated: %s", path_updated_ ? "true" : "false");
+}
+
+bool CaBotRotationShimController::isGoalChanged(const nav_msgs::msg::Path & path)
+{
+  // Return true if rotating or if the current path is empty
+  if (in_rotation_ || current_path_.poses.empty()) {
+    return true;
+  }
+
+  // Check if the last pose of the current and new paths differ
+  auto p0 = current_path_.poses.back().pose;
+  auto p1 = path.poses.back().pose;
+  auto dx = p0.position.x - p1.position.x;
+  auto dy = p0.position.y - p1.position.y;
+  RCLCPP_INFO(
+    logger_, "Path goal changed: %f (%.2f, %.2f) - (%.2f, %.2f)", std::hypot(dx, dy),
+    p0.position.x, p0.position.y, p1.position.x, p1.position.y);
+  return std::hypot(dx, dy) > 1.0;
+}
+
 geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & pose,
   const geometry_msgs::msg::Twist & velocity,
@@ -72,14 +99,14 @@ geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCom
         std::atan2(sampled_pt_base.position.y, sampled_pt_base.position.x);
       double distance_to_heading = hypot(sampled_pt_base.position.x, sampled_pt_base.position.y);
 
-      RCLCPP_DEBUG(
+      RCLCPP_INFO(
         logger_,
         "angular_distance_to_heading: abs(%.2f) <> %.2f, distance_to_heading: %.2f <> %.2f",
         angular_distance_to_heading, angular_dist_threshold_, distance_to_heading, forward_sampling_distance_);
       if (distance_to_heading >= forward_sampling_distance_ * 0.9 &&
         fabs(angular_distance_to_heading) > angular_dist_threshold_ && velocity.linear.x < 0.1)
       {
-        RCLCPP_DEBUG(
+        RCLCPP_INFO(
           logger_,
           "Robot is not within the new path's rough heading, rotating to heading...");
         if (turn_pose_prefer_pub_ == nullptr) {
@@ -94,7 +121,7 @@ geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCom
         }
         return computeRotateToHeadingCommand(angular_distance_to_heading, pose, velocity);
       } else {
-        RCLCPP_DEBUG(
+        RCLCPP_INFO(
           logger_,
           "Robot is at the new path's rough heading, passing to controller");
         path_updated_ = false;
@@ -125,7 +152,7 @@ geometry_msgs::msg::PoseStamped CaBotRotationShimController::getNearestPathPt(co
   double dx, dy, dist;
   double mind = 10000;
   unsigned int mini;
-  for (unsigned int i = 1; i != current_path_.poses.size(); i++) {
+  for (unsigned int i = 1; i != current_path_.poses.size() && i < 100; i++) {
     dx = current_path_.poses[i].pose.position.x - pose.pose.position.x;
     dy = current_path_.poses[i].pose.position.y - pose.pose.position.y;
     dist = hypot(dx, dy);

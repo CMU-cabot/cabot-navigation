@@ -34,6 +34,7 @@ public:
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override;
+  void setPlan(const nav_msgs::msg::Path & path) override;
 
 private:
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_prefer_pub_;
@@ -46,6 +47,7 @@ protected:
     const geometry_msgs::msg::Twist & velocity);
   geometry_msgs::msg::PoseStamped getNearestPathPt(const geometry_msgs::msg::PoseStamped & pose);
   geometry_msgs::msg::Pose transformPoseToBaseFrame(const geometry_msgs::msg::PoseStamped & pt);
+  bool isGoalChanged(const nav_msgs::msg::Path & path);
 };
 }  // namespace cabot_navigation2
 #endif  // CABOT_NAVIGATION2__CABOT_ROTATION_SHIM_CONTROLLER_HPP_

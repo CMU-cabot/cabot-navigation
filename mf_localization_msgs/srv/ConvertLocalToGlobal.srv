@@ -21,3 +21,4 @@
 MFLocalPosition local_position
 ---
 MFGlobalPosition global_position
+StatusResponse status

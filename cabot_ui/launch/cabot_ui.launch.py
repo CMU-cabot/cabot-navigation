@@ -51,6 +51,7 @@ def generate_launch_description():
     handle_button_mapping = LaunchConfiguration('handle_button_mapping')
     vibrator_type = LaunchConfiguration('vibrator_type')
     use_directional_indicator = LaunchConfiguration('use_directional_indicator')
+    max_speed = LaunchConfiguration('max_speed')
 
     def hoge(text):
         return text
@@ -138,11 +139,16 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_USE_DIRECTIONAL_INDICATOR', default_value='false'),
             description='If true, the directional indicator on the handle is enabled'
         ),
+        DeclareLaunchArgument(
+            'max_speed',
+            default_value=EnvironmentVariable('CABOT_MAX_SPEED', default_value='1.0'),
+            description='Set maximum speed of the robot'
+        ),
         Node(
             package="cabot_ui",
             executable="cabot_ui_manager.py",
-            name="cabot_ui_manager",
             output=output,
+            # name="cabot_ui_manager",  # must not set name because it makes multiple nodes with different names
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'init_speed': init_speed,
@@ -153,7 +159,8 @@ def generate_launch_description():
                 'menu_file': menu_file,
                 'speed_poi_params': speed_poi_params,
                 'handle_button_mapping': handle_button_mapping,
-            }, NamespaceParameterFile('cabot_ui_manager', config_path)],
+                'max_speed': max_speed,
+            }, NamespaceParameterFile('cabot_ui_manager_navigation', config_path)],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
             ],
@@ -186,6 +193,7 @@ def generate_launch_description():
             name="stop_reasons_node",
             output=output,
             parameters=[{
+                'use_sim_time': use_sim_time,
                 'announce_no_touch': announce_no_touch
             }],
         ),
