@@ -1,16 +1,9 @@
-from .navgoal import NavGoal, TurnGoal
-from .navgoal import ElevatorWaitGoal, ElevatorInGoal, ElevatorTurnGoal, ElevatorFloorGoal, ElevatorOutGoal
-from .navgoal import make_goals
-from .navigation import Navigation
+from .navigation import Navigation, ControlBase, NavigationParamManager
+from .menu import NavigationMenu
 
 __all__ = [
-    'NavGoal',
-    'TurnGoal',
-    'ElevatorWaitGoal',
-    'ElevatorInGoal',
-    'ElevatorTurnGoal',
-    'ElevatorFloorGoal',
-    'ElevatorOutGoal',
-    'make_goals',
+    'ControlBase',
     'Navigation',
+    'NavigationMenu',
+    'NavigationParamManager',
 ]

@@ -33,5 +33,8 @@ setup(
             'description = cabot_ui_plugins.description:Description',
             'speaker = cabot_ui_plugins.speaker:Speaker',
         ],
+        'navcog_map.plugins': [
+            'navigation = cabot_ui_plugins.navigation:NavigationMenu',
+        ],
     }
 )

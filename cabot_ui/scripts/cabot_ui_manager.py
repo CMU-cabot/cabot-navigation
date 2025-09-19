@@ -34,10 +34,9 @@ Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
 
-from importlib.metadata import entry_points
+import os
 import signal
 import sys
-import threading
 import traceback
 import types
 import yaml
@@ -46,7 +45,6 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import std_msgs.msg
-import std_srvs.srv
 
 import cabot_common.button
 from cabot_common.event import BaseEvent, ButtonEvent, ClickEvent, HoldDownEvent
@@ -55,48 +53,10 @@ from cabot_ui.event import MenuEvent, NavigationEvent, ExplorationEvent
 from cabot_ui.menu import Menu
 from cabot_ui.interface import UserInterface
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.plugin import NavigationPlugins
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
-
-
-class NavigationPlugins():
-    def __init__(self, plugins, node_manager, delegate):
-        self._node = node_manager.get_node()
-        self._logger = self._node.get_logger()
-        eps = entry_points(group="cabot_ui.plugins")
-        self._plugins = []
-
-        for name in plugins:
-            for ep in eps:
-                if ep.name != name:
-                    continue
-                CaBotRclpyUtil.info(f"Loading plugin {ep.name} {ep.value}")
-                cls = ep.load()
-                instance = cls(node_manager)
-                instance.delegate = delegate
-                self._plugins.append(instance)
-
-    @property
-    def plugins(self):
-        return self._plugins
-
-    @property
-    def ready(self):
-        for p in self._plugins:
-            if not p.ready:
-                return False
-        return True
-
-    def process_event(self, event):
-        for p in self._plugins:
-            try:
-                result = p.process_event(event)
-                self._logger.info(f"process_event {result=}, {type(p)=}, {str(event)}")
-                if result:
-                    break
-            except:  # noqa
-                self._logger.error(traceback.format_exc())
 
 
 class CabotUIManager(object):
@@ -120,7 +80,7 @@ class CabotUIManager(object):
             return self.speed_menu.value
         self._interface.user_speed = types.MethodType(user_speed, self)
 
-        plugins = self._node.declare_parameter('navigation_plugins', ["navigation", "feature", "description", "speaker"]).value
+        plugins = os.environ.get('CABOT_UI_PLUGINS', "navigation,feature,description,speaker").split(",")
         self._navigation_plugins = NavigationPlugins(plugins, node_manager, self._interface)
         # self._exploration = Exploration()
         # self._exploration.delegate = self
