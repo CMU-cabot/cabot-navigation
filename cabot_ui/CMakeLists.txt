@@ -14,6 +14,7 @@ find_package(cabot_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_lifecycle_manager REQUIRED)
+find_package(nav2_util REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -32,6 +33,7 @@ set(dependencies
   std_msgs
   tf2_geometry_msgs
   tf2_ros
+  nav2_util
 )
 
 add_library(cabot_handle_v2_lib SHARED
