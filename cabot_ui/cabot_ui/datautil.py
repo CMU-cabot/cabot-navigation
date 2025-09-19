@@ -44,9 +44,9 @@ class DataUtil(object):
     def __init__(self, node: Node):
         self._node = node
         self._protocol = node.declare_parameter("protocol", "http").value
-        self._hostname = node.declare_parameter("map_server_host", "").value
+        self._hostname = node.declare_parameter("map_server_host", "localhost:9090/map").value
         if os.environ.get("CABOT_MAP_SERVER_HOST"):
-            self._hostname = os.environ.get("CABOT_MAP_SERVER_HOST")
+            self._hostname = os.environ.get("CABOT_MAP_SERVER_HOST", "localhost:9090/map")
         if not node.has_parameter("lang"):
             self._lang = node.declare_parameter("lang", "en").value
         else:

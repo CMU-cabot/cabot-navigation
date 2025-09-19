@@ -55,6 +55,7 @@ class TourDestination:
 class Tour:
     tour_id: Optional[str]
     destinations: List[TourDestination]
+    introduction: Optional[str] = None
     title: Optional[dict] = None  # Use a dictionary for text fields
     default_var: Optional[str] = None  # Add this field
     debug: Optional[bool] = None  # Add this field
@@ -74,6 +75,10 @@ class TourData:
         for dest in self.destinations:
             if dest.value == ref and (not var or dest.var == var):
                 return dest
+        for dest in self.destinations:
+            if dest.value == ref and dest.var is None:
+                return dest
+        return Destination(value=ref, floor=None, sharp_title=None)  # If not found,
         return None
 
     def get_message(self, ref, message_type):

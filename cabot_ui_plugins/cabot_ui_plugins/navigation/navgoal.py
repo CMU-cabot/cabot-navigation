@@ -605,7 +605,7 @@ class Goal(geoutil.TargetPlace):
                         self._logger.info(f"cancel future result = {future.result}")
                 if cancel_callback:
                     cancel_callback()
-                self.delegate._process_queue.append((self.cancel, callback))
+                self.delegate._process_queue.add(self.cancel, callback)
             future.add_done_callback(done_callback)
 
             def timeout_watcher(future, timeout_duration):
@@ -633,6 +633,9 @@ class Goal(geoutil.TargetPlace):
     def completed(self, pose, floor):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
         return False
+
+    def current_target(self):
+        return None
 
 
 class Nav2Params:

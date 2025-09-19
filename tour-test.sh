@@ -50,6 +50,7 @@ function help()
     echo "-s <start>  start node id"
     echo "-g <goal>   goal node id"
     echo "-L          list landmarks"
+    echo "-S <site>   site package name (overrides CABOT_SITE environment variable)"
 }
 
 pwd=`pwd`
@@ -67,7 +68,7 @@ goal_id=
 landmarks=
 messages=
 
-while getopts "hdDl:t:s:g:LM" arg; do
+while getopts "hdDl:t:s:g:LMS:" arg; do
     case $arg in
         h)
             help
@@ -96,6 +97,9 @@ while getopts "hdDl:t:s:g:LM" arg; do
             ;;
         M)
             messages="-M"
+            ;;
+        S)
+            export CABOT_SITE=$OPTARG
             ;;
         *)
             err "Invalid option - $arg"
