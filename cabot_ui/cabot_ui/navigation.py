@@ -1334,7 +1334,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         goal.target_yaw = turn_yaw
 
         msg = geometry_msgs.msg.PoseStamped()
-        msg.header.frame_id = self._global_map_name
+        msg.header.frame_id = "base_footprint"
         msg.header.stamp = self._node.get_clock().now().to_msg()
         quaternion = tf_transformations.quaternion_from_euler(0.0, 0.0, turn_yaw)
         msg.pose.orientation.x = quaternion[0]

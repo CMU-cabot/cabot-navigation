@@ -367,7 +367,7 @@ class UserInterface(object):
             self._activity_log("cabot/turn_type", "Type.Avoiding")
         self.last_notify_turn[device] = self._node.get_clock().now()
         if device == "directional_indicator" and turn.end is not None:
-            msgs[1].header.frame_id = self.last_pose['global_frame']
+            msgs[1].header.frame_id = turn.end.header.frame_id
             msgs[1].header.stamp = self._node.get_clock().now().to_msg()
             msgs[1].pose.position = turn.end.pose.position
             msgs[1].pose.orientation = turn.end.pose.orientation
