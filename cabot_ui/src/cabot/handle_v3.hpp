@@ -204,6 +204,7 @@ private:
   void stopVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr vibratorPub);
   void changeServoPos(int16_t target_pos);
   void setServoFree(bool is_free);
+  void checkServoPosition();
   void resetServoPosition();
   void navigationArrived();
   void navigationStart();

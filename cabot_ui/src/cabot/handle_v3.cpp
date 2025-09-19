@@ -426,7 +426,6 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::SharedPtr msg)
     di.target_pos_global = static_cast<int16_t>(di.target_turn_angle - turned_angle);
     if (std::abs(di.target_pos_global) < di.THRESHOLD_RESET) {
       if (std::abs(di.target_pos_global - di.target_pos_local) < di.THRESHOLD_PASS_CONTROL_MIN) {
-        // resetServoPosition();
         di.is_controlled_exclusive = false;
         RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "(global -> local) global: %d, local: %d ", di.target_pos_global, di.target_pos_local);
       } else {
@@ -441,6 +440,8 @@ void Handle::servoPosCallback(std_msgs::msg::Int16::SharedPtr msg)
         RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "(global) global: %d, local: %d", di.target_pos_global, di.target_pos_local);
       }
     }
+  } else {
+    checkServoPosition();
   }
 }
 
@@ -501,11 +502,6 @@ void Handle::pauseControlCallback(std_msgs::msg::Bool::SharedPtr msg)
     di.turn_angle_queue_.clear();
     di.turn_angle_queue_prefer_.clear();
     resetServoPosition();
-    for (uint8_t i = 0; i < 5; i++) {
-      RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset dial position");
-      changeServoPos(0);
-    }
-    setServoFree(true);
   }
 }
 
@@ -577,6 +573,13 @@ void Handle::setServoFree(bool is_free)
   servo_free_pub_->publish(std::move(msg));
 }
 
+void Handle::checkServoPosition()
+{
+  if (di.current_servo_pos == 0) {
+    setServoFree(true);
+  }
+}
+
 void Handle::resetServoPosition()
 {
   RCLCPP_INFO(rclcpp::get_logger("Handle_v3"), "Reset: servo_pos");
@@ -600,11 +603,6 @@ void Handle::navigationArrived()
   } else if (vibratorType_ == vibrator_type_::LRA) {
     vibratePattern(vibrator1_pub_, VibConst::LRA::NumVibrations::HAS_ARRIVED, VibConst::LRA::Duration::HAS_ARRIVED, VibConst::LRA::Sleep::DEFAULT);
   }
-  for (uint8_t i = 0; i < 5; i++) {
-    RCLCPP_DEBUG(rclcpp::get_logger("Handle_v3"), "wait for reset dial position");
-    changeServoPos(0);
-  }
-  setServoFree(true);
 }
 
 void Handle::navigationStart()
