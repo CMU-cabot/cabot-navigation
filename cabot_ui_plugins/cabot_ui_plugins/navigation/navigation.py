@@ -1,5 +1,5 @@
-# Copyright (c) 2020  Carnegie Mellon University
-# Copyright (c) 2024  ALPS ALPINE CO., LTD.
+# Copyright (c) 2020, 2025  Carnegie Mellon University
+# Copyright (c) 2024, 2025  ALPS ALPINE CO., LTD.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,6 @@
 
 import copy
 import math
-import inspect
-from sre_parse import State
 import numpy
 import numpy.linalg
 import os
@@ -36,6 +34,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+import tf2_ros
 import tf_transformations
 import nav2_msgs.action
 import std_msgs.msg
@@ -195,7 +194,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     TURN_NEARBY_THRESHOLD = 2
 
     def __init__(self, node_manager: NodeManager,
-                 datautil_instance=None, anchor_file='', wait_for_action=True):        
+                 datautil_instance=None, anchor_file='', wait_for_action=True):
         node = node_manager.get_node("nav", False)
         tf_node = node_manager.get_node("tf", True)
         srv_node = node_manager.get_node("srv", True)

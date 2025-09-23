@@ -6,7 +6,7 @@ package_name = 'cabot_ui_plugins'
 setup(
     name=package_name,
     version='2.0.0',
-    packages=find_packages(exclude=['test']),
+    packages=find_packages(exclude=['tests']),
     data_files=[
         ('share/' + package_name, ['package.xml']),
         ('share/ament_index/resource_index/packages',
@@ -26,6 +26,7 @@ setup(
     description='cabot_ui plugins',
     long_description='',
     license='MIT',
+    tests_require=['pytest'],
     entry_points={
         'cabot_ui.plugins': [
             'navigation = cabot_ui_plugins.navigation:Navigation',

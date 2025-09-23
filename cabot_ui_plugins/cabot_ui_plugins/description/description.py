@@ -20,7 +20,6 @@
 
 import traceback
 import rclpy.logging
-from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from nav_msgs.msg import Path
 from std_msgs.msg import String
