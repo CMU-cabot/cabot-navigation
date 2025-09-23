@@ -28,6 +28,43 @@ from cabot_ui.node_manager import NodeManager
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 
+class EventMapperPlugin(ABC):
+    name: str
+
+    def __init__(self, callback):
+        pass
+
+    @abstractmethod
+    def push(self, event) -> None:
+        pass
+
+
+class EventMapperPlugins():
+    def __init__(self, plugins, callback):
+        eps = entry_points(group="event_mapper.plugins")
+        self._plugins = []
+
+        for name in plugins:
+            for ep in eps:
+                if ep.name != name:
+                    continue
+                CaBotRclpyUtil.info(f"Loading plugin {ep.name} {ep.value}")
+                cls = ep.load()
+                instance = cls(callback)
+                self._plugins.append(instance)
+
+    @property
+    def plugins(self):
+        return self._plugins
+
+    def push(self, event):
+        for p in self._plugins:
+            try:
+                p.push(event)
+            except:  # noqa
+                self._logger.error(traceback.format_exc())
+
+
 class NavcogMapPlugin(ABC):
     name: str
 

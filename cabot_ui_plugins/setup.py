@@ -33,6 +33,10 @@ setup(
             'description = cabot_ui_plugins.description:Description',
             'speaker = cabot_ui_plugins.speaker:Speaker',
         ],
+        'event_mapper.plugins': [
+            'event_mapper1 = cabot_ui_plugins.event_mapper:EventMapper1',
+            'event_mapper2 = cabot_ui_plugins.event_mapper:EventMapper2',
+        ],
         'navcog_map.plugins': [
             'navigation = cabot_ui_plugins.navigation:NavigationMenu',
         ],
