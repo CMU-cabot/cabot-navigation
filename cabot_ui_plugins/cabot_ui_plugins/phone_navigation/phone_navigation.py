@@ -25,19 +25,16 @@ import traceback
 
 # ROS
 import rclpy
-from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import unique_identifier_msgs.msg
 import nav2_msgs.action
 import nav_msgs.msg
-from ament_index_python.packages import get_package_share_directory
 
 # Other
 from cabot_ui import geojson
 from cabot_common import util
-from cabot_ui.event import NavigationEvent
 import cabot_ui.navgoal as navgoal
 from cabot_ui.navgoal import GoalInterface
 from cabot_ui.param_manager import ParamManager
