@@ -235,6 +235,10 @@ if __name__ == "__main__":
     rclpy.init()
 
     node_manager = NodeManager()
-    ui_manager = CabotUIManager(node_manager)
+    try:
+        ui_manager = CabotUIManager(node_manager)
+    except:  # noqa: #722
+        node_manager.get_node().get_logger().error(traceback.format_exc())
+        rclpy.shutdown()
     node_manager.join()
     node_manager.get_node().get_logger().info("cabot_ui_manager terminated")
