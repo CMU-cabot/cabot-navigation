@@ -330,10 +330,10 @@ controller_server:
       plugin: "cabot_navigation2::CaBotSamplingMPCController"
       group_topic: "/group_predictions"
       traj_vis_topic: "/control_output_vis"
-      loc_goal_vis_topic: "/local_goal_vis2"
+      loc_goal_vis_topic: "/local_goal_vis"
       prediction_horizon: 4.8
       sampling_rate: 0.4
-      max_linear_velocity: 0.5
+      max_linear_velocity: 1.0
       linear_sample_size: 2.0
       max_angular_velocity: 1.0
       angular_sample_size: 10.0
@@ -353,7 +353,7 @@ controller_server:
       plugin: "cabot_navigation2::CaBotRLController"
       rl_cmd_topic: "/rl_robot_cmd"
       rl_info_topic: "/rl_robot_info"
-      loc_goal_vis_topic: "/local_goal_vis"
+      loc_goal_vis_topic: "/local_goal_vis2"
       lookahead_distance: 2.5
       focus_goal_dist: 2.0
 
