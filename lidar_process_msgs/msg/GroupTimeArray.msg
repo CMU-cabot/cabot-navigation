@@ -1,0 +1,1 @@
+lidar_process_msgs/GroupArray[] group_sequences

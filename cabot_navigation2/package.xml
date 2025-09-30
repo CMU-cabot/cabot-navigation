@@ -43,6 +43,7 @@
   <depend>pcl_ros</depend>
   <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>
+  <depend>lidar_process_msgs</depend>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
 

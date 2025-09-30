@@ -31,5 +31,8 @@
     <class type="cabot_navigation2::TemporalObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
       <description>Temporal Obstacle layer</description>
     </class>
+    <class type="cabot_navigation2::GroupObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
+      <description>Obstacle layer dealing with Groups and predictions</description>
+    </class>
   </library>
 </class_libraries>
