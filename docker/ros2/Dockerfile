@@ -193,6 +193,7 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_gazebo src/cabot_gazeb
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_navigation2 src/cabot_navigation2
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_ui src/cabot_ui
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_msgs src/mf_localization_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./lidar_process_msgs src/lidar_process_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./mf_localization_rviz src/mf_localization_rviz
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./pedestrian_plugin src/pedestrian_plugin
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./pedestrian_plugin_msgs src/pedestrian_plugin_msgs
