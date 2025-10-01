@@ -1215,9 +1215,6 @@ class ElevatorInGoal(ElevatorGoal):
         # use odom frame for navigation
         self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
 
-    def check(self, current_pose):
-        elevator_controller.hold_door()
-
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorInGoal completed")
         status = future.result().status
@@ -1246,9 +1243,6 @@ class ElevatorTurnGoal(ElevatorGoal):
         pose = geoutil.Pose(x=self.cab_poi.x, y=self.cab_poi.y, r=self.cab_poi.r)
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
-
-    def check(self, current_pose):
-        elevator_controller.hold_door()
 
     def done_callback(self, result):
         if elevator_controller.in_control:
@@ -1320,9 +1314,6 @@ class ElevatorOutGoal(ElevatorGoal):
         self.delegate.publish_path(path, False)
 
         self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
-
-    def check(self, current_pose):
-        elevator_controller.hold_door()
 
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorOutGoal completed")

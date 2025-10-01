@@ -21,7 +21,7 @@
 import json
 import os
 import requests
-from datetime import datetime, timedelta
+import threading
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil as logger
 # import logging
 # logging.basicConfig(level=logging.INFO)
@@ -33,7 +33,6 @@ class ElevatorController:
         self._enabled = True
         self._in_control = False
         self._allow_door_hold = False
-        self._last_door_hold = datetime.now()
         self._client = ElevatorClient()
 
     @property
@@ -64,24 +63,20 @@ class ElevatorController:
     def open_door(self, duration=5):
         if self._enabled and self._in_control:
             logger.info(f"ElevatorController: open door for {duration} seconds")
-            if self._client.open_door(duration):
-                self._allow_door_hold = True
-                self._last_door_hold = datetime.now()
+            self._allow_door_hold = True
+            self._hold_door(duration)
 
-    def hold_door(self, duration=5):
+    def _hold_door(self, duration):
         if self._enabled and self._in_control and self._allow_door_hold:
-            now = datetime.now()
-            if (now - self._last_door_hold) < timedelta(seconds=duration/2):
-                return
             logger.info(f"ElevatorController: hold door for {duration} seconds")
             if self._client.open_door(duration):
-                self._last_door_hold = now
+                threading.Timer(duration/2, self._hold_door, args=(duration,)).start()
 
     def close_door(self, after=5):
         if self._enabled and self._in_control:
             logger.info(f"ElevatorController: close door after {after} seconds")
-            if self._client.open_door(after):
-                self._allow_door_hold = False
+            self._allow_door_hold = False
+            self._client.open_door(after)
 
 
 class ElevatorClient:
