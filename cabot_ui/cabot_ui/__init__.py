@@ -30,7 +30,6 @@ from . import node_manager
 from . import status
 from . import turn_detector
 from . import visualizer
-from . import elevator_controller
 
 
 __all__ = [
@@ -46,5 +45,4 @@ __all__ = [
     "status",
     "turn_detector",
     "visualizer",
-    "elevator_controller",
 ]
