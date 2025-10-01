@@ -22,10 +22,12 @@ import json
 import os
 import requests
 import threading
-from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil as logger
-# import logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
+try:
+    from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil as logger
+except ImportError:
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
 
 class ElevatorController:
@@ -37,7 +39,7 @@ class ElevatorController:
 
     @property
     def enabled(self):
-        return self._enabled
+        return self._client.valid and self._enabled
 
     @enabled.setter
     def enabled(self, value: bool):
@@ -46,7 +48,7 @@ class ElevatorController:
 
     @property
     def in_control(self):
-        return self._enabled and self._in_control
+        return self.enabled and self._in_control
 
     @in_control.setter
     def in_control(self, value: bool):
@@ -60,7 +62,7 @@ class ElevatorController:
                 self._in_control = True
                 self._allow_door_hold = False
 
-    def open_door(self, duration=5):
+    def open_door(self, duration=10):
         if self._enabled and self._in_control:
             logger.info(f"ElevatorController: open door for {duration} seconds")
             self._allow_door_hold = True
@@ -86,9 +88,13 @@ class ElevatorClient:
         self._client_id = os.getenv("ELEVATOR_CLIENT_ID")
         self._client_secret = os.getenv("ELEVATOR_CLIENT_SECRET")
 
+    @property
+    def valid(self):
+        return self._endpoint and self._client_id and self._client_secret
+
     def authorize(self):
         self._auth_header = None
-        if self._endpoint and self._client_id and self._client_secret:
+        if self.valid:
             try:
                 res = requests.post(
                     f"{self._endpoint}/auth/oauth/token",
@@ -119,9 +125,6 @@ class ElevatorClient:
 
     def call_elevator(self, from_floor, to_floor):
         logger.info(f"ElevatorClient: call elevator from {from_floor} to {to_floor}")
-        if self._auth_header is None and not self.authorize():
-            logger.error("ElevatorClient: authorization failed")
-            return False
         retry_count = [1]
         while True:
             try:
@@ -140,11 +143,8 @@ class ElevatorClient:
                 logger.error(f"error: {err}")
                 break
 
-    def open_door(self, duration=5):
+    def open_door(self, duration=10):
         logger.info(f"ElevatorClient: open door for {duration} seconds")
-        if self._auth_header is None and not self.authorize():
-            logger.error("ElevatorClient: authorization failed")
-            return False
         retry_count = [1]
         while True:
             try:
@@ -166,7 +166,8 @@ class ElevatorClient:
 
 elevator_controller = ElevatorController()
 
-# if __name__ == "__main__":
-#     client = ElevatorClient()
-#     client.call_elevator(3, 5)
-#     client.open_door()
+if __name__ == "__main__":
+    elevator_controller.call_elevator(5, 3)
+    elevator_controller.open_door()
+    threading.Timer(20, elevator_controller.close_door).start()
+    threading.Timer(40, elevator_controller.close_door).start()
