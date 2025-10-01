@@ -68,7 +68,7 @@ class ElevatorController:
             self._last_door_hold = now
 
     def close_door(self, after=5):
-        if self._enabled or self._in_control:
+        if self._enabled and self._in_control:
             CaBotRclpyUtil.info(f"ElevatorController: close door after {after} seconds")
             self._allow_door_hold = False
 
