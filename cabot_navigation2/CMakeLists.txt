@@ -171,6 +171,24 @@ ament_target_dependencies(cabot_scan
   sensor_msgs
 )
 
+### livox tag filter
+add_executable(livox_tag_filter_node
+  src/livox_tag_filter_node.cpp
+)
+
+ament_target_dependencies(livox_tag_filter_node
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+  pcl_ros
+  tf2_ros
+  visualization_msgs
+)
+
+target_link_libraries(livox_tag_filter_node
+  ${PCL_LIBRARIES}
+)
+
 ### clip ground filter
 add_executable(clip_ground_filter_node
   src/abstract_ground_filter_node.cpp
@@ -270,6 +288,7 @@ install(TARGETS
   cabot_controllers
   cabot_scan
   cabot_lifecycle_manager
+  livox_tag_filter_node
   clip_ground_filter_node
   ransac_ground_filter_node
   grid_map_ground_filter_node
