@@ -254,6 +254,9 @@ services:
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
       - CABOT_ROS2_RVIZ_CONFIG
       - CABOT_ROS2_LOCAL_RVIZ_CONFIG
+      - ELEVATOR_ENDPOINT
+      - ELEVATOR_CLIENT_ID
+      - ELEVATOR_CLIENT_SECRET
     volumes:
 # device, bluetooth
       - /dev:/dev

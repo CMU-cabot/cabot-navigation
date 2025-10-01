@@ -18,8 +18,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import json
+import os
+import requests
 from datetime import datetime, timedelta
-from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil as logger
+# import logging
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
 
 
 class ElevatorController:
@@ -28,6 +34,7 @@ class ElevatorController:
         self._in_control = False
         self._allow_door_hold = False
         self._last_door_hold = datetime.now()
+        self._client = ElevatorClient()
 
     @property
     def enabled(self):
@@ -35,7 +42,7 @@ class ElevatorController:
 
     @enabled.setter
     def enabled(self, value: bool):
-        CaBotRclpyUtil.info(f"ElevatorController: enabled = {value}")
+        logger.info(f"ElevatorController: enabled = {value}")
         self._enabled = value
 
     @property
@@ -44,33 +51,127 @@ class ElevatorController:
 
     @in_control.setter
     def in_control(self, value: bool):
-        CaBotRclpyUtil.info(f"ElevatorController: in_control = {value}")
+        logger.info(f"ElevatorController: in_control = {value}")
         self._in_control = value
 
     def call_elevator(self, from_floor, to_floor):
         if self._enabled:
-            CaBotRclpyUtil.info(f"ElevatorController: call elevator from {from_floor} to {to_floor}")
-            self._in_control = True
-            self._allow_door_hold = False
+            logger.info(f"ElevatorController: call elevator from {from_floor} to {to_floor}")
+            if self._client.call_elevator(from_floor, to_floor):
+                self._in_control = True
+                self._allow_door_hold = False
 
     def open_door(self, duration=5):
         if self._enabled and self._in_control:
-            CaBotRclpyUtil.info(f"ElevatorController: open door for {duration} seconds")
-            self._allow_door_hold = True
-            self._last_door_hold = datetime.now()
+            logger.info(f"ElevatorController: open door for {duration} seconds")
+            if self._client.open_door(duration):
+                self._allow_door_hold = True
+                self._last_door_hold = datetime.now()
 
     def hold_door(self, duration=5):
         if self._enabled and self._in_control and self._allow_door_hold:
             now = datetime.now()
             if (now - self._last_door_hold) < timedelta(seconds=duration/2):
                 return
-            CaBotRclpyUtil.info(f"ElevatorController: hold door for {duration} seconds")
-            self._last_door_hold = now
+            logger.info(f"ElevatorController: hold door for {duration} seconds")
+            if self._client.open_door(duration):
+                self._last_door_hold = now
 
     def close_door(self, after=5):
         if self._enabled and self._in_control:
-            CaBotRclpyUtil.info(f"ElevatorController: close door after {after} seconds")
-            self._allow_door_hold = False
+            logger.info(f"ElevatorController: close door after {after} seconds")
+            if self._client.open_door(after):
+                self._allow_door_hold = False
+
+
+class ElevatorClient:
+    def __init__(self):
+        self._auth_header = None
+        self._endpoint = os.getenv("ELEVATOR_ENDPOINT")
+        self._client_id = os.getenv("ELEVATOR_CLIENT_ID")
+        self._client_secret = os.getenv("ELEVATOR_CLIENT_SECRET")
+
+    def authorize(self):
+        self._auth_header = None
+        if self._endpoint and self._client_id and self._client_secret:
+            try:
+                res = requests.post(
+                    f"{self._endpoint}/auth/oauth/token",
+                    headers={"Content-Type": "application/json"},
+                    data=json.dumps({
+                        "client_id": self._client_id,
+                        "client_secret": self._client_secret,
+                    }),
+                    timeout=10,
+                )
+                res.raise_for_status()
+                access_token = res.json().get("access_token")
+                if access_token:
+                    self._auth_header = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {access_token}"
+                    }
+
+            except Exception as err:
+                logger.error(f"error: {err}")
+        return self._auth_header is not None
+
+    def retry_request(self, res, retry_count):
+        if res.status_code == 401 and retry_count[0] > 0:
+            retry_count[0] -= 1
+            return self.authorize()
+        return False
+
+    def call_elevator(self, from_floor, to_floor):
+        logger.info(f"ElevatorClient: call elevator from {from_floor} to {to_floor}")
+        if self._auth_header is None and not self.authorize():
+            logger.error("ElevatorClient: authorization failed")
+            return False
+        retry_count = [1]
+        while True:
+            try:
+                res = requests.post(
+                    f"{self._endpoint}/api/elevator/call",
+                    headers=self._auth_header,
+                    data=json.dumps({"id": "dummy", "from": from_floor, "to": to_floor}),
+                    timeout=10,
+                )
+                logger.info(f"call_elevator result: {res.json()}")
+                if res.status_code == 200:
+                    return True
+                if not self.retry_request(res, retry_count):
+                    break
+            except Exception as err:
+                logger.error(f"error: {err}")
+                break
+
+    def open_door(self, duration=5):
+        logger.info(f"ElevatorClient: open door for {duration} seconds")
+        if self._auth_header is None and not self.authorize():
+            logger.error("ElevatorClient: authorization failed")
+            return False
+        retry_count = [1]
+        while True:
+            try:
+                res = requests.post(
+                    f"{self._endpoint}/api/elevator/open",
+                    headers=self._auth_header,
+                    data=json.dumps({"duration": duration}),
+                    timeout=10,
+                )
+                logger.info(f"open_door result: {res.json()}")
+                if res.status_code == 200:
+                    return True
+                if not self.retry_request(res, retry_count):
+                    break
+            except Exception as err:
+                logger.error(f"error: {err}")
+                break
 
 
 elevator_controller = ElevatorController()
+
+# if __name__ == "__main__":
+#     client = ElevatorClient()
+#     client.call_elevator(3, 5)
+#     client.open_door()
