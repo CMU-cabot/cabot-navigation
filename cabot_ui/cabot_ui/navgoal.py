@@ -30,6 +30,7 @@ import yaml
 
 from cabot_ui import geoutil, geojson
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.elevator_controller import elevator_controller
 
 import tf_transformations
 import nav_msgs.msg
@@ -66,6 +67,12 @@ class GoalInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def please_call_elevator(self, pos):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def calling_elevator(self, floor):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def elevator_boarding_completed(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def publish_path(self, global_path, convert=True):
@@ -1160,6 +1167,18 @@ class ElevatorWaitGoal(ElevatorGoal):
     def done_callback(self, result):
         if result:
             CaBotRclpyUtil.info("ElevatorWaitGoal completed")
+            if elevator_controller.enabled:
+                try:
+                    for goal in self.delegate._sub_goals[self.delegate._sub_goals.index(self)+1:]:
+                        if isinstance(goal, ElevatorFloorGoal):
+                            elevator_controller.call_elevator(self.delegate.current_floor, goal._floor)
+                            self.delegate.calling_elevator(goal._floor)
+                            self._is_completed = result
+                            return
+                except:  # noqa: #722
+                    pass
+                CaBotRclpyUtil.error("Could not call elevetor")
+                elevator_controller.in_control = False
             pos = self.cab_poi.where_is_buttons(self.delegate.current_pose)
             self.delegate.please_call_elevator(pos)
             self._is_completed = result
@@ -1192,8 +1211,12 @@ class ElevatorInGoal(ElevatorGoal):
 
     # use default enter to set parameters
     def _enter(self):
+        elevator_controller.open_door()
         # use odom frame for navigation
         self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
+
+    def check(self, current_pose):
+        elevator_controller.hold_door()
 
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorInGoal completed")
@@ -1224,7 +1247,13 @@ class ElevatorTurnGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"turn target {str(pose)}")
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
 
+    def check(self, current_pose):
+        elevator_controller.hold_door()
+
     def done_callback(self, result):
+        if elevator_controller.in_control:
+            elevator_controller.close_door()
+            self.delegate.elevator_boarding_completed()
         if result:
             CaBotRclpyUtil.info(F"ElevatorTurnGoal completed {result=}")
             self._is_completed = True
@@ -1267,6 +1296,7 @@ class ElevatorOutGoal(ElevatorGoal):
 
     def _enter(self):
         CaBotRclpyUtil.info("ElevatorOutGoal _enter")
+        elevator_controller.open_door()
         pose = self.delegate.current_odom_pose
 
         start = geometry_msgs.msg.PoseStamped()
@@ -1291,8 +1321,12 @@ class ElevatorOutGoal(ElevatorGoal):
 
         self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
 
+    def check(self, current_pose):
+        elevator_controller.hold_door()
+
     def done_callback(self, future):
         CaBotRclpyUtil.info("ElevatorOutGoal completed")
+        elevator_controller.close_door()
         status = future.result().status
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)

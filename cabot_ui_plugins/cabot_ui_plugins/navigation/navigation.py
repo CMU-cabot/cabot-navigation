@@ -58,6 +58,7 @@ from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui.social_navigation import SocialNavigation
 from cabot_ui.status import State, StatusManager
 from cabot_ui.param_manager import ParamManager
+from cabot_ui.elevator_controller import elevator_controller
 import cabot_msgs.msg
 import queue_msgs.msg
 from mf_localization_msgs.msg import MFLocalizeStatus
@@ -353,6 +354,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.info("NavigationState: Pause control = True")
             self.delegate.set_pause_control(True)
             self.set_pause_control(True)
+            elevator_controller.in_control = False
             return True
 
         result = False
@@ -1534,6 +1536,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def please_call_elevator(self, pos):
         self.delegate.please_call_elevator(pos)
+
+    def calling_elevator(self, floor):
+        self.delegate.calling_elevator(floor)
+
+    def elevator_boarding_completed(self):
+        self.delegate.elevator_boarding_completed()
 
     def please_pass_door(self):
         self.delegate.please_pass_door()

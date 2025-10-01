@@ -58,6 +58,8 @@ CALL_ELEVATOR_PLEASE: "エレベーターを呼んでください"
 CALL_ELEVATOR_PLEASE_ON_YOUR: "{0}のボタンでエレベーターを呼んでください"
 ELEVATOR_IS_OPENING: "後ろをついてきてください。エレベーターに入ります。"
 GETTING_OFF_THE_ELEVATOR: "エレベーターから、おります"
+CALLING_ELEVATOR_TO_FLOOR: "{0}階行きのエレベーターを呼びます"
+ELEVATOR_BOARDING_COMPLETED: "乗車が完了しました"
 
 
 FRONT_LEFT: "左前"
