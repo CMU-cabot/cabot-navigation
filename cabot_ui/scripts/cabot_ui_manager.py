@@ -237,6 +237,9 @@ if __name__ == "__main__":
     node_manager = NodeManager()
     try:
         ui_manager = CabotUIManager(node_manager)
+        # FIXME
+        from cabot_ui.elevator_controller import elevator_controller
+        elevator_controller._client.subscribe_settings()
     except:  # noqa: #722
         node_manager.get_node().get_logger().error(traceback.format_exc())
         rclpy.shutdown()

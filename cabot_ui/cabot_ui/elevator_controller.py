@@ -32,19 +32,13 @@ except ImportError:
 
 class ElevatorController:
     def __init__(self):
-        self._enabled = True
         self._in_control = False
         self._allow_door_hold = False
         self._client = ElevatorClient()
 
     @property
     def enabled(self):
-        return self._client.valid and self._enabled
-
-    @enabled.setter
-    def enabled(self, value: bool):
-        logger.info(f"ElevatorController: enabled = {value}")
-        self._enabled = value
+        return self._client.enabled
 
     @property
     def in_control(self):
@@ -56,7 +50,7 @@ class ElevatorController:
         self._in_control = value
 
     def call_elevator(self, from_floor, to_floor):
-        if self._enabled:
+        if self.enabled:
             logger.info(f"ElevatorController: call elevator from {from_floor} to {to_floor}")
             if self._client.call_elevator(from_floor, to_floor):
                 self._in_control = True
@@ -65,19 +59,19 @@ class ElevatorController:
         return False
 
     def open_door(self, duration=10):
-        if self._enabled and self._in_control:
+        if self.enabled and self._in_control:
             logger.info(f"ElevatorController: open door for {duration} seconds")
             self._allow_door_hold = True
 
             def hold_door():
-                if self._enabled and self._in_control and self._allow_door_hold:
+                if self.enabled and self._in_control and self._allow_door_hold:
                     logger.info(f"ElevatorController: hold door for {duration} seconds")
                     if self._client.open_door(duration):
                         threading.Timer(duration/2, hold_door).start()
             hold_door()
 
     def close_door(self, after=5):
-        if self._enabled and self._in_control:
+        if self.enabled and self._in_control:
             logger.info(f"ElevatorController: close door after {after} seconds")
             self._allow_door_hold = False
             self._client.open_door(after)
@@ -86,17 +80,42 @@ class ElevatorController:
 class ElevatorClient:
     def __init__(self):
         self._auth_header = None
+        self._subscription = None
+        self._enabled = os.getenv("ELEVATOR_ENABLED") == "true"
         self._endpoint = os.getenv("ELEVATOR_ENDPOINT")
         self._client_id = os.getenv("ELEVATOR_CLIENT_ID")
         self._client_secret = os.getenv("ELEVATOR_CLIENT_SECRET")
 
+    def subscribe_settings(self):
+        if self._subscription is None:
+            try:
+                import std_msgs.msg
+                self._subscription = logger.create_subscription(
+                    std_msgs.msg.String, "/elevator_settings", self.on_settings_msg, 10)
+                logger.info("subscribed to /elevator_settings")
+            except Exception as e:
+                logger.error(f"cannot create subscription to /elevator_settings: {e}")
+
+    def on_settings_msg(self, msg):
+        try:
+            settings = json.loads(msg.data)
+            if isinstance(settings, dict):
+                logger.info(f"elevator settings: {settings}")
+                self._enabled = settings.get("enabled")
+                self._client_id = settings.get("client_id")
+                self._client_secret = settings.get("client_secret")
+            else:
+                logger.error(f"elevator settings is not a dict: {settings}")
+        except Exception:
+            logger.error(f"cannot parse elevator settings {msg.data}")
+
     @property
-    def valid(self):
-        return self._endpoint and self._client_id and self._client_secret
+    def enabled(self):
+        return self._enabled and self._endpoint and self._client_id and self._client_secret
 
     def authorize(self):
         self._auth_header = None
-        if self.valid:
+        if self.enabled:
             try:
                 res = requests.post(
                     f"{self._endpoint}/auth/oauth/token",
@@ -169,7 +188,7 @@ class ElevatorClient:
 elevator_controller = ElevatorController()
 
 if __name__ == "__main__":
-    elevator_controller.call_elevator(5, 3)
-    elevator_controller.open_door()
-    threading.Timer(20, elevator_controller.close_door).start()
-    threading.Timer(40, elevator_controller.close_door).start()
+    if elevator_controller.call_elevator(5, 3):
+        elevator_controller.open_door()
+        threading.Timer(20, elevator_controller.close_door).start()
+        threading.Timer(40, elevator_controller.close_door).start()
