@@ -1540,6 +1540,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def calling_elevator(self, floor):
         self.delegate.calling_elevator(floor)
 
+    def error_call_elevator(self):
+        self.delegate.error_call_elevator()
+
     def elevator_boarding_completed(self):
         self.delegate.elevator_boarding_completed()
 

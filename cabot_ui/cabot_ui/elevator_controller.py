@@ -61,6 +61,8 @@ class ElevatorController:
             if self._client.call_elevator(from_floor, to_floor):
                 self._in_control = True
                 self._allow_door_hold = False
+                return True
+        return False
 
     def open_door(self, duration=10):
         if self._enabled and self._in_control:

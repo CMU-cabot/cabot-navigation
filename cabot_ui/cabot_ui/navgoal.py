@@ -72,6 +72,9 @@ class GoalInterface(object):
     def calling_elevator(self, floor):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
+    def error_call_elevator(self):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
     def elevator_boarding_completed(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
@@ -1171,14 +1174,16 @@ class ElevatorWaitGoal(ElevatorGoal):
                 try:
                     for goal in self.delegate._sub_goals[self.delegate._sub_goals.index(self)+1:]:
                         if isinstance(goal, ElevatorFloorGoal):
-                            elevator_controller.call_elevator(self.delegate.current_floor, goal._floor)
-                            self.delegate.calling_elevator(goal._floor)
-                            self._is_completed = result
-                            return
+                            if elevator_controller.call_elevator(self.delegate.current_floor, goal._floor):
+                                self.delegate.calling_elevator(goal._floor)
+                                self._is_completed = result
+                                return
+                            break
                 except:  # noqa: #722
                     pass
                 CaBotRclpyUtil.error("Could not call elevetor")
                 elevator_controller.in_control = False
+                self.delegate.error_call_elevator()
             pos = self.cab_poi.where_is_buttons(self.delegate.current_pose)
             self.delegate.please_call_elevator(pos)
             self._is_completed = result

@@ -386,6 +386,10 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "navigation", "calling elevator")
         self.speak(i18n.localized_string("CALLING_ELEVATOR_TO_FLOOR", floor), priority=SpeechPriority.REQUIRED)
 
+    def error_call_elevator(self):
+        self._activity_log("cabot/interface", "navigation", "error call elevator")
+        self.speak(i18n.localized_string("ERROR_CALL_ELEVATOR"), priority=SpeechPriority.REQUIRED)
+
     def elevator_boarding_completed(self):
         self._activity_log("cabot/interface", "navigation", "elevator boarding completed")
         self.speak(i18n.localized_string("ELEVATOR_BOARDING_COMPLETED"), priority=SpeechPriority.REQUIRED)
