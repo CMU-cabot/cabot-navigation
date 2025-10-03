@@ -164,6 +164,7 @@ class TopicRecorder:
         self._pose_log2_queue.put_nowait(msg)
 
     def worker_tick(self):
+        # get global_position
         if self._global_position_queue.qsize() < 1:
             return
         global_position = self._global_position_queue.get_nowait()
@@ -184,25 +185,27 @@ class TopicRecorder:
             image1 = self._image1_queue.get_nowait()
             wifi = self._wifi_queue.get_nowait()
             fix = self._gnss_fix_queue.get_nowait()
-            self._logger.info(F"points tick t = {timestamp}")
 
             # points2 conversion
             pts = []
             for p in point_cloud2.read_points(points2, skip_nans=True, field_names=("x", "y", "z")):
                 pts.append(list(p))
             pts = np.array(pts)
-            self._logger.info(F"pts = {pts}")
 
-            # save pointcloud
+            # save to files
             if self._output_dir is not None:
                 output_path = Path(self._output_dir)
-                # save pointcloud
+                if not output_path.exists():
+                    self._logger.warn(F"output path does not exist. path={output_path}")
+                    return
+
+                # pointcloud
                 pcd = open3d.geometry.PointCloud()
                 pcd.points = open3d.utility.Vector3dVector(pts)
                 pcd_path = output_path.joinpath(F"{timestamp}_points2.pcd")
                 open3d.io.write_point_cloud(pcd_path, pcd, compressed=True)
 
-                # save image1
+                # image1
                 img = cv2.imdecode(
                     np.frombuffer(image1.data, dtype='uint8'), cv2.IMREAD_UNCHANGED
                 )
@@ -211,6 +214,7 @@ class TopicRecorder:
                 img1_path = output_path.joinpath(F"{timestamp}_image1.jpg")
                 cv2.imwrite(str(img1_path), img)
 
+                # image2
                 if self._image2_queue.qsize() > 0:
                     image2 = self._image2_queue.get_nowait()
                     img = cv2.imdecode(
@@ -221,6 +225,7 @@ class TopicRecorder:
                     img2_path = output_path.joinpath(F"{timestamp}_image2.jpg")
                     cv2.imwrite(str(img2_path), img)
 
+                # image3
                 if self._image3_queue.qsize() > 0:
                     image3 = self._image3_queue.get_nowait()
                     img = cv2.imdecode(
@@ -231,7 +236,7 @@ class TopicRecorder:
                     img3_path = output_path.joinpath(F"{timestamp}_image3.jpg")
                     cv2.imwrite(str(img3_path), img)
 
-                # save wifi
+                # wifi
                 wifi_json = json.loads(wifi.data)
                 wifi_path = output_path.joinpath(F"{timestamp}_wifi.json")
                 with open(wifi_path, "w") as f:
@@ -257,13 +262,15 @@ class TopicRecorder:
                 with open(gp_path, "w") as f:
                     json.dump(gp_dict, f, indent=2)
 
-                # pose log2
+                # pose_log2
                 if self._pose_log2_queue.qsize() > 0:
                     pose_log2 = self._pose_log2_queue.get_nowait()
                     pl2_dict = message_to_ordereddict(pose_log2)
                     pl2_path = output_path.joinpath(F"{timestamp}_poselog2.json")
                     with open(pl2_path, "w") as f:
                         json.dump(pl2_dict, f, indent=2)
+
+                self._logger.warn(F"saved topics to {output_path}")
 
         except queue.Empty:
             self._logger.info(traceback.format_exc())
