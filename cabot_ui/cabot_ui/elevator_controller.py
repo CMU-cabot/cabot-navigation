@@ -86,11 +86,11 @@ class ElevatorClient:
         self._client_id = os.getenv("ELEVATOR_CLIENT_ID")
         self._client_secret = os.getenv("ELEVATOR_CLIENT_SECRET")
 
-    def subscribe_settings(self):
+    def subscribe_settings(self, node):
         if self._subscription is None:
             try:
                 import std_msgs.msg
-                self._subscription = logger.create_subscription(
+                self._subscription = node.create_subscription(
                     std_msgs.msg.String, "/elevator_settings", self.on_settings_msg, 10)
                 logger.info("subscribed to /elevator_settings")
             except Exception as e:

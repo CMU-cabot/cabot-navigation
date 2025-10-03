@@ -201,6 +201,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         srv_node = node_manager.get_node("srv", True)
         act_node = node_manager.get_node("act", True)
         soc_node = node_manager.get_node("soc", True)
+        elevator_controller._client.subscribe_settings(node)
 
         self._ready = False
         self.destination = None
