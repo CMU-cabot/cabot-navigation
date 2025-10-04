@@ -81,10 +81,10 @@ class ElevatorClient:
     def __init__(self):
         self._auth_header = None
         self._subscription = None
-        self._enabled = os.getenv("ELEVATOR_ENABLED") == "true"
+        self._enabled = False
+        self._client_id = None
+        self._client_secret = None
         self._endpoint = os.getenv("ELEVATOR_ENDPOINT")
-        self._client_id = os.getenv("ELEVATOR_CLIENT_ID")
-        self._client_secret = os.getenv("ELEVATOR_CLIENT_SECRET")
 
     def subscribe_settings(self, node):
         if self._subscription is None:
@@ -93,6 +93,13 @@ class ElevatorClient:
                 self._subscription = node.create_subscription(
                     std_msgs.msg.String, "/elevator_settings", self.on_settings_msg, 10)
                 logger.info("subscribed to /elevator_settings")
+                from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+                from cabot_ui.event import NavigationEvent
+                self._eventPub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+                e = NavigationEvent("getelevatorsettings", None)
+                msg = std_msgs.msg.String()
+                msg.data = str(e)
+                self._eventPub.publish(msg)
             except Exception as e:
                 logger.error(f"cannot create subscription to /elevator_settings: {e}")
 
