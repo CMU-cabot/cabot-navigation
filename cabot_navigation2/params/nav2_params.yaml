@@ -433,6 +433,7 @@ local_costmap:
           obstacle_min_range: 0.05
           obstacle_max_range: 4.0
           raytrace_max_range: 5.0
+          observation_persistence: 0.5 # default: 0 (store messages to prevent clearing the cost during obstacle avoidance)
           clearing: True
           marking: True
           inf_is_valid: True # default: False
