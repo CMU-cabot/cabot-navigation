@@ -102,7 +102,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
-    controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath", "RLFollowPath"]
+    controller_plugins: ["FollowPath", "MPCFollowPath", "RLFollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.

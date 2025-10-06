@@ -364,7 +364,7 @@ controller_server:
       plugin: "cabot_navigation2::CaBotSamplingMPCController"
       group_topic: "/group_predictions"
       traj_vis_topic: "/control_output_vis"
-      loc_goal_vis_topic: "/local_goal_vis"
+      loc_goal_vis_topic: "/local_goal_vis2"
       prediction_horizon: 4.8
       sampling_rate: 0.4
       max_linear_velocity: 1.0
@@ -387,7 +387,7 @@ controller_server:
       plugin: "cabot_navigation2::CaBotRLController"
       rl_cmd_topic: "/rl_robot_cmd"
       rl_info_topic: "/rl_robot_info"
-      loc_goal_vis_topic: "/local_goal_vis2"
+      loc_goal_vis_topic: "/local_goal_vis"
       lookahead_distance: 2.5
       focus_goal_dist: 2.0
 
@@ -471,7 +471,7 @@ local_costmap:
         map_subscribe_transient_local: True
       group_obstacle_layer:
         plugin: "cabot_navigation2::GroupObstacleLayer"
-        enabled: True
+        enabled: False
         group_topic: /group_predictions
         update_width: 30.0
         update_height: 30.0
