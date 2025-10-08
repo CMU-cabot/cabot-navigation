@@ -167,6 +167,10 @@ void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::Po
   auto node = node_.lock();
   rl_people_.clear();
   horizon_people_ = rl_people->horizon;
+  if (horizon_people_ == 0) {
+    num_people_ = 0;
+    return;
+  }
   for (size_t i = 0; i < horizon_people_; ++i) {
     lidar_process_msgs::msg::PositionArray people_array;
     people_array.quantity = rl_people->positions_history[i].quantity;
@@ -178,6 +182,7 @@ void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::Po
       people_array.positions.push_back(pos);
       people_array.ids.push_back(rl_people->positions_history[i].ids[j]);
     }
+    rl_people_.push_back(people_array);
   }
 }
 
