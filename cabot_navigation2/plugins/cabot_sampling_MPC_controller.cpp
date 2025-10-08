@@ -87,6 +87,10 @@ void CaBotSamplingMPCController::configure(
   node->get_parameter(name_ + ".lookahead_distance", lookahead_distance_);
 
   declare_parameter_if_not_declared(
+    node, name_ + ".max_lookahead", rclcpp::ParameterValue(10.0)); // meters
+  node->get_parameter(name_ + ".max_lookahead", max_lookahead_);
+
+  declare_parameter_if_not_declared(
     node, name_ + ".goal_distance", rclcpp::ParameterValue(0.5)); // meters
   node->get_parameter(name_ + ".goal_distance", goal_distance_);
 
@@ -97,6 +101,10 @@ void CaBotSamplingMPCController::configure(
   declare_parameter_if_not_declared(
     node, name_ + ".obstacle_costval", rclcpp::ParameterValue(250.0));
   node->get_parameter(name_ + ".obstacle_costval", obstacle_costval_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".collision_radius", rclcpp::ParameterValue(0.5));
+  node->get_parameter(name_ + ".collision_radius", collision_radius_);
 
   declare_parameter_if_not_declared(
     node, name_ + ".time_cost", rclcpp::ParameterValue(50.0));
@@ -288,7 +296,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   // The cost with the lowest trajectory will be selected and the associated velocities returned.
 
   geometry_msgs::msg::Twist best_control;
-  double min_cost = std::numeric_limits<double>::max();
+  double min_cost = std::numeric_limits<double>::infinity();
 
   // Get the local goal
   geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
@@ -529,6 +537,12 @@ geometry_msgs::msg::PoseStamped CaBotSamplingMPCController::getLookaheadPoint(
     }
   }
 
+  if (pointDist(current_pose.pose.position, lookahead_point.pose.position) > max_lookahead_) {
+    double angle_to_goal = std::atan2(lookahead_point.pose.position.y - current_y, lookahead_point.pose.position.x - current_x);
+    lookahead_point.pose.position.x = current_x + max_lookahead_ * std::cos(angle_to_goal);
+    lookahead_point.pose.position.y = current_y + max_lookahead_ * std::sin(angle_to_goal);
+  }
+
   return lookahead_point;
 }
 
@@ -729,7 +743,7 @@ std::tuple<double, int> CaBotSamplingMPCController::calculateGroupTrajectoryCost
         }
 
         // Add the discounted distance to the group trajectory to the cost
-        group_cost += discount * std::exp(-min_dist);
+        group_cost += discount * std::exp(collision_radius_ - min_dist);
       }
     }
   }

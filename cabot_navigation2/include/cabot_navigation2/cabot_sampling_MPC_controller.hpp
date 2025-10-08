@@ -91,9 +91,11 @@ private:
   double angular_sample_size_;
   double obstacle_horizon_;
   double lookahead_distance_;
+  double max_lookahead_;
   double goal_distance_;
   double discount_factor_;  // Discount factor for future time steps
   double obstacle_costval_;
+  double collision_radius_;
   double time_cost_; // fixed cost for reaching the goal faster
   double focus_goal_dist_;
   double smooth_wt_;

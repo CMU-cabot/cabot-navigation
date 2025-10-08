@@ -38,5 +38,9 @@
 	   base_class_type="nav2_core::Controller">
       <description>CrowdAttn Reinforcement Learning Local Planner</description>
     </class>
+    <class type="cabot_navigation2::CaBotHybridRLController"
+	   base_class_type="nav2_core::Controller">
+      <description>SAC Reinforcement Learning x MPC Hybrid Local Planner</description>
+    </class>
   </library>
 </class_libraries>

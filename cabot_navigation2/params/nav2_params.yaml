@@ -201,7 +201,8 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
-    controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath", "RLFollowPath"]
+    # controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath", "RLFollowPath", "HybridRLFollowPath"]
+    controller_plugins: ["FollowPath", "FollowPathElevator", "HybridRLFollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.
@@ -364,19 +365,21 @@ controller_server:
       plugin: "cabot_navigation2::CaBotSamplingMPCController"
       group_topic: "/group_predictions"
       traj_vis_topic: "/control_output_vis"
-      loc_goal_vis_topic: "/local_goal_vis2"
+      loc_goal_vis_topic: "/local_goal_vis"
       prediction_horizon: 4.8
       sampling_rate: 0.4
       max_linear_velocity: 1.0
       linear_sample_size: 2.0
       max_angular_velocity: 1.0
       angular_sample_size: 10.0
-      lookahead_distance: 5.0
+      lookahead_distance: 4.0
+      max_lookahead: 10.0
       goal_distance: 1.0
       discount_factor: 0.9
       obstacle_costval: 250.0
+      collision_radius: 0.5
       time_cost: 5.0
-      focus_goal_dist: 2.0
+      focus_goal_dist: 4.0
       goal_cost_wt: 0.35
       group_cost_wt: 0.65
       obs_cost_wt: 1.0
@@ -388,8 +391,30 @@ controller_server:
       rl_cmd_topic: "/rl_robot_cmd"
       rl_info_topic: "/rl_robot_info"
       loc_goal_vis_topic: "/local_goal_vis"
-      lookahead_distance: 2.5
-      focus_goal_dist: 2.0
+      lookahead_distance: 4.0
+      max_lookahead: 10.0
+      focus_goal_dist: 4.0
+    HybridRLFollowPath:
+      plugin: "cabot_navigation2::CaBotHybridRLController"
+      rl_people_topic: "/rl_people"
+      rl_subgoal_topic: "/rl_subgoal"
+      rl_info_topic: "/rl_robot_info"
+      loc_goal_vis_topic: "/local_goal_vis"
+      traj_vis_topic: "/control_output_vis"
+      lookahead_distance: 4.0
+      max_lookahead: 10.0
+      discount_factor: 0.9
+      obstacle_costval: 250.0
+      collision_radius: 0.5
+      focus_goal_dist: 4.0
+      prediction_horizon: 1.0      
+      sampling_rate: 0.1
+      max_linear_velocity: 1.0
+      linear_sample_size: 4.0
+      max_angular_velocity: 0.785
+      angular_sample_size: 32.0
+      goal_cost_wt: 1.0
+      people_cost_wt: 1.0
 
 controller_server_rclcpp_node:
   ros__parameters:

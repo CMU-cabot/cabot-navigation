@@ -102,7 +102,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
-    controller_plugins: ["FollowPath", "MPCFollowPath", "RLFollowPath"]
+    controller_plugins: ["FollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.
@@ -184,39 +184,6 @@ controller_server:
       trans_stopped_velocity: 0.25
       slowing_factor: 5.0
       stateful: True
-    MPCFollowPath:
-      #plugin: "cabot_navigation2::CaBotRotationShimController"
-      #primary_controller: "cabot_navigation2::CaBotSamplingMPCController"
-      plugin: "cabot_navigation2::CaBotSamplingMPCController"
-      group_topic: "/group_predictions"
-      traj_vis_topic: "/local/control_output_vis"
-      loc_goal_vis_topic: "/local/local_goal_vis"
-      prediction_horizon: 4.8
-      sampling_rate: 0.4
-      max_linear_velocity: 0.5
-      linear_sample_size: 4.0
-      max_angular_velocity: 1.0
-      angular_sample_size: 16.0
-      obstacle_horizon: 2.0
-      lookahead_distance: 2.5
-      goal_distance: 1.0
-      discount_factor: 0.99
-      obstacle_costval: 250.0
-      time_cost: 5.0
-      focus_goal_dist: 2.0
-      goal_cost_wt: 0.1
-      group_cost_wt: 0.45
-      obs_cost_wt: 1.0
-      time_cost_wt: 1.0
-      energy_cost_wt: 0.01
-      smooth_wt: 0.0
-    RLFollowPath:
-      plugin: "cabot_navigation2::CaBotRLController"
-      rl_cmd_topic: "/local/rl_robot_cmd"
-      rl_info_topic: "/local/rl_robot_info"
-      loc_goal_vis_topic: "/local/local_goal_vis"
-      lookahead_distance: 2.5
-      focus_goal_dist: 2.0
 
 controller_server_rclcpp_node:
   ros__parameters:

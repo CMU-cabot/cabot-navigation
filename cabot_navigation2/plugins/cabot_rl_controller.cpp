@@ -52,6 +52,10 @@ void CaBotRLController::configure(
   node->get_parameter(name_ + ".lookahead_distance", lookahead_distance_);
 
   declare_parameter_if_not_declared(
+    node, name_ + ".max_lookahead", rclcpp::ParameterValue(10.0)); // meters
+  node->get_parameter(name_ + ".max_lookahead", max_lookahead_);
+
+  declare_parameter_if_not_declared(
     node, name_ + ".focus_goal_dist", rclcpp::ParameterValue(1.0));
   node->get_parameter(name_ + ".focus_goal_dist", focus_goal_dist_);
 
@@ -263,6 +267,12 @@ geometry_msgs::msg::PoseStamped CaBotRLController::getLookaheadPoint(
       last_visited_index_ = i;  // Update last visited index
       break;
     }
+  }
+
+  if (pointDist(current_pose.pose.position, lookahead_point.pose.position) > max_lookahead_) {
+    double angle_to_goal = std::atan2(lookahead_point.pose.position.y - current_y, lookahead_point.pose.position.x - current_x);
+    lookahead_point.pose.position.x = current_x + max_lookahead_ * std::cos(angle_to_goal);
+    lookahead_point.pose.position.y = current_y + max_lookahead_ * std::sin(angle_to_goal);
   }
 
   return lookahead_point;
