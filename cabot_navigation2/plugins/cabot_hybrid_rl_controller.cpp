@@ -233,9 +233,28 @@ void CaBotHybridRLController::deactivate()
 void CaBotHybridRLController::setPlan(const nav_msgs::msg::Path & path)
 {
   auto node = node_.lock();
-  // Transform global path into the robot's frame
-  global_plan = path;
-  last_visited_index_ = 0;
+  // Check if path's positions are the same as the current global plan
+  bool same = true;
+  if (path.poses.size() == global_plan_.poses.size()) {
+    for (size_t i = 0; i < path.poses.size(); ++i) {
+      if (abs(path.poses[i].pose.position.x - global_plan_.poses[i].pose.position.x) > 0.0001 ||
+          abs(path.poses[i].pose.position.y - global_plan_.poses[i].pose.position.y) > 0.0001) {
+        same = false;
+        break;
+      }
+    }
+  } else {
+    same = false;
+  }
+  if (same) {
+    RCLCPP_INFO(logger_, "Received same global plan, ignoring.");
+    return;
+  } else {
+    global_plan_ = path;
+    last_visited_index_ = 0;
+    RCLCPP_INFO(logger_, "Received new global plan with %zu points.", global_plan_.poses.size());
+    return;
+  }
 }
 
 void CaBotHybridRLController::setSpeedLimit(const double & speed_limit, const bool & percentage)
@@ -249,7 +268,7 @@ geometry_msgs::msg::TwistStamped CaBotHybridRLController::computeVelocityCommand
 {
   // This wrapper fucntion calls the function that computes the velocity commands
 
-  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Request Sent A");
+  RCLCPP_INFO(logger_, "Request Sent A");
 
   auto node = node_.lock();
 
@@ -257,12 +276,12 @@ geometry_msgs::msg::TwistStamped CaBotHybridRLController::computeVelocityCommand
   velocity_cmd.header.stamp = node->now();
   velocity_cmd.header.frame_id = "base_link";
 
-  if (global_plan.poses.size() == 0) {
+  if (global_plan_.poses.size() == 0) {
     return velocity_cmd;
   }
 
   // Call your RL function to compute the optimal control action
-  geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
+  geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan_);
   curr_local_goal_ = local_goal;
 
    // temporary code for goal handling! (DANGER!)
@@ -399,6 +418,94 @@ std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesSimple(
 
       // Store this trajectory
       trajectories.push_back(Trajectory(control, trajectory));
+    }
+  }
+
+  return trajectories;
+}
+
+std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesImproved(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  // This function samples trajectories that follow a fixed linear velocity
+  // But the angular velocity can change in the middle of the duration
+  std::vector<Trajectory> trajectories;
+
+  double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
+  double angular_vel_lim = max_angular_velocity_;
+  double angular_sample_resolution = angular_vel_lim / angular_sample_size_;
+
+  // Sample a set of linear velocities
+  for (double initial_linear_vel = 0.0; initial_linear_vel <= max_linear_velocity_; initial_linear_vel += linear_sample_resolution)
+  {
+    double secondary_max_linear_velocity;
+    if (abs(initial_linear_vel) < 0.001) {
+      secondary_max_linear_velocity = 0.001;
+    } else {
+      secondary_max_linear_velocity = max_linear_velocity_;
+    }
+    for (double secondary_linear_vel = 0.0; secondary_linear_vel <= secondary_max_linear_velocity; secondary_linear_vel += linear_sample_resolution)
+    {
+      // Sample initial and secondary angular velocities
+      for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
+      {
+        for (double secondary_angular_vel = -angular_vel_lim; secondary_angular_vel <= angular_vel_lim; secondary_angular_vel += angular_sample_resolution)
+        {
+          // Start with the current pose and initial control
+          geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+          double current_x = current_pose_copy.pose.position.x;
+          double current_y = current_pose_copy.pose.position.y;
+          double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
+
+          std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+          geometry_msgs::msg::Twist initial_control;
+          initial_control.linear.x = initial_linear_vel;
+          initial_control.angular.z = initial_angular_vel;
+
+          // Determine the time at which to switch to the secondary angular velocity
+          double switch_time = prediction_horizon_ / 2.0;
+
+          // Predict the trajectory over the prediction horizon
+          for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+          {
+            // Use initial angular velocity before switch time, secondary after
+            double angular_vel;
+            double linear_vel;
+            if (t < switch_time) {
+              angular_vel = initial_angular_vel;
+              linear_vel = initial_linear_vel;
+            } else {
+              angular_vel = secondary_angular_vel;
+              linear_vel = secondary_linear_vel;
+            }
+
+            // Simulate robot dynamics
+            if (abs(angular_vel) < 0.0001)
+            {
+              current_x += linear_vel * sampling_rate_ * cos(current_theta);
+              current_y += linear_vel * sampling_rate_ * sin(current_theta);
+            } else{
+              current_x += linear_vel / angular_vel * (sin(current_theta + angular_vel * sampling_rate_) - sin(current_theta));
+              current_y -= linear_vel / angular_vel * (cos(current_theta + angular_vel * sampling_rate_) - cos(current_theta));
+            }
+            current_theta += angular_vel * sampling_rate_;
+            
+
+            geometry_msgs::msg::PoseStamped predicted_pose;
+            predicted_pose.pose.position.x = current_x;
+            predicted_pose.pose.position.y = current_y;
+            tf2::Quaternion q;
+            q.setRPY(0, 0, current_theta);
+            predicted_pose.pose.orientation = tf2::toMsg(q);
+
+            trajectory.push_back(predicted_pose);
+          }
+
+          // Store this trajectory with its initial control
+          trajectories.push_back(Trajectory(initial_control, trajectory));
+        }
+      }
     }
   }
 
@@ -557,9 +664,10 @@ double CaBotHybridRLController::calculatePeopleCost(
         if (dist < min_dist) {
           min_dist = dist;
         }
-        // Accumulate cost based on distance (e.g., inverse distance)
-        people_cost += discount * std::exp(collision_radius_ - dist);
+        
       }
+      // Accumulate cost based on distance (e.g., inverse distance)
+      people_cost += discount * std::exp(collision_radius_ - min_dist);
     }
   }
 
