@@ -404,17 +404,17 @@ controller_server:
       traj_vis_topic: "/control_output_vis"
       lookahead_distance: 5.0
       max_lookahead: 12.0
-      discount_factor: 0.9
-      obstacle_costval: 250.0
+      discount_factor: 0.95
+      obstacle_costval: 125.0
       collision_radius: 0.5
       focus_goal_dist: 5.0
       prediction_horizon: 1.0      
       sampling_rate: 0.1
-      max_linear_velocity: 1.0
+      max_linear_velocity: 0.8
       linear_sample_size: 10.0
       max_angular_velocity: 0.785
-      angular_sample_size: 10.0
-      goal_cost_wt: 1.0
+      angular_sample_size: 16.0
+      goal_cost_wt: 2.0
       people_cost_wt: 1.0
 
 controller_server_rclcpp_node:
@@ -435,7 +435,8 @@ local_costmap:
       width: 8
       height: 8
       resolution: 0.05
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer", "group_obstacle_layer"]
+      # plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer", "group_obstacle_layer"]
+      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
       robot_radius: 0.45
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"

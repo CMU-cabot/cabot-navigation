@@ -134,6 +134,9 @@ void CaBotHybridRLController::configure(
 
   current_command = geometry_msgs::msg::Twist();
   robot_info = lidar_process_msgs::msg::RobotMessage();
+  
+  rl_people_.clear();
+  RCLCPP_INFO(logger_, "CaBotHybridRLController configured");
 }
 
 void CaBotHybridRLController::localGoalVisualizationCallback()
@@ -163,26 +166,45 @@ void CaBotHybridRLController::localGoalVisualizationCallback()
 
 void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people)
 {
-  // Pedestrian sequences: First time, then people
   auto node = node_.lock();
   rl_people_.clear();
-  horizon_people_ = rl_people->horizon;
+  horizon_people_ = rl_people->positions_history.size();
   if (horizon_people_ == 0) {
     num_people_ = 0;
     return;
   }
-  for (size_t i = 0; i < horizon_people_; ++i) {
-    lidar_process_msgs::msg::PositionArray people_array;
-    people_array.quantity = rl_people->positions_history[i].quantity;
-    num_people_ = people_array.quantity;
-    for (size_t j = 0; j < people_array.quantity; ++j) {
-      geometry_msgs::msg::Point pos;
-      pos.x = rl_people->positions_history[i].positions[j].x;
-      pos.y = rl_people->positions_history[i].positions[j].y;
-      people_array.positions.push_back(pos);
-      people_array.ids.push_back(rl_people->positions_history[i].ids[j]);
+  try {
+    for (size_t i = 0; i < horizon_people_; ++i) {
+      const auto & hist = rl_people->positions_history.at(i);  // at() for bounds check
+
+      const size_t pos_sz = hist.positions.size();
+      const size_t ids_sz = hist.ids.size();
+      const size_t count  = std::min(pos_sz, ids_sz);  // clamp by both vectors
+
+      lidar_process_msgs::msg::PositionArray people_array;
+      people_array.quantity = static_cast<uint32_t>(count);
+      num_people_ = static_cast<uint32_t>(count);
+
+      people_array.positions.reserve(count);
+      people_array.ids.reserve(count);
+
+      for (size_t j = 0; j < count; ++j) {
+        geometry_msgs::msg::Point pos;
+        pos.x = hist.positions.at(j).x;  // at() for bounds check
+        pos.y = hist.positions.at(j).y;
+        people_array.positions.push_back(pos);
+        people_array.ids.push_back(hist.ids.at(j));  // at() for bounds check
+      }
+      rl_people_.push_back(std::move(people_array));
     }
-    rl_people_.push_back(people_array);
+  } catch (const std::out_of_range &e) {
+    RCLCPP_ERROR(logger_, "rlPeopleCallback out_of_range: history=%zu horizon=%zu what=%s",
+      rl_people->positions_history.size(), horizon_people_, e.what());
+    // Leave rl_people_ as-is (cleared) to fail-safe
+    num_people_ = 0;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger_, "rlPeopleCallback exception: %s", e.what());
+    num_people_ = 0;
   }
 }
 
@@ -391,7 +413,7 @@ std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesSimple(
       double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
 
       // Predict the trajectory over the prediction horizon
-      for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+      for (double t = sampling_rate_; t <= prediction_horizon_; t += sampling_rate_)
       {
         // Simulate robot dynamics
         if (abs(angular_vel) < 0.0001)
@@ -467,7 +489,7 @@ std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesImproved(
           double switch_time = prediction_horizon_ / 2.0;
 
           // Predict the trajectory over the prediction horizon
-          for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+          for (double t = sampling_rate_; t <= prediction_horizon_; t += sampling_rate_)
           {
             // Use initial angular velocity before switch time, secondary after
             double angular_vel;
@@ -637,37 +659,40 @@ double CaBotHybridRLController::getCostFromCostmap(const geometry_msgs::msg::Pos
 double CaBotHybridRLController::calculatePeopleCost(
   const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory)
 {
-  // This function estimates the cost of a trajectory against the predicted people trajectories
   double discount = 1.0;
   double people_cost = 0.0;
-  size_t num_time_steps = sampled_trajectory.size();
+  const size_t num_time_steps = sampled_trajectory.size();
 
-  // Iterate over each time step in the sampled trajectory
   double min_dist;
   for (size_t t = 0; t < num_time_steps; ++t)
   {
-    if (t < horizon_people_)
-    {
-      discount = std::pow(discount_factor_, t);  // Apply discount factor for future time steps
-      lidar_process_msgs::msg::PositionArray current_people = rl_people_[t];
-
-      // Compare the robot trajectory at time t with people trajectories at the same time
-      min_dist = std::numeric_limits<double>::infinity();
-      for (size_t i = 0; i < current_people.quantity; ++i)
+    try {
+      if (t < rl_people_.size())
       {
-        double dx = sampled_trajectory[t].pose.position.x - current_people.positions[i].x;
-        double dy = sampled_trajectory[t].pose.position.y - current_people.positions[i].y;
-        double dist = std::sqrt(dx * dx + dy * dy);
-        if (dist < 0.0001) {
-          dist = 0.0001;
+        discount = std::pow(discount_factor_, static_cast<double>(t));
+        const auto & current_people = rl_people_.at(t);  // at() for bounds check
+
+        min_dist = std::numeric_limits<double>::infinity();
+        for (size_t i = 0; i < current_people.positions.size(); ++i)
+        {
+          const auto & robot_pose = sampled_trajectory.at(t).pose;          // at() for bounds check
+          const auto & person     = current_people.positions.at(i);          // at() for bounds check
+          double dx = robot_pose.position.x - person.x;
+          double dy = robot_pose.position.y - person.y;
+          double dist = std::sqrt(dx * dx + dy * dy);
+          if (dist < 0.0001) dist = 0.0001;
+          if (dist < min_dist) min_dist = dist;
         }
-        if (dist < min_dist) {
-          min_dist = dist;
-        }
-        
+        people_cost += discount * std::exp(collision_radius_ - min_dist);
       }
-      // Accumulate cost based on distance (e.g., inverse distance)
-      people_cost += discount * std::exp(collision_radius_ - min_dist);
+    } catch (const std::out_of_range &e) {
+      RCLCPP_ERROR(logger_, "calculatePeopleCost out_of_range: t=%zu traj=%zu people=%zu what=%s",
+        t, num_time_steps, rl_people_.size(), e.what());
+      // Fail-safe: stop accumulating and return what we have
+      break;
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(logger_, "calculatePeopleCost exception at t=%zu: %s", t, e.what());
+      break;
     }
   }
 
