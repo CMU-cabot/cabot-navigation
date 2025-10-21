@@ -153,8 +153,8 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self.delegate.could_not_get_current_location()
             return
 
-        self.delegate.activity_log("cabot/navigation", "from", from_id)
-        self.delegate.activity_log("cabot/navigation", "to", destination)
+        self.delegate.activity_log("cabot/phone", "from", from_id)
+        self.delegate.activity_log("cabot/phone", "to", destination)
 
         # specify last orientation
         if destination.find("@") > -1:

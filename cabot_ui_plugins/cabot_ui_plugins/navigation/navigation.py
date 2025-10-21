@@ -87,8 +87,27 @@ class ControlBase(object):
         self.last_log_time = node.get_clock().now()
         self.current_odom_pose = None
         self.current_floor = node.declare_parameter("initial_floor", 1).value
+        self.current_frame = None
         self.floor_is_changed_at = node.get_clock().now()
         self._logger.info(F"current_floor is {self.current_floor}")
+
+        transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+
+        current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
+        self.current_floor_sub = node.create_subscription(
+            std_msgs.msg.Int64,
+            current_floor_input,
+            self._current_floor_callback,
+            transient_local_qos,
+            callback_group=MutuallyExclusiveCallbackGroup())
+
+        current_frame_input = node.declare_parameter("current_frame_topic", "/current_frame").value
+        self.current_frame_sub = node.create_subscription(
+            std_msgs.msg.String,
+            current_frame_input,
+            self._current_frame_callback,
+            transient_local_qos,
+            callback_group=MutuallyExclusiveCallbackGroup())
 
         # for current location
         self._anchor = None
@@ -184,6 +203,28 @@ class ControlBase(object):
         _global = self.current_global_pose()
         return F"latlng:{_global.lat:.7f}:{_global.lng:.7f}:{self.current_floor}"
 
+    def on_current_floor_changed(self, previous_floor, current_floor):
+        pass
+
+    def on_current_frame_changed(self, previous_frame, current_frame):
+        pass
+
+    def _current_floor_callback(self, msg):
+        prev = self.current_floor
+        new_floor = msg.data + 1 if msg.data >= 0 else msg.data
+        self.current_floor = new_floor
+        if new_floor != prev:
+            self.floor_is_changed_at = self._node.get_clock().now()
+            self.on_current_floor_changed(prev, new_floor)
+        self._logger.info(F"Current floor is {self.current_floor}")
+
+    def _current_frame_callback(self, msg):
+        prev = self.current_frame
+        if prev != msg.data:
+            self.on_current_frame_changed(prev, msg.data)
+        self.current_frame = msg.data
+        self._logger.info(F"Current frame is {self.current_frame}")
+
 
 class Navigation(ControlBase, navgoal.GoalInterface):
     """Navigation node for Cabot"""
@@ -205,8 +246,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.destination = None
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
-        self.current_floor = None
-        self.current_frame = None
 
         super(Navigation, self).__init__(
             node, tf_node, datautil_instance=datautil_instance, anchor_file=anchor_file)
@@ -269,10 +308,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
-        current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
-        self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        current_frame_input = node.declare_parameter("current_frame_topic", "/current_frame").value
-        self.current_frame_sub = node.create_subscription(std_msgs.msg.String, current_frame_input, self._current_frame_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self._localize_status_sub = node.create_subscription(MFLocalizeStatus, "/localize_status", self._localize_status_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self.localize_status = MFLocalizeStatus.UNKNOWN
 
@@ -510,21 +545,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         elif self.social_navigation is not None:
             self.social_navigation.event = event
 
-    # callback functions
-    def _current_floor_callback(self, msg):
-        prev = self.current_floor
-        self.current_floor = msg.data
-        if msg.data >= 0:
-            self.current_floor = msg.data + 1
-        if self.current_floor != prev:
-            self.floor_is_changed_at = self._node.get_clock().now()
-        self._logger.info(F"Current floor is {self.current_floor}")
-
-    def _current_frame_callback(self, msg):
-        if self.current_frame != msg.data:
-            self.wait_for_restart_navigation()
-        self.current_frame = msg.data
-        self._logger.info(F"Current frame is {self.current_frame}")
+    # callback hooks
+    def on_current_frame_changed(self, previous_frame, current_frame):
+        super().on_current_frame_changed(previous_frame, current_frame)
+        self.wait_for_restart_navigation()
 
     def wait_for_restart_navigation(self):
         now = self._node.get_clock().now()
