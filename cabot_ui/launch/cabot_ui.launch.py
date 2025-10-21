@@ -160,7 +160,10 @@ def generate_launch_description():
                 'speed_poi_params': speed_poi_params,
                 'handle_button_mapping': handle_button_mapping,
                 'max_speed': max_speed,
-            }, NamespaceParameterFile('cabot_ui_manager_navigation', config_path)],
+            },
+                NamespaceParameterFile('cabot_ui_manager_navigation', config_path),
+                NamespaceParameterFile('cabot_ui_manager_description', config_path),
+            ],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
             ],
