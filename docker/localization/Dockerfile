@@ -273,13 +273,13 @@ RUN pip install --no-cache-dir \
     # localization
     einops \
     fast-pytorch-kmeans \
-    torch \
-    torchvision \
+    torch==2.8.0 \
+    torchvision==0.23.0 \
     h5py \
     open3d \
     pillow \
     tqdm \
-    xformers \
+    xformers==0.0.32.post2 \
     # pbstream edit
     imageio \
     tifffile \
