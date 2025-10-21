@@ -10,6 +10,7 @@ FROM --platform=linux/arm64 dustynv/l4t-pytorch:2.2-r35.4.1 as base_arm64
 ENV INDEX_HOST=jetson-ai-lab.io
 ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp5/cu114
 ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+ENV PIP_EXTRA_INDEX_URL=https://pypi.org/simple
 
 # Target arch
 FROM base_${TARGETARCH} AS base
