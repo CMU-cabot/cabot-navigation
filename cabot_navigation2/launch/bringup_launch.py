@@ -394,7 +394,7 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'input_topic': '/livox_scan',
                 'output_topic': '/livox_scan_expand',
-                'expand_angle': 1.0
+                'expand_angle': 0.0872  # 5.0*M_PI/180
             }],
             condition=IfCondition(use_low_obstacle_detect)
         ),

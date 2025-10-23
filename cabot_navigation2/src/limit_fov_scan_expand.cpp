@@ -50,7 +50,7 @@ public:
       RCLCPP_INFO(this->get_logger(), "output_topic=%s", output_topic.c_str());
     }
 
-    this->declare_parameter("expand_angle", rclcpp::ParameterValue(1.0));
+    this->declare_parameter("expand_angle", rclcpp::ParameterValue(0.0872));
     if (this->get_parameter<double>("expand_angle", expand_angle_)) {
       RCLCPP_INFO(this->get_logger(), "expand_angle=%d", expand_angle_);
     }
