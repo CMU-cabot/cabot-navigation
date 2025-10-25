@@ -66,8 +66,8 @@ class ElevatorController:
             def hold_door():
                 if self.enabled and self._in_control and self._allow_door_hold:
                     logger.info(f"ElevatorController: hold door for {duration} seconds")
-                    if self._client.open_door(duration):
-                        threading.Timer(1.0, hold_door).start()
+                    self._client.open_door(duration)
+                    threading.Timer(1.0, hold_door).start()
             hold_door()
 
     def close_door(self, after=5):
