@@ -45,10 +45,10 @@ A_PERSON_IN_THE_WAY: "ルート上に人。"
 PEOPLE_IN_THE_WAY: "ルート上に複数の人。"
 FOLLOWING_A_PERSON: "前の人に合わせています。"
 FOLLOWING_PEOPLE: "前の人たちに合わせています。"
-RED_SIGNAL: "赤信号、{0}秒"
+RED_SIGNAL: "赤信号、{0}秒"  # 0: remaining_time
 RED_SIGNAL_DETAIL: "赤信号です、横断歩道は{2}メートル。速度{1:.2f}、{3}秒で渡る見込み、次の青信号は{4}秒"  # 0: remaining_time, 1: user_speed, 2: distance, 3: expected_time, 4: next_programmed_seconds
-GREEN_SIGNAL_SHORT: "青信号ですが、時間が足りません"
-GREEN_SIGNAL: "青信号、{0}秒"
+GREEN_SIGNAL_SHORT: "青信号ですが、時間が足りません"  # 0: remaining_time
+GREEN_SIGNAL: "青信号、{0}秒"  # 0: remaining_time
 NO_SIGNAL_INFO: "信号情報がありません"
 
 ## queue
