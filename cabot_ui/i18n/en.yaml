@@ -46,7 +46,9 @@ PEOPLE_IN_THE_WAY: "people in the way"
 FOLLOWING_A_PERSON: "following a person"
 FOLLOWING_PEOPLE: "following some people"
 RED_SIGNAL: "red signal, {0} seconds remaining"
-GREEN_SIGNAL_SHORT: "green signal, but not enough time remains"
+RED_SIGNAL_DETAIL: "red signal, crosswalk is {2} meters long. At speed {1:.2f}, it will take {3} seconds to cross. Next green signal is {4} seconds."  # 0: remaining_time, 1: user_speed, 2: distance, 3: expected_time, 4: next_programmed_seconds
+GREEN_SIGNAL_SHORT: "green signal, not enough time to cross"
+GREEN_SIGNAL: "green signal, {0} seconds remaining"
 NO_SIGNAL_INFO: "no signal information"
 
 ## queue

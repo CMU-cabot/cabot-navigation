@@ -67,8 +67,10 @@ start_id=
 goal_id=
 landmarks=
 messages=
+signal=
+user_speed=
 
-while getopts "hdDl:t:s:g:LMS:" arg; do
+while getopts "hdDl:t:s:g:LMS:nu:" arg; do
     case $arg in
         h)
             help
@@ -101,6 +103,12 @@ while getopts "hdDl:t:s:g:LMS:" arg; do
         S)
             export CABOT_SITE=$OPTARG
             ;;
+        n)
+            signal="-n"
+            ;;
+        u)
+            user_speed="-u $OPTARG"
+            ;;
         *)
             err "Invalid option - $arg"
             help
@@ -115,7 +123,7 @@ fi
 
 dccom="docker compose -f $scriptdir/docker-compose.yaml --profile $profile"
 com="$dccom run --rm navigation-$profile bash -c \
-     \"source install/setup.bash; script/tour_test.py $debug $lang $tour_id $start_id $goal_id $landmarks $messages\""
+     \"source install/setup.bash; script/tour_test.py $debug $lang $tour_id $start_id $goal_id $landmarks $messages $signal $user_speed\""
 if [[ $debug -eq 1 ]]; then
     echo $com
 fi

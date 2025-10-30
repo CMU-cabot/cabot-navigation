@@ -357,8 +357,11 @@ class UserInterface(object):
 
     def announce_social(self, message: SNMessage):
         self._activity_log("cabot/interface", message.type.name, message.code.name)
-        if message.param:
-            self.speak(i18n.localized_string(message.code.name, message.param))
+        if message.param is not None:
+            if isinstance(message.param, list):
+                self.speak(i18n.localized_string(message.code.name, *message.param))
+            else:
+                self.speak(i18n.localized_string(message.code.name, message.param))
         else:
             self.speak(i18n.localized_string(message.code.name))
 

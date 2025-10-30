@@ -1126,13 +1126,16 @@ class SignalPOI(POI):
                 std_msgs.msg.String, "/signal_response_intersection_status", callback, 10)
         self.id = None
         self.group = None
+        self.distances = None
         hulop_content_json = json.loads(self.properties.hulop_content)
         if "id" in hulop_content_json:
             self.id = hulop_content_json["id"]
         if "group" in hulop_content_json:
             self.group = hulop_content_json["group"]
+        if "distances" in hulop_content_json:
+            self.distances = hulop_content_json["distances"]
 
-        CaBotRclpyUtil.info(f"SignalPOI id:{self.id}, group:{self.group}")
+        CaBotRclpyUtil.info(f"SignalPOI id:{self.id}, group:{self.group}, distances:{self.distances}")
 
     @property
     def signal(self):

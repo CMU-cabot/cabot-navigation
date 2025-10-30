@@ -1039,17 +1039,20 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         goal_dist = 999
         expected_time = 999
         user_speed = self.delegate.user_speed()
-        if self._current_goal.current_target():
-            current_target = self._current_goal.current_target().pose.position
-            dx = current_target.x - current_pose.x
-            dy = current_target.y - current_pose.y
-            goal_dist = math.sqrt(dx * dx + dy * dy)
-            margin = 3.0
-            rate = 0.9
-            expected_time = goal_dist / user_speed / rate + margin
+        # if self._current_goal.current_target():
+        #     current_target = self._current_goal.current_target().pose.position
+        #     dx = current_target.x - current_pose.x
+        #     dy = current_target.y - current_pose.y
+        #     goal_dist = math.sqrt(dx * dx + dy * dy)
+        #     margin = 3.0
+        #     rate = 0.9
+        #     expected_time = goal_dist / user_speed / rate + margin
 
-        state = "None"
+        state = None
         remaining_time = -1.0
+        distance = 0.0
+        expected_time = 0.0
+        next_programmed_seconds = 0.0
         for poi in self.signal_pois:
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist >= 5.0:
@@ -1058,41 +1061,53 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 continue
             temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
 
+            distances = poi.distances if poi.distances else [10.0]
+            distance = distances[0]
+            margin = 3.0
+            rate = 0.9
+            expected_time = distance / user_speed / rate + margin
+
             if poi.signal is None:
                 limit = temp_limit
-                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)", throttle_duration_sec=1.0)
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "NO_SIGNAL_INFO"
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
-                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s")
-
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s", throttle_duration_sec=1.0)
+                state = "GREEN_SIGNAL"
                 if remaining_time < expected_time:
                     limit = temp_limit
-                    self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)")
+                    self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)", throttle_duration_sec=1.0)
                     self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                     state = "GREEN_SIGNAL_SHORT"
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
                 remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
-                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)")
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)", throttle_duration_sec=1.0)
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "GREEN_SIGNAL_SHORT"
             elif poi.signal.state == geojson.Signal.RED:
                 remaining_time = poi.signal.remaining_seconds
+                next_programmed_seconds = poi.signal.next_programmed_seconds
                 limit = temp_limit
-                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)")
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)", throttle_duration_sec=1.0)
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "RED_SIGNAL"
 
-        msg = std_msgs.msg.Float32()
-        msg.data = limit
-        self.speed_limit_pub.publish(msg)
-        msg = cabot_msgs.msg.SignalState()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.state = state
-        msg.remaining_time = float(remaining_time)
-        self.signal_state_pub.publish(msg)
+        if state:
+            msg = std_msgs.msg.Float32()
+            msg.data = limit
+            self.speed_limit_pub.publish(msg)
+            msg = cabot_msgs.msg.SignalState()
+            msg.header.stamp = self._node.get_clock().now().to_msg()
+            msg.state = state
+            msg.remaining_time = float(remaining_time)
+            msg.distance = float(round(distance))
+            msg.user_speed = float(user_speed)
+            msg.expected_time = float(expected_time)
+            msg.next_programmed_seconds = float(next_programmed_seconds)
+            self.signal_state_pub.publish(msg)
 
     def _check_turn(self, current_pose):
         # provide turn tactile notification
