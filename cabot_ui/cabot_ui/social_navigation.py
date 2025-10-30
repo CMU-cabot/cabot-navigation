@@ -29,7 +29,6 @@ import tf2_geometry_msgs  # noqa: to register class for transform
 from geometry_msgs.msg import PointStamped
 from nav_msgs.msg import Odometry
 from cabot_msgs.msg import StopReason, SignalState
-from cabot_ui.geojson import Signal
 
 from dataclasses import dataclass
 import enum
