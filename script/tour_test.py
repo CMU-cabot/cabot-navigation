@@ -141,7 +141,7 @@ class StopReasonsNodeLauncher:
                 'announce_no_touch': announce_no_touch,
             }],
             ros_arguments=[
-                '--log-level', 'stop_reasons_node:=info'
+                '--log-level', 'stop_reasons_node:=debug'
             ],
         )
         description = LaunchDescription([node_action])
