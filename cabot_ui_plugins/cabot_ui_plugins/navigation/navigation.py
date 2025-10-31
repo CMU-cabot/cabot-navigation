@@ -1095,10 +1095,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "RED_SIGNAL"
 
+        msg = std_msgs.msg.Float32()
+        msg.data = limit
+        self.speed_limit_pub.publish(msg)
         if state:
-            msg = std_msgs.msg.Float32()
-            msg.data = limit
-            self.speed_limit_pub.publish(msg)
             msg = cabot_msgs.msg.SignalState()
             msg.header.stamp = self._node.get_clock().now().to_msg()
             msg.state = state
