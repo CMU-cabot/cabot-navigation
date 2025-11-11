@@ -121,6 +121,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     goals = []
     route_objs = []
     index = 1
+    is_first = True
     is_last = False
 
     while index < len(groute):
@@ -132,6 +133,9 @@ def make_goals(delegate, groute, anchor, yaw=None):
         # It needs to check if the last link has perpendicular turn
         # if the link is a leaf of the graph and short
         link = link_or_node
+        CaBotRclpyUtil.info(F"processing link {link._id} length={link.length} is_temp={link.is_temp}, is_first={is_first}")
+        if is_first and link.is_temp and link.length < 3.0:
+            continue
         if link.target_node.is_leaf and link.length < 3.0:
             continue
         route_objs.append(link)
@@ -292,6 +296,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
             route_objs = []
 
         # TODO: escalator
+        is_first = False
 
     if len(route_objs) > 0:
         goals.append(NavGoal(delegate, route_objs, anchor, is_last=True))
@@ -871,7 +876,7 @@ class NavGoal(Goal):
             current_link = route[i]
             previous_link = route[i - 1]
             orientation_diff = math.fabs(geoutil.diff_angle(current_link.pose.orientation, previous_link.pose.orientation))
-            if current_link.navigation_mode != previous_link.navigation_mode or \
+            if (current_link.navigation_mode != previous_link.navigation_mode and not previous_link.is_temp) or \
                (previous_link.navigation_mode != geojson.NavigationMode.Standard and orientation_diff > 80.0 / 180.0 * math.pi):
                 separated_routes.append(current_group)
                 current_group = [current_link]

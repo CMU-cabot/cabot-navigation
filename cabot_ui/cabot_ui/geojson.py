@@ -500,6 +500,10 @@ class Link(Object):
             self.floor = (self.start_node.floor + self.end_node.floor)/2.0
 
     @property
+    def is_temp(self):
+        return self._id.startswith("_TEMP_LINK")
+
+    @property
     def is_elevator(self):
         """wheather this links is an elevator or not"""
         return self.properties.route_type == Link.ROUTE_TYPE_ELEVATOR
