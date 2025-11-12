@@ -63,6 +63,7 @@ def generate_launch_description():
             namespace=namespace,
             output=output,
             parameters=[{
+                'use_sim_time': True,
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose
             }],
@@ -78,6 +79,7 @@ def generate_launch_description():
             namespace=namespace,
             output=output,
             parameters=[{
+                'use_sim_time': True,
                 'wireless_config_file': wireless_config_file,
                 'verbose': verbose
             }],
