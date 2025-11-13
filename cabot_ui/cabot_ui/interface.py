@@ -403,11 +403,11 @@ class UserInterface(object):
             return SpeechPriority.LOW
         if isinstance(poi, cabot_ui.geojson.InfoPOI):
             nav_info_minor_category = poi.get_minor_category()
-            if nav_info_minor_category == "_priority_low_":
+            if "_priority_low_" in nav_info_minor_category:
                 return SpeechPriority.LOW
-            elif nav_info_minor_category == "_priority_high_":
+            elif "_priority_high_" in nav_info_minor_category:
                 return SpeechPriority.HIGH
-            elif nav_info_minor_category == "_priority_normal_":
+            elif "_priority_normal_" in nav_info_minor_category:
                 return SpeechPriority.NORMAL
             else:
                 return SpeechPriority.REQUIRED
