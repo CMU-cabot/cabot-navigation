@@ -185,10 +185,15 @@ class SocialNavigation(object):
 
     def _stop_reason_callback(self, msg: StopReason):
         try:
-            # if msg.summary:
-            self._stop_reason = msg.reason
-            self._logger.info("_stop_reason_callback summary is True and calling _update()")
-            # self._update()
+            if msg.summary:
+                self._stop_reason = msg.reason
+                self._logger.info("_stop_reason_callback summary is True and calling _update()")
+                # self._update()
+            elif msg.reason in ["RED_SIGNAL", "GREEN_SIGNAL_SHORT", "NO_SIGNAL_INFO", "NOT_STOPPED"]:
+                self._stop_reason = msg.reason
+                self._logger.info("_stop_reason_callback reason is signal related and calling _update()")
+                # self._update()
+
         except:  # noqa: 722
             self._logger.error(traceback.format_exc())
 
