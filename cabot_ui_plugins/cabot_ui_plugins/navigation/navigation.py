@@ -270,6 +270,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.green_start_time = None
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -1072,21 +1073,28 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)", throttle_duration_sec=1.0)
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "NO_SIGNAL_INFO"
+                self.green_start_time = None
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
                 self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s", throttle_duration_sec=1.0)
                 state = "GREEN_SIGNAL"
-                if remaining_time < expected_time:
+                if (remaining_time < expected_time and
+                        (self.green_start_time is None or
+                         self._node.get_clock().now() - self.green_start_time > rclpy.duration.Duration(seconds=3.0))):
                     limit = temp_limit
                     self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)", throttle_duration_sec=1.0)
                     self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                     state = "GREEN_SIGNAL_SHORT"
+                    self.green_start_time = None
+                else:
+                    self.green_start_time = self._node.get_clock().now()
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
                 remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)", throttle_duration_sec=1.0)
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "GREEN_SIGNAL_SHORT"
+                self.green_start_time = None
             elif poi.signal.state == geojson.Signal.RED:
                 remaining_time = poi.signal.remaining_seconds
                 next_programmed_seconds = poi.signal.next_programmed_seconds
@@ -1094,6 +1102,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)", throttle_duration_sec=1.0)
                 self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "RED_SIGNAL"
+                self.green_start_time = None
 
         msg = std_msgs.msg.Float32()
         msg.data = limit

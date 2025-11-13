@@ -96,8 +96,8 @@ static constexpr double FILTER_DURATION_LONG = 5.0;
 static constexpr double STOP_DURATION_THRESHOLD = 0.1;
 static constexpr double UNKNOWN_DURATION_THRESHOLD = 3.0;
 static constexpr int REPLAN_REASON_COUNT = 2;
-static constexpr double STOP_LINEAR_VELOCITY_THRESHOLD = 0.2;
-static constexpr double STOP_ANGULAR_VELOCITY_THRESHOLD = 0.2;
+static constexpr double STOP_LINEAR_VELOCITY_THRESHOLD = 0.05;
+static constexpr double STOP_ANGULAR_VELOCITY_THRESHOLD = 0.05;
 }
 
 template<typename DataT>
