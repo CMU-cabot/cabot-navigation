@@ -60,7 +60,7 @@ function red {
     echo $@
     echo -en "\033[0m"  ## reset color
 }
-function blue {Permission
+function blue {
     echo -en "\033[36m"  ## blue
     echo $@
     echo -en "\033[0m"  ## reset color
@@ -80,7 +80,7 @@ scriptdir=`dirname $0`
 cd $scriptdir
 scriptdir=`pwd`
 command=''
-commandpost='&'Permission
+commandpost='&'
 
 ### default variables
 : ${CABOT_GAZEBO:=1}

@@ -112,7 +112,7 @@ cabot:
       speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/low_lidar_speed', '/cabot/people_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed', '/cabot/touch_speed_switched']
       speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
       speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
-      complete_stop: [false,false,false,false,true,true,false,true,true]
+      complete_stop: [false,false,false,true,true,true,false,true,true]
       configurable: [true,false,false,false,false,false,false,false,false]
 
   speed_control_node_touch_false:  #TODO better way
@@ -122,7 +122,7 @@ cabot:
       speed_input: ['/cabot/user_speed', '/cabot/lidar_speed', '/cabot/low_lidar_speed', '/cabot/people_speed', '/cabot/tf_speed', '/cabot/queue_speed', '/cabot/map_speed', '/cabot/wheelie_speed']
       speed_limit: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
       speed_timeout: [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.5]
-      complete_stop: [false,false,false,false,true,true,false,true,true]
+      complete_stop: [false,false,false,true,true,true,false,true,true]
       configurable: [true,false,false,false,false,false,false,false,false]
 
   wheelie_speed_control_node:

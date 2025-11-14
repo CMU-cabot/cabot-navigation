@@ -303,7 +303,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
     CaBotRclpyUtil.debug(F"goals: {goals}")
     return goals
 
-def make_goals_to(delegate, x, y):
+def make_goal_to(delegate, x, y):
     return [SimpleGoal(delegate, x, y)]
 
 
@@ -405,7 +405,7 @@ def create_ros_path(navcog_route, anchor, global_map_name, target_poi=None, set_
 
 
 def estimate_next_goal(goals, current_pose, current_floor):
-    CaBotRclpyUtil.info(F"estimate_next_goal is called: len(goals)={len(goals)}, {current_pose}, {current_floor}")
+    # CaBotRclpyUtil.info(F"estimate_next_goal is called: len(goals)={len(goals)}, {current_pose}, {current_floor}")
     for i in range(len(goals), 0, -1):
         CaBotRclpyUtil.info(F"checking goal[{i-1}]")
         goal = goals[i-1]

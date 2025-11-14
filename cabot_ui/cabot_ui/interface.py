@@ -326,7 +326,7 @@ class UserInterface(object):
 
     def start_navigation(self):
         self._activity_log("cabot/interface", "navigation", "start")
-        self.vibrate(vibration.FRONT)
+        # self.vibrate(vibration.FRONT)
         self.read_aloud_vibration(vibration.FRONT)
 
     def update_pose(self, **kwargs):
@@ -372,7 +372,7 @@ class UserInterface(object):
         elif device == "vibrator":
             self._activity_log("cabot/interface", "turn angle", str(turn.angle))
             self._activity_log("cabot/interface", "notify", text)
-            self.vibrate(pattern)
+            # self.vibrate(pattern)
             self.read_aloud_vibration(pattern)
 
     def notify_human(self, angle=0):
@@ -381,7 +381,7 @@ class UserInterface(object):
             vib = vibration.LEFT_DEV
 
         self._activity_log("cabot/interface", "human")
-        self.vibrate(pattern=vib)
+        # self.vibrate(pattern=vib)
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"), priority=SpeechPriority.NORMAL)
 
     def have_arrived(self, goal):
@@ -467,7 +467,7 @@ class UserInterface(object):
 
     def elevator_opening(self):
         self._activity_log("cabot/interface", "navigation", "elevator opening")
-        self.vibrate(vibration.FRONT)
+        # self.vibrate(vibration.FRONT)
         self.speak(i18n.localized_string("ELEVATOR_IS_OPENING"), priority=SpeechPriority.REQUIRED)
 
     def floor_changed(self, floor):
@@ -480,7 +480,7 @@ class UserInterface(object):
 
     def queue_proceed(self):
         self._activity_log("cabot/interface", "queue", "proceed")
-        self.vibrate(vibration.FRONT)
+        # self.vibrate(vibration.FRONT)
 
     def please_pass_door(self):
         self._activity_log("cabot/interface", "navigation", "manual door")
@@ -517,3 +517,38 @@ class UserInterface(object):
     def describe_surround(self, description):
         self._activity_log("cabot/interface", "describe_surround", description)
         self.speak(description, priority=SpeechPriority.MODERATE)
+
+    def exploring_direction(self, direction):
+        self._activity_log("cabot/interface", "exploration", f"going to {direction}")
+
+        if direction == "front":
+            self.speak(i18n.localized_string("GO_FORWARD"))
+        elif direction == "left":
+            self.speak(i18n.localized_string("GO_LEFT"))
+        elif direction == "right":
+            self.speak(i18n.localized_string("GO_RIGHT"))
+        elif direction == "back":
+            self.speak(i18n.localized_string("GO_BACK"))
+
+    def start_chat(self):
+        self._activity_log("cabot/interface", "exploration", "start chat")
+        # self.speak(i18n.localized_string("START_CHAT"))
+
+    def set_button_control(self, flag):
+        self._activity_log("cabot/interface", "button_control", str(flag))
+        if flag:
+            self.speak(i18n.localized_string("BUTTON_CONTROL_START"))
+        else:
+            self.speak(i18n.localized_string("BUTTON_CONTROL_END"))
+
+    def finish_chat(self):
+        self._activity_log("cabot/interface", "exploration", "finish chat")
+        self.speak(i18n.localized_string("FINISH_CHAT"))
+
+    def exploring_auto_mode_switch(self):
+        self._activity_log("cabot/interface", "exploration", "auto mode switch")
+        self.speak(i18n.localized_string("AUTO_MODE_SWITCH"))
+
+    def update_persona(self, persona):
+        self._activity_log("cabot/interface", "persona", persona)
+        self.speak(i18n.localized_string("PERSONA_UPDATED").format(i18n.localized_string(persona)))

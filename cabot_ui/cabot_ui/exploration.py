@@ -19,9 +19,59 @@
 # SOFTWARE.
 
 from cabot_ui import navigation
+from std_msgs.msg import String
+from rclpy.node import Node
 
 
-class Exploration(navigation.ControlBase):
-    def __init__(self, datautil_instance=None, anchor_file=None):
+class Exploration():
+    def __init__(self, node: Node):
 
-        super(Exploration, self).__init__(datautil_instance=datautil_instance, anchor_file=anchor_file)
+        super(Exploration, self).__init__()
+        self.node = node
+        self.pause = False
+        self.in_conversation = False
+        self.in_button_control = False
+        self.publisher = self.node.create_publisher(String, '/cabot/user_query', 10)
+        self.statePublisher = self.node.create_publisher(String, '/cabot/state', 10)
+
+    def send_query(self, query_type, query_string):
+        msg = String()
+        msg.data = f"{query_type};{query_string}"
+        self.publisher.publish(msg)
+        self.node.get_logger().info(f"Published: {msg.data}")
+
+    def send_state(self, state):
+        msg = String()
+        msg.data = state
+        self.statePublisher.publish(msg)
+        self.node.get_logger().info(f"Published: {msg.data}")
+
+    def set_pause_control(self, pause):
+        self.pause = pause
+
+    def get_pause_control(self):
+        return self.pause
+
+    def set_conversation_control(self, in_conversation):
+        self.in_button_control = False
+        self.send_state("button_control_end")
+        self.in_conversation = in_conversation
+        if in_conversation:
+            self.send_state("conversation_start")
+        else:
+            self.send_state("conversation_end")
+
+    def get_conversation_control(self):
+        return self.in_conversation
+
+    def set_button_control(self, in_button_control):
+        self.in_conversation = False
+        self.send_state("conversation_end")
+        self.in_button_control = in_button_control
+        if in_button_control:
+            self.send_state("button_control_start")
+        else:
+            self.send_state("button_control_end")
+
+    def get_button_control(self):
+        return self.in_button_control
