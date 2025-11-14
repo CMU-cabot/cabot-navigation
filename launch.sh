@@ -85,6 +85,7 @@ function help()
     echo "Usage:"
     echo "-h          show this help"
     echo "-A          find all test module under cabot_sites"
+    echo "-e          exploration mode (for demo/research)"
     echo "-E 1-10     separate environment (ROS_DOMAIN_ID, CABOT_MAP_SERVER_HOST) for simultaneous launch"
     echo "-H          headless"
     echo "-M          log dmesg output"
@@ -107,7 +108,7 @@ function help()
     echo "  -T <module>       specify test module CABOT_SITE.<module> (default=tests)"
 }
 
-
+exploration=0
 simulation=0
 log_prefix=cabot
 verbose=0
@@ -138,7 +139,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
+while getopts "ehDE:f:HlLMn:drsS:ti:T:uvy" arg; do
     case $arg in
         h)
             help
@@ -153,6 +154,9 @@ while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
         E)
             environment=$OPTARG
             ;;
+        e)
+            exploration=1
+            ;;   
         f)
             test_regex=$OPTARG
             ;;
@@ -302,21 +306,30 @@ cd $scriptdir
 dcfile=
 
 dcfile=docker-compose
+if [[ $exploration -eq 1 ]]; then dcfile="${dcfile}-exploration"; fi
 if [[ $simulation -eq 0 ]]; then dcfile="${dcfile}-production"; fi
 dcfile="${dcfile}.yaml"
 
 if [ ! -e $dcfile ]; then
-    err "There is not $dcfile, simulation=$simulation)"
+    err "There is not $dcfile, exploration=$exploration, simulation=$simulation)"
     exit
 fi
 
 dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
 
 ## launch server
-if [[ $profile == "dev" ]]; then
-    com="./server-launch.sh -d -c -p ${CABOT_SITE} -E \"$environment\""
+if [[ $exploration -eq 0 ]]; then
+    if [[ $profile == "dev" ]]; then
+        com="./server-launch.sh -d -c -p ${CABOT_SITE} -E \"$environment\""
+    else
+        com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+    fi
 else
-    com="./server-launch.sh -c -p ${CABOT_SITE} -E \"$environment\""
+    if [[ $profile == "dev" ]]; then
+        com="./server-launch.sh -d -C -e -E \"$environment\""
+    else
+        com="./server-launch.sh -C -e -E \"$environment\""
+    fi
 fi
 echo $com
 eval $com

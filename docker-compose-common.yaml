@@ -392,6 +392,7 @@ services:
       - ./mf_localization_mapping:/home/developer/loc_ws/src/mf_localization_mapping
       - ./mf_localization_msgs:/home/developer/loc_ws/src/mf_localization_msgs
       - ./mf_localization_rviz:/home/developer/loc_ws/src/mf_localization_rviz
+      - ./cabot_exploration:/home/developer/loc_ws/src/cabot_exploration
 # bridge - if DDS use shared memory
       - /dev/shm:/dev/shm
 
@@ -421,6 +422,23 @@ services:
     volumes:
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
+
+  exploration-dev:
+    extends: localization-dev-base
+    volumes:
+      - ./docker/home:/home/developer/
+    command:
+      - "/launch.sh"
+      - "exploration"
+
+  exploration-prod:
+    extends: localization-dev-base
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
+    command:
+      - "/launch.sh"
+      - "exploration"
 
 
   rtk_gnss-dev-base:

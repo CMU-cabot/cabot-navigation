@@ -18,44 +18,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# configuration of simulation for single PC
-# services extend from docker-compose-common.yaml
+
+# configuration of real robot for single PC
+# services environments are overrideed
 
 services:
-  # build
-  navigation:
-    extends:
-      file: docker-compose-common.yaml
-      service: navigation-dev
-    profiles:
-      - build
-
-  localization:
-    extends:
-      file: docker-compose-common.yaml
-      service: localization-dev
-    profiles:
-      - build
-
-  debug:
-    extends:
-      file: docker-compose-debug.yaml
-      service: debug
-    profiles:
-      - build
-
-  # dev
   navigation-dev:
     extends:
       file: docker-compose-common.yaml
       service: navigation-dev
-    profiles:
-      - dev
-
-  gazebo-dev:
-    extends:
-      file: docker-compose-common.yaml
-      service: gazebo-dev
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
     profiles:
       - dev
 
@@ -63,6 +37,9 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: gui-dev
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
     profiles:
       - dev
     deploy:
@@ -72,6 +49,20 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: localization-dev
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
+      - CABOT_PRESSURE_AVAILABLE=0
+    profiles:
+      - dev
+
+  exploration-dev:
+    extends:
+      file: docker-compose-common.yaml
+      service: exploration-dev
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
     profiles:
       - dev
 
@@ -80,13 +71,9 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: navigation-prod
-    profiles:
-      - prodz
-
-  gazebo-prod:
-    extends:
-      file: docker-compose-common.yaml
-      service: gazebo-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
     profiles:
       - prod
 
@@ -94,6 +81,9 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: gui-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
     profiles:
       - prod
     deploy:
@@ -103,68 +93,19 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: localization-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
+      - CABOT_PRESSURE_AVAILABLE=0
     profiles:
       - prod
 
-  # embedding
-  embedding:
+  exploration-dev:
     extends:
       file: docker-compose-common.yaml
-      service: embedding
-    profiles:
-      - build
-
-  embedding-dev:
-    extends:
-      file: docker-compose-common.yaml
-      service: embedding-dev
-    profiles:
-      - dev
-
-  embedding-prod:
-    extends:
-      file: docker-compose-common.yaml
-      service: embedding-prod
+      service: exploration-prod
+    environment:
+      - CABOT_GAZEBO=0
+      - CABOT_USE_SIM_TIME=0
     profiles:
       - prod
-
-  # map server
-  map_server:
-    extends:
-      file: docker-compose-common.yaml
-      service: map_server
-    profiles:
-      - map
-
-  map_data:
-    extends:
-      file: docker-compose-common.yaml
-      service: map_data
-    ports: !override []  # workaround, do not remove
-    profiles:
-      - map
-
-  mongodb_ms:
-    extends:
-      file: docker-compose-common.yaml
-      service: mongodb_ms
-    profiles:
-      - map
-
-  # location tools
-  location_tools:
-    extends:
-      file: docker-compose-common.yaml
-      service: location_tools
-    profiles:
-      - tools
-
-  mongodb_lt:
-    extends:
-      file: docker-compose-common.yaml
-      service: mongodb_lt
-    profiles:
-      - tools
-
-networks:
-  mongodb_network:

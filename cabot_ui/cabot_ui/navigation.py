@@ -36,7 +36,7 @@ import rcl_interfaces.msg
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.parameter import Parameter
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import tf2_ros
 import tf2_geometry_msgs  # noqa: to register class for transform
@@ -267,7 +267,7 @@ class ControlBase(object):
         else:
             self._datautil = datautil.getInstance(node)
             self._datautil.set_anchor(self._anchor)
-            self._datautil.init_by_server()
+            self._datautil.init_by_server(retry_count=2)
             self._datautil.set_anchor(self._anchor)
 
     # current location
@@ -408,7 +408,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._spin_client = ActionClient(act_node, nav2_msgs.action.Spin, "/spin", callback_group=self._main_callback_group)
 
-        transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL, reliability=QoSReliabilityPolicy.RELIABLE)
 
         pause_control_output = node.declare_parameter("pause_control_topic", "/cabot/pause_control").value
         self.pause_control_pub = node.create_publisher(std_msgs.msg.Bool, pause_control_output, 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -679,6 +679,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             yaw = float(yaw_str)
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor, yaw=yaw)
+        elif destination.find("goal") > -1:
+            (_, x, y) = destination.split(":")
+            groute = []
+            self._sub_goals = navgoal.make_goal_to(self, float(x), float(y))
         else:
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
@@ -723,13 +727,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         # for dashboad
         (gpath, _, _) = navgoal.create_ros_path(groute, self._anchor, self.global_map_name())
-        msg = nav_msgs.msg.Path()
-        msg.header = gpath.header
-        msg.header.frame_id = self._global_map_name
-        for pose in gpath.poses:
-            msg.poses.append(self.buffer.transform(pose, self._global_map_name))
-            msg.poses[-1].pose.position.z = 0.0
-        self.path_all_pub.publish(msg)
+        if gpath:
+            msg = nav_msgs.msg.Path()
+            msg.header = gpath.header
+            msg.header.frame_id = self._global_map_name
+            for pose in gpath.poses:
+                msg.poses.append(self.buffer.transform(pose, self._global_map_name))
+                msg.poses[-1].pose.position.z = 0.0
+            self.path_all_pub.publish(msg)
 
         # navigate from the first path
         self._navigate_next_sub_goal()
@@ -914,7 +919,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             return
 
         # wait data is analyzed
-        if not self._datautil.is_analyzed:
+        if not self._datautil.is_analyzed and not self._datautil.no_server:
             self._logger.debug("datautil is not analyzed", throttle_duration_sec=1)
             return
 

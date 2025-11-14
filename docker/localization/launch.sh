@@ -42,6 +42,8 @@ function snore()
     read ${1:+-t "$1"} -u $_snore_fd || :
 }
 
+echo '=== Cabot MF Localization Launch Script ==='
+
 if [ $# -lt 1 ]; then
     usage
     exit
@@ -88,6 +90,13 @@ case $1 in
 	source install/setup.bash
 	cd src/cabot_mf_localization/script
 	exec ./cabot_mf_localization.sh $@
+	;;
+
+	exploration)
+	shift
+	source install/setup.bash
+	cd src/cabot_exploration/script
+	exec ./cabot_exploration.sh $@
 	;;
     
     *)
