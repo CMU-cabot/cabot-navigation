@@ -85,6 +85,8 @@ function signal() {
 : ${CABOT_SITE:=}
 : ${CABOT_MODEL:=}
 : ${CABOT_TOUCH_PARAMS:=}
+: ${OPENAI_API_KEY:=}
+# : ${ROS_LOG_DIR:=}
 # variables with default value
 : ${CABOT_GAZEBO:=0}
 : ${CABOT_INITX:=0}
@@ -131,6 +133,10 @@ if [[ -z $CABOT_MODEL ]]; then
 fi
 if [[ $CABOT_TOUCH_ENABLED = 'true' ]] && [[ -z $CABOT_TOUCH_PARAMS ]]; then
     err "CABOT_TOUCH_PARAMS should be configured when CABOT_TOUCH_ENABLED is true"
+    error_flag=1
+fi
+if [[ -z $OPENAI_API_KEY ]]; then
+    err "OPENAI_API_KEY is not set, exploration will not be launched"
     error_flag=1
 fi
 if [[ $error_flag -ne 0 ]]; then
@@ -261,6 +267,16 @@ eval $com
 checks+=($!)
 pids+=($!)
 
+# launch exploration
+blue "launch exploration related nodes"
+com="$command_prefix ros2 launch cabot_ui cabot_explore_exp2.launch.py \
+    apikey:=$OPENAI_API_KEY \
+    log_dir:=$ROS_LOG_DIR \
+    $command_postfix"
+echo $com
+eval $com
+checks+=($!)
+pids+=($!)
 
 #  TODO
 #  record_bt_log:=$CABOT_RECORD_ROSBAG2 \

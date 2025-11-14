@@ -166,6 +166,12 @@ if __name__ == '__main__':
                 button = cabot_common.button.BUTTON_RIGHT
             elif key == 68:  # arrow left
                 button = cabot_common.button.BUTTON_LEFT
+            elif key == 13:  # enter
+                button = cabot_common.button.BUTTON_CENTER
+            elif key == 32:  # space 
+                button = cabot_common.button.BUTTON_DEBUG
+
+
 
             if button > 0:
                 node.get_logger().info(F"button {button}")
