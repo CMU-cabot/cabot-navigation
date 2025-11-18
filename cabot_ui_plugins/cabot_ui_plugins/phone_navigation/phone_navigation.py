@@ -33,7 +33,6 @@ import nav2_msgs.action
 import nav_msgs.msg
 
 # Other
-from cabot_ui import i18n
 from cabot_ui import geojson
 from cabot_common import util
 import cabot_ui.navgoal as navgoal
@@ -46,6 +45,7 @@ from cabot_ui.process_queue import ProcessQueue
 from cabot_ui.status import State
 
 from .phone_interface import PhoneInterface
+
 
 class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
     """Phone Navigation"""
@@ -194,7 +194,6 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
             self._navigate_next_sub_goal()
         goal.exit(goal_exit_callback)
-
 
     # wrap execution by a queue
     def set_destination(self, destination):
