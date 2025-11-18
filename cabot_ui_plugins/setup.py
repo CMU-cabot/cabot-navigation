@@ -33,7 +33,7 @@ setup(
             'feature = cabot_ui_plugins.feature:Feature',
             'description = cabot_ui_plugins.description:Description',
             'speaker = cabot_ui_plugins.speaker:Speaker',
-            'phone = cabot_ui_plugins.phone_navigation:PhoneNavigation',
+            'phone = cabot_ui_plugins.phone_navigation.phone_navigation:PhoneNavigation',
         ],
         'event_mapper.plugins': [
             'event_mapper1 = cabot_ui_plugins.event_mapper:EventMapper1',
@@ -41,7 +41,7 @@ setup(
         ],
         'navcog_map.plugins': [
             'navigation = cabot_ui_plugins.navigation:NavigationMenu',
-            'phone = cabot_ui_plugins.phone_navigation:PhoneMenu',
+            'phone = cabot_ui_plugins.phone_navigation.menu:PhoneMenu',
         ],
     }
 )

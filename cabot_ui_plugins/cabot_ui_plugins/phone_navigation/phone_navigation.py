@@ -33,6 +33,7 @@ import nav2_msgs.action
 import nav_msgs.msg
 
 # Other
+from cabot_ui import i18n
 from cabot_ui import geojson
 from cabot_common import util
 import cabot_ui.navgoal as navgoal
@@ -42,7 +43,9 @@ from cabot_ui_plugins.navigation import ControlBase
 from cabot_ui.plugin import NavigationPlugin
 from cabot_ui.node_manager import NodeManager
 from cabot_ui.process_queue import ProcessQueue
+from cabot_ui.status import State
 
+from .phone_interface import PhoneInterface
 
 class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
     """Phone Navigation"""
@@ -73,6 +76,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self._sub_goals = None
         self._goal_index = -1
         self._current_goal = None
+        self.to_id = None
 
         self._loop_handle = None
         self.lock = threading.Lock()
@@ -95,6 +99,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self.path_pub = node.create_publisher(nav_msgs.msg.Path, path_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self.goal_id_pub = node.create_publisher(unique_identifier_msgs.msg.UUID, "/debug/goal_id", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
+        self._last_estimated_goal = None
+        self._last_estimated_goal_check = None
+        self._retry_count = 0
+
+        self.interface = PhoneInterface(node)
         self._process_queue = ProcessQueue(node)
         self._start_loop()
 
@@ -104,7 +113,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self.set_destination(event.param)
 
     def _start_loop(self):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"phone.{util.callee_name()} called")
         if self.lock.acquire():
             if self._loop_handle is None:
                 self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
@@ -125,6 +134,67 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         except:  # noqa: E722
             self._logger.debug(traceback.format_exc())
             return
+
+        try:
+            self._check_goal(self.current_pose)
+        except:  # noqa: E722
+            self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+
+    def _check_goal(self, current_pose):
+        self._logger.info(F"phone.{util.callee_name()} called", throttle_duration_sec=1)
+        goal = self._current_goal
+        if not goal:
+            return
+
+        goal.check(current_pose)
+
+        # estimate next goal
+        now = self._node.get_clock().now()
+        interval = rclpy.duration.Duration(seconds=1.0)
+        if not self._last_estimated_goal_check or now - self._last_estimated_goal_check > interval:
+            estimated_goal = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+            if self._last_estimated_goal != estimated_goal:
+                self._logger.info(F"Estimated next goal = {estimated_goal}")
+                self.delegate.activity_log("cabot/phone", "estimated_next_goal", F"{repr(estimated_goal)}")
+            self._last_estimated_goal = estimated_goal
+            self._last_estimated_goal_check = now
+
+        if goal.is_canceled:
+            self._stop_loop()
+            self._current_goal = None
+            self._goal_index = max(-1, self._goal_index - 1)
+            # unexpected cancel, may need to retry
+            if self._status_manager.state == State.in_action:
+                self._logger.info("NavigationState: canceled (system)")
+                self._status_manager.set_state(State.in_pausing)
+                self._retry_count += 1
+                self._logger.info("NavigationState: retrying (system)")
+                self._status_manager.set_state(State.in_action)
+                self.retry_navigation()
+                self._logger.info("NavigationState: retried (system)")
+                return
+            self._logger.info("NavigationState: canceled (user)")
+            self.delegate.activity_log("cabot/phone", "goal_canceled", F"{goal.__class__.__name__}")
+            return
+
+        if not goal.is_completed:
+            return
+
+        if goal.is_exiting_goal:
+            return
+
+        def goal_exit_callback():
+            self.delegate.activity_log("cabot/phone", "goal_completed", F"{goal.__class__.__name__}")
+            self._current_goal = None
+            if goal.is_last:
+                # keep this for test
+                # do nothing actually, supposed to be handled in cabot-ios-app
+                self.delegate.activity_log("cabot/phone", "navigation", "arrived")
+                self.interface.have_arrived(goal, self.to_id)
+
+            self._navigate_next_sub_goal()
+        goal.exit(goal_exit_callback)
+
 
     # wrap execution by a queue
     def set_destination(self, destination):
@@ -161,12 +231,13 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             (to_id, yaw_str) = destination.split("@")
             yaw = float(yaw_str)
             groute = self._datautil.get_route(from_id, to_id)
-            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, yaw=yaw)
+            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, yaw=yaw, separate_route=False)
         else:
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
-            self._sub_goals = navgoal.make_goals(self, groute, self._anchor)
+            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, separate_route=False)
         self._goal_index = -1
+        self.to_id = to_id
 
         def check_facilities_task():
             # check facilities
@@ -213,7 +284,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     def _retry_navigation(self):
         self._logger.info(F"navigation.{util.callee_name()} called")
-        self.delegate.activity_log("cabot/navigation", "retry")
+        self.delegate.activity_log("cabot/phone", "retry")
         self.turns = []
 
         self._logger.info(f"{self._current_goal=}, {self._goal_index}")
@@ -224,8 +295,8 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self._process_queue.add(self._pause_navigation, callback)
 
     def _pause_navigation(self, callback):
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        self.delegate.activity_log("cabot/navigation", "pause")
+        self._logger.info(F"phone.{util.callee_name()} called")
+        self.delegate.activity_log("cabot/phone", "pause")
 
         if self._current_goal:
             self._current_goal.cancel(callback)
@@ -243,12 +314,12 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self._process_queue.add(self._resume_navigation, callback)
 
     def _resume_navigation(self, callback):
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        self.delegate.activity_log("cabot/navigation", "resume")
+        self._logger.info(F"phone.{util.callee_name()} called")
+        self.delegate.activity_log("cabot/phone", "resume")
 
         current_pose = self.current_local_pose()
         goal, index = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
-        self._logger.info(F"navigation.{util.callee_name()} estimated next goal index={index}: {goal}")
+        self._logger.info(F"phone.{util.callee_name()} estimated next goal index={index}: {goal}")
         if goal:
             goal.estimate_inner_goal(current_pose, self.current_floor)
             self._goal_index = index - 1
@@ -263,8 +334,8 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     def _cancel_navigation(self, callback):
         """callback for cancel topic"""
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        self.delegate.activity_log("cabot/navigation", "cancel")
+        self._logger.info(F"phone.{util.callee_name()} called")
+        self.delegate.activity_log("cabot/phone", "cancel")
         self._sub_goals = None
         self._goal_index = -1
         self._stop_loop()
@@ -276,13 +347,13 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     # private methods for navigation
     def _navigate_next_sub_goal(self):
-        self._logger.info(F"navigation.{util.callee_name()} called")
+        self._logger.info(F"phone.{util.callee_name()} called")
         if self._sub_goals is None:
-            self._logger.info("navigation is canceled")
+            self._logger.info("phone is canceled")
             return
 
         if self._sub_goals and self._goal_index+1 < len(self._sub_goals):
-            self.delegate.activity_log("cabot/navigation", "next_sub_goal")
+            self.delegate.activity_log("cabot/phone", "next_sub_goal")
             self._goal_index += 1
             self._current_goal = self._sub_goals[self._goal_index]
             self._current_goal.reset()
@@ -291,11 +362,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         self._current_goal = None
         self.delegate.have_completed()
-        self.delegate.activity_log("cabot/navigation", "completed")
+        self.delegate.activity_log("cabot/phone", "completed")
 
     def _navigate_sub_goal(self, goal):
-        self._logger.info(F"navigation.{util.callee_name()} called")
-        self.delegate.activity_log("cabot/navigation", "sub_goal")
+        self._logger.info(F"phone.{util.callee_name()} called")
+        self.delegate.activity_log("cabot/phone", "sub_goal")
         self.visualizer.reset()
         if isinstance(goal, navgoal.NavGoal):
             self.visualizer.pois = goal.pois
@@ -337,7 +408,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     def navigate_to_pose(self, goal_pose, behavior_tree, gh_cb, done_cb, namespace=""):
         self._logger.info(F"{namespace}/navigate_to_pose")
-        self.delegate.activity_log("cabot/navigation", "navigate_to_pose")
+        self.delegate.activity_log("cabot/phone", "navigate_to_pose")
         client = self._clients["/".join([namespace, "navigate_to_pose"])]
         goal = nav2_msgs.action.NavigateToPose.Goal()
 

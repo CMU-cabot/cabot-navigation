@@ -93,7 +93,7 @@ class GoalInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
 
-def make_goals(delegate, groute, anchor, yaw=None):
+def make_goals(delegate, groute, anchor, yaw=None, **kwargs):
     """
     This function makes one or multiple action goals towards the destination to deal with
     manual door, elevators, queue, narrow path, and so on.
@@ -116,7 +116,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
         return []
     if len(groute) == 1:
         # if route is only a node
-        return [NavGoal(delegate, groute, anchor, is_last=True)]
+        return [NavGoal(delegate, groute, anchor, is_last=True, **kwargs)]
 
     goals = []
     route_objs = []
@@ -154,7 +154,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
 
             # set previous goal 1.0 meter behind the door
             if len(route_objs) >= 2:
-                goals.append(NavGoal(delegate, route_objs[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0)))
+                goals.append(NavGoal(delegate, route_objs[:-1], anchor, target_poi=doors[0], set_back=(1.0, 0.0), **kwargs))
             # ask user to pass the door
             goals.append(DoorGoal(delegate, link, anchor, doors[0]))
             route_objs = []
@@ -190,7 +190,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
                     # until before the link connected with queue enter node, navigate in normal mode
                     befoer_queue_enter_groute = groute[:before_queue_enter_link_idx+1]
                     befoer_queue_enter_groute.append(groute[before_queue_enter_link_idx].target_node)
-                    goals.append(NavGoal(delegate, befoer_queue_enter_groute, anchor))
+                    goals.append(NavGoal(delegate, befoer_queue_enter_groute, anchor, **kwargs))
 
                     # from the link connected with queue enter node, navigate in queue mode to prevent shortcutting path to queue enter node
                     goals.append(QueueNavFirstGoal(delegate, [groute[queue_enter_link_idx].source_node,
@@ -272,7 +272,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
 
                 if len(route_objs) > 1:
                     # navigat to in front of the elevator cab (3.0 meters from the cab as default)
-                    goals.append(NavGoal(delegate, route_objs, anchor, target_poi=src_cabs[0], set_back=src_cabs[0].set_back))
+                    goals.append(NavGoal(delegate, route_objs, anchor, target_poi=src_cabs[0], set_back=src_cabs[0].set_back, **kwargs))
                 # turn towards door
                 goals.append(ElevatorWaitGoal(delegate, src_cabs[0]))
                 # wait cab and get on the cab
@@ -299,7 +299,7 @@ def make_goals(delegate, groute, anchor, yaw=None):
         is_first = False
 
     if len(route_objs) > 0:
-        goals.append(NavGoal(delegate, route_objs, anchor, is_last=True))
+        goals.append(NavGoal(delegate, route_objs, anchor, is_last=True, **kwargs))
 
     if yaw is not None:
         goal_node = groute[-1]  # should be Node
@@ -849,7 +849,10 @@ class NavGoal(Goal):
             self.separated_route = [navcog_route]
             self.navcog_routes = [create_ros_path(navcog_route, self.anchor, self.global_map_name, target_poi=target_poi, set_back=set_back)]
         else:
-            self.separated_route = self.separate_route(navcog_route)
+            if kwargs['separate_route'] if 'separate_route' in kwargs else True:
+                self.separated_route = self.separate_route(navcog_route)
+            else:
+                self.separated_route = [navcog_route]
             # self.separated_route = [list(group) for _, group in groupby(navcog_route, key=lambda x: x.navigation_mode)]
             self.navcog_routes = [
                 create_ros_path(

@@ -131,3 +131,7 @@ ARRIVE_DESTINATON: "目的地到着"
 TAKE_ELEVATOR: "エレベーターに乗る"
 EXIT_ELEVATOR: "エレベーターを降りる"
 SYSTEM: "システム"
+
+
+## Phone Navigation
+PHONE_ARRIVED_AT_FACILITY: "{0}に到着しました。{1}。"

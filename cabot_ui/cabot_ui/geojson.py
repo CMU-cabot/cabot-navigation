@@ -773,6 +773,10 @@ class Facility(Object):
         return i18n.localized_attr(self.properties, "name_hira", only_if="ja")
 
     @property
+    def description(self):
+        return i18n.localized_attr(self.properties, "hulop_description")
+
+    @property
     def long_description(self):
         return i18n.localized_attr(self.properties, "hulop_long_description")
 
