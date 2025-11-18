@@ -889,7 +889,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     # Main loop of navigation
     GOAL_POSITION_TORELANCE = 1
 
-    def _check_loop(self):
+    def _check_loop(self): # not called todo
         self._logger.info("_check_loop", throttle_duration_sec=1.0)
         if not rclpy.ok():
             self._stop_loop()
