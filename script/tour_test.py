@@ -625,7 +625,7 @@ class TourTestNode(rclpy.node.Node):
                 if ent.node._id == goal:
                     goal_name = landmark.name
 
-        self.head(f"{goal_name}")
+        self.head(f"{goal_name} ({start=})")
 
         def callback(node):
             self.navigation.current_floor = node.floor
@@ -682,11 +682,16 @@ class TourTestNode(rclpy.node.Node):
 
     def approaching_to_poi(self, poi=None):
         statement = poi.approaching_statement()
-        if statement: 
+        if statement:
             self.item(f"({poi.__class__.__name__}) {statement}")
 
     def approached_to_poi(self, poi=None):
         statement = poi.approached_statement()
+        if statement:
+            self.item(f"({poi.__class__.__name__}) {statement}")
+
+    def on_poi(self, poi=None):
+        statement = poi.on_poi_statement()
         if statement:
             self.item(f"({poi.__class__.__name__}) {statement}")
 
@@ -882,8 +887,11 @@ def main(args):
                 raise
 
             def signal_task():
-                info = signal_generator.next()
-                pub.publish(std_msgs.msg.String(data=json.dumps(info)))
+                try:
+                    info = signal_generator.next()
+                    pub.publish(std_msgs.msg.String(data=json.dumps(info)))
+                except Exception as e:
+                    node.get_logger().error("signal_task error\n" + traceback.format_exc())
             tester.navigation.signal_task = signal_task
 
             def spin():

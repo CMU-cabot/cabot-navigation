@@ -340,6 +340,12 @@ class UserInterface(object):
             self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
+    def on_poi(self, poi=None):
+        statement = poi.on_poi_statement()
+        if statement:
+            self.speak(statement, priority=self.get_speech_priority(poi))
+            self._activity_log("cabot/interface", "poi", "on")
+
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:

@@ -852,6 +852,9 @@ class POI(Facility, geoutil.TargetPlace):
     def approached_statement(self):
         return None
 
+    def on_poi_statement(self):
+        return None
+
     def passed_statement(self):
         return None
 
@@ -1164,6 +1167,9 @@ class SignalPOI(POI):
             if 'group' in item and item['group'] == self.group:
                 signal = item
         return Signal.marshal(signal) if signal else None
+
+    def on_poi_statement(self):
+        return i18n.localized_string("GOING_INTO_CROSSING", int(self.signal.remaining_seconds + self.signal.next_programmed_seconds))
 
 
 class Landmark(Facility):

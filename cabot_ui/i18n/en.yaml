@@ -50,6 +50,7 @@ RED_SIGNAL_DETAIL: "red signal, crosswalk is {2} meters long. At speed {1:.2f}, 
 GREEN_SIGNAL_SHORT: "green signal, not enough time to cross"  # 0: remaining_time
 GREEN_SIGNAL: "green signal, {0} seconds remaining"  # 0: remaining_time
 NO_SIGNAL_INFO: "no signal information"
+GOING_INTO_CROSSING: "going into crossing, {0} seconds remaining"
 
 ## queue
 GOING_TO_GET_IN_LINE: "We are going to get in line"

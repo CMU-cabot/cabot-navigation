@@ -564,6 +564,9 @@ class TargetPlace(Pose):
         self._was_approached = False
         self._pose_approached = None
 
+        self._was_on = False
+        self._pose_on = None
+
         self._was_passed = False
         self._pose_passed = None
 
@@ -575,6 +578,7 @@ class TargetPlace(Pose):
     APPROACHING_THRETHOLD = 5.0
     APPROACHED_THRETHOLD = 1.0
     PASSED_THRETHOLD = 1.0
+    ON_THRETHOLD = 0.25
 
     def in_angle(self, pose):
         return in_angle(pose, self, self._angle)
@@ -604,6 +608,19 @@ class TargetPlace(Pose):
         if self.distance_to(pose) < TargetPlace.APPROACHED_THRETHOLD:
             self._was_approached = True
             self._pose_approached = pose
+            return True
+
+        return False
+
+    def is_on_poi(self, pose):
+        if self._was_on:
+            return False
+
+        if self._was_approached and \
+           self._pose_approached is not None and \
+           self.distance_to(pose) < TargetPlace.ON_THRETHOLD:
+            self._was_on = True
+            self._pose_on = pose
             return True
 
         return False

@@ -973,6 +973,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_approached(current_pose):
                 self._logger.info(F"approached {poi._id}")
                 self.delegate.approached_to_poi(poi=poi)
+            elif poi.is_on_poi(current_pose):
+                self._logger.info(F"on {poi._id}")
+                self.delegate.on_poi(poi=poi)
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
@@ -1076,7 +1079,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.green_start_time = None
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
-                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s", throttle_duration_sec=1.0)
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s"
+                                  F" clock={self._node.get_clock().now()} self.green_start_time={self.green_start_time}", throttle_duration_sec=1.0)
                 state = "GREEN_SIGNAL"
                 if (remaining_time < expected_time and
                         (self.green_start_time is None or
@@ -1086,7 +1090,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                     state = "GREEN_SIGNAL_SHORT"
                     self.green_start_time = None
-                else:
+                elif self.green_start_time is None:
                     self.green_start_time = self._node.get_clock().now()
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
                 remaining_time = poi.signal.remaining_seconds

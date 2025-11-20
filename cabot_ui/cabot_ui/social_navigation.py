@@ -246,37 +246,38 @@ class SocialNavigation(object):
                 # self._set_sound(SNMessage.Code.TRYING_TO_AVOID_OBSTACLE, SNMessage.STOP, 7)
             elif code == "RED_SIGNAL":
                 remaining_time = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
-                if remaining_time > 0 and remaining_time % 5 == 0:
-                    if self._last_stop_reason != "RED_SIGNAL":
-                        user_speed = round(self._latest_signal_state.user_speed, 2) if self._latest_signal_state is not None else None
-                        distance = round(self._latest_signal_state.distance) if self._latest_signal_state is not None else None
-                        expected_time = round(self._latest_signal_state.expected_time) if self._latest_signal_state is not None else None
-                        next_programmed_seconds = round(self._latest_signal_state.next_programmed_seconds) if self._latest_signal_state is not None else None
-                        self._set_message(SNMessage.Code.RED_SIGNAL_DETAIL, SNMessage.Category.STOP, 7,
-                                          param=[remaining_time, user_speed, distance, expected_time, next_programmed_seconds])
-                    else:
-                        self._set_message(SNMessage.Code.RED_SIGNAL, SNMessage.Category.STOP, 7, param=remaining_time)
+                self._logger.info(F"{remaining_time=}")
+                if self._last_stop_reason != "RED_SIGNAL":
+                    user_speed = round(self._latest_signal_state.user_speed, 2) if self._latest_signal_state is not None else None
+                    distance = round(self._latest_signal_state.distance) if self._latest_signal_state is not None else None
+                    expected_time = round(self._latest_signal_state.expected_time) if self._latest_signal_state is not None else None
+                    next_programmed_seconds = round(self._latest_signal_state.next_programmed_seconds) if self._latest_signal_state is not None else None
+                    self._set_message(SNMessage.Code.RED_SIGNAL_DETAIL, SNMessage.Category.STOP, 8,
+                                      param=[remaining_time, user_speed, distance, expected_time, next_programmed_seconds])
+                elif remaining_time > 0 and remaining_time % 5 == 0:
+                    self._set_message(SNMessage.Code.RED_SIGNAL, SNMessage.Category.STOP, 8, param=remaining_time)
                 else:
                     skip = True
             elif code == "GREEN_SIGNAL_SHORT":
                 param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
                 if param > 0 and param % 5 == 0:
-                    self._set_message(SNMessage.Code.GREEN_SIGNAL_SHORT, SNMessage.Category.STOP, 7, param=param)
+                    self._set_message(SNMessage.Code.GREEN_SIGNAL_SHORT, SNMessage.Category.STOP, 8, param=param)
             elif code == "NO_SIGNAL_INFO":
-                self._set_message(SNMessage.Code.NO_SIGNAL_INFO, SNMessage.Category.STOP, 7)
+                self._set_message(SNMessage.Code.NO_SIGNAL_INFO, SNMessage.Category.STOP, 8)
             elif code == "UNKNOWN":
-                # self._set_message(SNMessage.Code.PLEASE_WAIT_FOR_A_SECOND, SNMessage.Category.STOP, 7)
+                skip = True
                 pass
             elif code == "NO_TOUCH":
                 self._set_message(SNMessage.Code.NOT_DETECT_TOUCH, SNMessage.Category.STOP, 7)
             elif code == "NOT_STOPPED":
                 # announce green signal only when changing from red to green
-                if self._last_stop_reason == "RED_SIGNAL":
-                    if self._latest_signal_state.state == "GREEN_SIGNAL":
-                        param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
-                        self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.STOP, 7, param=param)
-                    else:
-                        skip = True
+                # if self._last_stop_reason == "RED_SIGNAL":
+                #     if self._latest_signal_state.state == "GREEN_SIGNAL":
+                #         param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
+                #         self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.STOP, 9, param=param)
+                #     else:
+                #         skip = True
+                pass
             if not skip:
                 self._last_stop_reason = self._stop_reason
                 self._stop_reason = None
@@ -400,3 +401,31 @@ class SocialNavigation(object):
     @current_pose.deleter
     def current_pose(self):
         del self._current_pose
+
+
+if __name__ == "__main__":
+    from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+    from cabot_ui import i18n
+    import os
+    from pathlib import Path
+    SCRIPT_DIR = Path(__file__).resolve().parent.parent
+
+    rclpy.init()
+    node = rclpy.create_node("social_navigation_test")
+    CaBotRclpyUtil.initialize(node)
+    i18n.set_language("ja")
+    i18n.init(os.path.join(SCRIPT_DIR, "i18n"))
+
+    sn = SocialNavigation(node, None)
+    sn.set_active(True)
+
+    def check_message():
+        message = sn.get_message()
+        if message is not None:
+            if isinstance(message.param, list):
+                node.get_logger().info(F"SNT: {i18n.localized_string(message.code.name, *message.param)}")
+            else:
+                node.get_logger().info(F"SNT: {i18n.localized_string(message.code.name, message.param)}")
+
+    timer = node.create_timer(0.1, check_message)
+    rclpy.spin(node)
