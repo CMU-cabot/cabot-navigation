@@ -49,11 +49,11 @@ options = {
   fixed_frame_pose_sampling_ratio = 1.,
   imu_sampling_ratio = 1.,
   landmarks_sampling_ratio = 1.,
+  ignore_out_of_order = true, -- option added by https://github.com/cartographer-project/cartographer_ros/pull/1737
 }
 
 MAP_BUILDER.use_trajectory_builder_2d = true
-MAP_BUILDER.num_background_threads = 7
-
+MAP_BUILDER.num_background_threads = 1
 
 -------- tune parameters in the trajectory builder 2D --------
 

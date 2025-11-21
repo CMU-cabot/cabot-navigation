@@ -108,6 +108,11 @@ bool CabotSimpleGoalChecker::isGoalReached(
     dy = query_pose.position.y - goal_pose.position.y;
   double dist = dx * dx + dy * dy;
 
+  RCLCPP_INFO_STREAM(
+    rclcpp::get_logger(plugin_name_),
+    "CabotSimpleGoalChecker: query_pose=(" << query_pose.position.x << ", " << query_pose.position.y << "), "
+    << "goal_pose=(" << goal_pose.position.x << ", " << goal_pose.position.y << ")");
+
   auto nh = parent_.lock();
   auto now = nh->get_clock()->now();
   if (dist < 0.5) {

@@ -690,6 +690,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._goal_index = -1
 
         def check_facilities_task():
+            if not groute or len(groute) == 0:
+                # no route
+                self._logger.info("no route found, skip facility check")
+                self.nearby_facilities = []
+                return
+
             # check facilities
             self.nearby_facilities = []
             links = list(filter(lambda x: isinstance(x, geojson.RouteLink), groute))

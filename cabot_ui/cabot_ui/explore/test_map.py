@@ -748,7 +748,7 @@ def set_next_point_based_on_skeleton(
     logger.info(f"candidates: {map_data.intersection_points}")
     # add one point for each direction to make sure that the robot can move to the direction
     # 3m away from the current point
-    additional_dist = 1 / map_resolution
+    additional_dist = 3 / map_resolution
     additional_points = [
         # front
         coords[-1] + additional_dist * np.array([np.sin(orientation[-1]), np.cos(orientation[-1])]),
