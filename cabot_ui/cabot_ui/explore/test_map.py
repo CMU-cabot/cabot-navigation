@@ -656,10 +656,25 @@ class FilterCandidates:
         marker_filter = self.marker_filter(current_point, orientation, candidates, self.initial_orientation)
         replanning_filter = self.replanning_filter(previous_destination, candidates)
         costmap_filter = self.costmap_filter(candidates)
+
+        # Log all the filter scores
+        self.logger.info(f"dist_filter: {dist_filter}")
+        self.logger.info(f"forbidden_area_filter: {forbidden_area_filter}")
+        self.logger.info(f"trajectory_filter: {trajectory_filter}")
+        self.logger.info(f"availability_filter: {availability_filter}")
+        self.logger.info(f"initial_pose_filter: {initial_pose_filter}")
+        self.logger.info(f"marker_filter: {marker_filter}")
+        self.logger.info(f"replanning_filter: {replanning_filter}")
+        self.logger.info(f"costmap_filter: {costmap_filter}")
         
-        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
+        #score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
+        #      + initial_pose_filter + marker_filter + replanning_filter + costmap_filter
+        
+        score_map = forbidden_area_filter + trajectory_filter + availability_filter \
               + initial_pose_filter + marker_filter + replanning_filter + costmap_filter
-        return score_map
+        #return score_map
+
+        return np.zeros(score_map.shape) - score_map
         
 
 def set_next_point_based_on_skeleton(
@@ -733,7 +748,7 @@ def set_next_point_based_on_skeleton(
     logger.info(f"candidates: {map_data.intersection_points}")
     # add one point for each direction to make sure that the robot can move to the direction
     # 3m away from the current point
-    additional_dist = 3 / map_resolution
+    additional_dist = 1 / map_resolution
     additional_points = [
         # front
         coords[-1] + additional_dist * np.array([np.sin(orientation[-1]), np.cos(orientation[-1])]),
@@ -800,7 +815,7 @@ def set_next_point_based_on_skeleton(
         points_scores = filtered_map[points_array[:, 0], points_array[:, 1]]
         min_score = np.min(points_scores)
         if min_score > 500:
-            logger.info(f"no candidate points with score < 500 in {direction}")
+            logger.info(f"no candidate points with score (cost) < 500 in {direction}")
             continue
         min_score_points = points_array[points_scores == min_score]
         min_score_points_scores = points_scores[points_scores == min_score]

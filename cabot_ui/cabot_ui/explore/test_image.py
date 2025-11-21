@@ -65,7 +65,7 @@ This script will output the current local costmap to `local_costmap.npy` file.
 
 class CaBotImageNode(Node):
     def __init__(self, use_left: bool = True, use_right: bool = True):
-        super().__init__("cabot_map_node")
+        super().__init__("cabot_image_node")
 
         self.mode = self.declare_parameter("mode").value
         self.should_speak = self.declare_parameter("should_speak").value

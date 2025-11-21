@@ -163,11 +163,15 @@ def check_update():
         CaBotRclpyUtil.info("localization is not tracking")
         return
     if current_floor == last_floor:
-        CaBotRclpyUtil.info("same floor")
+        CaBotRclpyUtil.info("same floor : current_floor = {}".format(current_floor))
         return
+    #if current_floor == 2:
+    #    CaBotRclpyUtil.info("skip floor 2, debug miraikan map issue")
+    #    return
     if not visualize_features(du.features, du.node_map):
         CaBotRclpyUtil.info("fail to visualize features")
         return
+    CaBotRclpyUtil.info("updated floor : {} -> {}".format(last_floor, current_floor))
     server.applyChanges()
 
     last_floor = current_floor

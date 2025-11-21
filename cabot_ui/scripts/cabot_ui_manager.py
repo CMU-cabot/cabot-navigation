@@ -67,11 +67,13 @@ from diagnostic_msgs.msg import DiagnosticStatus
 from cabot_common import vibration
 
 
-class CabotUIManager(NavigationInterface, object):
-    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node):
+class CabotUIManager(NavigationInterface, object): 
+    def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node): #TODO : Resume from here, try to verify logs and if the code is called properly
         self._node = node
         self._logger = self._node.get_logger()
         CaBotRclpyUtil.initialize(self._node)
+
+        CaBotRclpyUtil.info("CabotUIManager initializing")
 
         self.in_navigation = False
         self.destination = None
@@ -103,6 +105,9 @@ class CabotUIManager(NavigationInterface, object):
         self.persona_list = ["navigation", "middle", "explore"]
         self.persona_index = 1
         self._logger.info(f"[CHILOG] [BUTTON] [PERSONA] [{self.persona_list[self.persona_index]}]")
+
+        CaBotRclpyUtil.info("CabotUIManager initializing 2")
+
 
         # request language
         e = NavigationEvent("getlanguage", None)

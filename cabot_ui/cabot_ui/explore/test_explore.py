@@ -52,7 +52,7 @@ def getch():
 
 class CaBotExplorationNode(Node):
     def __init__(self, x: int = 0, y: int = 0, query_type: str = "goal", pose: Optional[float] = None):
-        super().__init__("cabot_exploration_node")
+        super().__init__("cabot_explore_node")
         self.logger = self.get_logger()
         self.should_stop = False
 

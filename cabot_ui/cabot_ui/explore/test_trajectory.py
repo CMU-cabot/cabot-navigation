@@ -47,7 +47,7 @@ This script will output the current local costmap to `local_costmap.npy` file.
 
 class CaBotTrajectoryNode(Node):
     def __init__(self):
-        super().__init__("cabot_map_node")
+        super().__init__("cabot_trajectory_node")
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
