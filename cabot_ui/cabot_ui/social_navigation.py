@@ -72,6 +72,8 @@ class SNMessage:
         STOP = enum.auto()
         IN_THE_WAY = enum.auto()
         FOLLOWING = enum.auto()
+        RED_SIGNAL = enum.auto()
+        GREEN_SIGNAL = enum.auto()
 
     type: Type
     code: Code
@@ -231,6 +233,8 @@ class SocialNavigation(object):
             self._turn = None
         '''
 
+        signal_announce_interval = 10  # seconds
+
         if self._stop_reason is not None:
             self._logger.info(F"social-navigation stop_reason {self._stop_reason}, last_stop_reason {self._last_stop_reason}")
             code = self._stop_reason
@@ -252,32 +256,28 @@ class SocialNavigation(object):
                     distance = round(self._latest_signal_state.distance) if self._latest_signal_state is not None else None
                     expected_time = round(self._latest_signal_state.expected_time) if self._latest_signal_state is not None else None
                     next_programmed_seconds = round(self._latest_signal_state.next_programmed_seconds) if self._latest_signal_state is not None else None
-                    self._set_message(SNMessage.Code.RED_SIGNAL_DETAIL, SNMessage.Category.STOP, 8,
+                    self._set_message(SNMessage.Code.RED_SIGNAL_DETAIL, SNMessage.Category.RED_SIGNAL, 8,
                                       param=[remaining_time, user_speed, distance, expected_time, next_programmed_seconds])
-                elif remaining_time > 0 and remaining_time % 5 == 0:
-                    self._set_message(SNMessage.Code.RED_SIGNAL, SNMessage.Category.STOP, 8, param=remaining_time)
+                elif remaining_time > 0 and remaining_time % signal_announce_interval == 0:
+                    self._set_message(SNMessage.Code.RED_SIGNAL, SNMessage.Category.RED_SIGNAL, 8, param=remaining_time)
                 else:
                     skip = True
             elif code == "GREEN_SIGNAL_SHORT":
                 param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
-                if param > 0 and param % 5 == 0:
-                    self._set_message(SNMessage.Code.GREEN_SIGNAL_SHORT, SNMessage.Category.STOP, 8, param=param)
+                if self._last_stop_reason != "GREEN_SIGNAL_SHORT" or \
+                   param > 0 and param % signal_announce_interval == 0:
+                    self._set_message(SNMessage.Code.GREEN_SIGNAL_SHORT, SNMessage.Category.GREEN_SIGNAL, 8, param=param)
             elif code == "NO_SIGNAL_INFO":
                 self._set_message(SNMessage.Code.NO_SIGNAL_INFO, SNMessage.Category.STOP, 8)
-            elif code == "UNKNOWN":
-                skip = True
-                pass
             elif code == "NO_TOUCH":
                 self._set_message(SNMessage.Code.NOT_DETECT_TOUCH, SNMessage.Category.STOP, 7)
-            elif code == "NOT_STOPPED":
+            elif code == "UNKNOWN" or code == "NOT_STOPPED":
                 # announce green signal only when changing from red to green
-                # if self._last_stop_reason == "RED_SIGNAL":
-                #     if self._latest_signal_state.state == "GREEN_SIGNAL":
-                #         param = round(self._latest_signal_state.remaining_time) if self._latest_signal_state is not None else None
-                #         self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.STOP, 9, param=param)
-                #     else:
-                #         skip = True
-                pass
+                if self._last_stop_reason == "RED_SIGNAL":
+                    if self._latest_signal_state.state == "GREEN_SIGNAL":
+                        self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.GREEN_SIGNAL, 9)
+                    else:
+                        skip = True
             if not skip:
                 self._last_stop_reason = self._stop_reason
                 self._stop_reason = None
@@ -310,7 +310,7 @@ class SocialNavigation(object):
     def _set_message(self, code, category, priority, param=None):
         now = self._node.get_clock().now()
         self._logger.info(F"set_message {code} {category} {priority} {self._last_message} {now - self._last_message.time}")
-        if (self._last_message.priority < priority and self._last_message.category != category) or \
+        if (self._last_message.priority <= priority and self._last_message.category != category) or \
            (now - self._last_message.time) > Duration(seconds=4.5):
             self._message.code = code
             self._message.category = category

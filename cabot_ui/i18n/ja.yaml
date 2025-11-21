@@ -48,9 +48,9 @@ FOLLOWING_PEOPLE: "前の人たちに合わせています。"
 RED_SIGNAL: "赤信号、{0}秒"  # 0: remaining_time
 RED_SIGNAL_DETAIL: "赤信号です、横断歩道は{2}メートル。速度{1:.2f}、{3}秒で渡る見込み、次の青信号は{4}秒"  # 0: remaining_time, 1: user_speed, 2: distance, 3: expected_time, 4: next_programmed_seconds
 GREEN_SIGNAL_SHORT: "青信号ですが、時間が足りません"  # 0: remaining_time
-GREEN_SIGNAL: "青信号、{0}秒"  # 0: remaining_time
+GREEN_SIGNAL: "青信号です"  # 0: remaining_time
 NO_SIGNAL_INFO: "信号情報がありません"
-GOING_INTO_CROSSING: "信号を渡ります。残り{0}秒"
+GOING_INTO_CROSSING: "横断歩道を渡ります。残り{0}秒"
 
 ## queue
 GOING_TO_GET_IN_LINE: "列に並びます。"
