@@ -715,12 +715,10 @@ class FilterCandidates:
         self.logger.info(f"replanning_filter: {replanning_filter}")
         self.logger.info(f"costmap_filter: {costmap_filter}")
         
-        #score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
-        #      + initial_pose_filter + marker_filter + replanning_filter + costmap_filter
-        
-        score_map = forbidden_area_filter + trajectory_filter + availability_filter \
+        score_map = dist_filter + forbidden_area_filter + trajectory_filter + availability_filter \
               + initial_pose_filter + marker_filter + replanning_filter + costmap_filter
-        #return score_map
+        
+        return score_map
 
         return np.zeros(score_map.shape) - score_map
         
