@@ -901,6 +901,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._stop_loop()
             return
 
+        # todo gaston, something is blocking between check_loop and check_social
+
+        self._logger.info("_check_loop step 1")
+
         # need a robot position
         try:
             self.current_pose = self.current_local_pose()
@@ -923,6 +927,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         except:  # noqa: E722
             self._logger.error(traceback.format_exc())
             return
+        
+        self._logger.info("_check_loop step 2")
+
 
         # wait data is analyzed
         if not self._datautil.is_analyzed and not self._datautil.no_server:
@@ -934,6 +941,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._logger.debug("not ready and initialize localization", throttle_duration_sec=1)
             return
 
+        self._logger.info("_check_loop step 3")
+
+
         # say I am ready once
         if not self.i_am_ready:
             self.i_am_ready = True
@@ -941,43 +951,57 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self.delegate.i_am_ready()
             self.request_defult_params()
 
+        self._logger.info("_check_loop step 4")
+
+
         if self._current_goal is None:
             self._logger.debug("_current_goal is not set", throttle_duration_sec=1)
             return
+
+        self._logger.info("_check_loop step 5")
+
 
         # cabot is active now
         self._logger.debug("cabot is active", throttle_duration_sec=1)
 
         # isolate error handling
         try:
+            self._logger.info("_check_loop step _check_info_poi")
             self._check_info_poi(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_gradient")
             self._check_gradient(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_nearby_facility")
             self._check_nearby_facility(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_speed_limit")
             self._check_speed_limit(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_turn")
             self._check_turn(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_queue_wait")
             self._check_queue_wait(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_social")
             self._check_social(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
         try:
+            self._logger.info("_check_loop step _check_goal")
             self._check_goal(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
@@ -1205,46 +1229,85 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def _check_goal(self, current_pose):
         self._logger.info(F"navigation.{util.callee_name()} called", throttle_duration_sec=1)
+        self._logger.info("_check_loop step _check_goal 1")
         goal = self._current_goal
+        self._logger.info("_check_loop step _check_goal 2")
         if not goal:
             return
+        
+        self._logger.info("_check_loop step _check_goal 3")
 
         goal.check(current_pose)
+
+        self._logger.info("_check_loop step _check_goal 4")
+
 
         # estimate next goal
         now = self._node.get_clock().now()
         interval = rclpy.duration.Duration(seconds=1.0)
+
+        self._logger.info("_check_loop step _check_goal 5")
+
         if not self._last_estimated_goal_check or now - self._last_estimated_goal_check > interval:
+            self._logger.info("_check_loop step _check_goal 6")
             estimated_goal = navgoal.estimate_next_goal(self._sub_goals, current_pose, self.current_floor)
+            self._logger.info("_check_loop step _check_goal 7")
             if self._last_estimated_goal != estimated_goal:
                 self._logger.info(F"Estimated next goal = {estimated_goal}")
                 self.delegate.activity_log("cabot/navigation", "estimated_next_goal", F"{repr(estimated_goal)}")
             self._last_estimated_goal = estimated_goal
             self._last_estimated_goal_check = now
+            self._logger.info("_check_loop step _check_goal 8")
+
+        self._logger.info("_check_loop step _check_goal 9")
 
         if goal.is_canceled:
+            self._logger.info("_check_loop step _check_goal 10")
             self._stop_loop()
             self._current_goal = None
             self._goal_index = max(-1, self._goal_index - 1)
+            self._logger.info("_check_loop step _check_goal 11")
             self.delegate.goal_canceled(goal)
+            self._logger.info("_check_loop step _check_goal 12")
             self.delegate.activity_log("cabot/navigation", "goal_canceled", F"{goal.__class__.__name__}")
+            self._logger.info("_check_loop step _check_goal 13")
             return
+
+        self._logger.info("_check_loop step _check_goal 14")
 
         if not goal.is_completed:
+            self._logger.info("_check_loop step _check_goal 15")
             return
+
+
+        self._logger.info("_check_loop step _check_goal 16")
 
         if goal.is_exiting_goal:
+            self._logger.info("_check_loop step _check_goal 17")
             return
+        
+        self._logger.info("_check_loop step _check_goal 18")
 
         def goal_exit_callback():
+            self._logger.info("_check_loop step _check_goal 21")
             self.delegate.activity_log("cabot/navigation", "goal_completed", F"{goal.__class__.__name__}")
+            self._logger.info("_check_loop step _check_goal 22")
             self._current_goal = None
             if goal.is_last:
                 # keep this for test
+                self._logger.info("_check_loop step _check_goal 23")
                 self.delegate.activity_log("cabot/navigation", "navigation", "arrived")
+                self._logger.info("_check_loop step _check_goal 24")
                 self.delegate.have_arrived(goal)
+                self._logger.info("_check_loop step _check_goal 25")
+            self._logger.info("_check_loop step _check_goal 26")
             self._navigate_next_sub_goal()
+            self._logger.info("_check_loop step _check_goal 27")
+
+        self._logger.info("_check_loop step _check_goal 19")
         goal.exit(goal_exit_callback)
+        self._logger.info("_check_loop step _check_goal 20")
+
 
     # GoalInterface
 

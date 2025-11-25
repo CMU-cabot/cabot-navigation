@@ -101,6 +101,10 @@ class CaBotMapNode(Node):
         roll, pitch, yaw = tf_transformations.euler_from_quaternion(map_quaternion)
         self.map_orientation = yaw
 
+        if(self.map_width == 0):
+            self.logger.info("[CaBotMapNode] map callback received but map width is 0, waiting for valid map...")
+            return
+
         # get occupancy grid data
         self.map_data = np.asarray(msg.data).reshape((msg.info.height, msg.info.width))
         self.logger.info(f"[CaBotMapNode] map data; x: {self.map_x:.5f}, y: {self.map_y:.5f}, width: {self.map_width}, height: {self.map_height}, resolution: {self.map_resolution:.5f}, orientation: {self.map_orientation:.5f}")
@@ -612,17 +616,61 @@ class FilterCandidates:
         return dists
 
     def costmap_filter(self, candidates: np.ndarray) -> np.ndarray:
-        score_map = np.zeros(candidates.shape[0])
-        
-        candidates_without_additional = candidates[:self.map_data.intersection_points_num, :]
-        score_candidates_without_additional = self.map_data.highlighted_map[candidates_without_additional[:, 0].astype(int), candidates_without_additional[:, 1].astype(int)]
-        map_max_score = np.max(score_candidates_without_additional)
-        map_min_score = max(np.min(score_candidates_without_additional), 1)
-        
-        cand_on_map = self.map_data.highlighted_map[candidates[:, 0].astype(int), candidates[:, 1].astype(int)]
-        is_forbidden = cand_on_map < map_min_score
-        score_map[is_forbidden] = 20
+        # Local copy of the map
+        local_map = np.array(self.map_data.highlighted_map, copy=True)
+
+        # Map size
+        h, w = local_map.shape[:2]
+
+        # Prepare the output score array
+        score_map = np.zeros(candidates.shape[0], dtype=float)
+
+        # Utility: check bounds
+        def is_in_bounds(x, y):
+            return (0 <= x < h) and (0 <= y < w)
+
+        # ----- Step 1: Base candidates (without additional points)
+        base_count = self.map_data.intersection_points_num
+        base_candidates = candidates[:base_count]
+
+        in_bounds_mask_base = [
+            is_in_bounds(int(x), int(y)) for x, y in base_candidates
+        ]
+
+        # If none are in bounds, fallback → assign 20 to all
+        if not any(in_bounds_mask_base):
+            score_map[:] = 20
+            return score_map
+
+        # Extract valid base scores
+        base_scores = []
+        for (x, y), ok in zip(base_candidates, in_bounds_mask_base):
+            if ok:
+                base_scores.append(local_map[int(x), int(y)])
+
+        base_scores = np.array(base_scores)
+
+        map_max_score = np.max(base_scores)
+        map_min_score = max(np.min(base_scores), 1)
+
+        # ----- Step 2: Evaluate all candidates
+        for i, (x, y) in enumerate(candidates):
+            xi, yi = int(x), int(y)
+
+            # Outside map → score 20
+            if not is_in_bounds(xi, yi):
+                score_map[i] = 20
+                continue
+
+            # Inside → apply highlighted_map rule
+            val = local_map[xi, yi]
+            if val < map_min_score:
+                score_map[i] = 20
+            else:
+                score_map[i] = 0  # not forbidden
+
         return score_map
+
 
     def filter(self, current_point, candidates, orientation, previous_destination) -> np.ndarray:
         # candidates: (n, 2); n: number of coordinates
@@ -918,10 +966,11 @@ def main(
         re_init = True
     rcl_publisher = CaBotMapNode()
     
-    try:
-        rclpy.spin(rcl_publisher)
-    except SystemExit as e:
-        print(e)
+    while(rcl_publisher.map_width == 0): #We need to wait until we get the map info
+        try:
+            rclpy.spin(rcl_publisher)
+        except SystemExit as e:
+            print(e)
     
     rcl_publisher.destroy_node()
     # if re_init:

@@ -438,6 +438,8 @@ class Goal(geoutil.TargetPlace):
         self._is_exiting_goal = False
 
     def reset(self):
+        # LOG ALERT: reset internal states when re-entering the goal
+        CaBotRclpyUtil.info(f"{self} reset is called, be careful")
         self._is_completed = False
         self._is_canceled = False
         self._is_exiting_goal = False

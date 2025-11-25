@@ -1134,7 +1134,7 @@ if __name__ == "__main__":
                         #                               f"  guards {len(list(target_node.guards))}\n"
                         #                               f"  waitables {len(list(target_node.waitables))}\n",
                         #                               throttle_duration_sec=1.0)
-                        executor.spin_once()
+                        executor.spin_once() #TODO DEBUG gaston
                 except KeyboardInterrupt:
                     target_node.get_logger().info(f"Shutting down {name} node")
                 except:  # noqa: 722
