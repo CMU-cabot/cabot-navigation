@@ -3,6 +3,9 @@ from rclpy.node import Node
 from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+
+
 import cabot_msgs.msg
 import cabot_msgs.srv
 
@@ -10,7 +13,9 @@ import cabot_msgs.srv
 class Speaker(object):
     def __init__(self, node: Node, debug: bool = False):
         self._node = node
-        self.lang = node.declare_parameter("language", "en").value
+        CaBotRclpyUtil.initialize(self._node)
+        # self.lang = node.declare_parameter("language", "en").value
+        self.lang = "ja"
         # Comment out for debug
         if debug:
             self.speak('hello world!こんにちは')
@@ -23,13 +28,15 @@ class Speaker(object):
         rate = 50
 
         speak_proxy = self._node.create_client(cabot_msgs.srv.Speak, '/speak', callback_group=MutuallyExclusiveCallbackGroup())
+        CaBotRclpyUtil.info("Test Speaker: waiting for speak service...")
         try:
             if not speak_proxy.wait_for_service(timeout_sec=1):
-                print(f"Service cannot be found; tried to speak '{text}' (v={voice}, r={rate}, p={pitch}) {force}")
+                CaBotRclpyUtil.error("Service not available; speak request aborted")
                 return
-            print(f"try to speak {text} (v={voice}, r={rate}, p={pitch}) {force}")
+            CaBotRclpyUtil.info(f"Test Speaker: try to speak '{text}' (v={voice}, r={rate}, p={pitch}) {force}")
             request = cabot_msgs.srv.Speak.Request()
             request.text = text
+            #request.text = "Japanese text to speech test"
             request.rate = rate
             request.pitch = pitch
             request.volume = volume
@@ -42,7 +49,7 @@ class Speaker(object):
             speak_proxy.call_async(request)
             # CaBotRclpyUtil.info("speak requested")
         except InvalidServiceNameException as e:
-            print(f"Service call failed: {e}")
+            CaBotRclpyUtil.error(F"Service call failed: {e}")
             pass
             # CaBotRclpyUtil.error(F"Service call failed: {e}")
 

@@ -1101,8 +1101,8 @@ if __name__ == "__main__":
     soc_node = Node("cabot_ui_manager_navigation_social", start_parameter_services=False)
     desc_node = Node("cabot_ui_manager_description", start_parameter_services=False)
     nodes = [node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node]
-    executors = [MultiThreadedExecutor(),
-                 MultiThreadedExecutor(),
+    executors = [SingleThreadedExecutor(), #MultiThreadedExecutor
+                 SingleThreadedExecutor(), #MultiThreadedExecutor
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
                  SingleThreadedExecutor(),
@@ -1134,7 +1134,9 @@ if __name__ == "__main__":
                         #                               f"  guards {len(list(target_node.guards))}\n"
                         #                               f"  waitables {len(list(target_node.waitables))}\n",
                         #                               throttle_duration_sec=1.0)
+                        target_node.get_logger().info(f"run_node spin once {name} before")
                         executor.spin_once() #TODO DEBUG gaston
+                        target_node.get_logger().info(f"run_node spin once {name} after")
                 except KeyboardInterrupt:
                     target_node.get_logger().info(f"Shutting down {name} node")
                 except:  # noqa: 722

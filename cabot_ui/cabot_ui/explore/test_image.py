@@ -81,6 +81,11 @@ class CaBotImageNode(Node):
         self.ready = False
         self.realsense_ready = False
         self.explore_main_loop_ready = False
+        self.can_speak_explanation = True
+        self.can_speak_timer = None
+        self.in_conversation = False
+        self.last_saved_images_time = time.time() 
+        # This must be set before any callback can be called
 
         self.latest_explained_front_image = None
         self.latest_explained_left_image = None
@@ -196,11 +201,6 @@ class CaBotImageNode(Node):
         else:
             self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
             self.open_webcam_loop()
-
-        self.can_speak_explanation = True
-        self.can_speak_timer = None
-        self.in_conversation = False
-        self.last_saved_images_time = time.time()
 
         if self.is_sim:
             # to save OpenAI API cost, set the max loop to 10
