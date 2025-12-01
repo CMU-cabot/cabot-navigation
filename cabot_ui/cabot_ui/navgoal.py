@@ -59,7 +59,7 @@ class GoalInterface(object):
     def set_pause_control(self, flag):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
-    def turn_towards(self, orientation, callback, clockwise=0):
+    def turn_towards(self, orientation, gh_callback, callback, clockwise, time_limit):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def goto_floor(self, floor, callback):
@@ -305,7 +305,7 @@ def make_goals(delegate, groute, anchor, yaw=None, **kwargs):
         goal_node = groute[-1]  # should be Node
         goals.append(TurnGoal(delegate, goal_node, anchor, yaw))
 
-    CaBotRclpyUtil.debug(F"goals: {goals}")
+    CaBotRclpyUtil.info(F"goals: {goals}")
     return goals
 
 

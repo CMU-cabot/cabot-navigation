@@ -19,11 +19,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import math
 import threading
 import time
 import traceback
 
 # ROS
+from action_msgs.msg import GoalStatus
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -31,9 +33,11 @@ from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 import unique_identifier_msgs.msg
 import nav2_msgs.action
 import nav_msgs.msg
+import std_msgs.msg
+import tf_transformations
 
 # Other
-from cabot_ui import geojson
+from cabot_ui import geojson, geoutil
 from cabot_common import util
 import cabot_ui.navgoal as navgoal
 from cabot_ui.navgoal import GoalInterface
@@ -43,6 +47,7 @@ from cabot_ui.plugin import NavigationPlugin
 from cabot_ui.node_manager import NodeManager
 from cabot_ui.process_queue import ProcessQueue
 from cabot_ui.status import State
+from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from .phone_interface import PhoneInterface
 
@@ -94,6 +99,8 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
                 # use action for _clients key instead of full name
                 self._clients[f"/{action}"] = ActionClient(act_node, PhoneNavigation.ACTIONS[action], name, callback_group=self._main_callback_group)
 
+        self._spin_client = ActionClient(act_node, nav2_msgs.action.Spin, "/phone/spin", callback_group=self._main_callback_group)
+
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         path_output = node.declare_parameter("path_topic", "/path").value
         self.path_pub = node.create_publisher(nav_msgs.msg.Path, path_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -119,6 +126,25 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
                 self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
             self.lock.release()
 
+    def current_phone_pose(self, frame=None) -> geoutil.Pose:
+        """get current local location"""
+        if frame is None:
+            frame = self._global_map_name
+
+        try:
+            transformStamped = self.buffer.lookup_transform(
+                frame, 'phone/odom', CaBotRclpyUtil.time_zero())
+            translation = transformStamped.transform.translation
+            rotation = transformStamped.transform.rotation
+            euler = tf_transformations.euler_from_quaternion([rotation.x, rotation.y, rotation.z, rotation.w])
+            current_pose = geoutil.Pose(x=translation.x, y=translation.y, r=euler[2])
+            return current_pose
+        except RuntimeError:
+            self._logger.debug("cannot get current_local_pose")
+        except:  # noqa: E722
+            self._logger.error(traceback.format_exc())
+        raise RuntimeError("no transformation")
+
     def _check_loop(self):
         self._logger.info("_check_loop", throttle_duration_sec=1.0)
         if not rclpy.ok():
@@ -126,7 +152,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         # need a robot position
         try:
-            self.current_pose = self.current_local_pose()
+            self.current_pose = self.current_phone_pose()
             self._logger.debug(F"current pose {self.current_pose}", throttle_duration_sec=1)
         except RuntimeError:
             self._logger.info("could not get position", throttle_duration_sec=3)
@@ -160,7 +186,6 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self._last_estimated_goal_check = now
 
         if goal.is_canceled:
-            self._stop_loop()
             self._current_goal = None
             self._goal_index = max(-1, self._goal_index - 1)
             # unexpected cancel, may need to retry
@@ -337,7 +362,6 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self.delegate.activity_log("cabot/phone", "cancel")
         self._sub_goals = None
         self._goal_index = -1
-        self._stop_loop()
         if self._current_goal:
             self._current_goal.cancel(callback)
             self._current_goal = None
@@ -488,3 +512,60 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     def change_parameters(self, params, callback):
         self.param_manager.change_parameters(params, callback)
+
+    def turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
+        self._logger.info("turn_towards")
+        self.delegate.activity_log("cabot/navigation", "turn_towards",
+                                   str(geoutil.get_yaw(geoutil.q_from_msg(orientation))))
+        self.turn_towards_count = 0
+        self.turn_towards_last_diff = None
+        self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
+
+    def _turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
+        goal = nav2_msgs.action.Spin.Goal()
+        diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
+        time_allowance = max(3.0, min(time_limit, abs(diff)/0.3))
+        goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
+
+        self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}")
+        if (clockwise < 0 and diff < - math.pi / 4) or \
+           (clockwise > 0 and diff > + math.pi / 4):
+            diff = diff - clockwise * math.pi * 2
+        turn_yaw = diff - (diff / abs(diff) * 0.05)
+        goal.target_yaw = turn_yaw
+
+        msg = std_msgs.msg.Float32()
+        msg.data = geoutil.normalize_angle(turn_yaw)
+
+        future = self._spin_client.send_goal_async(goal)
+        future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
+        return future
+
+    def _turn_towards_sent_goal(self, goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit):
+        self._logger.info(F"_turn_towards_sent_goal: {goal=}")
+        goal_handle = future.result()
+
+        def cancel_callback():
+            self._logger.info(F"_turn_towards_sent_goal cancel_callback: {goal=}")
+            self.turn_towards_count = 0
+            self.turn_towards_last_diff = None
+        gh_callback(goal_handle, cancel_callback)
+        self._logger.info(F"get goal handle {goal_handle}")
+        get_result_future = goal_handle.get_result_async()
+
+        def done_callback(future):
+            self._logger.info(F"_turn_towards_sent_goal done_callback: {future.result().status=}, {self.turn_towards_last_diff=}")
+            if future.result().status == GoalStatus.STATUS_CANCELED:
+                return
+            diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
+            if self.turn_towards_last_diff and abs(self.turn_towards_last_diff - diff) < 0.1:
+                self.turn_towards_count += 1
+
+            if abs(diff) > 0.05 and self.turn_towards_count < 3:
+                self._logger.info(F"send turn {diff:.2f}")
+                self.turn_towards_last_diff = diff
+                self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
+            else:
+                self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
+                callback(True)
+        get_result_future.add_done_callback(done_callback)

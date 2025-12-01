@@ -45,7 +45,7 @@ class PhoneInterface:
                     target_facility = facility
                     break
         if not target_facility:
-            self.node.get_logger().warn(f"Could not find facility for goal {goal.to_json()}")
+            self.node.get_logger().warn(f"Could not find facility for goal {goal}")
             return
 
         name = target_facility.name_pron if target_facility.name_pron else target_facility.name
