@@ -353,7 +353,7 @@ class CaBotImageNode(Node):
             odom = np.array([position.x, position.y, yaw])
             self.odom = odom        
 
-            front_image = np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)
+            front_image = np.flipud(np.fliplr(np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)))
             left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
             right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
 

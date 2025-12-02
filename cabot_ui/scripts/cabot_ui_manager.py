@@ -998,6 +998,8 @@ class EventMapper1(object):
                 return ExplorationEvent(subtype="chat")
             elif event.holddown == cabot_common.button.BUTTON_DOWN:
                 return ExplorationEvent(subtype="reset_navigation")
+            elif event.holddown == cabot_common.button.BUTTON_RIGHT:
+                return ExplorationEvent(subtype="button_control")
 
         return None
 
