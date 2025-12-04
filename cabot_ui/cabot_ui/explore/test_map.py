@@ -71,7 +71,7 @@ class CaBotMapNode(Node):
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
         
-        self.map_sub = self.create_subscription(OccupancyGrid, "/map", self.map_callback, 10)
+        self.map_sub = self.create_subscription(OccupancyGrid, "/local_costmap/costmap", self.map_callback, transient_local_qos)
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
 
         self.tf_buffer = Buffer()
@@ -90,6 +90,10 @@ class CaBotMapNode(Node):
         """
         Receive map data and save it to local variables
         """
+        if self.map_width != 0:
+            # map already received
+            return
+
         self.map_x = msg.info.origin.position.x
         self.map_y = msg.info.origin.position.y
         self.map_width = msg.info.width

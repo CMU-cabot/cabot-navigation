@@ -65,7 +65,7 @@ from cabot_ui.description import Description
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 from cabot_common import vibration
-
+from enum import Enum
 
 class CabotUIManager(NavigationInterface, object): 
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node): #TODO : Resume from here, try to verify logs and if the code is called properly
@@ -385,7 +385,7 @@ class CabotUIManager(NavigationInterface, object):
         '''
         self._logger.info(f"process_event {str(event)}")
 
-        self._event_mapper.push(event)
+        self._event_mapper.push(event, self._logger)
         self._process_menu_event(event)
         self._process_navigation_event(event)
         self._process_exploration_event(event)
@@ -888,12 +888,20 @@ class CabotUIManager(NavigationInterface, object):
 
 
 class EventMapper1(object):
+    
+    class ExplorationMode(Enum):
+        MANUAL = 0
+        SHARED = 1
+        AUTONOMOUS = 2
+
     def __init__(self):
         self._manager = StatusManager.get_instance()
         self.description_duration = 0
         self.mode = "exploration"
+        self.exploration_mode = self.ExplorationMode.AUTONOMOUS  # Default to AUTONOMOUS mode
 
-    def push(self, event):
+
+    def push(self, event, logger):
         # state = self._manager.state
 
         if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
@@ -908,23 +916,15 @@ class EventMapper1(object):
         # elif self.mode == "navigation":
         #     mevent = self.map_button_to_navigation(event)
 
-        mevent = self.map_button_to_exploration(event)
 
+        mevents = self.map_button_to_exploration(event, logger)
 
-
-        '''
-        if state == State.idle:
-            mevent = self.map_button_to_menu(event)
-
-        elif state == State.in_action or state == State.waiting_action:
-            mevent = self.map_button_to_navigation(event)
-
-        elif state == State.in_pause or state == State.waiting_pause:
-            mevent = self.map_button_to_navigation(event)
-        '''
-
-        if mevent:
-            self.delegate.process_event(mevent)
+        if mevents is None or len(mevents) == 0:
+            return
+        
+        for mevent in mevents:
+            if mevent:
+                self.delegate.process_event(mevent)
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:
@@ -974,33 +974,45 @@ class EventMapper1(object):
         '''
         return None
 
-    def map_button_to_exploration(self, event):
-        if event.type == "button" and event.down:
-            if event.button == cabot_common.button.BUTTON_UP:
-                return ExplorationEvent(subtype="front")
-            if event.button == cabot_common.button.BUTTON_DOWN:
-                return ExplorationEvent(subtype="back")
-            if event.button == cabot_common.button.BUTTON_DEBUG:
-                return ExplorationEvent(subtype="chat")
-
-        if event.type == "click":
-            if event.buttons == cabot_common.button.BUTTON_LEFT and event.count == 1:
-                return ExplorationEvent(subtype="left")
-            if event.buttons == cabot_common.button.BUTTON_RIGHT and event.count == 1:
-                return ExplorationEvent(subtype="right")
-            if event.buttons == cabot_common.button.BUTTON_CENTER and event.count == 1:
-                return ExplorationEvent(subtype="button_control")
+    def map_button_to_exploration(self, event, logger):
+        if event.type == "click" and event.count == 1:
+            if event.buttons == cabot_common.button.BUTTON_UP:
+                return [ExplorationEvent(subtype="front")]
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                return [ExplorationEvent(subtype="back")]
+            if event.buttons == cabot_common.button.BUTTON_LEFT:
+                return [ExplorationEvent(subtype="left")]
+            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+                return [ExplorationEvent(subtype="right")]
 
         if event.type == HoldDownEvent.TYPE:
-            if event.holddown == cabot_common.button.BUTTON_LEFT:
-                return ExplorationEvent(subtype="wheel_switch")
-            elif event.holddown == cabot_common.button.BUTTON_CENTER:
-                return ExplorationEvent(subtype="chat")
-            elif event.holddown == cabot_common.button.BUTTON_DOWN:
-                return ExplorationEvent(subtype="reset_navigation")
-            elif event.holddown == cabot_common.button.BUTTON_RIGHT:
-                return ExplorationEvent(subtype="button_control")
+            new_mode = self.exploration_mode
 
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                return [ExplorationEvent(subtype="reset_navigation")]
+            elif event.holddown == cabot_common.button.BUTTON_LEFT:
+                new_mode = self.ExplorationMode.MANUAL
+            elif event.holddown == cabot_common.button.BUTTON_RIGHT:
+                new_mode = self.ExplorationMode.SHARED
+            elif event.holddown == cabot_common.button.BUTTON_UP:
+                new_mode = self.ExplorationMode.AUTONOMOUS
+
+            logger.info(f"Requested exploration mode change to {new_mode.name}")
+
+            if new_mode != self.exploration_mode:
+                events = []
+
+                if self.exploration_mode == self.ExplorationMode.MANUAL or new_mode == self.ExplorationMode.MANUAL:
+                    # switching to or from MANUAL mode resets wheel_switch
+                    events.append(ExplorationEvent(subtype="wheel_switch"))
+
+                if self.exploration_mode == self.ExplorationMode.SHARED or new_mode == self.ExplorationMode.SHARED:
+                    # switching to or from SHARED mode resets button_control
+                    events.append(ExplorationEvent(subtype="button_control"))
+
+                self.exploration_mode = new_mode
+                return events
+            
         return None
 
 
