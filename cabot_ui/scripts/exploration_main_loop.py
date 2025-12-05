@@ -55,7 +55,6 @@ class ExplorationMainLoop(Node):
 
         self.timer = self.create_timer(1.0, self.check_camera_ready_and_start)
 
-        self.marker_a, self.marker_b = None, None
         self.planning_events = []
         self.planning_time_threshold = 10
         self.planning_count_threshold = 10
@@ -241,7 +240,6 @@ class ExplorationMainLoop(Node):
         self.logger.info(f"sim: {sim}")
         self.logger.info(f"keyboard: {keyboard}")
         self.logger.info(f"debug: {debug}")
-        maps = []
 
         if not rclpy.ok():
             rclpy.init()
@@ -256,8 +254,6 @@ class ExplorationMainLoop(Node):
         is_already_checked = False
         has_left_initial_area = False
         
-        forbidden_centers = []
-
         initial_coords: Optional[List[float]] = None
         initial_orientation: Optional[float] = None
 
@@ -335,7 +331,7 @@ class ExplorationMainLoop(Node):
             self.logger.info(f"availability_from_image: {availability_from_image}")
             state_client.logger.info(f"Getting next point...\n")
             start = time.time()
-            sampled_points, forbidden_centers, current_coords, current_orientation, costmap, marker_a, marker_b = get_next_point(
+            sampled_points, current_coords, current_orientation = get_next_point(
                 floor=self.floor,
                 do_dist_filter=dist_filter, 
                 do_forbidden_area_filter=forbidden_area_filter, 
@@ -343,20 +339,13 @@ class ExplorationMainLoop(Node):
                 auto_mode=auto,
                 log_dir=log_dir, 
                 availability_from_image=availability_from_image,
-                forbidden_centers=forbidden_centers,
                 initial_coords=initial_coords,
                 initial_orientation=initial_orientation,
-                marker_a=self.marker_a,
-                marker_b=self.marker_b,
                 previous_destination=self.previous_destination,
                 logger=state_client.logger
             )
             state_client.logger.info(f"Took {time.time() - start:.2f} seconds to get the next point\n")
 
-            self.marker_a = marker_a
-            self.marker_b = marker_b
-
-            maps.append(costmap)
             if self.iter == 0:
                 initial_coords = current_coords
                 initial_orientation = current_orientation
@@ -371,13 +360,6 @@ class ExplorationMainLoop(Node):
                 speak_text("一周しました。")
                 self.did_go_around = True
                 # break
-
-            # calculate map's highlihgted area's diff 
-            if len(maps) > 1:
-                current_map_area = np.sum(maps[-1] > 0)
-                prev_map_area = np.sum(maps[-2] > 0)
-                diff = current_map_area - prev_map_area
-                state_client.logger.info(f"Highlighted area diff: {diff} ({diff / prev_map_area * 100:.2f}%)")
 
             # pick up one direction
             # first, ask user to select the direction

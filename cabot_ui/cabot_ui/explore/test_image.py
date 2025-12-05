@@ -35,7 +35,6 @@ from cabot_msgs.msg import Log
 from . import test_speak
 from .log_maker import log_image_and_gpt_response
 from .test_semantic import concat_features, extract_image_feature, extract_text_feature
-from .WebCameraManager import WebCameraManager
 from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION
 
 
@@ -96,7 +95,6 @@ class CaBotImageNode(Node):
         self.latest_explained_front_image_pub = self.create_publisher(Image, "/cabot/latest_explained_front_image", 10)
         self.latest_explained_left_image_pub = self.create_publisher(Image, "/cabot/latest_explained_left_image", 10)
         self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
-        self.latest_web_camera_image_pub = self.create_publisher(Image, "/cabot/latest_web_camera_image", 10)
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
         self.prompt_sub = self.create_subscription(std_msgs.msg.String, "/cabot/persona", self.persona_callback, 10)
 
@@ -144,8 +142,6 @@ class CaBotImageNode(Node):
         self.right_image = None
         self.right_depth = None
 
-        self.webcamera_image = None
-
         self.front_marker_detected = False
         self.left_marker_detected = False
         self.right_marker_detected = False
@@ -190,17 +186,6 @@ class CaBotImageNode(Node):
                 persona=self.persona,
                 # dummy=True if is_sim else False
             )
-        self.web_camera_ready  = False
-
-        self.logger.info("Opening web camera")
-        self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
-        if self.web_camera_manager.is_open():
-            self.logger.info("Web camera is open")
-            test_speak.speak_text("Webカメラが起動しました")
-            self.web_camera_ready = True
-        else:
-            self.logger.info("Web camera is not open in the first attempt. Trying again in a different thread")
-            self.open_webcam_loop()
 
         if self.is_sim:
             # to save OpenAI API cost, set the max loop to 10
@@ -212,41 +197,14 @@ class CaBotImageNode(Node):
         #do loop in different threading no timer
         self.timer = threading.Timer(0.1, self.loop).start()
 
-        self.webcam_timer = None
-
-        if self.web_camera_ready:
-            self.publish_camera_ready()
-            # self.get_web_camera_image() # use this only when after discussing with the team
+        self.publish_camera_ready()
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
-
-    def get_web_camera_image(self):
-        # Function to capture and schedule the next image capture
-        def _capture_and_schedule():
-            self.webcamera_image = self.web_camera_manager.get_frame()
-            self.logger.info("Captured web camera image")
-            # Schedule the next capture 1 second later
-
-        self.webcam_timer = threading.Timer(1.0, _capture_and_schedule).start()
 
     def persona_callback(self, msg: std_msgs.msg.String):
         self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
         self.persona = msg.data
         self.gpt_explainer.update_persona(self.persona)
-
-    def open_webcam_loop(self):
-        # open the webcam in different thread until it is opened
-        def _open_webcam_loop():
-            while not self.web_camera_manager.is_open():
-                self.web_camera_manager = WebCameraManager(logger=self.logger, log_dir=self.log_dir, resolution="4k")
-                time.sleep(1)
-            self.logger.info("Web camera is open")
-            test_speak.speak_text("Webカメラが起動しました")
-            self.web_camera_ready = True
-            self.publish_camera_ready()
-            self.publish_latest_explained_info()
-        thread = threading.Thread(target=_open_webcam_loop)
-        thread.start()
 
     def publish_camera_ready(self):
         def _publish_camera_ready():
@@ -254,6 +212,7 @@ class CaBotImageNode(Node):
                 # publish the camera ready status after i seconds
                 self.logger.info(f"Publishing camera ready status after {i} seconds")
                 self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
+                time.sleep(1)
         thread = threading.Thread(target=_publish_camera_ready)
         thread.start()
 
@@ -295,11 +254,6 @@ class CaBotImageNode(Node):
         if self.latest_explained_right_image is not None:
             right_image_msg = bridge.cv2_to_imgmsg(self.latest_explained_right_image, encoding="rgb8")
             self.latest_explained_right_image_pub.publish(right_image_msg)
-
-        if self.webcamera_image is not None:
-            # make the resolution smaller
-            webcamera_image_msg = bridge.cv2_to_imgmsg(self.webcamera_image, encoding="rgb8")
-            self.latest_web_camera_image_pub.publish(webcamera_image_msg)
 
         self.logger.info("Published latest explained info")
     
@@ -368,9 +322,6 @@ class CaBotImageNode(Node):
             self.front_image = front_image
             self.left_image = left_image
             self.right_image = right_image
-            if self.web_camera_manager.is_open():
-                self.webcamera_image = self.web_camera_manager.get_frame()
-                self.webcamera_image = self.resize_images(self.webcamera_image, max_width=1920, max_height=1080)   
 
             self.front_marker_detected = self.detect_marker(front_image)
             self.left_marker_detected = self.detect_marker(left_image)
@@ -381,15 +332,6 @@ class CaBotImageNode(Node):
                 self.logger.info("Realsense ready")
                 test_speak.speak_text("カメラが起動しました")
                 self.publish_latest_explained_info()
-
-            if not self.web_camera_ready and self.web_camera_manager.is_open():
-                self.logger.info("Web camera is open")
-                test_speak.speak_text("Webカメラが起動しました")
-                self.web_camera_ready = True
-                self.publish_latest_explained_info()
-
-            if self.webcam_timer is not None:
-                self.webcam_timer.cancel()
             
             self.camera_ready_pub.publish(std_msgs.msg.Bool(data=True))
         except Exception as e:
@@ -431,11 +373,11 @@ class CaBotImageNode(Node):
         is_in_valid_state = self.cabot_nav_state == self.valid_state
         self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
         self.loop_count += 1
-        camera_ready = self.realsense_ready or self.web_camera_ready
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
+        camera_ready = self.realsense_ready
+        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
 
-            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, self.webcamera_image)
+            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
             if self.touching and not self.in_conversation and is_in_valid_state and self.can_speak_explanation and explain != "":
@@ -481,7 +423,7 @@ class CaBotImageNode(Node):
                 self.logger.info(f"surronding_explain_mode next wait time: {next_loop_wait_time}")
                 self.change_timer_interval(interval=next_loop_wait_time)
         else:
-            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, web_camera_ready {self.web_camera_ready},c an_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
+            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
             self.logger.info(f"next wait time: 0.5 (constant)")
             self.change_timer_interval(interval=0.5)
 
@@ -655,7 +597,7 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], webcamera_image: Optional[np.ndarray]) -> float:
+    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray]) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
@@ -671,19 +613,7 @@ class GPTExplainer():
         try:
             images = []
 
-            use_webcamera = False
             use_realsense = False
-
-            if webcamera_image is not None:
-                if not self.okay_images:
-                    self.logger.info("Okay")
-                    self.okay_images = True
-                    test_speak.speak_text("実験準備ができました")
-                use_webcamera = True
-                    
-                # resize to 1080p
-                webcamera_image_with_text = self.add_text_to_image(webcamera_image, "High View: Left, Right, Front")
-                images.append(webcamera_image_with_text)
 
             if (front_image is not None) and (left_image is not None) and (right_image is not None):
                 if not self.okay_images:
@@ -704,18 +634,11 @@ class GPTExplainer():
                 right_image_with_text = self.add_text_to_image(right_image, "Right")
                 images.append(right_image_with_text)
 
-            if use_webcamera and use_realsense:
-                prompt = prompt % "画像は4枚あります。順番に全体、左、前、右を撮影した広角の画像です。"
-                images_with_text = [left_image_with_text, front_image_with_text, right_image_with_text, webcamera_image_with_text]
-            elif use_webcamera:
-                prompt = prompt % "画像は1枚あります。周囲を撮影した広角の画像です。"
-                images_with_text = [webcamera_image_with_text]
-            elif use_realsense:
+            if use_realsense:
                 prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
                 images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
             
-            if webcamera_image is None and (front_image is None or left_image is None or right_image is None):
-                self.logger.info(f"Webcamera image: {webcamera_image}")
+            if (front_image is None or left_image is None or right_image is None):
                 self.logger.info(f"Front image: {front_image}")
                 self.logger.info(f"Left image: {left_image}")
                 self.logger.info(f"Right image: {right_image}")
@@ -769,8 +692,6 @@ class GPTExplainer():
                 cv2.imwrite(os.path.join(folder_name,"left.jpg"), left_image)
             if not right_image is None:
                 cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
-            if not webcamera_image is None:
-                cv2.imwrite(os.path.join(folder_name,"webcamera.jpg"), webcamera_image)
 
             with open(os.path.join(folder_name,"explanation.jsonl"), "w") as f:
                 description_json = {"description": extracted_json["description"]}
@@ -780,9 +701,6 @@ class GPTExplainer():
                 json.dump(gpt_response, f, ensure_ascii=False)
 
             pretty_response = json.dumps(gpt_response, indent=4)
-
-            # if not webcamera_image is None:
-            #     images_with_text.append(webcamera_image_with_text)
 
             log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
