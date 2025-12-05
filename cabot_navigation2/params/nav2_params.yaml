@@ -377,8 +377,8 @@ local_costmap:
       use_sim_time: True
       rolling_window: True
       transform_tolerance: 0.5
-      width: 30
-      height: 30
+      width: 100
+      height: 100
       resolution: 0.05
       track_unknown_space: True
       plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
