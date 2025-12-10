@@ -43,7 +43,9 @@ class ParamManager:
                     self.clients[key] = client
                     break
                 self.node.get_logger().error(f'{key} is not available (retry {i+1})...')
-        return self.clients[key]
+        if key in self.clients:
+            return self.clients[key]
+        return None
 
     def change_parameter(self, node_name, param_dict, callback):
         def done_callback(future):
