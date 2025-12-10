@@ -29,6 +29,7 @@ import std_msgs.msg
 class Feature():
     def __init__(self, node_manager):
         self._node = node_manager.get_node("feature", True)
+        self._logger = self._node.get_logger()
         self.delegate = None
         self._process_queue = ProcessQueue(self._node)
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
