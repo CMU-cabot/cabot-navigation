@@ -23,15 +23,18 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from cabot_ui.event import NavigationEvent
 from cabot_ui.process_queue import ProcessQueue
+from cabot_ui.param_manager import ParamManager
 import std_msgs.msg
 
 
 class Feature():
     def __init__(self, node_manager):
         self._node = node_manager.get_node("feature", True)
+        self._logger = self._node.get_logger()
         self.delegate = None
         self._process_queue = ProcessQueue(self._node)
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.param_manager = ParamManager(self._node)
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -114,7 +117,7 @@ class Feature():
         else:
             self._logger.info(f"set_handle_side {side=} should be 'left' or 'right'")
             return
-        self.change_parameters({
+        self.param_manager.change_parameters({
             "/footprint_publisher": {
                 "offset_sign": offset_sign
             }
@@ -126,7 +129,7 @@ class Feature():
         def callback(result):
             self.delegate.activity_log("cabot/navigation", "set_touch_mode", "mode")
             self._logger.info(f"set_touch_mode {mode=}, {result=}")
-        self.change_parameters({
+        self.param_manager.change_parameters({
             "/cabot/cabot_can": {
                 "touch_mode": mode
             }

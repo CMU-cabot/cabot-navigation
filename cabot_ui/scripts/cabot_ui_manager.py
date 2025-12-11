@@ -76,7 +76,7 @@ class CabotUIManager(object):
             return self.speed_menu.value
         self._interface.user_speed = types.MethodType(user_speed, self)
 
-        plugins = os.environ.get('CABOT_UI_PLUGINS', "navigation,feature,description,speaker").split(",")
+        plugins = os.environ.get('CABOT_UI_PLUGINS', "feature,speaker,description,navigation").split(",")
         self._navigation_plugins = NavigationPlugins(plugins, node_manager, self._interface)
         # self._exploration = Exploration()
         # self._exploration.delegate = self
