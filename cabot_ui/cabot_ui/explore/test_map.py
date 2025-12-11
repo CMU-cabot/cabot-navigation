@@ -317,52 +317,41 @@ def get_submap_for_direction(current_location: np.ndarray, orientation: np.ndarr
     return submap, [robot_submap_x, robot_submap_y], [center_map_x, center_map_y] 
 
 def compute_accessibility_score(submap: np.ndarray, robot_submap_coords: List[int], logger) -> np.ndarray:
-    # Implement Dijkstra's algorithm to compute accessibility score from robot position
-    from queue import PriorityQueue
+    # Optimize using skimage.graph.MCP which uses C++ backend for Dijkstra
+    from skimage import graph
 
-    height, width = submap.shape
-    scores = np.full((height, width), np.inf)
-    visited = np.zeros((height, width), dtype=bool)
+    # Initialize costs array with 0.0 (free space)
+    costs = np.zeros(submap.shape, dtype=np.float32)
+    
+    # Vectorized cost assignment based on submap values
+    # Low cost
+    costs[(submap > 0) & (submap < 20)] = 5.0
+    # Medium cost
+    costs[(submap >= 20) & (submap < 50)] = 20.0
+    # High cost
+    costs[(submap >= 50) & (submap < 98)] = 50.0
+    # Obstacles / Unknown (Infinite cost)
+    costs[(submap >= 98) | (submap == -1)] = np.inf
 
-    pq = PriorityQueue()
+    # Set start point cost to 0 to avoid adding penalty for the starting pixel itself
     start_x, start_y = robot_submap_coords
-    scores[start_y, start_x] = 0
-    pq.put((0, (start_x, start_y)))
+    costs[start_y, start_x] = 0.0
 
-    directions = [(-1, 0), (1, 0), (0, -1), (0, 1),
-                  (-1, -1), (-1, 1), (1, -1), (1, 1)]  # 8 directions
-
-    while not pq.empty():
-        current_score, (x, y) = pq.get()
-        if visited[y, x]:
-            continue
-        visited[y, x] = True
-
-        for dx, dy in directions:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < width and 0 <= ny < height:
-                if submap[ny, nx] == -1:  # unknown area
-                    continue
-                map_cost = submap[ny, nx]
-                cost = 0
-                if map_cost >= 98:  # obstacle
-                    continue
-                elif map_cost >= 50:  # high cost area
-                    cost = 50
-                elif map_cost >= 20:  # medium cost area
-                    cost = 20
-                elif map_cost > 0:  # low non null cost area
-                    cost = 5
-                new_score = current_score + cost
-                if new_score < scores[ny, nx]:
-                    scores[ny, nx] = new_score
-                    pq.put((new_score, (nx, ny)))
-
+    # Define 8-connected neighborhood offsets
+    offsets = [(-1, 0), (1, 0), (0, -1), (0, 1),
+               (-1, -1), (-1, 1), (1, -1), (1, 1)]
+    
+    # Compute minimum costs using MCP (Minimum Cost Path)
+    mcp = graph.MCP(costs, offsets=offsets)
+    cumulative_costs, _ = mcp.find_costs([(start_y, start_x)])
+    
     # Normalize scores to [0, 1]
-    max_score = 100
-    min_score = 0
-    normalized_scores = (scores - min_score) / (max_score - min_score)
-    normalized_scores[~np.isfinite(scores)] = 1.0  # unreachable areas get max score
+    # Max score reference is 100.0 as per original code
+    normalized_scores = np.zeros_like(cumulative_costs, dtype=np.float32)
+    
+    reachable = np.isfinite(cumulative_costs)
+    normalized_scores[reachable] = cumulative_costs[reachable] / 100.0
+    normalized_scores[~reachable] = 1.0  # Unreachable areas get max score
 
     return normalized_scores
 
@@ -414,14 +403,14 @@ def set_next_point_based_on_skeleton(
 
         centers.append(meteric_center_submap)
 
-        cv2.imwrite(f"{log_dir}/submap_direction_{i}.png", submap)
+        # cv2.imwrite(f"{log_dir}/submap_direction_{i}.png", submap)
         logger.info(f"submap_direction_{i} center: {center_submap}, robot in submap: {robot_submap_coords}")
 
         # djikstra from robot_submap_coord to score each pixel (cost) in the submap between 0 and 1
         accessibility_score = compute_accessibility_score(submap, robot_submap_coords, logger)
         accessibility_score = np.clip(accessibility_score, 0.0, 1.0)
         logger.info(f"accessibility_score_direction_{i} min: {np.min(accessibility_score)}, max: {np.max(accessibility_score)}")
-        cv2.imwrite(f"{log_dir}/accessibility_score_direction_{i}.png", (accessibility_score * 255).astype(np.uint8))
+        # cv2.imwrite(f"{log_dir}/accessibility_score_direction_{i}.png", (accessibility_score * 255).astype(np.uint8))
 
         # get a cost of distance from submap center to each pixel (0 to 1)
         if i == 0:
@@ -433,19 +422,19 @@ def set_next_point_based_on_skeleton(
             distance_score = np.clip(distance_score, 0.0, 1.0)
             distance_score = 1.0 - 2.0*(1.0 - distance_score)
             distance_score = np.clip(distance_score, 0.0, 1.0) 
-            cv2.imwrite(f"{log_dir}/distance_score_direction_{i}.png", (distance_score * 255).astype(np.uint8))
+            # cv2.imwrite(f"{log_dir}/distance_score_direction_{i}.png", (distance_score * 255).astype(np.uint8))
 
         # combine accessibility score and distance score and normalize to [0, 1]
         combined_score = (1.0 - accessibility_score) * (1.0 - distance_score)
 
-        cv2.imwrite(f"{log_dir}/combined_score_direction_{i}.png", (combined_score * 255).astype(np.uint8))
+        # cv2.imwrite(f"{log_dir}/combined_score_direction_{i}.png", (combined_score * 255).astype(np.uint8))
         logger.info(f"combined_score_direction_{i} min: {np.min(combined_score)}, max: {np.max(combined_score)}")
 
         # Apply a gaussian filter to smooth the combined score and favor larger areas
         smoothed_combined_score = gaussian_filter(combined_score, sigma=3)
         # Add robot position on the smoothed combined score for visualization
         # smoothed_combined_score_visu[robot_submap_coords[1], robot_submap_coords[0]] = 1.0
-        cv2.imwrite(f"{log_dir}/smoothed_combined_score_direction_{i}.png", (smoothed_combined_score * 255).astype(np.uint8))
+        # cv2.imwrite(f"{log_dir}/smoothed_combined_score_direction_{i}.png", (smoothed_combined_score * 255).astype(np.uint8))
 
         # Find the pixel with the highest score
         max_index = np.unravel_index(np.argmax(smoothed_combined_score), smoothed_combined_score.shape)
