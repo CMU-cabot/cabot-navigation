@@ -171,6 +171,7 @@ class CabotRvizPointDrawer(Node):
         Draw points on rviz for visualization
         """
         self.logger.info("Publishing points on rviz")
+        self.logger.info(f"Colors: {self.color}")
         self.publish_clear_points()
         marker = MarkerArray()
         for i, coord in enumerate(self.coordinates):
@@ -188,9 +189,9 @@ class CabotRvizPointDrawer(Node):
             marker_msg.pose.orientation.y = 0.0
             marker_msg.pose.orientation.z = 0.0
             marker_msg.pose.orientation.w = 1.0
-            marker_msg.scale.x = 1.0
-            marker_msg.scale.y = 1.0
-            marker_msg.scale.z = 1.0
+            marker_msg.scale.x = 0.4
+            marker_msg.scale.y = 0.4
+            marker_msg.scale.z = 0.4
             marker_msg.color.a = 1.0
             if self.color is None:
                 marker_msg.color.r = 1.0 if i != len(self.coordinates) - 1 else 0.0
@@ -248,10 +249,10 @@ def convert_odom_to_map_batch(coords: np.ndarray, map_x: int, map_y: int, map_re
     return np.stack([converted_x, converted_y], axis=1)
 
 
-def draw_points_on_rviz(coordinates: List[Tuple[float, float]]):
+def draw_points_on_rviz(coordinates: List[Tuple[float, float]], colors: List[Tuple[float, float, float]] = None):
     if not rclpy.ok():
         rclpy.init()
-    point_drawer = CabotRvizPointDrawer(coordinates)
+    point_drawer = CabotRvizPointDrawer(coordinates, colors)
     rclpy.spin_once(point_drawer)
     point_drawer.destroy_node()
 
@@ -277,8 +278,8 @@ def get_submap_for_direction(current_location: np.ndarray, orientation: np.ndarr
     # We first get the center of the submap based on the direction
     direction_angle = direction * (np.pi / 8)  # convert to radian
     distance_from_current = submap_size_meters / 2  # meters
-    center_x = current_location[0] + distance_from_current * np.cos(orientation + direction_angle) / map_resolution
-    center_y = current_location[1] + distance_from_current * np.sin(orientation + direction_angle) / map_resolution
+    center_x = current_location[0] + distance_from_current * np.sin(orientation + direction_angle) / map_resolution
+    center_y = current_location[1] + distance_from_current * np.cos(orientation + direction_angle) / map_resolution
 
     logger.info(f"Getting submap for direction {direction} at center ({center_x:.2f}, {center_y:.2f})")
 
@@ -287,7 +288,6 @@ def get_submap_for_direction(current_location: np.ndarray, orientation: np.ndarr
     # Convert center_x and center_y to map coordinates
     center_map_x = center_x
     center_map_y = center_y
-
 
     center_map_x = int(center_map_x)
     center_map_y = int(center_map_y)
@@ -348,20 +348,20 @@ def compute_accessibility_score(submap: np.ndarray, robot_submap_coords: List[in
                 if map_cost >= 98:  # obstacle
                     continue
                 elif map_cost >= 50:  # high cost area
-                    cost = 128
+                    cost = 50
                 elif map_cost >= 20:  # medium cost area
-                    cost = 64
+                    cost = 20
                 elif map_cost > 0:  # low non null cost area
-                    cost = 16
+                    cost = 5
                 new_score = current_score + cost
                 if new_score < scores[ny, nx]:
                     scores[ny, nx] = new_score
                     pq.put((new_score, (nx, ny)))
 
     # Normalize scores to [0, 1]
-    max_score = np.max(scores[np.isfinite(scores)])
-    min_score = np.min(scores[np.isfinite(scores)])
-    normalized_scores = (scores - min_score) / (max_score - min_score + 1e-6)
+    max_score = 100
+    min_score = 0
+    normalized_scores = (scores - min_score) / (max_score - min_score)
     normalized_scores[~np.isfinite(scores)] = 1.0  # unreachable areas get max score
 
     return normalized_scores
@@ -400,6 +400,8 @@ def set_next_point_based_on_skeleton(
     # If no point found in any direction, make the robot turn around
     # Maybe add a trace of previous path to avoid going back (v2}
 
+
+    colors = []
     centers = []
     additional_points = []
     distance_score = None
@@ -429,6 +431,8 @@ def set_next_point_based_on_skeleton(
             max_distance = 2.5 / map_resolution  # 2.5 meters in pixels
             distance_score = (distance_from_center / max_distance)
             distance_score = np.clip(distance_score, 0.0, 1.0)
+            distance_score = 1.0 - 2.0*(1.0 - distance_score)
+            distance_score = np.clip(distance_score, 0.0, 1.0) 
             cv2.imwrite(f"{log_dir}/distance_score_direction_{i}.png", (distance_score * 255).astype(np.uint8))
 
         # combine accessibility score and distance score and normalize to [0, 1]
@@ -439,13 +443,15 @@ def set_next_point_based_on_skeleton(
 
         # Apply a gaussian filter to smooth the combined score and favor larger areas
         smoothed_combined_score = gaussian_filter(combined_score, sigma=3)
+        # Add robot position on the smoothed combined score for visualization
+        # smoothed_combined_score_visu[robot_submap_coords[1], robot_submap_coords[0]] = 1.0
         cv2.imwrite(f"{log_dir}/smoothed_combined_score_direction_{i}.png", (smoothed_combined_score * 255).astype(np.uint8))
 
         # Find the pixel with the highest score
         max_index = np.unravel_index(np.argmax(smoothed_combined_score), smoothed_combined_score.shape)
         logger.info(f"max_index_direction_{i}: {max_index}, score: {smoothed_combined_score[max_index]:.4f}")
 
-        score_accepted_threshold = 0.2
+        score_accepted_threshold = 0.1
         if smoothed_combined_score[max_index] < score_accepted_threshold:
             logger.info(f"Direction {i}: No suitable point found (max score {smoothed_combined_score[max_index]:.4f} < {score_accepted_threshold})")
             continue
@@ -453,11 +459,16 @@ def set_next_point_based_on_skeleton(
         # Convert max_index to map coordinates
         point_map_x = center_submap[0] - (submap.shape[1] // 2) + max_index[1]
         point_map_y = center_submap[1] - (submap.shape[0] // 2) + max_index[0]
+        point_map_y = map_height-point_map_y  # flip y axis
 
         additional_points.append([point_map_x, point_map_y])  # flip x and y for map coordinates are later
+        colors.append((1.0, distance_score[max_index], 0.0))
         logger.info(f"Direction {i}: Selected point at map coordinates ({point_map_x}, {point_map_y}) with score {smoothed_combined_score[max_index]:.4f}")
 
     #draw_points_on_rviz(centers)
+
+    if len(colors) == 0:
+        colors = None
 
     #additional_dist = 3 / map_resolution
     #additional_points = [
@@ -500,11 +511,13 @@ def set_next_point_based_on_skeleton(
         cand_coords_odom.append(converted_cand)
         print(f"sampled point {i}: {cand[0][::-1]} ({cand[1]}) (x: {converted_cand[0]:.2f}, y: {converted_cand[1]:.2f}) (score: {cand[2]})")
     
+
+
     # draw points on rviz
     # add current point
     current_coords_odom = convert_map_to_odom(coords[-1][0], coords[-1][1], map_x, map_y, map_resolution, map_height)
-    cand_coords_odom.append(current_coords_odom)
-    draw_points_on_rviz(cand_coords_odom)
+    # cand_coords_odom.append(current_coords_odom)
+    draw_points_on_rviz(cand_coords_odom, colors)
 
     # copy local_map.png to upper directory
     os.system(f"cp {log_dir}/local_map.png {log_dir}/../local_map.png")
