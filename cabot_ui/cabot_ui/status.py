@@ -42,7 +42,7 @@ class State(Enum):
 
 
 class StatusManager(object):
-    _unique_instance = None
+    _unique_instance = {}
     _lock = Lock()
 
     def __new__(cls):
@@ -53,13 +53,13 @@ class StatusManager(object):
         return super(StatusManager, cls).__new__(cls)
 
     @classmethod
-    def get_instance(cls):
-        if not cls._unique_instance:
+    def get_instance(cls, namespace="default"):
+        if namespace not in cls._unique_instance:
             with cls._lock:
-                if not cls._unique_instance:
-                    cls._unique_instance = cls.__internal_new__()
-                    cls._unique_instance.__init__()
-        return cls._unique_instance
+                if namespace not in cls._unique_instance:
+                    cls._unique_instance[namespace] = cls.__internal_new__()
+                    cls._unique_instance[namespace].__init__()
+        return cls._unique_instance[namespace]
 
     def __init__(self):
         # initialize

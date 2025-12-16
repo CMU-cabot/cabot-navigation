@@ -46,7 +46,7 @@ from cabot_ui_plugins.navigation import ControlBase
 from cabot_ui.plugin import NavigationPlugin
 from cabot_ui.node_manager import NodeManager
 from cabot_ui.process_queue import ProcessQueue
-from cabot_ui.status import State
+from cabot_ui.status import State, StatusManager
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
 from .phone_interface import PhoneInterface
@@ -71,6 +71,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self.current_floor = None
         self.current_frame = None
         self._ready = True
+
+        self._status_manager = StatusManager.get_instance("phone")
+        self._status_manager.delegate = self
+        if self._status_manager.state == State.in_preparation:
+            self._status_manager.set_state(State.idle)
 
         super(PhoneNavigation, self).__init__(
             node, tf_node, datautil_instance=datautil_instance, anchor_file=anchor_file)
@@ -223,6 +228,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
     # wrap execution by a queue
     def set_destination(self, destination):
         self.destination = destination
+        self._status_manager.set_state(State.in_action)
         self._process_queue.add(self._set_destination, destination)
 
     def reset_destination(self):
@@ -245,6 +251,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         except RuntimeError:
             self._logger.error("could not get current location")
             self.delegate.could_not_get_current_location()
+            self._status_manager.set_state(State.idle)
             return
 
         self.delegate.activity_log("cabot/phone", "from", from_id)
@@ -316,7 +323,14 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     # wrap execution by a queue
     def pause_navigation(self, callback):
-        self._process_queue.add(self._pause_navigation, callback)
+        self._status_manager.set_state(State.in_pausing)
+
+        def done_callback():
+            self._status_manager.set_state(State.in_pause)
+            if callback:
+                callback()
+
+        self._process_queue.add(self._pause_navigation, done_callback)
 
     def _pause_navigation(self, callback):
         self._logger.info(F"phone.{util.callee_name()} called")
@@ -335,6 +349,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     # wrap execution by a queue
     def resume_navigation(self, callback=None):
+        self._status_manager.set_state(State.in_action)
         self._process_queue.add(self._resume_navigation, callback)
 
     def _resume_navigation(self, callback):
@@ -354,7 +369,15 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     # wrap execution by a queue
     def cancel_navigation(self, callback=None):
-        self._process_queue.add(self._cancel_navigation, callback)
+        if self._status_manager.state != State.idle:
+            self._status_manager.set_state(State.in_pausing)
+
+        def done_callback():
+            self._status_manager.set_state(State.idle)
+            if callback:
+                callback()
+
+        self._process_queue.add(self._cancel_navigation, done_callback)
 
     def _cancel_navigation(self, callback):
         """callback for cancel topic"""
@@ -384,6 +407,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             return
 
         self._current_goal = None
+        self._status_manager.set_state(State.idle)
         self.delegate.have_completed()
         self.delegate.activity_log("cabot/phone", "completed")
 
