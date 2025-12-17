@@ -216,11 +216,6 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         def goal_exit_callback():
             self.delegate.activity_log("cabot/phone", "goal_completed", F"{goal.__class__.__name__}")
             self._current_goal = None
-            if goal.is_last:
-                # keep this for test
-                # do nothing actually, supposed to be handled in cabot-ios-app
-                self.delegate.activity_log("cabot/phone", "navigation", "arrived")
-                self.interface.have_arrived(goal, self.to_id)
 
             self._navigate_next_sub_goal()
         goal.exit(goal_exit_callback)
@@ -408,6 +403,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         self._current_goal = None
         self._status_manager.set_state(State.idle)
+
+        # keep this for test
+        # do nothing actually, supposed to be handled in cabot-ios-app
+        self.delegate.activity_log("cabot/phone", "navigation", "arrived")
+        self.interface.have_completed(self.to_id)
         self.delegate.have_completed()
         self.delegate.activity_log("cabot/phone", "completed")
 
