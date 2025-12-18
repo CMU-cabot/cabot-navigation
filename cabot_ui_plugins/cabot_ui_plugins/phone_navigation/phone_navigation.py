@@ -138,7 +138,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         try:
             transformStamped = self.buffer.lookup_transform(
-                frame, 'phone/odom', CaBotRclpyUtil.time_zero())
+                frame, 'phone/base_footprint', CaBotRclpyUtil.time_zero())
             translation = transformStamped.transform.translation
             rotation = transformStamped.transform.rotation
             euler = tf_transformations.euler_from_quaternion([rotation.x, rotation.y, rotation.z, rotation.w])
@@ -548,7 +548,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
     def _turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
         goal = nav2_msgs.action.Spin.Goal()
         diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
-        time_allowance = max(3.0, min(time_limit, abs(diff)/0.3))
+        time_allowance = max(10.0, min(time_limit, abs(diff)/0.1))
         goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
 
         self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}")
