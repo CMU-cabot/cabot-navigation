@@ -573,7 +573,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
     def change_parameters(self, params, callback):
         self.param_manager.change_parameters(params, callback)
 
-    def turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
+    def turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=15.0):
         self._logger.info("turn_towards")
         self.delegate.activity_log("cabot/navigation", "turn_towards",
                                    str(geoutil.get_yaw(geoutil.q_from_msg(orientation))))
@@ -581,10 +581,10 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self.turn_towards_last_diff = None
         self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
 
-    def _turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=10.0):
+    def _turn_towards(self, orientation, gh_callback, callback, clockwise=0, time_limit=30.0):
         goal = nav2_msgs.action.Spin.Goal()
         diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
-        time_allowance = max(10.0, min(time_limit, abs(diff)/0.1))
+        time_allowance = max(30.0, min(time_limit, abs(diff) / 0.05))
         goal.time_allowance = rclpy.duration.Duration(seconds=time_allowance).to_msg()
 
         self._logger.info(F"current pose {self.current_pose}, diff {diff:.2f}")
@@ -602,7 +602,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         return future
 
     def _turn_towards_sent_goal(self, goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit):
-        self._logger.info(F"_turn_towards_sent_goal: {goal=}")
+        self._logger.info(F"_turn_towards_sent_goal: {goal=} {goal.time_allowance=} {turn_yaw=}")
         goal_handle = future.result()
 
         def cancel_callback():
