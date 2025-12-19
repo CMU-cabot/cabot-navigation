@@ -30,6 +30,7 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+import rclpy.duration
 import unique_identifier_msgs.msg
 import nav2_msgs.action
 import nav_msgs.msg
@@ -40,6 +41,7 @@ import tf_transformations
 from cabot_ui import geojson, geoutil
 from cabot_common import util
 import cabot_ui.navgoal as navgoal
+from cabot_ui.event import NavigationEvent
 from cabot_ui.navgoal import GoalInterface
 from cabot_ui.param_manager import ParamManager
 from cabot_ui_plugins.navigation import ControlBase
@@ -105,6 +107,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
                 self._clients[f"/{action}"] = ActionClient(act_node, PhoneNavigation.ACTIONS[action], name, callback_group=self._main_callback_group)
 
         self._spin_client = ActionClient(act_node, nav2_msgs.action.Spin, "/phone/spin", callback_group=self._main_callback_group)
+        self._stop_user_action_client = ActionClient(act_node, nav2_msgs.action.Wait, "/phone/stop_user_action", callback_group=self._main_callback_group)
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         path_output = node.declare_parameter("path_topic", "/path").value
@@ -119,10 +122,20 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self._process_queue = ProcessQueue(node)
         self._start_loop()
 
-    def process_event(self, event) -> None:
+    def process_event(self, event):
         self._logger.info(f"process_event {str(event)}")
         if event.subtype == "phone":
             self.set_destination(event.param)
+            return True
+        if event.subtype == "phone_completed":
+            def callback():
+                self._logger.info("cancel_navigation callback called")
+                self._send_stop_user_action()
+                self._sub_goals = []
+                self._navigate_next_sub_goal()
+
+            self.cancel_navigation(callback=callback)
+            return True
 
     def _start_loop(self):
         self._logger.info(F"phone.{util.callee_name()} called")
@@ -131,6 +144,18 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
                 self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
             self.lock.release()
 
+    def current_phone_global_pose(self):
+        local = self.current_phone_pose()
+        _global = geoutil.local2global(local, self._anchor)
+        self._logger.debug(F"current global pose ({_global})", throttle_duration_sec=1.0)
+        return _global
+
+    def current_phone_location_id(self):
+        """get id string for the current loaction in ROS"""
+
+        _global = self.current_phone_global_pose()
+        return F"latlng:{_global.lat:.7f}:{_global.lng:.7f}:{self.current_floor}"
+
     def current_phone_pose(self, frame=None) -> geoutil.Pose:
         """get current local location"""
         if frame is None:
@@ -138,7 +163,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         try:
             transformStamped = self.buffer.lookup_transform(
-                frame, 'phone/base_footprint', CaBotRclpyUtil.time_zero())
+                frame, 'phone/base_link', CaBotRclpyUtil.time_zero())
             translation = transformStamped.transform.translation
             rotation = transformStamped.transform.rotation
             euler = tf_transformations.euler_from_quaternion([rotation.x, rotation.y, rotation.z, rotation.w])
@@ -242,9 +267,9 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         """
         self._logger.info(F"navigation.{util.callee_name()} called")
         try:
-            from_id = self.current_location_id()
+            from_id = self.current_phone_location_id()
         except RuntimeError:
-            self._logger.error("could not get current location")
+            self._logger.error("could not get current phone location")
             self.delegate.could_not_get_current_location()
             self._status_manager.set_state(State.idle)
             return
@@ -409,6 +434,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self.delegate.activity_log("cabot/phone", "navigation", "arrived")
         self.interface.have_completed(self.to_id)
         self.delegate.have_completed()
+        # notify external nodes about arrival
         self.delegate.activity_log("cabot/phone", "completed")
 
     def _navigate_sub_goal(self, goal):
@@ -438,6 +464,16 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             import traceback
             self._logger.error(traceback.format_exc())
         self._start_loop()
+
+    def _send_stop_user_action(self):
+        self._logger.info("send stop_user_action")
+        if not self._stop_user_action_client.wait_for_server(timeout_sec=1.0):
+            self._logger.warning("stop_user_action action server not available")
+            return
+
+        goal = nav2_msgs.action.Wait.Goal()
+        goal.time = rclpy.duration.Duration(seconds=0.5).to_msg()
+        self._stop_user_action_client.send_goal_async(goal)
 
     # GoalInterface
 

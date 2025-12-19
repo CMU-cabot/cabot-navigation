@@ -249,6 +249,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._status_manager = StatusManager.get_instance()
         self._status_manager.delegate = self
 
+        self._sub_goals = None
+        self._goal_index = -1
+        self._current_goal = None
+        self._last_estimated_goal_check = None
+        self._last_estimated_goal = None
+
         super(Navigation, self).__init__(
             node, tf_node, datautil_instance=datautil_instance, anchor_file=anchor_file)
 
@@ -261,12 +267,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turns = []
         self.gradient = []
         self.notified_turns = {"directional_indicator": [], "vibrator": []}
-
-        self._sub_goals = None
-        self._goal_index = -1
-        self._current_goal = None
-        self._last_estimated_goal_check = None
-        self._last_estimated_goal = None
 
         # speed = 0.50 m/sec
         self._notify_vib_threshold = 0.85
