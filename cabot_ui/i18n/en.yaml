@@ -137,3 +137,4 @@ SYSTEM: "System"
 
 ## Phone Navigation
 PHONE_ARRIVED_AT_FACILITY: "You have arrived at {0}. {1}."
+PHONE_STARTING_NAVIGATION_TO_FACILITY: "Starting navigation to {0}."

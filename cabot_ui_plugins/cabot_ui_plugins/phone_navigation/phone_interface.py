@@ -36,6 +36,22 @@ class PhoneInterface:
     def __init__(self, node):
         self.node = node
 
+    def start_navigation(self, to_id):
+        target_facility = None
+        facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
+        for facility in facilities:
+            for entrance in facility.entrances:
+                if entrance.node._id == to_id:
+                    target_facility = facility
+                    break
+        if not target_facility:
+            self.node.get_logger().warn(f"Could not find facility for to_id {to_id}")
+            return
+
+        name = target_facility.name_pron if target_facility.name_pron else target_facility.name
+        text = i18n.localized_string("PHONE_STARTING_NAVIGATION_TO_FACILITY", name)
+        self.speak(text, force=True, priority=SpeechPriority.REQUIRED)
+
     def have_completed(self, to_id):
         target_facility = None
         facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)

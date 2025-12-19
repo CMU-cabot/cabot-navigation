@@ -92,6 +92,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         self._loop_handle = None
         self.lock = threading.Lock()
+        self._delayed_navigate_timer = None
 
         self._global_map_name = node.declare_parameter("global_map_name", "map_global").value
         self.visualizer.global_map_name = self._global_map_name
@@ -326,8 +327,19 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
                 self._logger.info(F"Check Facilities {end - start:.3f}.sec")
         threading.Thread(target=check_facilities_task).start()
 
-        # navigate from the first path
-        self._navigate_next_sub_goal()
+        self.interface.start_navigation(to_id)
+
+        # navigate from the first path with a non-blocking delay
+        if self._delayed_navigate_timer:
+            self._delayed_navigate_timer.cancel()
+            self._delayed_navigate_timer = None
+
+        def delayed_start():
+            self._delayed_navigate_timer = None
+            self._navigate_next_sub_goal()
+
+        self._delayed_navigate_timer = threading.Timer(3.0, delayed_start)
+        self._delayed_navigate_timer.start()
 
     # wrap execution by a queue
     def retry_navigation(self):
