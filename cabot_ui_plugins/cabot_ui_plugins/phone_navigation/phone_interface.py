@@ -38,7 +38,7 @@ class PhoneInterface:
         self.node = node
         self._speak_client = ActionClient(self.node, cabot_msgs.action.Speak, "/speak")
 
-    def start_navigation(self, to_id):
+    def start_navigation(self, to_id, callback=None):
         target_facility = None
         facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
         for facility in facilities:
@@ -52,7 +52,7 @@ class PhoneInterface:
 
         name = target_facility.name_pron if target_facility.name_pron else target_facility.name
         text = i18n.localized_string("PHONE_STARTING_NAVIGATION_TO_FACILITY", name)
-        self.speak(text, force=True, priority=SpeechPriority.REQUIRED)
+        self.speak(text, force=True, priority=SpeechPriority.REQUIRED, callback=callback)
 
     def have_completed(self, to_id):
         target_facility = None
@@ -71,7 +71,7 @@ class PhoneInterface:
         text = i18n.localized_string("PHONE_ARRIVED_AT_FACILITY", name, description)
         self.speak(text, force=True, priority=SpeechPriority.REQUIRED)
 
-    def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL):
+    def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL, callback=None):
         if text is None:
             return
 
@@ -97,17 +97,36 @@ class PhoneInterface:
             goal.timeout = 2.0
             goal.channels = cabot_msgs.action.Speak.Goal.CHANNEL_BOTH
             future = self._speak_client.send_goal_async(goal)
-            future.add_done_callback(self._handle_speak_goal)
+            future.add_done_callback(lambda future: self._handle_speak_goal(future, callback))
             self.node.get_logger().info("speak goal sent")
         except:  # noqa: E722
             self.node.get_logger().error(traceback.format_exc())
 
-    def _handle_speak_goal(self, future):
+    def _handle_speak_goal(self, future, callback):
         if future.cancelled():
             self.node.get_logger().error("Speak goal sending cancelled")
+            if callback is not None:
+                callback(None)
             return
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.node.get_logger().error("Speak goal rejected")
+            if callback is not None:
+                callback(None)
             return
         self.node.get_logger().info("Speak goal accepted")
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(lambda future: self._handle_speak_result(future, callback))
+
+    def _handle_speak_result(self, future, callback):
+        if future.cancelled():
+            self.node.get_logger().error("Speak result cancelled")
+            if callback is not None:
+                callback(None)
+            return
+        result = future.result().result
+        self.node.get_logger().info(
+            f"Speak result: success={result.success} message='{result.message}'"
+        )
+        if callback is not None:
+            callback(result)
