@@ -20,7 +20,8 @@
 
 from cabot_ui import geojson
 from cabot_ui import i18n
-import cabot_msgs.srv
+import cabot_msgs.action
+from rclpy.action import ActionClient
 import traceback
 
 
@@ -35,6 +36,7 @@ class SpeechPriority:
 class PhoneInterface:
     def __init__(self, node):
         self.node = node
+        self._speak_client = ActionClient(self.node, cabot_msgs.action.Speak, "/speak")
 
     def start_navigation(self, to_id):
         target_facility = None
@@ -77,24 +79,35 @@ class PhoneInterface:
         voice = 'male'
         rate = 50
 
-        speak_proxy = self.node.create_client(cabot_msgs.srv.Speak, '/speak')
         try:
-            if not speak_proxy.wait_for_service(timeout_sec=1):
-                self.node.get_logger().error("Speak service not available")
+            if not self._speak_client.wait_for_server(timeout_sec=1):
+                self.node.get_logger().error("Speak action server not available")
                 return
             self.node.get_logger().info(F"try to speak {text} (v={voice}, r={rate}, p={pitch}, priority={priority}) {force}")
-            request = cabot_msgs.srv.Speak.Request()
-            request.text = text
-            request.rate = rate
-            request.pitch = pitch
-            request.volume = volume
-            request.lang = i18n._lang
-            request.voice = voice
-            request.force = force
-            request.priority = priority
-            request.timeout = 2.0
-            request.channels = cabot_msgs.srv.Speak.Request.CHANNEL_BOTH
-            speak_proxy.call_async(request)
-            self.node.get_logger().info("speak requested")
+            goal = cabot_msgs.action.Speak.Goal()
+            goal.request_id = ""
+            goal.text = text
+            goal.rate = rate
+            goal.pitch = pitch
+            goal.volume = volume
+            goal.lang = i18n._lang
+            goal.voice = voice
+            goal.force = force
+            goal.priority = priority
+            goal.timeout = 2.0
+            goal.channels = cabot_msgs.action.Speak.Goal.CHANNEL_BOTH
+            future = self._speak_client.send_goal_async(goal)
+            future.add_done_callback(self._handle_speak_goal)
+            self.node.get_logger().info("speak goal sent")
         except:  # noqa: E722
             self.node.get_logger().error(traceback.format_exc())
+
+    def _handle_speak_goal(self, future):
+        if future.cancelled():
+            self.node.get_logger().error("Speak goal sending cancelled")
+            return
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.node.get_logger().error("Speak goal rejected")
+            return
+        self.node.get_logger().info("Speak goal accepted")

@@ -128,6 +128,9 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         if event.subtype == "phone":
             self.set_destination(event.param)
             return True
+        if event.subtype == "phone_cancel":
+            self.cancel_navigation()
+            return True
         if event.subtype == "phone_completed":
             def callback():
                 self._logger.info("cancel_navigation callback called")
