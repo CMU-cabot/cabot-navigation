@@ -38,7 +38,7 @@ class PhoneInterface:
         self.node = node
         self._speak_client = ActionClient(self.node, cabot_msgs.action.Speak, "/speak")
 
-    def start_navigation(self, to_id, callback=None):
+    def start_navigation(self, to_id, route_overview=None, callback=None):
         target_facility = None
         facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
         for facility in facilities:
@@ -52,7 +52,12 @@ class PhoneInterface:
 
         name = target_facility.name_pron if target_facility.name_pron else target_facility.name
         text = i18n.localized_string("PHONE_STARTING_NAVIGATION_TO_FACILITY", name)
-        self.speak(text, force=True, priority=SpeechPriority.REQUIRED, callback=callback)
+        if route_overview:
+            def after_start(_result):
+                self.speak(route_overview, force=True, priority=SpeechPriority.REQUIRED, callback=callback)
+            self.speak(text, force=True, priority=SpeechPriority.REQUIRED, callback=after_start)
+        else:
+            self.speak(text, force=True, priority=SpeechPriority.REQUIRED, callback=callback)
 
     def have_completed(self, to_id):
         target_facility = None

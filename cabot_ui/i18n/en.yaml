@@ -138,3 +138,7 @@ SYSTEM: "System"
 ## Phone Navigation
 PHONE_ARRIVED_AT_FACILITY: "You have arrived at {0}. {1}."
 PHONE_STARTING_NAVIGATION_TO_FACILITY: "Starting navigation to {0}."
+PHONE_ROUTE_OVERVIEW_PREFIX: "To reach your destination, {0}."
+PHONE_ROUTE_OVERVIEW_STRAIGHT: "go straight for {0} meters"
+PHONE_ROUTE_OVERVIEW_TURN_AND_STRAIGHT: "turn {0} {1} degrees and go straight for {2} meters"
+PHONE_ROUTE_OVERVIEW_JOINER: ", then "

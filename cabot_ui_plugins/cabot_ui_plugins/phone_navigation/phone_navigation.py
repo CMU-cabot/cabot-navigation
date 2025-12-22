@@ -38,7 +38,7 @@ import std_msgs.msg
 import tf_transformations
 
 # Other
-from cabot_ui import geojson, geoutil
+from cabot_ui import geojson, geoutil, i18n
 from cabot_common import util
 import cabot_ui.navgoal as navgoal
 from cabot_ui.event import NavigationEvent
@@ -61,6 +61,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     NS = ["/phone"]
     TURN_NEARBY_THRESHOLD = 2
+    ROUTE_OVERVIEW_LINE_TOLERANCE = 0.4
+    ROUTE_OVERVIEW_POINT_EPS = 0.01
+    ROUTE_OVERVIEW_TURN_THRESHOLD_DEG = 15
+    ROUTE_OVERVIEW_ANGLE_ROUND_DEG = 5
+    ROUTE_OVERVIEW_MIN_DISTANCE = 1.0
 
     def __init__(self, node_manager: NodeManager):
         node = node_manager.get_node("phone")
@@ -258,6 +263,147 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         if self.destination:
             self.set_destination(self.destination)
 
+    def _route_point_from_node(self, node):
+        if node is None:
+            return None
+        if node.local_geometry is not None:
+            return node.local_geometry
+        if self._anchor is not None and node.geometry is not None:
+            try:
+                return geoutil.global2local(node.geometry, self._anchor)
+            except:  # noqa: E722
+                self._logger.debug("failed to convert node geometry to local")
+        return None
+
+    def _append_route_point(self, points, point):
+        if point is None:
+            return
+        if points and points[-1].distance_to(point) < self.ROUTE_OVERVIEW_POINT_EPS:
+            return
+        points.append(point)
+
+    def _extract_route_points(self, groute):
+        points = []
+        for item in groute:
+            if isinstance(item, geojson.RouteLink):
+                if not points:
+                    self._append_route_point(points, self._route_point_from_node(item.source_node))
+                self._append_route_point(points, self._route_point_from_node(item.target_node))
+            elif isinstance(item, geojson.Node):
+                self._append_route_point(points, self._route_point_from_node(item))
+        return points
+
+    def _segment_length(self, points, start_idx, end_idx):
+        length = 0.0
+        for i in range(start_idx, end_idx):
+            length += points[i].distance_to(points[i + 1])
+        return length
+
+    def _segment_angle(self, start_point, end_point):
+        return math.atan2(end_point.y - start_point.y, end_point.x - start_point.x)
+
+    def _split_route_points(self, points):
+        segments = []
+        start_idx = 0
+        last_index = len(points) - 1
+        while start_idx < last_index:
+            last_valid_end = start_idx + 1
+            candidate_end = last_valid_end
+            while candidate_end <= last_index:
+                if points[start_idx].distance_to(points[candidate_end]) < self.ROUTE_OVERVIEW_POINT_EPS:
+                    candidate_end += 1
+                    continue
+                line = geoutil.Line(start=points[start_idx], end=points[candidate_end])
+                max_dist = 0.0
+                for i in range(start_idx + 1, candidate_end):
+                    dist = line.distance_to(points[i])
+                    if dist > max_dist:
+                        max_dist = dist
+                        if max_dist > self.ROUTE_OVERVIEW_LINE_TOLERANCE:
+                            break
+                if max_dist <= self.ROUTE_OVERVIEW_LINE_TOLERANCE:
+                    last_valid_end = candidate_end
+                    candidate_end += 1
+                else:
+                    break
+            segments.append((start_idx, last_valid_end))
+            start_idx = last_valid_end
+        return segments
+
+    def _merge_small_turns(self, segments):
+        if not segments:
+            return []
+        merged = [segments[0]]
+        for seg in segments[1:]:
+            prev = merged[-1]
+            angle_diff = geoutil.normalize_angle(seg["angle"] - prev["angle"])
+            if abs(math.degrees(angle_diff)) < self.ROUTE_OVERVIEW_TURN_THRESHOLD_DEG:
+                prev["end_idx"] = seg["end_idx"]
+                prev["end"] = seg["end"]
+                prev["length"] += seg["length"]
+                prev["angle"] = self._segment_angle(prev["start"], prev["end"])
+            else:
+                merged.append(seg)
+        return merged
+
+    def _format_distance(self, distance_m):
+        rounded = int(round(distance_m))
+        if rounded == 0 and distance_m > 0:
+            return 1
+        return rounded
+
+    def _format_angle(self, angle_rad):
+        angle_deg = abs(math.degrees(angle_rad))
+        rounded = int(round(angle_deg / self.ROUTE_OVERVIEW_ANGLE_ROUND_DEG) * self.ROUTE_OVERVIEW_ANGLE_ROUND_DEG)
+        if rounded == 0:
+            rounded = self.ROUTE_OVERVIEW_ANGLE_ROUND_DEG
+        return rounded
+
+    def _build_route_overview(self, groute):
+        if not groute:
+            return None
+        points = self._extract_route_points(groute)
+        if len(points) < 2:
+            return None
+
+        segments = []
+        for start_idx, end_idx in self._split_route_points(points):
+            segment = {
+                "start_idx": start_idx,
+                "end_idx": end_idx,
+                "start": points[start_idx],
+                "end": points[end_idx],
+                "length": self._segment_length(points, start_idx, end_idx),
+                "angle": self._segment_angle(points[start_idx], points[end_idx]),
+            }
+            segments.append(segment)
+
+        segments = self._merge_small_turns(segments)
+        if not segments:
+            return None
+        total_length = sum(seg["length"] for seg in segments)
+        if total_length < self.ROUTE_OVERVIEW_MIN_DISTANCE:
+            return None
+
+        steps = []
+        steps.append(i18n.localized_string(
+            "PHONE_ROUTE_OVERVIEW_STRAIGHT",
+            self._format_distance(segments[0]["length"])
+        ))
+        for i in range(1, len(segments)):
+            prev = segments[i - 1]
+            seg = segments[i]
+            angle_diff = geoutil.normalize_angle(seg["angle"] - prev["angle"])
+            direction_key = "LEFT" if angle_diff > 0 else "RIGHT"
+            steps.append(i18n.localized_string(
+                "PHONE_ROUTE_OVERVIEW_TURN_AND_STRAIGHT",
+                i18n.localized_string(direction_key),
+                self._format_angle(angle_diff),
+                self._format_distance(seg["length"])
+            ))
+        joiner = i18n.localized_string("PHONE_ROUTE_OVERVIEW_JOINER")
+        return i18n.localized_string("PHONE_ROUTE_OVERVIEW_PREFIX", joiner.join(steps))
+
     def _set_destination(self, destination):
         """
         memo: current logic is not beautiful.
@@ -290,6 +436,10 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor, separate_route=False)
+
+        self._logger.info(F"{groute=}")
+        route_overview = self._build_route_overview(groute)
+        self._logger.info(F"route overview: {route_overview}")
         self._goal_index = -1
         self.to_id = to_id
 
@@ -333,7 +483,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self._logger.info("start navigation after speak")
             self._navigate_next_sub_goal()
 
-        self.interface.start_navigation(to_id, callback=after_speak)
+        self.interface.start_navigation(to_id, route_overview=route_overview, callback=after_speak)
 
     # wrap execution by a queue
     def retry_navigation(self):
