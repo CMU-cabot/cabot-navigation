@@ -51,7 +51,7 @@ from cabot_ui.process_queue import ProcessQueue
 from cabot_ui.status import State, StatusManager
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
-from .phone_interface import PhoneInterface
+from .phone_interface import PhoneInterface, SpeechPriority
 
 
 class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
@@ -133,6 +133,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self.set_destination(event.param)
             return True
         if event.subtype == "phone_cancel":
+            self.interface.speak(
+                i18n.localized_string("PHONE_CANCEL_NAVIGATION"),
+                force=True,
+                priority=SpeechPriority.REQUIRED,
+            )
             self.cancel_navigation()
             return True
         if event.subtype == "phone_completed":

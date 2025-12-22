@@ -136,6 +136,7 @@ SYSTEM: "システム"
 
 
 ## Phone Navigation
+PHONE_CANCEL_NAVIGATION: "ナビゲーションを途中終了します"
 PHONE_ARRIVED_AT_FACILITY: "{0}に到着しました。{1}"
 PHONE_STARTING_NAVIGATION_TO_FACILITY: "{0}への案内を開始します。"
 PHONE_ROUTE_OVERVIEW_PREFIX: "ゴールまでは{0}します。"

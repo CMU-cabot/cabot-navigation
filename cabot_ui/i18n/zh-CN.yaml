@@ -132,3 +132,6 @@ ARRIVE_DESTINATON: "Arrive Destination"
 TAKE_ELEVATOR: "Taking Elevator"
 EXIT_ELEVATOR: "Exit Elevator"
 SYSTEM: "System"
+
+## Phone Navigation
+PHONE_CANCEL_NAVIGATION: "提前结束导航。"

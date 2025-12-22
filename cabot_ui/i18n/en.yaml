@@ -136,6 +136,7 @@ SYSTEM: "System"
 
 
 ## Phone Navigation
+PHONE_CANCEL_NAVIGATION: "Ending navigation early."
 PHONE_ARRIVED_AT_FACILITY: "You have arrived at {0}. {1}."
 PHONE_STARTING_NAVIGATION_TO_FACILITY: "Starting navigation to {0}."
 PHONE_ROUTE_OVERVIEW_PREFIX: "To reach your destination, {0}."
