@@ -112,7 +112,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
                 self._clients[f"/{action}"] = ActionClient(act_node, PhoneNavigation.ACTIONS[action], name, callback_group=self._main_callback_group)
 
         self._spin_client = ActionClient(act_node, nav2_msgs.action.Spin, "/phone/spin", callback_group=self._main_callback_group)
-        self._stop_user_action_client = ActionClient(act_node, nav2_msgs.action.Wait, "/phone/stop_user_action", callback_group=self._main_callback_group)
+        self._user_action_client = ActionClient(act_node, nav2_msgs.action.DummyBehavior, "/phone/user_action", callback_group=self._main_callback_group)
 
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         path_output = node.declare_parameter("path_topic", "/path").value
@@ -143,7 +143,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         if event.subtype == "phone_completed":
             def callback():
                 self._logger.info("cancel_navigation callback called")
-                self._send_stop_user_action()
+                self._send_user_action("arrived")
                 self._sub_goals = []
                 self._navigate_next_sub_goal()
 
@@ -597,6 +597,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         self.delegate.have_completed()
         # notify external nodes about arrival
         self.delegate.activity_log("cabot/phone", "completed")
+        self._send_user_action("completed")
 
     def _navigate_sub_goal(self, goal):
         self._logger.info(F"phone.{util.callee_name()} called")
@@ -626,15 +627,18 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self._logger.error(traceback.format_exc())
         self._start_loop()
 
-    def _send_stop_user_action(self):
-        self._logger.info("send stop_user_action")
-        if not self._stop_user_action_client.wait_for_server(timeout_sec=1.0):
-            self._logger.warning("stop_user_action action server not available")
-            return
-
-        goal = nav2_msgs.action.Wait.Goal()
-        goal.time = rclpy.duration.Duration(seconds=0.5).to_msg()
-        self._stop_user_action_client.send_goal_async(goal)
+    def _send_user_action(self, command):
+        try:
+            self._logger.info(F"send user_action {command}")
+            if not self._user_action_client.wait_for_server(timeout_sec=1.0):
+                self._logger.warning("user_action action server not available")
+                return
+            goal = nav2_msgs.action.DummyBehavior.Goal()
+            goal.command = std_msgs.msg.String()
+            goal.command.data = command
+            self._user_action_client.send_goal_async(goal)
+        except:
+            self._logger.error(traceback.format_exc())
 
     # GoalInterface
 
