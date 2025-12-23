@@ -366,8 +366,11 @@ class UserInterface(object):
             self._activity_log("cabot/turn_type", "Type.Avoiding")
         self.last_notify_turn[device] = self._node.get_clock().now()
         if device == "directional_indicator" and turn.end is not None:
+            ros_pose = geoutil.Pose.from_pose_msg(self.last_pose['ros_pose'])
+            end_pose = geoutil.Pose.from_pose_msg(turn.end.pose)
             angle_diff = geoutil.diff_angle(self.last_pose['ros_pose'].orientation, turn.end.pose.orientation)
             msgs[1].data = geoutil.normalize_angle(angle_diff)
+            CaBotRclpyUtil.info(F"directional_indicator: {ros_pose} to {end_pose} angle_diff={angle_diff} normalized={msgs[1].data}")
             self.turn_angle_pub.publish(msgs[1])
         elif device == "vibrator":
             self._activity_log("cabot/interface", "turn angle", str(turn.angle))

@@ -73,7 +73,12 @@ class Turn:
         self.passed_vibrator = False
 
     def __str__(self):
-        return F"<Turn at ({self.start.x}, {self.start.y}), {self.angle}, type({self.turn_type})>"
+        pose = geoutil.Pose(pose_msg=self.pose)
+        if self.end is None:
+            return F"<Turn at ({self.start.x:.2f}, {self.start.y:.2f})@({pose.r:.3f}), {self.angle:.3f}, type({self.turn_type})>"
+        else:
+            end_pose = geoutil.Pose(pose_msg=self.end)
+            return F"<Turn at ({self.start.x:.2f}, {self.start.y:.2f})@({pose.r:.3f}) - ({end_pose.x:.2f}, {end_pose.y:.2f})@({end_pose.r:.3f}) , {self.angle:.3f}, type({self.turn_type})>"
 
     def __repr__(self):
         return self.__str__()
@@ -88,7 +93,7 @@ class Turn:
             pose_TR = geoutil.Pose.pose_from_points(pose, other)
             yaw = geoutil.diff_angle(pose.orientation, pose_TR.orientation)
             adjusted = dist_TR * math.cos(yaw)
-            CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
+            CaBotRclpyUtil.info(f"dist_TR={dist_TR:.2f}, yaw={yaw:.3f}, adjusted={adjusted:.2f}, {pose=}, {pose_TR=}")
             return adjusted
 
 
@@ -187,6 +192,7 @@ class TurnDetector:
                         Angles.append(-RightTurn * diff)
                         # Angles.append(-RightTurn * math.pi / 7)
                         Types.append(Turn.Type.Avoiding)
+                        t_i += 1
                 else:
                     if TurnEnds[t_i] < TurnStarts[t_i]:
                         TurnEnds[t_i], TurnStarts[t_i] = TurnStarts[t_i], TurnEnds[t_i]
@@ -195,11 +201,11 @@ class TurnDetector:
                     t_i += 1
                 i = k
 
-        CaBotRclpyUtil.debug("*******")
-        CaBotRclpyUtil.debug(f"{TurnStarts}")
-        CaBotRclpyUtil.debug(f"{TurnEnds}")
-        CaBotRclpyUtil.debug(f"{Angles}")
-        CaBotRclpyUtil.debug(f"{Types}")
+        CaBotRclpyUtil.info("*******")
+        CaBotRclpyUtil.info(f"{TurnStarts}")
+        CaBotRclpyUtil.info(f"{TurnEnds}")
+        CaBotRclpyUtil.info(f"{Angles}")
+        CaBotRclpyUtil.info(f"{Types}")
 
         turns = []
         for i, j, angle, turn_type in zip(TurnStarts, TurnEnds, Angles, Types):
@@ -210,7 +216,7 @@ class TurnDetector:
             turns.append(Turn(sp, math.degrees(angle), turn_type, ep))
 
         for turn in turns:
-            CaBotRclpyUtil.debug(turn.text)
+            CaBotRclpyUtil.info(turn.text)
 
         if visualize:
             TurnDetector._visualize(yaw, x, y, TurnStarts, TurnEnds, yawRaw, yaw, dyaw, dyaw2)
