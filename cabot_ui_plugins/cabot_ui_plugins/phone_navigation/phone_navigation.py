@@ -260,9 +260,13 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
     # wrap execution by a queue
     def set_destination(self, destination):
+        leaving = False
+        if destination and destination.endswith(":leaving"):
+            leaving = True
+            destination = destination[:-len(":leaving")]
         self.destination = destination
         self._status_manager.set_state(State.in_action)
-        self._process_queue.add(self._set_destination, destination)
+        self._process_queue.add(self._set_destination, destination, leaving)
 
     def reset_destination(self):
         if self.destination:
@@ -409,7 +413,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         joiner = i18n.localized_string("PHONE_ROUTE_OVERVIEW_JOINER")
         return i18n.localized_string("PHONE_ROUTE_OVERVIEW_PREFIX", joiner.join(steps))
 
-    def _set_destination(self, destination):
+    def _set_destination(self, destination, leaving=False):
         """
         memo: current logic is not beautiful.
         1. get a NavCog route from the server
@@ -433,7 +437,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
         # specify last orientation
         if destination.find("@") > -1:
-            (to_id, yaw_str) = destination.split("@")
+            (to_id, yaw_str) = destination.rsplit("@", 1)
             yaw = float(yaw_str)
             groute = self._datautil.get_route(from_id, to_id)
             self._sub_goals = navgoal.make_goals(self, groute, self._anchor, yaw=yaw, separate_route=False)
@@ -488,7 +492,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self._logger.info("start navigation after speak")
             self._navigate_next_sub_goal()
 
-        self.interface.start_navigation(to_id, route_overview=route_overview, callback=after_speak)
+        self.interface.start_navigation(to_id, route_overview=route_overview, leaving=leaving, callback=after_speak)
 
     # wrap execution by a queue
     def retry_navigation(self):
