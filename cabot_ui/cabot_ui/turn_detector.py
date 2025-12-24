@@ -92,7 +92,7 @@ class Turn:
             dist_TR = other.distance_to(pose)
             pose_TR = geoutil.Pose.pose_from_points(pose, other)
             yaw = geoutil.diff_angle(pose.orientation, pose_TR.orientation)
-            adjusted = dist_TR * math.cos(yaw)
+            adjusted = dist_TR * abs(math.cos(yaw))
             CaBotRclpyUtil.info(f"dist_TR={dist_TR:.2f}, yaw={yaw:.3f}, adjusted={adjusted:.2f}, {pose=}, {pose_TR=}")
             return adjusted
 
