@@ -150,7 +150,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self.cancel_navigation(callback=callback)
             return True
         if event.subtype == "arrived":  # suitcase arrival
-            self._send_user_action("completed")  # notify completion to app
+            self._send_user_action("suitcase_completed")  # notify completion to app
             return False   # do no catch
 
     def _start_loop(self):
