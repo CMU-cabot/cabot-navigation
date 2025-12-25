@@ -440,11 +440,11 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             (to_id, yaw_str) = destination.rsplit("@", 1)
             yaw = float(yaw_str)
             groute = self._datautil.get_route(from_id, to_id)
-            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, yaw=yaw, separate_route=False)
+            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, yaw=yaw, separate_route=False, keep_first=True)
         else:
             to_id = destination
             groute = self._datautil.get_route(from_id, to_id)
-            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, separate_route=False)
+            self._sub_goals = navgoal.make_goals(self, groute, self._anchor, separate_route=False, keep_first=True)
 
         self._logger.info(F"{groute=}")
         route_overview = self._build_route_overview(groute)
@@ -489,6 +489,9 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         threading.Thread(target=check_facilities_task).start()
 
         def after_speak(_result):
+            if self._status_manager.state != State.in_action or self._sub_goals is None:
+                self._logger.info("navigation canceled during speak; skipping start")
+                return
             self._logger.info("start navigation after speak")
             self._navigate_next_sub_goal()
 
@@ -760,7 +763,7 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
         if (clockwise < 0 and diff < - math.pi / 4) or \
            (clockwise > 0 and diff > + math.pi / 4):
             diff = diff - clockwise * math.pi * 2
-        turn_yaw = diff - (diff / abs(diff) * 0.05)
+        turn_yaw = diff
         goal.target_yaw = turn_yaw
 
         msg = std_msgs.msg.Float32()
@@ -786,15 +789,21 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
             self._logger.info(F"_turn_towards_sent_goal done_callback: {future.result().status=}, {self.turn_towards_last_diff=}")
             if future.result().status == GoalStatus.STATUS_CANCELED:
                 return
-            diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
-            if self.turn_towards_last_diff and abs(self.turn_towards_last_diff - diff) < 0.1:
-                self.turn_towards_count += 1
+            timer_holder = {}
 
-            if abs(diff) > 0.05 and self.turn_towards_count < 10:
-                self._logger.info(F"send turn {diff:.2f}")
-                self.turn_towards_last_diff = diff
-                self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
-            else:
-                self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
-                callback(True)
+            def delayed_check():
+                timer_holder["timer"].cancel()
+                diff = geoutil.diff_angle(self.current_pose.orientation, orientation)
+                if self.turn_towards_last_diff and abs(self.turn_towards_last_diff - diff) < 0.1:
+                    self.turn_towards_count += 1
+
+                if abs(diff) > 0.1 and self.turn_towards_count < 10:
+                    self._logger.info(F"send turn {diff:.2f}")
+                    self.turn_towards_last_diff = diff
+                    self._turn_towards(orientation, gh_callback, callback, clockwise, time_limit)
+                else:
+                    self._logger.info(F"turn completed {diff=}, {self.turn_towards_count=}")
+                    callback(True)
+
+            timer_holder["timer"] = self._node.create_timer(0.5, delayed_check, callback_group=self._main_callback_group)
         get_result_future.add_done_callback(done_callback)

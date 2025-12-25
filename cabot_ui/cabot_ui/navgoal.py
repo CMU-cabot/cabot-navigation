@@ -133,6 +133,7 @@ def make_goals(delegate, groute, anchor, yaw=None, **kwargs):
     index = 1
     is_first = True
     is_last = False
+    keep_first = kwargs.pop('keep_first', False)
 
     while index < len(groute):
         link_or_node = groute[index]
@@ -144,7 +145,7 @@ def make_goals(delegate, groute, anchor, yaw=None, **kwargs):
         # if the link is a leaf of the graph and short
         link = link_or_node
         CaBotRclpyUtil.info(F"processing link {link._id} length={link.length} is_temp={link.is_temp}, is_first={is_first}")
-        if is_first and link.is_temp and link.length < 3.0:
+        if not keep_first and is_first and link.is_temp and link.length < 3.0:
             continue
         if link.target_node.is_leaf and link.length < 3.0:
             continue
