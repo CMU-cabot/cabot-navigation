@@ -70,6 +70,9 @@ class PhoneInterface:
         else:
             self.speak(text, force=True, priority=SpeechPriority.REQUIRED, callback=callback)
 
+    def start_navigation_suitcase(self, to_id, callback=None):
+        self.start_navigation(to_id, route_overview=None, leaving=False, callback=callback)
+
     def have_completed(self, to_id):
         target_facility = None
         facilities = geojson.Object.get_objects_by_exact_type(geojson.Facility)
@@ -86,6 +89,9 @@ class PhoneInterface:
         description = target_facility.description if target_facility.description else ""
         text = i18n.localized_string("PHONE_ARRIVED_AT_FACILITY", name, description)
         self.speak(text, force=True, priority=SpeechPriority.REQUIRED)
+
+    def have_completed_suitcase(self, to_id):
+        self.have_completed(to_id)
 
     def speak(self, text, force=False, pitch=50, volume=50, rate=50, priority=SpeechPriority.NORMAL, callback=None):
         if text is None:

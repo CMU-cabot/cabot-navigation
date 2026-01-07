@@ -149,8 +149,18 @@ class PhoneNavigation(ControlBase, GoalInterface, NavigationPlugin):
 
             self.cancel_navigation(callback=callback)
             return True
+        if event.subtype == "destination":
+            destination = event.param
+            if destination.find("@") > -1:
+                (to_id, yaw_str) = destination.rsplit("@", 1)
+            else:
+                to_id = destination
+            self.to_id = to_id
+            self.interface.start_navigation_suitcase(self.to_id)
+            return False   # do no catch
         if event.subtype == "arrived":  # suitcase arrival
             self._send_user_action("suitcase_completed")  # notify completion to app
+            self.interface.have_completed_suitcase(self.to_id)
             return False   # do no catch
 
     def _start_loop(self):
