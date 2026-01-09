@@ -167,6 +167,7 @@ public:
     }
 
     auto [duration, code] = reasoner_->update();
+    RCLCPP_DEBUG(this->get_logger(), "StopReasonsNode timer_callback duration=%.2f, code=%s", duration, cabot_ui::StopReasonUtil::toStr(code).c_str());
     stop_reason_filter_->update(duration, code);
     std::tie(duration, code) = stop_reason_filter_->event();
     if (code != cabot_ui::StopReason::NONE) {

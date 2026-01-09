@@ -270,6 +270,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.speed_limit_pub = node.create_publisher(std_msgs.msg.Float32, map_speed_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.green_start_time = None
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -972,6 +973,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_approached(current_pose):
                 self._logger.info(F"approached {poi._id}")
                 self.delegate.approached_to_poi(poi=poi)
+            elif poi.is_on_poi(current_pose):
+                self._logger.info(F"on {poi._id}")
+                self.delegate.on_poi(poi=poi)
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)
@@ -1039,17 +1043,20 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         goal_dist = 999
         expected_time = 999
         user_speed = self.delegate.user_speed()
-        if self._current_goal.current_target():
-            current_target = self._current_goal.current_target().pose.position
-            dx = current_target.x - current_pose.x
-            dy = current_target.y - current_pose.y
-            goal_dist = math.sqrt(dx * dx + dy * dy)
-            margin = 3.0
-            rate = 0.9
-            expected_time = goal_dist / user_speed / rate + margin
+        # if self._current_goal.current_target():
+        #     current_target = self._current_goal.current_target().pose.position
+        #     dx = current_target.x - current_pose.x
+        #     dy = current_target.y - current_pose.y
+        #     goal_dist = math.sqrt(dx * dx + dy * dy)
+        #     margin = 3.0
+        #     rate = 0.9
+        #     expected_time = goal_dist / user_speed / rate + margin
 
-        state = "None"
+        state = None
         remaining_time = -1.0
+        distance = 0.0
+        expected_time = 0.0
+        next_programmed_seconds = 0.0
         for poi in self.signal_pois:
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist >= 5.0:
@@ -1058,41 +1065,62 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 continue
             temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
 
+            distances = poi.distances if poi.distances else [10.0]
+            distance = distances[0]
+            margin = 3.0
+            rate = 0.9
+            expected_time = distance / user_speed / rate + margin
+
             if poi.signal is None:
                 limit = temp_limit
-                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)")
-                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (no signal status)", throttle_duration_sec=1.0)
+                # self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "NO_SIGNAL_INFO"
+                self.green_start_time = None
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
-                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s")
-
-                if remaining_time < expected_time:
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s"
+                                  F" clock={self._node.get_clock().now()} self.green_start_time={self.green_start_time}", throttle_duration_sec=1.0)
+                state = "GREEN_SIGNAL"
+                if (remaining_time < expected_time and
+                        (self.green_start_time is None or
+                         self._node.get_clock().now() - self.green_start_time > rclpy.duration.Duration(seconds=3.0))):
                     limit = temp_limit
-                    self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)")
-                    self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                    self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)", throttle_duration_sec=1.0)
+                    # self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                     state = "GREEN_SIGNAL_SHORT"
+                    self.green_start_time = None
+                elif self.green_start_time is None:
+                    self.green_start_time = self._node.get_clock().now()
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
                 remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
-                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)")
-                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green_blinking)", throttle_duration_sec=1.0)
+                # self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "GREEN_SIGNAL_SHORT"
+                self.green_start_time = None
             elif poi.signal.state == geojson.Signal.RED:
                 remaining_time = poi.signal.remaining_seconds
+                next_programmed_seconds = poi.signal.next_programmed_seconds
                 limit = temp_limit
-                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)")
-                self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
+                self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)", throttle_duration_sec=1.0)
+                # self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "RED_SIGNAL"
+                self.green_start_time = None
 
         msg = std_msgs.msg.Float32()
         msg.data = limit
         self.speed_limit_pub.publish(msg)
-        msg = cabot_msgs.msg.SignalState()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.state = state
-        msg.remaining_time = float(remaining_time)
-        self.signal_state_pub.publish(msg)
+        if state:
+            msg = cabot_msgs.msg.SignalState()
+            msg.header.stamp = self._node.get_clock().now().to_msg()
+            msg.state = state
+            msg.remaining_time = float(math.floor(remaining_time))
+            msg.distance = float(round(distance))
+            msg.user_speed = float(user_speed)
+            msg.expected_time = float(expected_time)
+            msg.next_programmed_seconds = float(next_programmed_seconds)
+            self.signal_state_pub.publish(msg)
 
     def _check_turn(self, current_pose):
         # provide turn tactile notification

@@ -852,6 +852,9 @@ class POI(Facility, geoutil.TargetPlace):
     def approached_statement(self):
         return None
 
+    def on_poi_statement(self):
+        return None
+
     def passed_statement(self):
         return None
 
@@ -1126,13 +1129,16 @@ class SignalPOI(POI):
                 std_msgs.msg.String, "/signal_response_intersection_status", callback, 10)
         self.id = None
         self.group = None
+        self.distances = None
         hulop_content_json = json.loads(self.properties.hulop_content)
         if "id" in hulop_content_json:
             self.id = hulop_content_json["id"]
         if "group" in hulop_content_json:
             self.group = hulop_content_json["group"]
+        if "distances" in hulop_content_json:
+            self.distances = hulop_content_json["distances"]
 
-        CaBotRclpyUtil.info(f"SignalPOI id:{self.id}, group:{self.group}")
+        CaBotRclpyUtil.info(f"SignalPOI id:{self.id}, group:{self.group}, distances:{self.distances}")
 
     @property
     def signal(self):
@@ -1161,6 +1167,9 @@ class SignalPOI(POI):
             if 'group' in item and item['group'] == self.group:
                 signal = item
         return Signal.marshal(signal) if signal else None
+
+    def on_poi_statement(self):
+        return i18n.localized_string("GOING_INTO_CROSSING", int(self.signal.remaining_seconds + self.signal.next_programmed_seconds))
 
 
 class Landmark(Facility):
