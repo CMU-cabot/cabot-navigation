@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020, 2022  Carnegie Mellon University
+# Copyright (c) 2020, 2025  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
 import sys
 import signal
 import rclpy
@@ -33,149 +34,171 @@ from geometry_msgs.msg import Point
 import std_msgs.msg
 
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.plugin import NavcogMapPlugins
 from mf_localization_msgs.msg import MFLocalizeStatus
 from cabot_msgs.msg import Anchor
 
-data_ready = False
-navigate_menu = None
-raw_current_floor = 0
-meters_per_floor = 5
-current_floor = 0
-last_floor = None
-menu_handler = MenuHandler()
-server = None
-map_frame = "map_global"
-localize_status = MFLocalizeStatus.UNKNOWN
 
+class NavCogMap(Node):
+    def __init__(self):
+        super(NavCogMap, self).__init__('navcog_map')
+        CaBotRclpyUtil.initialize(self)
 
-def visualize_features(features, node_map):
-    if features is None:
-        node.get_logger().error("navcog_map: features is None")
-        return False
+        plugins = os.environ.get('CABOT_UI_PLUGINS', "navigation,feature,description,speaker").split(",")
+        self._plugins = NavcogMapPlugins(plugins, self)
 
-    qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-    vis_pub = node.create_publisher(MarkerArray, "links", qos)
+        qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.current_floor_sub = self.create_subscription(std_msgs.msg.Int64, "/current_floor", self.current_floor_callback, qos)
+        self.raw_current_floor = 0
+        self.current_floor = 0
+        self.meters_per_floor = 5
+        self.last_floor = None
 
-    array = MarkerArray()
+        transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.localize_status_sub = self.create_subscription(MFLocalizeStatus, "/localize_status", self.localize_status_callback, transient_local_qos)
+        self.localize_status = MFLocalizeStatus.UNKNOWN
 
-    marker = Marker()
-    marker.header.frame_id = map_frame
-    marker.header.stamp = node.get_clock().now().to_msg()
-    marker.ns = "links"
-    marker.id = 0
-    marker.type = Marker.LINE_LIST
-    marker.action = Marker.ADD
-    marker.pose.position.x = 0.0
-    marker.pose.position.y = 0.0
-    marker.pose.position.z = 0.0
-    marker.pose.orientation.x = 0.0
-    marker.pose.orientation.y = 0.0
-    marker.pose.orientation.z = 0.0
-    marker.pose.orientation.w = 1.0
-    marker.scale.x = 0.05
-    marker.color.a = 0.5
-    marker.color.r = 0.0
-    marker.color.g = 1.0
-    marker.color.b = 0.0
+        self.anchor_pub = self.create_publisher(Anchor, "/anchor", transient_local_qos)
 
-    for f in features:
-        if not isinstance(f, geojson.Link) or f.floor != current_floor:
-            continue
-        s = Point()
-        s.x = f.start_node.local_geometry.x
-        s.y = f.start_node.local_geometry.y
-        s.z = raw_current_floor*meters_per_floor + 0.1
-        e = Point()
-        e.x = f.end_node.local_geometry.x
-        e.y = f.end_node.local_geometry.y
-        e.z = raw_current_floor*meters_per_floor + 0.1
-        marker.points.append(s)
-        marker.points.append(e)
+        self.current_floor = self.declare_parameter("initial_floor", 0).value
+        self.map_frame = self.declare_parameter("map_frame", "map_global").value
 
-    array.markers.append(marker)
+        anchor = None
+        anchor_file = self.declare_parameter("anchor_file", "").value
+        self.get_logger().info(F"Anchor file is {anchor_file}")
+        anchor_tmp = geoutil.get_anchor(anchor_file=anchor_file)
+        if anchor_tmp is not None:
+            anchor = anchor_tmp
+            anchor_msg = Anchor()
+            anchor_msg.lat = float(anchor.lat)
+            anchor_msg.lng = float(anchor.lng)
+            anchor_msg.rotate = float(anchor.rotate)
+            self.anchor_pub.publish(anchor_msg)
+        else:
+            self.get_logger().info(F"Could not load anchor_file {anchor_file}")
 
-    for k, f in node_map.items():
-        if isinstance(f, geojson.Landmark):
-            continue
-        if f.floor != current_floor:
-            continue
+        self.datautil = datautil.DataUtil(self)
+        self.datautil.set_anchor(anchor)
+        self.datautil.init_by_server()
+        self.datautil.set_anchor(anchor)
+        self.data_ready = True
+        self.get_logger().info("data ready")
+        self.get_logger().info(F"initial floor = {self.current_floor}")
 
-        control = InteractiveMarkerControl()
-        control.interaction_mode = InteractiveMarkerControl.BUTTON
-        control.always_visible = True
+        self.server = InteractiveMarkerServer(self, "menu")
+        self.menu_handler = MenuHandler()
+        self._plugins.init_menu(self.menu_handler)
 
-        marker = InteractiveMarker()
-        marker.header.frame_id = map_frame
-        marker.name = k
-        marker.pose.position.x = f.local_geometry.x
-        marker.pose.position.y = f.local_geometry.y
-        marker.pose.position.z = raw_current_floor*meters_per_floor + 0.1
-        marker.scale = 1.0
+        self.timer = self.create_timer(1, self.check_update)
 
-        sphere = Marker()
-        sphere.type = Marker.SPHERE
-        sphere.scale.x = 0.2
-        sphere.scale.y = 0.2
-        sphere.scale.z = 0.2
-        sphere.color.a = 1.0
-        sphere.color.r = 0.0
-        sphere.color.g = 0.0
-        sphere.color.b = 1.0
+    def current_floor_callback(self, msg):
+        self.raw_current_floor = msg.data
+        self.current_floor = msg.data + 1 if msg.data >= 0 else msg.data
 
-        control.markers.append(sphere)
-        marker.controls.append(control)
-        server.insert(marker, feedback_callback=process_feedback)
-        menu_handler.apply(server, marker.name)
+    def localize_status_callback(self, msg):
+        self.localize_status = msg.status
 
-    vis_pub.publish(array)
-    # vis_pub.publish(array)
-    return True
+    def check_update(self):
+        if not self.data_ready:
+            self.get_logger().info("data is not ready")
+            return
+        if self.localize_status != MFLocalizeStatus.TRACKING:
+            self.get_logger().info("localization is not tracking")
+            return
+        if self.current_floor == self.last_floor:
+            self.get_logger().info("same floor")
+            return
+        self.server.clear()
+        if not self.visualize_features(self.datautil.features, self.datautil.node_map):
+            self.get_logger().info("fail to visualize features")
+            return
+        self.server.applyChanges()
+        self.last_floor = self.current_floor
 
+    def visualize_features(self, features, node_map):
+        if features is None:
+            self.get_logger().error("navcog_map: features is None")
+            return False
 
-def process_feedback(feedback):
-    CaBotRclpyUtil.info(F"{feedback}")
+        qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        vis_pub = self.create_publisher(MarkerArray, "links", qos)
 
+        array = MarkerArray()
 
-def menu_callback(feedback):
-    CaBotRclpyUtil.info(F"{feedback}")
-    msg = std_msgs.msg.String()
-    msg.data = "navigation;destination;"+feedback.marker_name
-    event_pub.publish(msg)
+        marker = Marker()
+        marker.header.frame_id = self.map_frame
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "links"
+        marker.id = 0
+        marker.type = Marker.LINE_LIST
+        marker.action = Marker.ADD
+        marker.pose.position.x = 0.0
+        marker.pose.position.y = 0.0
+        marker.pose.position.z = 0.0
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.05
+        marker.color.a = 0.5
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
 
+        for f in features:
+            if not isinstance(f, geojson.Link) or f.floor != self.current_floor:
+                continue
+            s = Point()
+            s.x = f.start_node.local_geometry.x
+            s.y = f.start_node.local_geometry.y
+            s.z = self.raw_current_floor * self.meters_per_floor + 0.1
+            e = Point()
+            e.x = f.end_node.local_geometry.x
+            e.y = f.end_node.local_geometry.y
+            e.z = self.raw_current_floor * self.meters_per_floor + 0.1
+            marker.points.append(s)
+            marker.points.append(e)
 
-def cf_callback(msg):
-    global current_floor, raw_current_floor
-    raw_current_floor = msg.data
-    current_floor = msg.data + 1 if msg.data >= 0 else msg.data
+        array.markers.append(marker)
 
+        for k, f in node_map.items():
+            if isinstance(f, geojson.Landmark):
+                continue
+            if f.floor != self.current_floor:
+                continue
 
-def ls_callback(msg):
-    global localize_status
-    localize_status = msg.status
+            control = InteractiveMarkerControl()
+            control.interaction_mode = InteractiveMarkerControl.BUTTON
+            control.always_visible = True
 
+            marker = InteractiveMarker()
+            marker.header.frame_id = self.map_frame
+            marker.name = k
+            marker.pose.position.x = f.local_geometry.x
+            marker.pose.position.y = f.local_geometry.y
+            marker.pose.position.z = self.raw_current_floor * self.meters_per_floor + 0.1
+            marker.scale = 1.0
 
-def check_update():
-    global last_floor
-    if not data_ready:
-        CaBotRclpyUtil.info("data is not ready")
-        return
-    if localize_status != MFLocalizeStatus.TRACKING:
-        CaBotRclpyUtil.info("localization is not tracking")
-        return
-    if current_floor == last_floor:
-        CaBotRclpyUtil.info("same floor")
-        return
-    if not visualize_features(du.features, du.node_map):
-        CaBotRclpyUtil.info("fail to visualize features")
-        return
-    server.applyChanges()
+            sphere = Marker()
+            sphere.type = Marker.SPHERE
+            sphere.scale.x = 0.2
+            sphere.scale.y = 0.2
+            sphere.scale.z = 0.2
+            sphere.color.a = 1.0
+            sphere.color.r = 0.0
+            sphere.color.g = 0.0
+            sphere.color.b = 1.0
 
-    last_floor = current_floor
+            control.markers.append(sphere)
+            marker.controls.append(control)
+            self.server.insert(marker, feedback_callback=self.process_feedback)
+            self.menu_handler.apply(self.server, marker.name)
 
+        vis_pub.publish(array)
+        return True
 
-def initMenu():
-    global navigate_menu
-    navigate_menu = menu_handler.insert("Navigate to Here", callback=menu_callback)
+    def process_feedback(self, feedback):
+        self.get_logger().info(F"{feedback}")
 
 
 def receiveSignal(signal_num, frame):
@@ -189,53 +212,5 @@ signal.signal(signal.SIGINT, receiveSignal)
 
 if __name__ == "__main__":
     rclpy.init()
-    node = Node("navcog_map")
-    CaBotRclpyUtil.initialize(node)
-
-    event_pub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 1)
-    qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-    cf_sub = node.create_subscription(std_msgs.msg.Int64, "/current_floor", cf_callback, qos)
-    transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-    ls_sub = node.create_subscription(MFLocalizeStatus, "/localize_status", ls_callback, transient_local_qos)
-    anchor_pub = node.create_publisher(Anchor, "/anchor", transient_local_qos)
-
-    node.declare_parameters(
-        namespace="",
-        parameters=[
-            ("initial_floor", 0),
-            ("map_frame", "map_global"),
-            ("anchor_file", ""),
-        ]
-    )
-    current_floor = node.get_parameter("initial_floor").value
-    map_frame = node.get_parameter("map_frame").value
-
-    anchor = None
-    anchor_file = node.get_parameter("anchor_file").value
-    node.get_logger().info(F"Anchor file is {anchor_file}")
-    anchor_tmp = geoutil.get_anchor(anchor_file=anchor_file)
-    if anchor_tmp is not None:
-        anchor = anchor_tmp
-        anchor_msg = Anchor()
-        anchor_msg.lat = float(anchor.lat)
-        anchor_msg.lng = float(anchor.lng)
-        anchor_msg.rotate = float(anchor.rotate)
-        anchor_pub.publish(anchor_msg)
-    else:
-        node.get_logger().info(F"Could not load anchor_file {anchor_file}")
-
-    du = datautil.DataUtil(node)
-    du.set_anchor(anchor)
-    du.init_by_server()
-    du.set_anchor(anchor)
-    data_ready = True
-    node.get_logger().info("data ready")
-    node.get_logger().info(F"initial floor = {current_floor}")
-
-    server = InteractiveMarkerServer(node, "menu")
-    initMenu()
-
-    def timer_callback():
-        check_update()
-    timer = node.create_timer(1, timer_callback)
+    node = NavCogMap()
     rclpy.spin(node)

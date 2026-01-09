@@ -95,6 +95,7 @@ StopReasoner::StopReasoner(const std::shared_ptr<rclcpp::Node> node)
   stopped_time_(0, 0, RCL_SYSTEM_TIME),
   prev_code_(StopReason::NONE),
   is_navigating_(false),
+  is_preparing_(true),
   is_waiting_for_elevator_(false),
   navigation_timeout_(0),
   last_log_(""),
@@ -135,6 +136,10 @@ void StopReasoner::input_odom(nav_msgs::msg::Odometry & msg)
   auto lx = msg.twist.twist.linear.x;
   auto ly = msg.twist.twist.linear.y;
   auto az = msg.twist.twist.angular.z;
+  RCLCPP_DEBUG(
+    logger_, "%.2f, odom linear=(%.2f, %.2f), angular=%.2f",
+    get_current_time().nanoseconds() / 1e9,
+    lx, ly, az);
   linear_velocity_.input(get_current_time(), std::abs(std::sqrt(lx * lx + ly * ly)));
   angular_velocity_.input(get_current_time(), std::abs(az));
 }
@@ -169,7 +174,7 @@ void StopReasoner::input_event(std_msgs::msg::String & msg)
 
 void StopReasoner::input_global_plan(nav_msgs::msg::Path & /* msg */)
 {
-  RCLCPP_INFO(logger_, "set_is_navigating(true)");
+  RCLCPP_DEBUG(logger_, "set_is_navigating(true)");
   set_is_navigating(true);
   navigation_timeout_ = get_current_time() + rclcpp::Duration(0, 500000000);
 }
@@ -243,10 +248,16 @@ void StopReasoner::input_current_frame(std_msgs::msg::String & msg)
   current_frame_ = msg.data;
 }
 
+void StopReasoner::input_signal_state(cabot_msgs::msg::SignalState & msg)
+{
+  signal_state_ = msg.state;
+}
+
 std::tuple<double, StopReason> StopReasoner::update()
 {
   if (is_navigating_ == false) {
     is_stopped_ = false;
+    is_preparing_ = true;
     stopped_time_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
     return std::make_tuple(0.0, StopReason::NO_NAVIGATION);
   }
@@ -255,7 +266,25 @@ std::tuple<double, StopReason> StopReasoner::update()
     navigation_timeout_ < get_current_time())
   {
     is_navigating_ = false;
+    is_preparing_ = true;
     navigation_timeout_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
+  }
+
+  RCLCPP_DEBUG(
+    logger_, "%.2f, is_preparing=%s, linear_velocity=%.2f, angular_velocity=%.2f",
+    get_current_time().nanoseconds() / 1e9,
+    is_preparing_ ? "true" : "false",
+    linear_velocity_.latest(get_current_time()),
+    angular_velocity_.latest(get_current_time()));
+
+  if (is_preparing_) {
+    if (linear_velocity_.latest(get_current_time()) > Constant::STOP_LINEAR_VELOCITY_THRESHOLD ||
+      angular_velocity_.latest(get_current_time()) > Constant::STOP_ANGULAR_VELOCITY_THRESHOLD)
+    {
+      is_preparing_ = false;
+    } else {
+      return std::make_tuple(0.0, StopReason::NOT_STOPPED);
+    }
   }
 
   // average velocity is under threshold
@@ -288,8 +317,26 @@ std::tuple<double, StopReason> StopReasoner::update()
     return std::make_tuple(0.0, StopReason::NOT_STOPPED);
   }
 
+  RCLCPP_DEBUG(
+    logger_, "%.2f, stopped_time=%.2f, stopped duration=%.2f, linear=%.2f, angular=%.2f",
+    get_current_time().nanoseconds() / 1e9,
+    stopped_time_.nanoseconds() / 1e9,
+    duration,
+    linear_velocity_.latest(get_current_time()),
+    angular_velocity_.latest(get_current_time()));
+
   if (duration < Constant::STOP_DURATION_THRESHOLD) {
     return std::make_tuple(duration, StopReason::STOPPED_BUT_UNDER_THRESHOLD);
+  }
+
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::RED_SIGNAL)) {
+    return std::make_tuple(duration, StopReason::RED_SIGNAL);
+  }
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::GREEN_SIGNAL_SHORT)) {
+    return std::make_tuple(duration, StopReason::GREEN_SIGNAL_SHORT);
+  }
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::NO_SIGNAL_INFO)) {
+    return std::make_tuple(duration, StopReason::NO_SIGNAL_INFO);
   }
 
   auto ts_latest = touch_speed_.latest(get_current_time());

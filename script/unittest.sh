@@ -37,6 +37,8 @@ if [[ -z $package ]] && [[ -z $all ]]; then
     exit 1
 fi
 
+source install/setup.bash
+
 if [[ $all -eq 1 ]]; then
     ([[ -z $build ]] ||  colcon build) && \
     colcon test --packages-ignore-regex "$exclude" && \

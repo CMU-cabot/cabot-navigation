@@ -2,11 +2,11 @@ repositories:
   cabot-common:
     type: git
     url: https://github.com/CMU-cabot/cabot-common
-    version: 3929da1ac586732d60cedf9fbe3de23fcc9cb64e
+    version: 0631e7279a77b3febad715cf0de67acaedb288d3
   cabot-description:
     type: git
     url: https://github.com/CMU-cabot/cabot-description
-    version: 12e472d5c70b6e6149b962cf52e084e1f1f379a2
+    version: f8ded1c9c2ba696991cdb571a676c151f3013920
   docker/localization/RTKLIB:
     type: git
     url: https://github.com/tomojitakasu/RTKLIB.git
@@ -18,19 +18,19 @@ repositories:
   docker/localization/cartographer:
     type: git
     url: https://github.com/CMU-cabot/cartographer.git
-    version: ed9c582787051180150d3bf751bedb97d18e6718
+    version: ee09eb39047b91efebc595c8e7e373ac858bebd1
   docker/localization/cartographer_ros:
     type: git
     url: https://github.com/CMU-cabot/cartographer_ros.git
-    version: aabd1d6e708cf04e15ff4f2a4dbe18b948de8ae9
+    version: 15e0bb7f8d2b131b95a0a8722866113bcab7a301
   docker/localization/ntrip_client:
     type: git
     url: https://github.com/cmu-cabot/ntrip_client.git
-    version: 666e0e8dd50f8690812542aac45bfb06095a4668
+    version: a8e841cd1b8764bb0ef760d360f78153e5d729da
   docker/localization/ublox:
     type: git
     url: https://github.com/CMU-cabot/ublox.git
-    version: 18b425a3f9a581a71d22567541dcbb06fc4750e0
+    version: 39ee5362409b60518f406f6a95a8a4acf08cc8a9
   docker/ros2/grid_map:
     type: git
     url: https://github.com/ANYbotics/grid_map.git
@@ -38,7 +38,7 @@ repositories:
   docker/ros2/rosbridge_suite:
     type: git
     url: https://github.com/CMU-cabot/rosbridge_suite
-    version: 1b698a76aee904adb370e7b7d77b8355325f3747
+    version: 32dffa8511d0274c04c3e98f9daf4120a6b3b9a8
   docker/ros2/tf2_web_republisher:
     type: git
     url: https://github.com/CMU-cabot/tf2_web_republisher

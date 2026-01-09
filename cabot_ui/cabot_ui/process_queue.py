@@ -1,4 +1,4 @@
-# Copyright (c) 2020  Carnegie Mellon University
+# Copyright (c) 2025  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,31 +18,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from . import cabot_rclpy_util
-from . import datautil
-from . import event
-from . import geoutil
-from . import geojson
-from . import interface
-from . import navgoal
-from . import param_manager
-from . import node_manager
-from . import status
-from . import turn_detector
-from . import visualizer
+import threading
+import traceback
+from typing import Callable
+
+from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 
-__all__ = [
-    "cabot_rclpy_util",
-    "datautil",
-    "event",
-    "geoutil",
-    "geojson",
-    "interface",
-    "navgoal",
-    "param_manager",
-    "node_manager",
-    "status",
-    "turn_detector",
-    "visualizer",
-]
+class ProcessQueue:
+    def __init__(self, node: Node):
+        self._node = node
+        self._queue = []
+        self._queue_lock = threading.Lock()
+        self._process_timer = node.create_timer(0.01, self._process_queue_func, callback_group=MutuallyExclusiveCallbackGroup())
+
+    def add(self, func: Callable, *args, **kwargs):
+        with self._queue_lock:
+            self._queue.append((func, args, kwargs))
+
+    def _process_queue_func(self):
+        with self._queue_lock:
+            if not self._queue:
+                return
+            func, args, kwargs = self._queue.pop(0)
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            self._node.get_logger().error(f"Error processing queue item: {e}\n{traceback.format_exc()}")

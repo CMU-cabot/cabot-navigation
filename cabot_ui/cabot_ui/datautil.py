@@ -44,9 +44,9 @@ class DataUtil(object):
     def __init__(self, node: Node):
         self._node = node
         self._protocol = node.declare_parameter("protocol", "http").value
-        self._hostname = node.declare_parameter("map_server_host", "").value
+        self._hostname = node.declare_parameter("map_server_host", "localhost:9090/map").value
         if os.environ.get("CABOT_MAP_SERVER_HOST"):
-            self._hostname = os.environ.get("CABOT_MAP_SERVER_HOST")
+            self._hostname = os.environ.get("CABOT_MAP_SERVER_HOST", "localhost:9090/map")
         if not node.has_parameter("lang"):
             self._lang = node.declare_parameter("lang", "en").value
         else:
@@ -238,8 +238,9 @@ class DataUtil(object):
         doors = geojson.Object.get_objects_by_type(geojson.DoorPOI)
         infos = geojson.Object.get_objects_by_type(geojson.InfoPOI)
         speeds = geojson.Object.get_objects_by_type(geojson.SpeedPOI)
+        signals = geojson.Object.get_objects_by_type(geojson.SignalPOI)
 
-        for poi in doors+infos+speeds:
+        for poi in doors+infos+speeds+signals:
             min_link, min_dist = geojson.Object.get_nearest_link(poi)
             if min_link is None:
                 CaBotRclpyUtil.debug(F"poi {poi._id} ({poi.floor}) is not registered.")

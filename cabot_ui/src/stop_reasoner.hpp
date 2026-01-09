@@ -37,6 +37,8 @@
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/string.hpp>
 
+#include <cabot_msgs/msg/signal_state.hpp>
+
 namespace cabot_ui
 {
 
@@ -53,6 +55,9 @@ enum class StopReason
   WAITING_FOR_ELEVATOR,
   AVOIDING_OBSTACLE,
   AVOIDING_PEOPLE,
+  RED_SIGNAL,
+  GREEN_SIGNAL_SHORT,
+  NO_SIGNAL_INFO,
   NONE
 };
 
@@ -73,6 +78,10 @@ public:
       case StopReason::WAITING_FOR_ELEVATOR: return "WAITING_FOR_ELEVATOR";
       case StopReason::AVOIDING_OBSTACLE: return "AVOIDING_OBSTACLE";
       case StopReason::AVOIDING_PEOPLE: return "AVOIDING_PEOPLE";
+      case StopReason::RED_SIGNAL: return "RED_SIGNAL";
+      case StopReason::GREEN_SIGNAL_SHORT: return "GREEN_SIGNAL_SHORT";
+      case StopReason::NO_SIGNAL_INFO: return "NO_SIGNAL_INFO";
+        return "GREEN_SIGNAL_BUT_NOT_ENOUGH_REMAINING_TIME";
       case StopReason::NONE: return "NONE";
       default:
         return "NONE";
@@ -82,13 +91,13 @@ public:
 
 namespace Constant
 {
-static constexpr double FILTER_DURATION_SHORT = 0.1;
+static constexpr double FILTER_DURATION_SHORT = 0.5;
 static constexpr double FILTER_DURATION_LONG = 5.0;
 static constexpr double STOP_DURATION_THRESHOLD = 0.1;
 static constexpr double UNKNOWN_DURATION_THRESHOLD = 3.0;
 static constexpr int REPLAN_REASON_COUNT = 2;
-static constexpr double STOP_LINEAR_VELOCITY_THRESHOLD = 0.2;
-static constexpr double STOP_ANGULAR_VELOCITY_THRESHOLD = 0.2;
+static constexpr double STOP_LINEAR_VELOCITY_THRESHOLD = 0.05;
+static constexpr double STOP_ANGULAR_VELOCITY_THRESHOLD = 0.05;
 }
 
 template<typename DataT>
@@ -230,7 +239,7 @@ class StopReasonFilter
 {
 public:
   static constexpr double EventInterval = 0.1;
-  static constexpr double SummaryInterval = 3.0;
+  static constexpr double SummaryInterval = 5.0;
 
   explicit StopReasonFilter(std::vector<StopReason> ignore);
   void update(double duration, StopReason code);
@@ -262,6 +271,7 @@ public:
   void input_touch_speed(std_msgs::msg::Float32 & msg);
   void input_replan_reason(people_msgs::msg::Person & msg);
   void input_current_frame(std_msgs::msg::String & msg);
+  void input_signal_state(cabot_msgs::msg::SignalState & msg);
   std::tuple<double, StopReason> update();
   void set_is_navigating(bool newValue);
   bool is_navigating();
@@ -277,10 +287,12 @@ private:
   rclcpp::Time stopped_time_;
   StopReason prev_code_;
   bool is_navigating_;
+  bool is_preparing_;
   bool is_waiting_for_elevator_;
   rclcpp::Time navigation_timeout_;
   std::string last_log_;
   std::string current_frame_;
+  std::string signal_state_;
   AverageFilter linear_velocity_;
   AverageFilter angular_velocity_;
   AverageFilter cmd_vel_linear_;

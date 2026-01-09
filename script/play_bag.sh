@@ -88,7 +88,7 @@ fi
 
 temp_file="$(mktemp)"
 ros2 run cabot_debug print_topics.py -f $bag -1 -r -t /robot_description > $temp_file
-if [[ $(wc -n $temp_file) -eq 0 ]]; then
+if [[ $(wc -l < "$temp_file") -eq 0 ]]; then
     red "There is no robot_description in the $bag"
     if [[ -n $robot ]]; then
 	xacro ../src/cabot_description/robots/$robot.urdf.xacro.xml > $temp_file

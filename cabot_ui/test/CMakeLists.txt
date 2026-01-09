@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(cabot REQUIRED)
+find_package(cabot_msgs REQUIRED)
 
 set(dependencies
   rclcpp
@@ -30,6 +31,7 @@ set(dependencies
   tf2_geometry_msgs
   tf2_ros
   cabot
+  cabot_msgs
 )
 
 

@@ -81,6 +81,21 @@ RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ./launch.sh -s -t -H      # simulation in production mode, yes to launch a map server, run test, headless
 ```
 
+### Run MapService only
+
+- clone target cabot_site repo in cabot_sites
+  - for example cabot_sites_test
+
+```
+pushd cabot_sites
+git clone https://github.com/cmu-cabot/cabot_sites_test
+popd
+./server-launch.sh -d -p cabot_site_test_room       # specify a ros2 pacakge for cabot_site
+./server-launch.sh -d -C                            # stop server container
+```
+
+- access [http://localhost:9090/map/editor.jsp](http://localhost:9090/map/editor.jsp) with editor/editor
+
 ### .env file
 
 - **Required settings**

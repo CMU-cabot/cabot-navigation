@@ -1301,6 +1301,7 @@ def main():
 
     parser.add_option('-m', '--module', type=str, help='test module name')
     parser.add_option('-d', '--debug', action='store_true', help='debug print')
+    parser.add_option('-e', '--env', action='store_true', help='show environment variables')
     parser.add_option('-f', '--func', type=str, help='test func name')
     parser.add_option('-L', '--list-modules', action='store_true', help='list test modules')
     parser.add_option('-l', '--list-functions', action='store_true', help='list test function')
@@ -1318,6 +1319,18 @@ def main():
     handler = logging.StreamHandler()
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
+
+    if options.env:
+        module = importlib.import_module(options.module)
+        functions = [func for func in dir(module) if inspect.isfunction(getattr(module, func))]
+        for f in functions:
+            if f.startswith("_env"):
+                env_func = getattr(module, f)
+                if callable(env_func):
+                    envs = env_func()
+                    for env in envs:
+                        print(env)
+        sys.exit(0)
 
     if options.list_modules:
         module = __import__(options.module)

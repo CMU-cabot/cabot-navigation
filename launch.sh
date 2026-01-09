@@ -321,6 +321,17 @@ fi
 echo $com
 eval $com
 
+if [[ $run_test -eq 1 ]]; then
+    nav_service="navigation-$profile"
+    test_env=$(docker compose -p $launch_prefix -f $dcfile run --rm $nav_service /home/developer/ros2_ws/script/run_test.sh -e $module 2> /dev/null)
+    set -a
+    eval $test_env
+    set +a
+    blue "------------ Environment variables for the test -----------"
+    blue "$test_env"
+    blue "-----------------------------------------------------------"
+fi
+
 if [ $verbose -eq 0 ]; then
     com2="$dccom --ansi never up --no-build --abort-on-container-exit > $host_ros_log_dir/docker-compose.log &"
 else

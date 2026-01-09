@@ -45,6 +45,9 @@ A_PERSON_IN_THE_WAY: "路线上有人。"
 PEOPLE_IN_THE_WAY: "路线上有人群。"
 FOLLOWING_A_PERSON: "正在跟随前方的人。"
 FOLLOWING_PEOPLE: "正在跟随前方的人群。"
+RED_SIGNAL: "红信号，剩余{0}秒"
+GREEN_SIGNAL_SHORT: "绿信号，但时间不足"
+NO_SIGNAL_INFO: "没有信号信息"
 
 ## queue
 GOING_TO_GET_IN_LINE: "正在排队。"
@@ -55,7 +58,9 @@ CALL_ELEVATOR_PLEASE: "请呼叫电梯"
 CALL_ELEVATOR_PLEASE_ON_YOUR: "请按{0}的按钮呼叫电梯"
 ELEVATOR_IS_OPENING: "请紧跟在后面。正在进入电梯。"
 GETTING_OFF_THE_ELEVATOR: "将走出电梯"
-
+CALLING_ELEVATOR_TO_FLOOR: "正在呼叫前往{0}层的电梯"
+ELEVATOR_BOARDING_COMPLETED: "乘梯完成"
+ERROR_CALL_ELEVATOR: "无法呼叫电梯。"
 
 FRONT_LEFT: "左前方"
 FRONT_RIGHT: "右前方"

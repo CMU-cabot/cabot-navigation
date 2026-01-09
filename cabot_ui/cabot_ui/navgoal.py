@@ -30,6 +30,7 @@ import yaml
 
 from cabot_ui import geoutil, geojson
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
+from cabot_ui.elevator_controller import elevator_controller
 
 import tf_transformations
 import nav_msgs.msg
@@ -66,6 +67,15 @@ class GoalInterface(object):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def please_call_elevator(self, pos):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def calling_elevator(self, floor):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def error_call_elevator(self):
+        CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
+
+    def elevator_boarding_completed(self):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
 
     def publish_path(self, global_path, convert=True):
@@ -605,7 +615,7 @@ class Goal(geoutil.TargetPlace):
                         self._logger.info(f"cancel future result = {future.result}")
                 if cancel_callback:
                     cancel_callback()
-                self.delegate._process_queue.append((self.cancel, callback))
+                self.delegate._process_queue.add(self.cancel, callback)
             future.add_done_callback(done_callback)
 
             def timeout_watcher(future, timeout_duration):
@@ -633,6 +643,9 @@ class Goal(geoutil.TargetPlace):
     def completed(self, pose, floor):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
         return False
+
+    def current_target(self):
+        return None
 
 
 class Nav2Params:
@@ -744,7 +757,7 @@ class Nav2Params:
 /footprint_publisher:
     footprint_mode: 3
 /controller_server:
-    FollowPath.max_vel_x: 1.0
+    FollowPath.max_vel_x: 2.75
     FollowPath.sim_time: 0.37
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
@@ -884,7 +897,7 @@ class NavGoal(Goal):
             if isinstance(item, geojson.RouteLink):
                 CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
-                    CaBotRclpyUtil.debug(["  ", type(poi), poi._id])
+                    CaBotRclpyUtil.debug(f"{['  ', type(poi), poi._id]}")
                 temp.extend(item.pois)
         return temp
 
@@ -1015,6 +1028,9 @@ class NavGoal(Goal):
         # CaBotRclpyUtil.info(F"NavGoal.completed distance_to ({pose}) = {self.distance_to(pose)}")
         return floor == self._floor and \
             self.distance_to(pose) < Goal.GOAL_XY_THRETHOLD
+
+    def current_target(self):
+        return self.navcog_routes[self.route_index][1]
 
 
 class TurnGoal(Goal):
@@ -1154,6 +1170,20 @@ class ElevatorWaitGoal(ElevatorGoal):
     def done_callback(self, result):
         if result:
             CaBotRclpyUtil.info("ElevatorWaitGoal completed")
+            if elevator_controller.enabled:
+                try:
+                    for goal in self.delegate._sub_goals[self.delegate._sub_goals.index(self)+1:]:
+                        if isinstance(goal, ElevatorFloorGoal):
+                            if elevator_controller.call_elevator(self.delegate.current_floor, goal._floor):
+                                self.delegate.calling_elevator(goal._floor)
+                                self._is_completed = result
+                                return
+                            break
+                except:  # noqa: #722
+                    pass
+                CaBotRclpyUtil.error("Could not call elevetor")
+                elevator_controller.in_control = False
+                self.delegate.error_call_elevator()
             pos = self.cab_poi.where_is_buttons(self.delegate.current_pose)
             self.delegate.please_call_elevator(pos)
             self._is_completed = result
@@ -1186,12 +1216,24 @@ class ElevatorInGoal(ElevatorGoal):
 
     # use default enter to set parameters
     def _enter(self):
+        elevator_controller.open_door()
         # use odom frame for navigation
         self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
-        CaBotRclpyUtil.info("ElevatorInGoal completed")
-        status = future.result().status
+        if future is None:
+            CaBotRclpyUtil.error("ElevatorInGoal done_callback called with None future (goal send may have timed out)")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        try:
+            status = future.result().status
+        except:  # noqa: E722
+            CaBotRclpyUtil.error(f"ElevatorInGoal done_callback failed: {traceback.format_exc()}")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        CaBotRclpyUtil.info(f"ElevatorInGoal completed status={status}")
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
 
@@ -1219,6 +1261,9 @@ class ElevatorTurnGoal(ElevatorGoal):
         self.delegate.turn_towards(pose.orientation, self.goal_handle_callback, self.done_callback, clockwise=-1)
 
     def done_callback(self, result):
+        if elevator_controller.in_control:
+            elevator_controller.close_door()
+            self.delegate.elevator_boarding_completed()
         if result:
             CaBotRclpyUtil.info(F"ElevatorTurnGoal completed {result=}")
             self._is_completed = True
@@ -1261,6 +1306,7 @@ class ElevatorOutGoal(ElevatorGoal):
 
     def _enter(self):
         CaBotRclpyUtil.info("ElevatorOutGoal _enter")
+        elevator_controller.open_door()
         pose = self.delegate.current_odom_pose
 
         start = geometry_msgs.msg.PoseStamped()
@@ -1286,8 +1332,20 @@ class ElevatorOutGoal(ElevatorGoal):
         self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
 
     def done_callback(self, future):
-        CaBotRclpyUtil.info("ElevatorOutGoal completed")
-        status = future.result().status
+        if future is None:
+            CaBotRclpyUtil.error("ElevatorOutGoal done_callback called with None future (goal send may have timed out)")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        try:
+            status = future.result().status
+        except:  # noqa: E722
+            CaBotRclpyUtil.error(f"ElevatorOutGoal done_callback failed: {traceback.format_exc()}")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        CaBotRclpyUtil.info(f"ElevatorOutGoal completed status={status}")
+        elevator_controller.close_door()
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
 

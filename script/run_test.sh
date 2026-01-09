@@ -38,9 +38,8 @@ function help()
     echo "-l          list test functions"
     echo "-r          retry until the test succeeds"
     echo "-w          wait ready"
+    echo "-e          list environment variables"
 }
-
-blue "Start running tests"
 
 pwd=`pwd`
 scriptdir=`dirname $0`
@@ -51,9 +50,10 @@ wait_ready_option=
 debug=
 list_modules=0
 list_functions=0
+show_env=0
 retry=0
 
-while getopts "hdLlrw" arg; do
+while getopts "hdeLlrw" arg; do
     case $arg in
         h)
             help
@@ -62,12 +62,15 @@ while getopts "hdLlrw" arg; do
         d)
             debug="-d"
             ;;
-	L)
-	    list_modules=1
-	    ;;
-	l)
-	    list_functions=1
-	    ;;
+        e)
+            show_env=1
+            ;;
+        L)
+            list_modules=1
+            ;;
+        l)
+            list_functions=1
+            ;;
         r)
             retry=1
             ;;
@@ -86,27 +89,32 @@ fi
 
 output_dir_option="-o ${ROS_LOG_DIR:-$pwd}"
 
-blue "testing with $CABOT_SITE"
-
 source $scriptdir/../install/setup.bash
+
+if [[ $show_env -eq 1 ]]; then
+    ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module -e
+    exit 0
+fi
+
+blue "testing with $CABOT_SITE"
 
 while [[ 1 -eq 1 ]]; do
     if [[ $list_modules -eq 1 ]]; then
-	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE} -L $output_dir_option
-	exit
+        ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE} -L $output_dir_option
+        exit
     fi
 
     if [[ $list_functions -eq 1 ]]; then
-	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module -l $output_dir_option
-	exit
+        ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module -l $output_dir_option
+        exit
     fi
 
     if [[ ! -z $debug ]]; then
-	echo "ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option"
-	ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args python3' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option
+        echo "ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option"
+        ros2 run --prefix 'gdb -ex run -ex bt -ex quit --args python3' cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option
     else
-	echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option"
-	ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $output_dir_option
+        echo "ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $debug $output_dir_option"
+        ros2 run cabot_navigation2 run_test.py -m ${CABOT_SITE}.$module $test_func_option $wait_ready_option $output_dir_option
     fi
     result=$?
     if [[ $result -le 1 ]]; then

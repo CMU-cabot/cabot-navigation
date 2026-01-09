@@ -80,6 +80,7 @@ services:
       - CABOT_USE_DIRECTIONAL_INDICATOR
       - CABOT_VIBRATOR_TYPE
       - CABOT_MAX_SPEED
+      - CABOT_UI_PLUGINS
 # ROS2/DDS
       - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
@@ -253,6 +254,7 @@ services:
       - CABOT_TOUCH_ENABLED=${CABOT_TOUCH_ENABLED:-false}
       - CABOT_ROS2_RVIZ_CONFIG
       - CABOT_ROS2_LOCAL_RVIZ_CONFIG
+      - ELEVATOR_ENDPOINT
     volumes:
 # device, bluetooth
       - /dev:/dev
@@ -286,6 +288,7 @@ services:
       - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
       - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
       - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
+      - ./cabot_ui_plugins:/home/developer/ros2_ws/src/cabot_ui_plugins
       - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
       - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
       - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
@@ -354,6 +357,8 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+      - "-w"
+      - "1"
 
   gui-dev:
     extends: gui-dev-base
@@ -366,6 +371,8 @@ services:
       - "/launch.sh"
       # - "-c"                  # core dump
       - "gui"
+      - "-w"
+      - "1"
 
   gui-prod:
     extends: gui-prod-base

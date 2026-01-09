@@ -28,8 +28,6 @@ from rclpy.exceptions import InvalidServiceNameException
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 
-from ament_index_python.packages import get_package_share_directory
-
 import std_msgs.msg
 import cabot_msgs.msg
 import cabot_msgs.srv
@@ -39,11 +37,6 @@ from cabot_ui.event import NavigationEvent
 from cabot_ui.turn_detector import Turn
 from cabot_ui.social_navigation import SNMessage
 from cabot_common import vibration
-
-from pydub import AudioSegment
-import pydub.playback
-
-import subprocess
 
 
 class SpeechPriority:
@@ -97,20 +90,6 @@ class UserInterface(object):
 
         self.last_social_announce = None
         self.last_notify_turn = {"directional_indicator": None, "vibrator": None}
-
-        self._enable_speaker = False
-        self._audio_dir = os.path.join(get_package_share_directory(os.environ.get("CABOT_SITE")), "sound")
-        self._audio_file_path = None
-        self._speaker_volume = 0.0
-        if os.path.isdir(self._audio_dir):
-            wav_files = [
-                f
-                for f in os.listdir(self._audio_dir)
-                if f.endswith(".wav") and os.path.isfile(os.path.join(self._audio_dir, f))
-            ]
-        else:
-            wav_files = []
-        self.audio_files = ",".join(wav_files)
 
     def _activity_log(self, category="", text="", memo="", visualize=False):
         log = cabot_msgs.msg.Log()
@@ -190,65 +169,6 @@ class UserInterface(object):
         except InvalidServiceNameException as e:
             CaBotRclpyUtil.error(F"Service call failed: {e}")
 
-    def enable_speaker(self, enable_speaker: str):
-        self._enable_speaker = enable_speaker.lower() == "true"
-        self._activity_log("change speaker config", "enable speaker", str(self._enable_speaker), visualize=True)
-
-    def set_audio_file(self, filename):
-        self._audio_file_path = os.path.join(self._audio_dir, filename)
-        self._activity_log("change speaker config", "audio file", str(self._audio_file_path), visualize=True)
-
-    def set_speaker_volume(self, volume):
-        try:
-            speaker_volume = float(volume)
-        except Exception:
-            CaBotRclpyUtil.error(f"Invalid volume value: {volume}")
-            return
-
-        speaker_volume = max(0, min(100, speaker_volume))
-        self._speaker_volume = speaker_volume
-
-        try:
-            if speaker_volume == 0:
-                subprocess.run(
-                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "on"],
-                    check=True
-                )
-            else:
-                subprocess.run(
-                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "off"],
-                    check=True
-                )
-                subprocess.run(
-                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(speaker_volume)}%"],
-                    check=True
-                )
-        except subprocess.CalledProcessError as e:
-            CaBotRclpyUtil.error(f"Failed to adjust volume via pactl: {e}")
-            return
-
-        self._activity_log("change speaker config", "volume (%)", str(self._speaker_volume), visualize=True)
-
-    def speaker_alert(self):
-        if not self._enable_speaker:
-            CaBotRclpyUtil.error("Speaker is disabled")
-            return
-
-        if not os.path.isfile(self._audio_file_path):
-            CaBotRclpyUtil.error(F"Audio file not found: {self._audio_file_path}")
-            return
-
-        if self._speaker_volume == 0:
-            CaBotRclpyUtil.info("Speaker is muted")
-            return
-
-        try:
-            sound = AudioSegment.from_wav(self._audio_file_path)
-            CaBotRclpyUtil.info(F"Playing {self._audio_file_path} (volume: {self._speaker_volume}%)")
-            pydub.playback.play(sound)
-        except Exception as e:
-            CaBotRclpyUtil.error(F"Playback failed: {e}")
-
     def vibrate(self, pattern=vibration.UNKNOWN):
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
         msg = std_msgs.msg.Int8()
@@ -313,8 +233,8 @@ class UserInterface(object):
 
     # navigate interface
 
-    def activity_log(self, category="", text="", memo=""):
-        self._activity_log(category, text, memo)
+    def activity_log(self, category="", text="", memo="", visualize=False):
+        self._activity_log(category, text, memo, visualize=visualize)
 
     def in_preparation(self):
         self._activity_log("cabot/interface", "status", "prepare")
@@ -385,18 +305,12 @@ class UserInterface(object):
         self.speak(i18n.localized_string("AVOIDING_A_PERSON"), priority=SpeechPriority.NORMAL)
 
     def have_arrived(self, goal):
-        raise RuntimeError("Should no use this func")
-        name = goal.goal_name_pron
-        desc = goal.goal_description
+        # do nothing
+        pass
 
-        if name:
-            if desc:
-                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME_AND_DESCRIPTION").format(name, desc), priority=SpeechPriority.HIGH)
-            else:
-                self.speak(i18n.localized_string("YOU_HAVE_ARRIVED_WITH_NAME").format(name), priority=SpeechPriority.HIGH)
-        else:
-            self.speak(i18n.localized_string("YOU_HAVE_ARRIVED"), priority=SpeechPriority.HIGH)
-        self._activity_log("cabot/interface", "navigation", "arrived")
+    def have_completed(self):
+        # do nothing
+        pass
 
     def get_speech_priority(self, poi):
         if isinstance(poi, cabot_ui.geojson.Entrance):
@@ -426,6 +340,12 @@ class UserInterface(object):
             self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
+    def on_poi(self, poi=None):
+        statement = poi.on_poi_statement()
+        if statement:
+            self.speak(statement, priority=self.get_speech_priority(poi))
+            self._activity_log("cabot/interface", "poi", "on")
+
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
@@ -443,7 +363,13 @@ class UserInterface(object):
 
     def announce_social(self, message: SNMessage):
         self._activity_log("cabot/interface", message.type.name, message.code.name)
-        self.speak(i18n.localized_string(message.code.name))
+        if message.param is not None:
+            if isinstance(message.param, list):
+                self.speak(i18n.localized_string(message.code.name, *message.param))
+            else:
+                self.speak(i18n.localized_string(message.code.name, message.param))
+        else:
+            self.speak(i18n.localized_string(message.code.name))
 
     def request_sound(self, sound: SNMessage):
         self._activity_log("cabot/interface", sound.type.name, sound.code.name)
@@ -464,6 +390,18 @@ class UserInterface(object):
                                              i18n.localized_string(pos)), priority=SpeechPriority.REQUIRED)
         else:
             self.speak(i18n.localized_string("CALL_ELEVATOR_PLEASE"), priority=SpeechPriority.REQUIRED)
+
+    def calling_elevator(self, floor):
+        self._activity_log("cabot/interface", "navigation", "calling elevator")
+        self.speak(i18n.localized_string("CALLING_ELEVATOR_TO_FLOOR", floor), priority=SpeechPriority.REQUIRED)
+
+    def error_call_elevator(self):
+        self._activity_log("cabot/interface", "navigation", "error call elevator")
+        self.speak(i18n.localized_string("ERROR_CALL_ELEVATOR"), priority=SpeechPriority.REQUIRED)
+
+    def elevator_boarding_completed(self):
+        self._activity_log("cabot/interface", "navigation", "elevator boarding completed")
+        self.speak(i18n.localized_string("ELEVATOR_BOARDING_COMPLETED"), priority=SpeechPriority.REQUIRED)
 
     def elevator_opening(self):
         self._activity_log("cabot/interface", "navigation", "elevator opening")

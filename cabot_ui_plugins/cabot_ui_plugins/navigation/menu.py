@@ -1,4 +1,6 @@
-# Copyright (c) 2020, 2022  Carnegie Mellon University
+#!/usr/bin/env python3
+
+# Copyright (c) 2025  Carnegie Mellon University
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,10 +20,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from cabot_ui import navigation
+import std_msgs.msg
+from cabot_ui.plugin import NavcogMapPlugin
 
 
-class Exploration(navigation.ControlBase):
-    def __init__(self, datautil_instance=None, anchor_file=None):
+class NavigationMenu(NavcogMapPlugin):
+    name = "Navigation Menu Plugin"
 
-        super(Exploration, self).__init__(datautil_instance=datautil_instance, anchor_file=anchor_file)
+    def __init__(self, node):
+        self.node = node
+        self.logger = node.get_logger()
+        self.event_pub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 1)
+
+    def menu_callback(self, feedback):
+        self.logger.info(F"{feedback}")
+        msg = std_msgs.msg.String()
+        msg.data = "navigation;destination;" + feedback.marker_name
+        self.event_pub.publish(msg)
+
+    def init_menu(self, menu_handler):
+        self.navigate_menu = menu_handler.insert("Navigate to Here", callback=self.menu_callback)
