@@ -698,9 +698,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     if not facility.is_read:
                         continue
 
+                    lookup_dist = facility.lookup_dist()
+                    nearby_dist = lookup_dist * math.sqrt(2.0)
                     for ent in facility.entrances:
                         min_link, min_dist = kdtree.get_nearest_link(ent.node)
-                        if min_link is None or min_dist >= 5.0:
+                        if min_link is None or min_dist >= lookup_dist:
                             continue
                         # self._logger.debug(f"Facility - Link {facility._id}, {min_dist}, {facility.name}:{ent.name}, {min_link._id}")
                         gp = ent.set_target(min_link)
@@ -710,7 +712,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                             continue
                         self.nearby_facilities.append({
                             "facility": facility,
-                            "entrance": ent
+                            "entrance": ent,
+                            "nearby_dist": nearby_dist,
+                            "lookup_dist": lookup_dist,
                         })
                 end = time.time()
                 self._logger.info(F"Check Facilities {end - start:.3f}.sec")
@@ -997,8 +1001,11 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         if entry is None:
             return
         entrance = entry["entrance"]
+        nearby_dist = entry.get("nearby_dist")
+        if nearby_dist is None:
+            nearby_dist = entrance.facility.lookup_dist() * math.sqrt(2.0)
 
-        if entrance is not None and entrance.distance_to(current_pose) < 8:
+        if entrance is not None and entrance.distance_to(current_pose) < nearby_dist:
             # self._logger.info(F"_check_nearby_facility: {entrance._id}, {entrance}, {current_pose}")
             if entrance.is_approaching(current_pose):
                 self._logger.info(F"_check_nearby_facility approaching {entrance._id}")

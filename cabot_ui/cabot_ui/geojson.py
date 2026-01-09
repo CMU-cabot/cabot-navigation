@@ -776,6 +776,30 @@ class Facility(Object):
     def is_read(self):
         return self._is_read
 
+    def lookup_dist(self, default=5.0):
+        hulop_content = getattr(self.properties, "hulop_content", None)
+        if not hulop_content:
+            return default
+        if isinstance(hulop_content, dict):
+            hulop_content_json = hulop_content
+        else:
+            try:
+                hulop_content_json = json.loads(hulop_content)
+            except:  # noqa: E722
+                return default
+        if not isinstance(hulop_content_json, dict):
+            return default
+        lookup_dist = hulop_content_json.get("lookup_dist")
+        if lookup_dist is None:
+            return default
+        try:
+            lookup_dist = float(lookup_dist)
+        except (TypeError, ValueError):
+            return default
+        if lookup_dist <= 0.0:
+            return default
+        return lookup_dist
+
     _id_map = {}
 
     @staticmethod
