@@ -1221,8 +1221,19 @@ class ElevatorInGoal(ElevatorGoal):
         self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
 
     def done_callback(self, future):
-        CaBotRclpyUtil.info("ElevatorInGoal completed")
-        status = future.result().status
+        if future is None:
+            CaBotRclpyUtil.error("ElevatorInGoal done_callback called with None future (goal send may have timed out)")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        try:
+            status = future.result().status
+        except:  # noqa: E722
+            CaBotRclpyUtil.error(f"ElevatorInGoal done_callback failed: {traceback.format_exc()}")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        CaBotRclpyUtil.info(f"ElevatorInGoal completed status={status}")
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
 
@@ -1321,9 +1332,20 @@ class ElevatorOutGoal(ElevatorGoal):
         self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
 
     def done_callback(self, future):
-        CaBotRclpyUtil.info("ElevatorOutGoal completed")
+        if future is None:
+            CaBotRclpyUtil.error("ElevatorOutGoal done_callback called with None future (goal send may have timed out)")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        try:
+            status = future.result().status
+        except:  # noqa: E722
+            CaBotRclpyUtil.error(f"ElevatorOutGoal done_callback failed: {traceback.format_exc()}")
+            self._is_completed = False
+            self._is_canceled = True
+            return
+        CaBotRclpyUtil.info(f"ElevatorOutGoal completed status={status}")
         elevator_controller.close_door()
-        status = future.result().status
         self._is_completed = (status == GoalStatus.STATUS_SUCCEEDED)
         self._is_canceled = (status != GoalStatus.STATUS_SUCCEEDED)
 

@@ -1390,6 +1390,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
     def _navigate_to_pose_sent_goal(self, goal, future, gh_cb, done_cb):
         if future.cancelled():
+            self._logger.error(
+                "send_goal_async future was cancelled (timeout or shutdown); treating as goal send failure"
+            )
             try:
                 done_cb(None)
             except:  # noqa: E722
