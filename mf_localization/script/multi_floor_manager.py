@@ -89,6 +89,7 @@ from mf_localization_msgs.srv import StartLocalization
 from mf_localization_msgs.srv import StopLocalization
 
 from mf_localization.altitude_manager import AltitudeManager
+from mf_localization.altitude_manager import AltitudeManagerParameters
 from mf_localization.altitude_manager import AltitudeFloorEstimator
 from mf_localization.altitude_manager import AltitudeFloorEstimatorParameters
 from mf_localization.altitude_manager import AltitudeFloorEstimatorResult
@@ -2449,6 +2450,7 @@ if __name__ == "__main__":
 
     # pressure topic parameters
     multi_floor_manager.pressure_available = node.declare_parameter("pressure_available", True).value
+    altitude_manager_config = map_config.get("altitude_manager", {})
     altitude_floor_estimator_config = map_config["altitude_floor_estimator"] if "altitude_floor_estimator" in map_config else None
     floor_height_mapper_config = map_config.get("floor_height_mapper", None)
 
@@ -2788,12 +2790,15 @@ if __name__ == "__main__":
         multi_floor_manager.wifi_floor_localizer.fit(samples_wifi_global_all)
 
     # altitude manager and altitude floor estimator
-    multi_floor_manager.altitude_manager = AltitudeManager(node)
+    altitude_manager_parameters = AltitudeManagerParameters(**altitude_manager_config)
+    multi_floor_manager.altitude_manager = AltitudeManager(node, parameters=altitude_manager_parameters)
     if altitude_floor_estimator_config is None:
         altitude_floor_estimator_parameters = AltitudeFloorEstimatorParameters(enable=False)
     else:
         altitude_floor_estimator_parameters = AltitudeFloorEstimatorParameters(**altitude_floor_estimator_config)
     multi_floor_manager.altitude_floor_estimator = AltitudeFloorEstimator(altitude_floor_estimator_parameters)
+    logger.info(F"altitude_manager_parameters = {altitude_manager_parameters}")
+    logger.info(F"altitude_floor_estimator_parameters = {altitude_floor_estimator_parameters}")
 
     # floor height mapper for floor estimation
     X_height_mapper = []
