@@ -87,7 +87,7 @@ class CaBotExplorationNode(Node):
         self.map_resolution = 0
 
         self.timer = self.create_timer(0.01, self.timer_callback)
-        self.timeout_timer = self.create_timer(10.0, self.timeout_timer_callback)
+        self.timeout_timer = self.create_timer(15.0, self.timeout_timer_callback)
 
     def timeout_timer_callback(self):
         self.goal_coordinate_pub.publish(String(data="navigation;cancel"))

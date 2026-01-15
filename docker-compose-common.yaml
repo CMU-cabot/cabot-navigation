@@ -298,7 +298,8 @@ services:
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
       - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
       - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
-
+      - ./nav2_local_to_global_layer:/home/developer/ros2_ws/src/nav2_local_to_global_layer
+      
   navigation-dev:
     extends: navigation-dev-base
     volumes:

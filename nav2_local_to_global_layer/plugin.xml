@@ -1,0 +1,5 @@
+<library path="nav2_local_to_global_layer">
+  <class type="nav2_local_to_global_layer::LocalToGlobalLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Copies local costmap data to the global costmap.</description>
+  </class>
+</library>

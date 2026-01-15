@@ -32,8 +32,8 @@
       <RecoveryNode number_of_retries="999999999" name="InitialComputePathRepeat">
         <Sequence name="ComputePathSequence">
           <!-- clear costmap -->
-          <ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000"
-            service_name="/global_costmap/clear_entirely_global_costmap" />
+          <!--<ClearEntireCostmap name="ClearGlobalCostmap-context" server_timeout="5000"
+            service_name="/global_costmap/clear_entirely_global_costmap" />-->
           <WaitFloat wait_duration_float="0.5" />
           <CurrentPose global_frame="map" robot_base_frame="base_footprint" pose="{current_pose}" />
           <ComputePathToPose start="{current_pose}" goal="{goal}" path="{path}" planner_id="GridBased" />
@@ -70,8 +70,8 @@
         <RecoveryNode number_of_retries="999999999" name="RecoveryComputePathRepeat">
           <Sequence name="ComputePathSequence">
             <!-- clear costmap -->
-            <ClearEntireCostmap name="ClearGlobalCostmap-context-2" server_timeout="5000"
-              service_name="/global_costmap/clear_entirely_global_costmap" />
+            <!-- <ClearEntireCostmap name="ClearGlobalCostmap-context-2" server_timeout="5000"
+              service_name="/global_costmap/clear_entirely_global_costmap" />-->
 
             <!-- wait long enough to include neighbor obstacles -->
             <Wait wait_duration="1.0" />

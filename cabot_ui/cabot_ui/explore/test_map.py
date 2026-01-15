@@ -72,6 +72,7 @@ class CaBotMapNode(Node):
         self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
         
         self.map_sub = self.create_subscription(OccupancyGrid, "/local_costmap/costmap", self.map_callback, transient_local_qos)
+        self.global_map_pub = self.create_publisher(OccupancyGrid, "/global_costmap/costmap", transient_local_qos)
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
 
         self.tf_buffer = Buffer()
@@ -99,6 +100,8 @@ class CaBotMapNode(Node):
         self.map_width = msg.info.width
         self.map_height = msg.info.height
         self.map_resolution = msg.info.resolution
+
+        # self.global_map_pub.publish(msg)
 
         # calculate map orientation in radian
         map_quaternion = (msg.info.origin.orientation.x, msg.info.origin.orientation.y, msg.info.origin.orientation.z, msg.info.origin.orientation.w)
@@ -148,7 +151,7 @@ class CabotRvizPointDrawer(Node):
         self.logger = self.get_logger()
         self.logger.info("CabotRvizPointDrawer is initialized")
         self.publisher_ = self.create_publisher(MarkerArray, "/marker", 10)
-        self.timer_ = self.create_timer(1.0, self.timer_callback)
+        self.timer_ = self.create_timer(0.001, self.timer_callback)
         self.color = colors
         self.coordinates = coordinates
     
@@ -396,8 +399,12 @@ def set_next_point_based_on_skeleton(
     distance_score = None
     for i in range(16):
         submap, robot_submap_coords, center_submap = get_submap_for_direction(
-            coords[-1], orientation[-1], map_x, map_y, map_resolution, map_height, map_array, i, submap_size_meters=5, logger=logger
+            coords[-1], orientation[-1], map_x, map_y, map_resolution, map_height, map_array, i, submap_size_meters=10, logger=logger
         )
+
+        if center_submap[0] <= 0 or center_submap[0] >= map_width or center_submap[1] <= 0 or center_submap[1] >= map_height:
+            logger.info(f"Direction {i}: Center of submap is out of map bounds, skipping this direction.")
+            continue
 
         meteric_center_submap = convert_map_to_odom(center_submap[0], center_submap[1], map_x, map_y, map_resolution, map_height)
 
@@ -417,12 +424,14 @@ def set_next_point_based_on_skeleton(
             height, width = submap.shape
             y_indices, x_indices = np.indices((height, width))
             distance_from_center = np.sqrt((x_indices - width / 2.0) ** 2 + (y_indices - height / 2.0) ** 2)
-            max_distance = 2.5 / map_resolution  # 2.5 meters in pixels
+            max_distance = 5 / map_resolution  # 5 meters in pixels
             distance_score = (distance_from_center / max_distance)
             distance_score = np.clip(distance_score, 0.0, 1.0)
-            distance_score = 1.0 - 2.0*(1.0 - distance_score)
-            distance_score = np.clip(distance_score, 0.0, 1.0) 
             # cv2.imwrite(f"{log_dir}/distance_score_direction_{i}.png", (distance_score * 255).astype(np.uint8))
+
+        if accessibility_score.shape != distance_score.shape:
+            logger.warning(f"Direction {i}: Accessibility score shape {accessibility_score.shape} does not match distance score shape {distance_score.shape}, skipping this direction.")
+            continue
 
         # combine accessibility score and distance score and normalize to [0, 1]
         combined_score = (1.0 - accessibility_score) * (1.0 - distance_score)
@@ -501,19 +510,21 @@ def set_next_point_based_on_skeleton(
         print(f"sampled point {i}: {cand[0][::-1]} ({cand[1]}) (x: {converted_cand[0]:.2f}, y: {converted_cand[1]:.2f}) (score: {cand[2]})")
     
 
-
     # draw points on rviz
     # add current point
     current_coords_odom = convert_map_to_odom(coords[-1][0], coords[-1][1], map_x, map_y, map_resolution, map_height)
     # cand_coords_odom.append(current_coords_odom)
+
     draw_points_on_rviz(cand_coords_odom, colors)
+
 
     # copy local_map.png to upper directory
     os.system(f"cp {log_dir}/local_map.png {log_dir}/../local_map.png")
-    
     sampled_point_in_odom = [convert_map_to_odom(point[0][1], point[0][0], map_x, map_y, map_resolution, map_height) for point in sampled_points]
     sampled_directions = [point[1] for point in sampled_points]
     sampled_points_and_directions = [[[point[0], point[1]], direction] for point, direction in zip(sampled_point_in_odom, sampled_directions)]
+
+    
     return sampled_points_and_directions, current_coords_odom, orientation[-1]
 
 
@@ -549,21 +560,34 @@ def main(
     log_dir = f"{log_dir}/{timestamp}"
     os.makedirs(log_dir, exist_ok=True)
 
+    starting_time = datetime.datetime.now()
+
+
+    # logger.info(f"TME taken begin: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
+
     re_init = False
     if not rclpy.ok():
         rclpy.init()
         re_init = True
     rcl_publisher = CaBotMapNode()
+
+    # logger.info(f"TME taken after CaBotMapNode: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
+
     
     while(rcl_publisher.map_width == 0): #We need to wait until we get the map info
         try:
             rclpy.spin(rcl_publisher)
         except SystemExit as e:
             print(e)
+
+    # logger.info(f"TME taken after get map info: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
+
     
     rcl_publisher.destroy_node()
     # if re_init:
     #     rclpy.shutdown()
+
+    # logger.info(f"TME taken after get map info: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
 
     # save map data
     map_data = np.copy(rcl_publisher.map_data)
@@ -574,6 +598,8 @@ def main(
     map_width = rcl_publisher.map_width    
     coordinates = np.asarray(rcl_publisher.coordinates)
     orientation = np.asarray(rcl_publisher.orientation)
+
+    # logger.info(f"TME taken after copy info: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
     
     coordinates = np.asarray(coordinates) / map_resolution
     coordinates[:, 1] = -coordinates[:, 1]
@@ -585,6 +611,9 @@ def main(
         np.save(f, coordinates)
     with open(f"{log_dir}/orientation_local_map.npy", "wb") as f:
         np.save(f, orientation)
+
+    # logger.info(f"TME taken after save info: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
+
     
     print("local map coordinates saved")
 
@@ -595,6 +624,9 @@ def main(
         previous_destination=previous_destination,
         logger=logger
     )
+
+    logger.info(f"TME taken TOTAL: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
+
     return output_point, current_coords, current_orientation
 
 

@@ -47,7 +47,8 @@ from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, qos_profile_sensor_data
+import sensor_msgs
 import std_msgs.msg
 import std_srvs.srv
 
@@ -61,11 +62,14 @@ from cabot_ui.exploration import Exploration
 from cabot_ui.navigation import Navigation, NavigationInterface
 from cabot_ui.cabot_rclpy_util import CaBotRclpyUtil
 from cabot_ui.description import Description
+from cabot_ui.explore.test_speak import speak_text
+
 
 from diagnostic_updater import Updater, FunctionDiagnosticTask
 from diagnostic_msgs.msg import DiagnosticStatus
 from cabot_common import vibration
 from enum import Enum
+import math
 
 class CabotUIManager(NavigationInterface, object): 
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node): #TODO : Resume from here, try to verify logs and if the code is called properly
@@ -97,6 +101,8 @@ class CabotUIManager(NavigationInterface, object):
         self._exploration.delegate = self
 
         self._retry_count = 0
+
+        self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -148,6 +154,10 @@ class CabotUIManager(NavigationInterface, object):
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.send_speaker_audio_files()
+
+    def _lidar_limit_callback(self, msg):
+        self._logger.debug("Lidar limit callback")
+        self._event_mapper.checkLidarLimit(self._logger, msg)
 
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
@@ -899,32 +909,54 @@ class EventMapper1(object):
         self.description_duration = 0
         self.mode = "exploration"
         self.exploration_mode = self.ExplorationMode.AUTONOMOUS  # Default to AUTONOMOUS mode
+        self.lock = threading.RLock()
 
+    def checkLidarLimit(self, logger, lidar_limit):
+
+        lidar_dist = 0.0
+
+        if hasattr(lidar_limit, "ranges"):
+            ranges = [x for x in lidar_limit.ranges if not math.isnan(x) and not math.isinf(x) and x >= lidar_limit.range_min and x <= lidar_limit.range_max]
+            if len(ranges) > 0:
+                lidar_dist = min(ranges)
+            else:
+                lidar_dist = float('inf')
+
+
+        with self.lock:
+            logger.info(f"Checking Lidar Limit: {lidar_dist}")
+            if self.exploration_mode == self.ExplorationMode.MANUAL and lidar_dist <= 0.5:
+                self.exploration_mode = self.ExplorationMode.AUTONOMOUS        
+                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
+                speak_text("障害物を検知しました。オートノマスモードに切り替えます。")
+
+                
 
     def push(self, event, logger):
-        # state = self._manager.state
+        with self.lock:
+            # state = self._manager.state
 
-        if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
-           event.type != HoldDownEvent.TYPE:
-            return
+            if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
+            event.type != HoldDownEvent.TYPE:
+                return
 
-        mevent = None
+            mevent = None
 
-        # Commented out the code below to enable switching between exploration and navigation modes
-        # if self.mode == "exploration":
-        #     mevent = self.map_button_to_exploration(event)
-        # elif self.mode == "navigation":
-        #     mevent = self.map_button_to_navigation(event)
+            # Commented out the code below to enable switching between exploration and navigation modes
+            # if self.mode == "exploration":
+            #     mevent = self.map_button_to_exploration(event)
+            # elif self.mode == "navigation":
+            #     mevent = self.map_button_to_navigation(event)
 
 
-        mevents = self.map_button_to_exploration(event, logger)
+            mevents = self.map_button_to_exploration(event, logger)
 
-        if mevents is None or len(mevents) == 0:
-            return
-        
-        for mevent in mevents:
-            if mevent:
-                self.delegate.process_event(mevent)
+            if mevents is None or len(mevents) == 0:
+                return
+            
+            for mevent in mevents:
+                if mevent:
+                    self.delegate.process_event(mevent)
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:

@@ -42,7 +42,7 @@ launch:
       exec: cartographer_occupancy_grid_node
       name: cartographer_occupancy_grid_node
       args: |
-        -resolution 0.05
+        -resolution 0.1
         -publish_period_sec 0.5
 
   # provide map_global -> map as identical transform
