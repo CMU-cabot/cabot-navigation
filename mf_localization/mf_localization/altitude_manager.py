@@ -33,16 +33,27 @@ from rclpy.qos import QoSDurabilityPolicy
 from std_msgs.msg import Float64
 
 
+@dataclass
+class AltitudeManagerParameters:
+    queue_limit: int = 60
+    timestamp_interval_limit: float = 3.0
+    window_size: int = 20
+    threshold: float = 0.3 * 12
+
+
 class AltitudeManager():
-    def __init__(self, node, verbose=False):
+    def __init__(self, node, verbose=False,
+                 parameters: AltitudeManagerParameters = AltitudeManagerParameters(),
+                 ):
         self.node = node
         self.logger = node.get_logger()
         self.queue = []
         self.verbose = verbose
-        self.queue_limit = 60
-        self.timestamp_interval_limit = 3.0
-        self.window_size = 20
-        self.threshold = 0.3 * 12
+        # parameters
+        self.queue_limit = parameters.queue_limit
+        self.timestamp_interval_limit = parameters.timestamp_interval_limit
+        self.window_size = parameters.window_size
+        self.threshold = parameters.threshold
 
         self.initial_pressure = None
         self.pressure_std_pub = self.node.create_publisher(
