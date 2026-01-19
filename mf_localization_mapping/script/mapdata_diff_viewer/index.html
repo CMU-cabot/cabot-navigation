@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MapData GeoJSON Diff Viewer</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      #app {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        height: 100%;
+      }
+      #sidebar {
+        border-right: 1px solid #ddd;
+        padding: 12px;
+        overflow: auto;
+      }
+      #canvasWrap {
+        position: relative;
+        overflow: hidden;
+      }
+      #c {
+        width: 100%;
+        height: 100%;
+        display: block;
+        cursor: grab;
+      }
+      #c.dragging {
+        cursor: grabbing;
+      }
+      .row {
+        margin: 10px 0;
+      }
+      .row label {
+        display: block;
+        font-size: 12px;
+        color: #333;
+        margin-bottom: 4px;
+      }
+      .checks {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 10px;
+        font-size: 13px;
+      }
+      .checks label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin: 0;
+        font-size: 13px;
+      }
+      button {
+        padding: 8px 10px;
+        border: 1px solid #ccc;
+        background: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f7f7f7;
+      }
+      pre {
+        background: #f7f7f7;
+        border: 1px solid #e5e5e5;
+        padding: 8px;
+        border-radius: 6px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+      }
+      .hint {
+        font-size: 12px;
+        color: #555;
+        line-height: 1.4;
+      }
+      .legend {
+        font-size: 12px;
+        color: #333;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 10px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+      }
+      .line {
+        width: 14px;
+        height: 3px;
+        display: inline-block;
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="sidebar">
+        <h2 style="margin: 0 0 10px 0; font-size: 16px">MapData Diff Viewer</h2>
+
+        <div class="row">
+          <label>Load GeoJSON diff</label>
+          <input id="file" type="file" accept=".geojson,.json,application/geo+json,application/json" />
+          <div class="hint" style="margin-top: 6px">
+            Generate diff GeoJSON with:
+            <pre>python3 cabot-navigation/mf_localization_mapping/script/diff_mapdata_geojson.py --orig ... --shifted ... -o /tmp/MapData.diff.geojson --delta_lines --summary</pre>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Filters</label>
+          <div class="checks">
+            <label><input id="showMoved" type="checkbox" checked /> moved</label>
+            <label><input id="showNotMoved" type="checkbox" checked /> not moved</label>
+            <label><input id="showOrig" type="checkbox" checked /> layer=orig</label>
+            <label><input id="showShifted" type="checkbox" checked /> layer=shifted</label>
+            <label><input id="showDelta" type="checkbox" checked /> layer=delta</label>
+            <label><input id="kindNode" type="checkbox" checked /> kind=node</label>
+            <label><input id="kindLink" type="checkbox" checked /> kind=link</label>
+            <label><input id="kindFacility" type="checkbox" checked /> kind=facility</label>
+            <label><input id="kindPoi" type="checkbox" checked /> kind=poi</label>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Style</label>
+          <div class="checks" style="grid-template-columns: 1fr">
+            <label>Point size <input id="pointSize" type="range" min="1" max="8" value="3" /></label>
+            <label>Line width <input id="lineWidth" type="range" min="1" max="6" value="2" /></label>
+            <label>Opacity <input id="opacity" type="range" min="0.1" max="1" step="0.1" value="0.8" /></label>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="fit">Fit to data</button>
+        </div>
+
+        <div class="row legend">
+          <label>Legend</label>
+          <div>
+            <span class="chip"><span class="dot" style="background: #777"></span> orig</span>
+            <span class="chip"><span class="dot" style="background: #1f77b4"></span> shifted</span>
+            <span class="chip"><span class="line" style="background: #ff7f0e"></span> delta</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Summary</label>
+          <pre id="summary">Load a GeoJSON diff to see counts.</pre>
+        </div>
+
+        <div class="row hint">
+          Mouse: drag to pan, wheel to zoom. This viewer uses a simple lon/lat plane (no basemap).
+        </div>
+      </div>
+      <div id="canvasWrap">
+        <canvas id="c"></canvas>
+      </div>
+    </div>
+    <script src="./viewer.js"></script>
+  </body>
+</html>
+
