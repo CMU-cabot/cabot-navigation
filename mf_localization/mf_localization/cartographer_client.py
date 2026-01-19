@@ -25,6 +25,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import tf_transformations
 
 from geometry_msgs.msg import Pose
+from dataclasses import dataclass
 
 from cartographer_ros_msgs.msg import TrajectoryStates
 from cartographer_ros_msgs.srv import GetTrajectoryStates
@@ -214,28 +215,74 @@ class CartographerClient:
         return res
 
     def is_optimized(self, timeout_sec):
+        count = self.get_pose_graph_constraints_count(timeout_sec)
+        if count is None:
+            return False
+
+        # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
+        # because this value is updated after running optimization
+        optimized = False
+        self.logger.info(f"inter_submap different trajectory constraints. count={count}")
+        # check if the number of constraints changed
+        if self.constraints_count != count:
+            self.constraints_count = count
+            if count >= self.min_hist_count:
+                optimized = True
+                self.logger.info("pose graph optimization detected.")
+        return optimized
+
+    def get_pose_graph_constraints_count(self, timeout_sec):
+        counts = self.get_scan_match_and_pose_graph_counts(timeout_sec)
+        if counts is None:
+            return None
+        return counts.pose_graph_constraints_count
+
+    def get_constraint_builder_found_count(self, timeout_sec):
+        counts = self.get_scan_match_and_pose_graph_counts(timeout_sec)
+        if counts is None:
+            return None
+        return counts.constraint_builder_count
+
+    @dataclass
+    class ScanMatchPoseGraphCounts:
+        constraint_builder_count: float | None
+        pose_graph_constraints_count: float | None
+
+    def get_scan_match_and_pose_graph_counts(self, timeout_sec):
         res = self.read_metrics(timeout_sec)
         if res is False:
-            return False
+            return None
 
         # comment out the following two lines to debug
         # from rosidl_runtime_py import message_to_yaml
         # self.logger.info(message_to_yaml(res))
 
-        # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
-        # because this value is updated after running optimization
-        optimized = False
+        constraint_builder_total = 0.0
+        constraint_builder_found = False
+        pose_graph_total = 0.0
+        pose_graph_found = False
         for metric_family in res.metric_families:
-            if metric_family.name == "mapping_2d_pose_graph_constraints":
+            if metric_family.name in [
+                    "mapping_constraints_constraint_builder_2d_constraints",
+                    "mapping_constraints_constraint_builder_3d_constraints",
+            ]:
                 for metric in metric_family.metrics:
-                    # inter_submap -> different trajectory
-                    if metric.labels[0].key == "tag" and metric.labels[0].value == "inter_submap" \
-                            and metric.labels[1].key == "trajectory" and metric.labels[1].value == "different":
-                        self.logger.info(f"inter_submap different trajectory constraints. count={metric.value}")
-                        # check if the number of constraints changed
-                        if self.constraints_count != metric.value:
-                            self.constraints_count = metric.value
-                            if metric.value >= self.min_hist_count:
-                                optimized = True
-                                self.logger.info("pose graph optimization detected.")
-        return optimized
+                    labels = {label.key: label.value for label in metric.labels}
+                    if labels.get("matcher") == "found" and labels.get("search_region") in ["local", "global"]:
+                        constraint_builder_total += metric.value
+                        constraint_builder_found = True
+            elif metric_family.name in [
+                    "mapping_2d_pose_graph_constraints",
+                    "mapping_3d_pose_graph_constraints",
+            ]:
+                for metric in metric_family.metrics:
+                    labels = {label.key: label.value for label in metric.labels}
+                    if labels.get("tag") == "inter_submap" and labels.get("trajectory") == "different":
+                        pose_graph_total += metric.value
+                        pose_graph_found = True
+        if not (constraint_builder_found or pose_graph_found):
+            return None
+        return self.ScanMatchPoseGraphCounts(
+            constraint_builder_count=constraint_builder_total if constraint_builder_found else None,
+            pose_graph_constraints_count=pose_graph_total if pose_graph_found else None,
+        )
