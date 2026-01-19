@@ -49,7 +49,23 @@ def _format_like(original: str, value: float) -> str:
     return str(value)
 
 
+def _format_changed(original: str, value: float) -> str:
+    """
+    Keep the original numeric style where possible, but ensure the text actually changes
+    when the numeric value changes (avoid rounding back to the original string).
+    """
+    original_s = original.strip()
+    out = _format_like(original_s, value)
+    if out != original_s:
+        return out
+    # Fallback with higher precision (non-scientific, trimmed)
+    out2 = f"{value:.15f}".rstrip("0").rstrip(".")
+    return out2 if out2 != "" else out
+
+
 def _shift_key_line(line: str, key: str, delta: float) -> str:
+    if delta == 0.0:
+        return line
     has_nl = line.endswith("\n")
     line0 = line[:-1] if has_nl else line
     if key == "latitude":
@@ -62,7 +78,7 @@ def _shift_key_line(line: str, key: str, delta: float) -> str:
         return line
     old = m.group(2)
     new = float(old) + delta
-    out = m.group(1) + _format_like(old, new) + m.group(3)
+    out = m.group(1) + _format_changed(old, new) + m.group(3)
     return out + ("\n" if has_nl else "")
 
 
