@@ -28,6 +28,7 @@ diagnostic_aggregator:
       path: "Soft: Localize"
       contains:
         - "Localize Status"
+        - "Scan Matching Status"
       remove_prefix:
         - "multi_floor_manager: "
 
