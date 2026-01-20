@@ -627,7 +627,7 @@ class MultiFloorManager:
                 age = now - floor_manager.scan_match_last_update_time
                 stat.add("scan_match_last_update_sec", f"{age.nanoseconds / 1e9:.1f}")
             if floor_manager.scan_match_distance_since_update is not None:
-                stat.add("scan_match_last_update_distance", f"{floor_manager.scan_match_distance_since_update:.1f}")
+                stat.add("scan_match_last_update_distance", f"{floor_manager.scan_match_distance_since_update:.2f}")
             stat.add("scan_match_no_update_detected", str(floor_manager.scan_match_no_update_detected))
             # fix constraint
             stat.add("fix_constraints_count", str(floor_manager.fix_constraints_count))
@@ -635,7 +635,7 @@ class MultiFloorManager:
                 age = now - floor_manager.fix_last_update_time
                 stat.add("fix_last_update_sec", f"{age.nanoseconds / 1e9:.1f}")
             if floor_manager.fix_distance_since_update is not None:
-                stat.add("fix_last_update_distance", f"{floor_manager.fix_distance_since_update:.1f}")
+                stat.add("fix_last_update_distance", f"{floor_manager.fix_distance_since_update:.2f}")
             stat.add("fix_no_update_detected", str(floor_manager.fix_no_update_detected))
             if floor_manager.scan_match_no_update_detected:
                 if floor_manager.fix_no_update_detected:
