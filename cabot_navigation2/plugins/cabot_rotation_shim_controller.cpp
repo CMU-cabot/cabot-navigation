@@ -30,6 +30,7 @@ namespace cabot_navigation2
 CaBotRotationShimController::CaBotRotationShimController()
 : nav2_rotation_shim_controller::RotationShimController()
 {
+  turn_pose_prefer_pub_ = nullptr;
 }
 
 geometry_msgs::msg::TwistStamped
@@ -108,18 +109,23 @@ geometry_msgs::msg::TwistStamped CaBotRotationShimController::computeVelocityCom
         RCLCPP_INFO(
           logger_,
           "Robot is not within the new path's rough heading, rotating to heading...");
-        if (angular_distance_pub_ == nullptr) {
-          angular_distance_pub_ = node->create_publisher<std_msgs::msg::Float64>("angular_distance", rclcpp::QoS(10));
+        if (turn_pose_prefer_pub_ == nullptr) {
+          turn_pose_prefer_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>("/cabot/turn_pose_prefer", rclcpp::QoS(10));
+          geometry_msgs::msg::PoseStamped msg;
+          tf2::Quaternion quaternion;
+          msg.header.stamp = clock_->now();
+          msg.header.frame_id = costmap_ros_->getBaseFrameID();
+          quaternion.setRPY(0.0, 0.0, angular_distance_to_heading);
+          tf2::convert(quaternion, msg.pose.orientation);
+          turn_pose_prefer_pub_->publish(msg);
         }
-        std_msgs::msg::Float64 msg;
-        msg.data = static_cast<double>(angular_distance_to_heading);
-        angular_distance_pub_->publish(msg);
         return computeRotateToHeadingCommand(angular_distance_to_heading, pose, velocity);
       } else {
         RCLCPP_INFO(
           logger_,
           "Robot is at the new path's rough heading, passing to controller");
         path_updated_ = false;
+        turn_pose_prefer_pub_ = nullptr;
       }
     } catch (const std::runtime_error & e) {
       RCLCPP_DEBUG(
