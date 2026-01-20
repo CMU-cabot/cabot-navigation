@@ -254,6 +254,12 @@ class FloorManager:
         self.pose_graph_constraints_count = None
         self.last_pose_graph_update_time = None
         self.pending_constraint_update_time = None
+        # variables (fix monitoring)
+        self.fix_constraints_count = 0
+        self.pending_fix_update_time = None
+        self.fix_distance_since_update = 0.0
+        self.fix_last_update_time = None
+        self.fix_no_update_detected = False
 
     def reset_states(self):
         # cartographer client
@@ -270,6 +276,12 @@ class FloorManager:
         self.pose_graph_constraints_count = None
         self.last_pose_graph_update_time = None
         self.pending_constraint_update_time = None
+        # variables (fix monitoring)
+        self.fix_constraints_count = 0
+        self.pending_fix_update_time = None
+        self.fix_distance_since_update = 0.0
+        self.fix_last_update_time = None
+        self.fix_no_update_detected = False
 
 
 class TFAdjuster:
@@ -423,6 +435,8 @@ class MultiFloorManagerParameters:
     scan_match_min_increment: int = 1
     scan_match_no_update_timeout: float = 300.0  # [s]
     scan_match_no_update_distance: float = 5.0  # [m]
+    fix_no_update_timeout: float = 600.0  # [s]
+    fix_no_update_distance: float = 5.0  # [m]
     enable_unreliable_status: bool = False  # disable unreliable status by default
 
 
@@ -533,6 +547,8 @@ class MultiFloorManager:
         self.localize_status_pub = self.node.create_publisher(MFLocalizeStatus, "localize_status", latched_qos, callback_group=MutuallyExclusiveCallbackGroup())
         self.scan_match_constraint_builder_count_pub = self.node.create_publisher(Int64, "~/scan_match_found_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.scan_match_pose_graph_count_pub = self.node.create_publisher(Int64, "~/pose_graph_constraint_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.fix_constraint_count_pub = self.node.create_publisher(Int64, "~/fix_constraint_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.fix_no_update_pub = self.node.create_publisher(Bool, "~/fix_update_stalled", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.scan_match_no_update_pub = self.node.create_publisher(Bool, "~/scan_match_update_stalled", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.scan_match_elapsed_time_since_update_pub = self.node.create_publisher(Float64, "~/scan_match_elapsed_time_since_update", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.scan_match_distance_since_update_pub = self.node.create_publisher(Float64, "~/scan_match_distance_since_update", 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -609,8 +625,20 @@ class MultiFloorManager:
                 stat.add("last_update_sec", f"{age.nanoseconds / 1e9:.1f}")
             if floor_manager.scan_match_distance_since_update is not None:
                 stat.add("last_update_distance", f"{floor_manager.scan_match_distance_since_update:.1f}")
+            stat.add("scan_match_no_update_detected", str(floor_manager.fix_no_update_detected))
+            # fix constraint
+            stat.add("fix_constraints_count", str(floor_manager.fix_constraints_count))
+            if floor_manager.fix_last_update_time is not None:
+                age = now - floor_manager.fix_last_update_time
+                stat.add("fix_last_update_sec", f"{age.nanoseconds / 1e9:.1f}")
+            if floor_manager.fix_distance_since_update is not None:
+                stat.add("fix_last_update_distance", f"{floor_manager.fix_distance_since_update:.1f}")
+            stat.add("fix_no_update_detected", str(floor_manager.fix_no_update_detected))
             if floor_manager.scan_match_no_update_detected:
-                stat.summary(DiagnosticStatus.WARN, "Unreliable")
+                if floor_manager.fix_no_update_detected:
+                    stat.summary(DiagnosticStatus.WARN, "Unreliable")
+                else:
+                    stat.summary(DiagnosticStatus.OK, "OK (Scan Matching: Unreliable, Fix: OK)")
             else:
                 stat.summary(DiagnosticStatus.OK, "OK")
             return stat
@@ -1404,6 +1432,7 @@ class MultiFloorManager:
 
         self.scan_match_constraint_builder_count_pub.publish(Int64(data=int(constraint_builder_count)))
         self.scan_match_pose_graph_count_pub.publish(Int64(data=int(pose_graph_count)))
+        self.fix_constraint_count_pub.publish(Int64(data=int(floor_manager.fix_constraints_count)))
         self.scan_match_distance_since_update_pub.publish(Float64(data=floor_manager.scan_match_distance_since_update))
         elapsed = None
         if floor_manager.scan_match_last_update_time is not None:
@@ -1416,6 +1445,7 @@ class MultiFloorManager:
             if self.params.scan_match_distance_min_step <= delta:
                 floor_manager.scan_match_distance_since_update += delta
                 floor_manager.scan_match_prev_xy = current_xy
+                floor_manager.fix_distance_since_update += delta  # reuse delta for fix_distance accumulation
         else:
             floor_manager.scan_match_prev_xy = current_xy
 
@@ -1428,6 +1458,9 @@ class MultiFloorManager:
             floor_manager.scan_match_last_update_xy = current_xy
             floor_manager.scan_match_no_update_detected = False
             floor_manager.scan_match_distance_since_update = 0.0
+            floor_manager.fix_last_update_time = now
+            floor_manager.fix_distance_since_update = 0.0
+            floor_manager.fix_no_update_detected = False
             self.scan_match_no_update_pub.publish(Bool(data=floor_manager.scan_match_no_update_detected))
             return
 
@@ -1453,6 +1486,14 @@ class MultiFloorManager:
             floor_manager.scan_match_distance_since_update = 0.0
             floor_manager.pending_constraint_update_time = None
 
+        # check new GNSS fix constraints
+        # pose graph update is not used here because it may not be detected when scan constraints are not added.
+        if floor_manager.pending_fix_update_time is not None:
+            floor_manager.fix_last_update_time = floor_manager.pending_fix_update_time
+            floor_manager.pending_fix_update_time = None
+            floor_manager.fix_distance_since_update = 0.0
+            floor_manager.fix_no_update_detected = False
+
         distance = floor_manager.scan_match_distance_since_update
         # flag as stale only if time or distance thresholds are exceeded
         if not floor_manager.scan_match_no_update_detected:
@@ -1461,9 +1502,19 @@ class MultiFloorManager:
                 floor_manager.scan_match_no_update_detected = True
         self.scan_match_no_update_pub.publish(Bool(data=floor_manager.scan_match_no_update_detected))
 
+        # flag as stale only if time or distance thresholds are exceeded
+        fix_distance = floor_manager.fix_distance_since_update
+        if floor_manager.fix_last_update_time is not None and not floor_manager.fix_no_update_detected:
+            fix_elapsed = now - floor_manager.fix_last_update_time
+            if fix_elapsed > Duration(seconds=self.params.fix_no_update_timeout) \
+                    or fix_distance >= self.params.fix_no_update_distance:
+                floor_manager.fix_no_update_detected = True
+        self.fix_no_update_pub.publish(Bool(data=floor_manager.fix_no_update_detected))
+
         # switch localize_status only in the track mode
         if self.params.enable_unreliable_status and self.mode == LocalizationMode.TRACK:
-            if floor_manager.scan_match_no_update_detected:
+            if floor_manager.scan_match_no_update_detected \
+                    and floor_manager.fix_no_update_detected:
                 if self.localize_status != MFLocalizeStatus.UNRELIABLE:
                     self.localize_status = MFLocalizeStatus.UNRELIABLE
             else:
@@ -2014,12 +2065,16 @@ class MultiFloorManager:
                 if floor_manager.previous_fix_local_published is None:
                     fix_pub.publish(fix)
                     floor_manager.previous_fix_local_published = fix_local
+                    floor_manager.fix_constraints_count += 1
+                    floor_manager.pending_fix_update_time = now
                 else:
                     prev_fix_local = floor_manager.previous_fix_local_published
                     distance_fix_local = np.sqrt((fix_local[1] - prev_fix_local[1])**2 + (fix_local[2] - prev_fix_local[2])**2)
                     if self.gnss_params.gnss_fix_motion_filter_distance <= distance_fix_local:
                         fix_pub.publish(fix)
                         floor_manager.previous_fix_local_published = fix_local
+                        floor_manager.fix_constraints_count += 1
+                        floor_manager.pending_fix_update_time = now
 
                 # check initial pose optimization timeout in reliable gnss fix loop
                 if self.gnss_init_time is not None:
