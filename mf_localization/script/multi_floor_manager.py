@@ -610,7 +610,7 @@ class MultiFloorManager:
             return stat
         self.updater.add(FunctionDiagnosticTask("Localize Status", localize_status))
 
-        def scan_match_status(stat):
+        def localization_health_monitor(stat):
             now = self.clock.now()
             floor_manager = self.get_active_floor_manager()
             if floor_manager is None \
@@ -622,9 +622,9 @@ class MultiFloorManager:
             stat.add("pose_graph_constraints_count", str(floor_manager.pose_graph_constraints_count))
             if floor_manager.scan_match_last_update_time is not None:
                 age = now - floor_manager.scan_match_last_update_time
-                stat.add("last_update_sec", f"{age.nanoseconds / 1e9:.1f}")
+                stat.add("scan_match_last_update_sec", f"{age.nanoseconds / 1e9:.1f}")
             if floor_manager.scan_match_distance_since_update is not None:
-                stat.add("last_update_distance", f"{floor_manager.scan_match_distance_since_update:.1f}")
+                stat.add("scan_match_last_update_distance", f"{floor_manager.scan_match_distance_since_update:.1f}")
             stat.add("scan_match_no_update_detected", str(floor_manager.scan_match_no_update_detected))
             # fix constraint
             stat.add("fix_constraints_count", str(floor_manager.fix_constraints_count))
@@ -642,7 +642,7 @@ class MultiFloorManager:
             else:
                 stat.summary(DiagnosticStatus.OK, "OK")
             return stat
-        self.updater.add(FunctionDiagnosticTask("Scan Matching Status", scan_match_status))
+        self.updater.add(FunctionDiagnosticTask("Localization Health Monitor", localization_health_monitor))
 
     # state getter/setter
     @property
