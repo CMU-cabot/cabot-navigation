@@ -247,7 +247,6 @@ class FloorManager:
         # variables (scan matching monitoring)
         self.constraint_builder_constraints_count = None
         self.scan_match_last_update_time = None
-        self.scan_match_last_update_xy = None
         self.scan_match_no_update_detected = False
         self.scan_match_distance_since_update = 0.0
         self.scan_match_prev_xy = None
@@ -269,7 +268,6 @@ class FloorManager:
         # variables (scan matching monitoring)
         self.constraint_builder_constraints_count = None
         self.scan_match_last_update_time = None
-        self.scan_match_last_update_xy = None
         self.scan_match_no_update_detected = False
         self.scan_match_distance_since_update = 0.0
         self.scan_match_prev_xy = None
@@ -1455,7 +1453,6 @@ class MultiFloorManager:
             floor_manager.pose_graph_constraints_count = pose_graph_count
             floor_manager.last_pose_graph_update_time = now
             floor_manager.scan_match_last_update_time = now
-            floor_manager.scan_match_last_update_xy = current_xy
             floor_manager.scan_match_no_update_detected = False
             floor_manager.scan_match_distance_since_update = 0.0
             floor_manager.fix_last_update_time = now
@@ -1481,7 +1478,6 @@ class MultiFloorManager:
                 and floor_manager.last_pose_graph_update_time is not None \
                 and floor_manager.last_pose_graph_update_time >= floor_manager.pending_constraint_update_time:
             floor_manager.scan_match_last_update_time = floor_manager.last_pose_graph_update_time
-            floor_manager.scan_match_last_update_xy = current_xy
             floor_manager.scan_match_no_update_detected = False
             floor_manager.scan_match_distance_since_update = 0.0
             floor_manager.pending_constraint_update_time = None
