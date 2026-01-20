@@ -433,10 +433,10 @@ class MultiFloorManagerParameters:
     scan_match_distance_min_step: float = 0.05  # [m]
     scan_match_monitor_interval: float = 2.5  # [s]
     scan_match_min_increment: int = 1
-    scan_match_no_update_timeout: float = 300.0  # [s]
-    scan_match_no_update_distance: float = 5.0  # [m]
-    fix_no_update_timeout: float = 600.0  # [s]
-    fix_no_update_distance: float = 5.0  # [m]
+    scan_match_no_update_timeout: float = 300.0  # [s], <= 0 disables
+    scan_match_no_update_distance: float = 5.0  # [m], <= 0 disables
+    fix_no_update_timeout: float = 0.0  # [s], <= 0 disables
+    fix_no_update_distance: float = 5.0  # [m], <= 0 disables
     enable_unreliable_status: bool = False  # disable unreliable status by default
 
 
@@ -1497,8 +1497,10 @@ class MultiFloorManager:
         distance = floor_manager.scan_match_distance_since_update
         # flag as stale only if time or distance thresholds are exceeded
         if not floor_manager.scan_match_no_update_detected:
-            if elapsed > Duration(seconds=self.params.scan_match_no_update_timeout) \
-                    or distance >= self.params.scan_match_no_update_distance:
+            if (self.params.scan_match_no_update_timeout > 0
+                and elapsed > Duration(seconds=self.params.scan_match_no_update_timeout)) \
+                    or (self.params.scan_match_no_update_distance > 0
+                        and distance >= self.params.scan_match_no_update_distance):
                 floor_manager.scan_match_no_update_detected = True
         self.scan_match_no_update_pub.publish(Bool(data=floor_manager.scan_match_no_update_detected))
 
@@ -1506,8 +1508,10 @@ class MultiFloorManager:
         fix_distance = floor_manager.fix_distance_since_update
         if floor_manager.fix_last_update_time is not None and not floor_manager.fix_no_update_detected:
             fix_elapsed = now - floor_manager.fix_last_update_time
-            if fix_elapsed > Duration(seconds=self.params.fix_no_update_timeout) \
-                    or fix_distance >= self.params.fix_no_update_distance:
+            if (self.params.fix_no_update_timeout > 0
+                and fix_elapsed > Duration(seconds=self.params.fix_no_update_timeout)) \
+                    or (self.params.fix_no_update_distance > 0
+                        and fix_distance >= self.params.fix_no_update_distance):
                 floor_manager.fix_no_update_detected = True
         self.fix_no_update_pub.publish(Bool(data=floor_manager.fix_no_update_detected))
 
