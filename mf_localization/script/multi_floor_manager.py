@@ -240,6 +240,7 @@ class FloorManager:
 
         # cartographer client
         self.cartographer_client: CartographerClient = None
+        self.cartographer_parameters = {}
 
         # variables
         self.previous_fix_local_published = None
@@ -280,6 +281,9 @@ class FloorManager:
         self.fix_distance_since_update = 0.0
         self.fix_last_update_time = None
         self.fix_no_update_detected = False
+
+    def use_nav_sat(self):
+        return self.cartographer_parameters.get("options.use_nav_sat", False)
 
 
 class TFAdjuster:
@@ -2065,16 +2069,18 @@ class MultiFloorManager:
                 if floor_manager.previous_fix_local_published is None:
                     fix_pub.publish(fix)
                     floor_manager.previous_fix_local_published = fix_local
-                    floor_manager.fix_constraints_count += 1
-                    floor_manager.pending_fix_update_time = now
+                    if floor_manager.use_nav_sat():
+                        floor_manager.fix_constraints_count += 1
+                        floor_manager.pending_fix_update_time = now
                 else:
                     prev_fix_local = floor_manager.previous_fix_local_published
                     distance_fix_local = np.sqrt((fix_local[1] - prev_fix_local[1])**2 + (fix_local[2] - prev_fix_local[2])**2)
                     if self.gnss_params.gnss_fix_motion_filter_distance <= distance_fix_local:
                         fix_pub.publish(fix)
                         floor_manager.previous_fix_local_published = fix_local
-                        floor_manager.fix_constraints_count += 1
-                        floor_manager.pending_fix_update_time = now
+                        if floor_manager.use_nav_sat():
+                            floor_manager.fix_constraints_count += 1
+                            floor_manager.pending_fix_update_time = now
 
                 # check initial pose optimization timeout in reliable gnss fix loop
                 if self.gnss_init_time is not None:
@@ -2938,6 +2944,7 @@ if __name__ == "__main__":
             floor_manager = FloorManager()
             floor_manager.configuration_directory = configuration_directory
             floor_manager.configuration_basename = tmp_configuration_basename
+            floor_manager.cartographer_parameters = cartographer_parameters
             multi_floor_manager.set_floor_manager(floor, area, mode, floor_manager)
 
         # set values to floor_manager
