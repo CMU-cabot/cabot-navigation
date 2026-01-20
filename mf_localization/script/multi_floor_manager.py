@@ -437,7 +437,8 @@ class MultiFloorManagerParameters:
     scan_match_min_increment: int = 1
     scan_match_no_update_timeout: float = 300.0  # [s], <= 0 disables
     scan_match_no_update_distance: float = 5.0  # [m], <= 0 disables
-    fix_no_update_timeout: float = 0.0  # [s], <= 0 disables
+    fix_motion_filter_distance = 0.2  # [m]
+    fix_no_update_timeout: float = 300.0  # [s], <= 0 disables
     fix_no_update_distance: float = 5.0  # [m], <= 0 disables
     enable_unreliable_status: bool = False  # disable unreliable status by default
 
@@ -564,7 +565,7 @@ class MultiFloorManager:
 
         # for gnss localization
         # parameters
-        self.gnss_params = GNSSParameters()
+        self.gnss_params: GNSSParameters = GNSSParameters()
         self.use_gnss = False
         # variables
         self.prev_navsat_msg = None
@@ -1460,7 +1461,6 @@ class MultiFloorManager:
             floor_manager.scan_match_no_update_detected = False
             floor_manager.scan_match_distance_since_update = 0.0
             floor_manager.fix_last_update_time = now
-            floor_manager.fix_distance_since_update = 0.0
             floor_manager.fix_no_update_detected = False
             self.scan_match_no_update_pub.publish(Bool(data=floor_manager.scan_match_no_update_detected))
             return
@@ -1508,10 +1508,18 @@ class MultiFloorManager:
         fix_distance = floor_manager.fix_distance_since_update
         if floor_manager.fix_last_update_time is not None and not floor_manager.fix_no_update_detected:
             fix_elapsed = now - floor_manager.fix_last_update_time
+            # timeout
             if (self.params.fix_no_update_timeout > 0
-                and fix_elapsed > Duration(seconds=self.params.fix_no_update_timeout)) \
-                    or (self.params.fix_no_update_distance > 0
-                        and fix_distance >= self.params.fix_no_update_distance):
+                    and fix_elapsed > Duration(seconds=self.params.fix_no_update_timeout)):
+                # no fix input
+                if floor_manager.fix_constraints_count == 0:
+                    floor_manager.fix_no_update_detected = True
+                # moved from the previous fix constraint more than the filter distance
+                elif fix_distance > self.params.fix_motion_filter_distance:
+                    floor_manager.fix_no_update_detected = True
+            # distance
+            if (self.params.fix_no_update_distance > 0
+                    and fix_distance >= self.params.fix_no_update_distance):
                 floor_manager.fix_no_update_detected = True
         self.fix_no_update_pub.publish(Bool(data=floor_manager.fix_no_update_detected))
 
