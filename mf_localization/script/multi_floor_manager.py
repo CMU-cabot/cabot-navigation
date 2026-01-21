@@ -436,10 +436,10 @@ class MultiFloorManagerParameters:
     localization_health_monitor_interval: float = 2.5  # [s]
     scan_match_min_increment: int = 1
     scan_match_no_update_timeout: float = 300.0  # [s], <= 0 disables
-    scan_match_no_update_distance: float = 5.0  # [m], <= 0 disables
+    scan_match_no_update_distance: float = 10.0  # [m], <= 0 disables
     fix_motion_filter_distance = 0.2  # [m]
     fix_no_update_timeout: float = 300.0  # [s], <= 0 disables
-    fix_no_update_distance: float = 5.0  # [m], <= 0 disables
+    fix_no_update_distance: float = 10.0  # [m], <= 0 disables
     enable_unreliable_status: bool = False  # disable unreliable status by default
 
 
