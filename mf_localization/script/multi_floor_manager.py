@@ -433,7 +433,7 @@ class MultiFloorManagerParameters:
 
     # scan matching monitoring
     scan_match_distance_min_step: float = 0.05  # [m]
-    scan_match_monitor_interval: float = 2.5  # [s]
+    localization_health_monitor_interval: float = 2.5  # [s]
     scan_match_min_increment: int = 1
     scan_match_no_update_timeout: float = 300.0  # [s], <= 0 disables
     scan_match_no_update_distance: float = 5.0  # [m], <= 0 disables
@@ -487,7 +487,7 @@ class MultiFloorManager:
         self.latest_floor_estimation_result = None
 
         # inter-trajectory constraint monitoring
-        self.scan_match_monitor_prev_check_time = None
+        self.localization_health_monitor_prev_check_time = None
 
         # ble wifi localization
         self.use_ble = True
@@ -548,13 +548,10 @@ class MultiFloorManager:
         self.resetpose_pub = self.node.create_publisher(PoseWithCovarianceStamped, "resetpose", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.global_position_pub = self.node.create_publisher(MFGlobalPosition, "global_position", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.localize_status_pub = self.node.create_publisher(MFLocalizeStatus, "localize_status", latched_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        self.scan_match_constraint_builder_count_pub = self.node.create_publisher(Int64, "~/scan_match_found_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self.scan_match_pose_graph_count_pub = self.node.create_publisher(Int64, "~/pose_graph_constraint_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self.fix_constraint_count_pub = self.node.create_publisher(Int64, "~/fix_constraint_count", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self.fix_no_update_pub = self.node.create_publisher(Bool, "~/fix_update_stalled", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        # publishers (localization health monitor)
         self.scan_match_no_update_pub = self.node.create_publisher(Bool, "~/scan_match_update_stalled", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self.scan_match_elapsed_time_since_update_pub = self.node.create_publisher(Float64, "~/scan_match_elapsed_time_since_update", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self.scan_match_distance_since_update_pub = self.node.create_publisher(Float64, "~/scan_match_distance_since_update", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.fix_no_update_pub = self.node.create_publisher(Bool, "~/fix_update_stalled", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        # set localize status after creating localize_status_pub
         self.localize_status = MFLocalizeStatus.UNKNOWN
 
         # verbosity
@@ -1404,13 +1401,13 @@ class MultiFloorManager:
             return None
         return np.array([trans.transform.translation.x, trans.transform.translation.y])
 
-    def monitor_scan_match_constraints(self):
+    def monitor_localization_constraints(self):
         now = self.clock.now()
         # run at a fixed monitoring interval
-        if self.scan_match_monitor_prev_check_time is not None:
-            if now - self.scan_match_monitor_prev_check_time < Duration(seconds=self.params.scan_match_monitor_interval):
+        if self.localization_health_monitor_prev_check_time is not None:
+            if now - self.localization_health_monitor_prev_check_time < Duration(seconds=self.params.localization_health_monitor_interval):
                 return
-        self.scan_match_monitor_prev_check_time = now
+        self.localization_health_monitor_prev_check_time = now
 
         floor_manager = self.get_active_floor_manager()
         # skip until localization is active
@@ -1433,14 +1430,9 @@ class MultiFloorManager:
         if constraint_builder_count is None or pose_graph_count is None:
             return
 
-        self.scan_match_constraint_builder_count_pub.publish(Int64(data=int(constraint_builder_count)))
-        self.scan_match_pose_graph_count_pub.publish(Int64(data=int(pose_graph_count)))
-        self.fix_constraint_count_pub.publish(Int64(data=int(floor_manager.fix_constraints_count)))
-        self.scan_match_distance_since_update_pub.publish(Float64(data=floor_manager.scan_match_distance_since_update))
         elapsed = None
         if floor_manager.scan_match_last_update_time is not None:
             elapsed = now - floor_manager.scan_match_last_update_time
-            self.scan_match_elapsed_time_since_update_pub.publish(Float64(data=elapsed.nanoseconds / 1e9))
 
         if floor_manager.scan_match_prev_xy is not None:
             delta = np.linalg.norm(current_xy - floor_manager.scan_match_prev_xy)
@@ -1673,7 +1665,7 @@ class MultiFloorManager:
         self.mode = None
         self.map2odom = None
         self.optimization_detected = False
-        self.scan_match_monitor_prev_check_time = None
+        self.localization_health_monitor_prev_check_time = None
 
         # timeout
         self.initial_localization_time = None
@@ -3158,7 +3150,7 @@ if __name__ == "__main__":
             multi_floor_manager.initial_localization_time = None  # clear timeout count
 
         # monitor inter-trajectory constraints
-        multi_floor_manager.monitor_scan_match_constraints()
+        multi_floor_manager.monitor_localization_constraints()
 
         # detect area and mode switching
         multi_floor_manager.check_and_update_states()  # 1 Hz
