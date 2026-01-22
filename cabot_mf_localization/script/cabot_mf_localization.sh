@@ -355,6 +355,10 @@ else
             ntrip_client_arg="ntrip_client_logger:=true"
         fi
     fi
+    # change error level of RTCM timeout when GNSS is not used in localization
+    if [ ${CABOT_USE_GNSS} -eq 0 ]; then
+        ntrip_client_arg="$ntrip_client_arg rtcm_timeout_error_level:=0"
+    fi
 
     # gnss node
     gnss_arg=""
