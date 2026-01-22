@@ -49,7 +49,7 @@
         <!-- navigation -->
         <PipelineSequence name="NavigateWithReplanning">
           <!-- Check people status frequently -->
-          <RateController hz="1" name="AvoidPeople">
+          <!-- <RateController hz="1" name="AvoidPeople">
             <Fallback name="AvoidPersonFallback">
               <Sequence>
                 <CurrentPose global_frame="map" robot_base_frame="base_footprint"
@@ -60,7 +60,7 @@
               </Sequence>
               <AlwaysSuccess />
             </Fallback>
-          </RateController>
+          </RateController> -->
 
           <!-- follow path -->
           <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="cabot_goal_checker" />
@@ -85,4 +85,3 @@
     </Sequence>
   </BehaviorTree>
 </root>
-  

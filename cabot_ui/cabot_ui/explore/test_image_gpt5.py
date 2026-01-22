@@ -232,7 +232,7 @@ class CaBotImageNode(Node):
                 self.logger.info("[CHILOG] [TOUCHING]")
         else:
             if self.touching:
-                #test_speak.speak_text("", force=True)
+                test_speak.speak_text("", force=True)
                 self.logger.info("[CHILOG] [NOT_TOUCHING]")
             self.touching = False
 
@@ -263,8 +263,8 @@ class CaBotImageNode(Node):
             self.ready = True
         elif msg.category == "ble speech request completed":
             if not self.can_speak_explanation:
-                # set can_speak_explanation to True 1 sec later in different thread
-                thread = threading.Timer(1.0, self.reset_can_speak).start()
+                # set can_speak_explanation to True 3 sec later in different thread
+                thread = threading.Timer(3.0, self.reset_can_speak).start()
 
                 if self.can_speak_timer is not None:
                     self.can_speak_timer.cancel()
@@ -278,9 +278,9 @@ class CaBotImageNode(Node):
             self.explore_main_loop_ready = True
         elif "navigation;destination;goal" in msg.data:
             self.explore_main_loop_ready = True
-        #elif msg.data == "navigation;cancel":
+        elif msg.data == "navigation;cancel":
             # self.explore_main_loop_ready = False
-            # test_speak.speak_text("", force=True)
+            test_speak.speak_text("", force=True)
 
     def reset_can_speak(self):
         self.logger.info("can speak explanation set to True by timer")
@@ -381,7 +381,7 @@ class CaBotImageNode(Node):
             wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
-            if explain != "" and self.can_speak_explanation:
+            if self.touching and not self.in_conversation and is_in_valid_state and self.can_speak_explanation and explain != "":
                 self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is not empty")
                 test_speak.speak_text(explain)
                 self.logger.info(f"[CHILOG] [EXPLAIN] [{explain}]")
@@ -571,7 +571,7 @@ class GPTExplainer():
 
     # Function to encode the image
     def encode_image(self, image):
-        _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        _, buffer = cv2.imencode('.jpg', image)
         image_bytes = buffer.tobytes()
         return base64.b64encode(image_bytes).decode('utf-8')
     
@@ -612,8 +612,6 @@ class GPTExplainer():
             use_initial_prompt = True
             self.conversation_history = []
 
-        total_begin_time = time.time()
-
         try:
             images = []
 
@@ -651,36 +649,13 @@ class GPTExplainer():
 
             self.logger.info(f"Persona: {self.persona} Prompt: {prompt}")
             gpt_response = self.query_with_images(prompt, images)
-            gpt_response["log_dir"] = self.log_dir
 
             # get front/left/right availability
             self.logger.info(f"Extracting JSON from the response: {gpt_response}")
-            extracted_json = gpt_response["choices"][0]["message"]["content"]
-            
-            if extracted_json is None:
-                extracted_json = {"description": ""}
-                self.logger.info("Could not extract JSON part from the response.")
-                self.logger.info(f"Error in GPTExplainer.explain: extracted_json is None: {gpt_response}")
-            else:
-                if self.mode == "intersection_detection_mode":
-                    self.front_available = extracted_json.get("front", True)
-                    self.left_available = extracted_json.get("left", True)
-                    self.right_available = extracted_json.get("right", True)
-                    try:
-                        extracted_json["description"] = extracted_json["front_think"] + extracted_json["left_think"] + extracted_json["right_think"]
-                    except KeyError:
-                        self.logger.info("Could not extract the explanation from the response.")
-                        extracted_json["description"] = "" # error so set the description to empty
-                        self.logger.info(f"Error in GPTExplainer.explain: KeyError: {extracted_json}")
-                else:
-                    self.logger.info(f"{extracted_json} {extracted_json}")
-                    if extracted_json == "Error":
-                        extracted_json = {"description": ""}
-                        self.logger.info(f"Error in GPTExplainer.explain: extracted_json is 'Error': {extracted_json}")
-                    else:
-                        extracted_json["description"] = extracted_json["description"]
 
-            self.logger.info(f"length of gpt_response: {len(extracted_json['description'])} actual response: {extracted_json['description']}")
+        
+
+            self.logger.info(f"length of gpt_response: {len(gpt_response)} actual response: {gpt_response}")
 
             ##save odom and img
             current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -698,7 +673,7 @@ class GPTExplainer():
                 cv2.imwrite(os.path.join(folder_name,"right.jpg"), right_image)
 
             with open(os.path.join(folder_name,"explanation.jsonl"), "w") as f:
-                description_json = {"description": extracted_json["description"]}
+                description_json = {"description": gpt_response}
                 json.dump(description_json, f, ensure_ascii=False)
 
             with open(os.path.join(folder_name,"log.jsonl"), "w") as f:
@@ -706,7 +681,7 @@ class GPTExplainer():
 
             pretty_response = json.dumps(gpt_response, indent=4)
 
-            log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
+            log_image_and_gpt_response(images_with_text, str(gpt_response), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")
@@ -716,75 +691,69 @@ class GPTExplainer():
         self.logger.info(f"GPTExplainer.explain gpt_response:\n{pretty_response}")
 
         wait_time = 2.0
-        if self.should_speak and not extracted_json["description"] == "":
-            wait_time = self.calculate_speak_time(extracted_json["description"])
+        if self.should_speak and not gpt_response == "":
+            wait_time = self.calculate_speak_time(gpt_response)
             self.logger.info(f"Speaking the {self.mode} explanation")
         
-        # # extract features from image & text
-        # left_feature = extract_image_feature(PILImage.fromarray(left_image), self.processor, self.model, self.device)
-        # front_feature = extract_image_feature(PILImage.fromarray(front_image), self.processor, self.model, self.device)
-        # right_feature = extract_image_feature(PILImage.fromarray(right_image), self.processor, self.model, self.device)
+        # extract features from image & text
+        left_feature = extract_image_feature(PILImage.fromarray(left_image), self.processor, self.model, self.device)
+        front_feature = extract_image_feature(PILImage.fromarray(front_image), self.processor, self.model, self.device)
+        right_feature = extract_image_feature(PILImage.fromarray(right_image), self.processor, self.model, self.device)
 
-        # # feature dir is the parent directory of the log_dir
-        # image_feature_path = os.path.join(self.log_dir, "image_features.pickle")
-        # # image_file_key is the dir name of self.log_dir
-        # image_file_key = os.path.basename(self.folder_name)
-        # if os.path.exists(image_feature_path):
-        #     with open(image_feature_path, "rb") as f:
-        #         image_features = pickle.load(f)
-        #     image_features["front"] = concat_features(image_features["front"], front_feature)
-        #     image_features["left"] = concat_features(image_features["left"], left_feature)
-        #     image_features["right"] = concat_features(image_features["right"], right_feature)
-        #     image_features["odoms"] = image_features.get("odoms", []) + [self.node.odom]
-        #     image_features["image_file_key"] = image_features.get("image_file_key", []) + [image_file_key]
-        # else:
-        #     image_features = {
-        #         "front": front_feature,
-        #         "left": left_feature,
-        #         "right": right_feature,
-        #         "odoms": [self.node.odom],
-        #         "image_file_key": [image_file_key]
-        #     }
-        # # save the image features
-        # with open(image_feature_path, "wb") as f:
-        #     pickle.dump(image_features, f)
+        # feature dir is the parent directory of the log_dir
+        image_feature_path = os.path.join(self.log_dir, "image_features.pickle")
+        # image_file_key is the dir name of self.log_dir
+        image_file_key = os.path.basename(self.folder_name)
+        if os.path.exists(image_feature_path):
+            with open(image_feature_path, "rb") as f:
+                image_features = pickle.load(f)
+            image_features["front"] = concat_features(image_features["front"], front_feature)
+            image_features["left"] = concat_features(image_features["left"], left_feature)
+            image_features["right"] = concat_features(image_features["right"], right_feature)
+            image_features["odoms"] = image_features.get("odoms", []) + [self.node.odom]
+            image_features["image_file_key"] = image_features.get("image_file_key", []) + [image_file_key]
+        else:
+            image_features = {
+                "front": front_feature,
+                "left": left_feature,
+                "right": right_feature,
+                "odoms": [self.node.odom],
+                "image_file_key": [image_file_key]
+            }
+        # save the image features
+        with open(image_feature_path, "wb") as f:
+            pickle.dump(image_features, f)
 
-        # # extract text features
-        # text_feature = extract_text_feature(extracted_json["description"], self.text_tokenizer, self.text_model, self.device)
-        # text_feature_path = os.path.join(self.log_dir, "text_features.pickle")
-        # if os.path.exists(text_feature_path):
-        #     with open(text_feature_path, "rb") as f:
-        #         text_features = pickle.load(f)
-        #     # text_features has four keys: "features", "odoms", "text_file_key", "texts"
-        #     text_features["features"] = concat_features(text_features["features"], text_feature)
-        #     text_features["odoms"] = text_features.get("odoms", []) + [self.node.odom]
-        #     text_features["text_file_key"] = text_features.get("text_file_key", []) + [image_file_key]
-        #     text_features["texts"] = text_features.get("texts", []) + [extracted_json["description"]]
-        # else:
-        #     text_features = {
-        #         "features": text_feature,
-        #         "odoms": [self.node.odom],
-        #         "text_file_key": [image_file_key],
-        #         "texts": [extracted_json["description"]]
-        #     }
-        # # save the text features
-        # with open(text_feature_path, "wb") as f:
-        #     pickle.dump(text_features, f)
+        # extract text features
+        text_feature = extract_text_feature(gpt_response, self.text_tokenizer, self.text_model, self.device)
+        text_feature_path = os.path.join(self.log_dir, "text_features.pickle")
+        if os.path.exists(text_feature_path):
+            with open(text_feature_path, "rb") as f:
+                text_features = pickle.load(f)
+            # text_features has four keys: "features", "odoms", "text_file_key", "texts"
+            text_features["features"] = concat_features(text_features["features"], text_feature)
+            text_features["odoms"] = text_features.get("odoms", []) + [self.node.odom]
+            text_features["text_file_key"] = text_features.get("text_file_key", []) + [image_file_key]
+            text_features["texts"] = text_features.get("texts", []) + [gpt_response]
+        else:
+            text_features = {
+                "features": text_feature,
+                "odoms": [self.node.odom],
+                "text_file_key": [image_file_key],
+                "texts": [gpt_response]
+            }
+        # save the text features
+        with open(text_feature_path, "wb") as f:
+            pickle.dump(text_features, f)
 
         self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
 
-        total_end_time = time.time()
-
-        total_delta_time = total_end_time - total_begin_time
-        self.logger.info(f"Image description total time taken: {total_delta_time:.3f}s")
-        
-
-        return wait_time, extracted_json["description"]
+        return wait_time, gpt_response
     
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
         # assume 1 character takes 0.125 seconds to speak (a bit longer than the average which is 0.1 seconds)
-        return len(text) * 0.15
+        return len(text) * 0.125
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it
@@ -807,16 +776,16 @@ class GPTExplainer():
         else:
             return None
 
-    def query_with_images(self, prompt, images, max_tokens=2000) -> Dict[str, Any]:
+    def query_with_images(self, prompt, images, max_tokens=10000) -> Dict[str, Any]:
         # Preparing the content with the prompt and images
-        new_content = [{"type": "text", "text": prompt}]
+        new_content = [{"type": "input_text", "text": prompt}]
         self.conversation_history.append({"role": "user", "content": copy(new_content)})
         
         for image in images:
             base64_image = self.encode_image(image)
             img_info = {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                "type": "input_image",
+                "image_url": f"data:image/jpeg;base64,{base64_image}"
             }
             new_content.append(img_info)
         
@@ -826,31 +795,67 @@ class GPTExplainer():
             new_input = [{"role": "user", "content": new_content}]
 
         payload = {
-            "model": "gpt-4o-mini",
-            "messages": new_input,
-            "max_tokens": max_tokens
+            "model": "gpt-5-nano",
+            "input": new_input,
+            "max_output_tokens": max_tokens,
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {"type": "text"},
+                "verbosity": "low"
+            }
         }
+
 
         self.logger.info(f"Payload size: {sys.getsizeof(str(payload))} bytes")
 
         self.logger.info("Sending the request to OpenAI API...")
         request_start = time.time()
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
-        try:
-            res_json = response.json()
-            extracted_json = self.extract_json_part(res_json["choices"][0]["message"]["content"])
-            res_json["choices"][0]["message"]["content"] = extracted_json
 
-            request_elapsed = time.time() - request_start
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers=self.headers,
+            json=payload
+        )
+
+        request_elapsed = time.time() - request_start
+
+        try:
+            response.raise_for_status()
+            res_json = response.json()
+
+            assistant_text = None
+
+            for item in res_json.get("output", []):
+                if item.get("type") == "message" and item.get("role") == "assistant":
+                    for content in item.get("content", []):
+                        if content.get("type") in ("output_text", "text"):
+                            assistant_text = content.get("text")
+                            break
+
+            if assistant_text is None:
+                raise ValueError("No assistant text found in response")
+
+            extracted_json = assistant_text
+
             self.logger.info("OpenAI API Request success.")
             self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
-            self.conversation_history.append({"role": "system", "content": str(res_json["choices"][0]["message"]["content"])})
+
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": str(extracted_json)
+            })
+
+            return extracted_json
+
         except Exception as e:
-            self.logger.info(f"OpenAI API Request failed. Error message: {e}")
-            self.logger.info(f"OpenAI Error Response: {response}")
-            res_json = {"choices": [{"message": {"content": "Error", "role": "assistant"}}]}
-        
-        return res_json
+            self.logger.error("OpenAI API Request failed")
+            self.logger.error(f"Status code: {response.status_code}")
+            self.logger.error(f"Response text: {response.text}")
+
+            return {
+                "error": str(e),
+                "raw_response": response.text
+            }
 
     def add_text_to_image(self, image: np.ndarray, text: str, fontscale=1):
         # putText params: image, text, position, font, fontScale, color, thickness, lineType

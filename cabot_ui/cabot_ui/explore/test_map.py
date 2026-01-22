@@ -17,6 +17,7 @@ from sklearn.cluster import DBSCAN
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+import std_msgs
 import tf_transformations
 from geometry_msgs.msg import Point
 from mf_localization_msgs.msg import MFLocalizeStatus
@@ -74,6 +75,7 @@ class CaBotMapNode(Node):
         self.map_sub = self.create_subscription(OccupancyGrid, "/local_costmap/costmap", self.map_callback, transient_local_qos)
         self.global_map_pub = self.create_publisher(OccupancyGrid, "/global_costmap/costmap", transient_local_qos)
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
+        self.current_cost_pub = self.create_publisher(std_msgs.msg.Int32, "/cabot/current_map_cost", transient_local_qos)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -581,6 +583,36 @@ def main(
             print(e)
 
     # logger.info(f"TME taken after get map info: {(datetime.datetime.now() - starting_time).total_seconds():.2f} seconds")
+
+    # # Calculate cost at current position
+    # if rcl_publisher.coordinates:
+    #     # Get current odom position
+    #     curr_x_odom = rcl_publisher.coordinates[-1][0]
+    #     curr_y_odom = rcl_publisher.coordinates[-1][1]
+        
+    #     # Convert to map pixels
+    #     # Formula mirrors convert_odom_to_map_batch but for single point
+    #     # x_pixel = (x_odom - origin_x) / resolution
+    #     # y_pixel = (y_odom - origin_y) / resolution
+    #     # Note: map_callback uses origin directly, main logic uses inverted origin. 
+    #     # Using raw values from rcl_publisher here:
+        
+    #     curr_x_pixel = int((curr_x_odom - rcl_publisher.map_x) / rcl_publisher.map_resolution)
+    #     curr_y_pixel = int((curr_y_odom - rcl_publisher.map_y) / rcl_publisher.map_resolution)
+        
+    #     # Standard ROS map data is usually bottom-left origin, but 
+    #     # CaBotMapNode stores it in `self.map_data` which is reshaped (H, W).
+    #     # We need to make sure we access it correctly.
+        
+    #     if 0 <= curr_x_pixel < rcl_publisher.map_width and 0 <= curr_y_pixel < rcl_publisher.map_height:
+    #          # Accessing data. Note that reshape((height, width)) typically means [y, x] access
+    #          current_cost = rcl_publisher.map_data[curr_y_pixel, curr_x_pixel]
+             
+    #          # If ROS/Nav2 standard, value is 0-100 or -1.
+    #          logger.info(f"Cost at start position ({curr_x_odom:.2f}, {curr_y_odom:.2f}): {current_cost}")
+    #     else:
+    #          logger.warning(f"Current position ({curr_x_odom:.2f}, {curr_y_odom:.2f}) is out of map bounds.")
+
 
     
     rcl_publisher.destroy_node()

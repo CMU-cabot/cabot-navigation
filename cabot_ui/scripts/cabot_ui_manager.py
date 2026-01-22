@@ -102,7 +102,9 @@ class CabotUIManager(NavigationInterface, object):
 
         self._retry_count = 0
 
-        self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        self._lidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        #self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -913,19 +915,21 @@ class EventMapper1(object):
 
     def checkLidarLimit(self, logger, lidar_limit):
 
-        lidar_dist = 0.0
+        lidar_dist = lidar_limit.data
 
-        if hasattr(lidar_limit, "ranges"):
-            ranges = [x for x in lidar_limit.ranges if not math.isnan(x) and not math.isinf(x) and x >= lidar_limit.range_min and x <= lidar_limit.range_max]
-            if len(ranges) > 0:
-                lidar_dist = min(ranges)
-            else:
-                lidar_dist = float('inf')
+        # lidar_dist = 0.0
+
+        # if hasattr(lidar_limit, "ranges"):
+        #     ranges = [x for x in lidar_limit.ranges if not math.isnan(x) and not math.isinf(x) and x >= lidar_limit.range_min and x <= lidar_limit.range_max]
+        #     if len(ranges) > 0:
+        #         lidar_dist = min(ranges)
+        #     else:
+        #         lidar_dist = float('inf')
 
 
         with self.lock:
             logger.info(f"Checking Lidar Limit: {lidar_dist}")
-            if self.exploration_mode == self.ExplorationMode.MANUAL and lidar_dist <= 0.5:
+            if self.exploration_mode == self.ExplorationMode.MANUAL and lidar_dist <= 0.05:
                 self.exploration_mode = self.ExplorationMode.AUTONOMOUS        
                 self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
                 speak_text("障害物を検知しました。オートノマスモードに切り替えます。")
