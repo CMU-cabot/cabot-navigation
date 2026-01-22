@@ -72,6 +72,7 @@ def generate_launch_description():
     nmea_request_cycle = LaunchConfiguration('nmea_request_cycle')
 
     # cabot use gnss
+    rtcm_timeout_error_level = LaunchConfiguration('rtcm_timeout_error_level')
     fix_warn_error_level = LaunchConfiguration('fix_warn_error_level')
     no_fix_error_level = LaunchConfiguration('no_fix_error_level')
 
@@ -109,6 +110,7 @@ def generate_launch_description():
                                 'reconnect_attempt_max': '10000',  # default: 10
                                 'respawn': respawn_ntrip_client,
                                 'nmea_max_length': '90',  # a large value to accept high precision mode
+                                'rtcm_timeout_error_level': rtcm_timeout_error_level,
                             }.items(),
                             condition=IfCondition(ntrip_client)
     )
@@ -206,6 +208,7 @@ def generate_launch_description():
         DeclareLaunchArgument('nmea_request_cycle', default_value="0", description='nmea request cycke (ms) [0]'),
 
         # cabot use gnss
+        DeclareLaunchArgument('rtcm_timeout_error_level', default_value='1', description='Error level for RTCM timeout. default: 1 (WARN)'),
         DeclareLaunchArgument('fix_warn_error_level', default_value='1', description='Error level for inaccurate FIX status. default: 1 (WARN)'),
         DeclareLaunchArgument('no_fix_error_level', default_value='1', description='Error level for NO FIX status. default: 1 (WARN)'),
 
