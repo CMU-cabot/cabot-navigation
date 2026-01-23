@@ -440,14 +440,45 @@ class Goal(geoutil.TargetPlace):
         self._is_canceled = False
         self._current_statement = None
         self.global_map_name = self.delegate.global_map_name()
+        # (send_seq, handle, cancel_callback)
         self._handles = []
         self._current_params = copy.deepcopy(Goal.default_params)
         self._is_exiting_goal = False
+        # Increasing sequence number for each action goal send issued by this Goal object.
+        # Used to prevent stale goal handles/results (from before a pause/resume) from
+        # canceling or overwriting state for a newer send.
+        self._send_seq = 0
+        self._active_send_seq = 0
+        # Cancel applies to all sends up to this sequence number.
+        self._cancel_upto_send_seq = 0
 
     def reset(self):
         self._is_completed = False
         self._is_canceled = False
         self._is_exiting_goal = False
+
+    def _new_action_callbacks(self, done_cb):
+        """
+        Create per-send callbacks for action goal handle/result.
+        The returned callbacks are guarded by an internal send sequence number so
+        late-arriving handles/results from older sends won't affect newer sends.
+        """
+        self._send_seq += 1
+        send_seq = self._send_seq
+        self._active_send_seq = send_seq
+
+        def goal_handle_cb(handle, cancel_callback=None):
+            self._goal_handle_callback(handle, send_seq, cancel_callback=cancel_callback)
+
+        def guarded_done_cb(future):
+            if send_seq != self._active_send_seq:
+                self._logger.info(
+                    f"Ignoring stale action result {send_seq=}, {self._active_send_seq=}"
+                )
+                return
+            done_cb(future)
+
+        return goal_handle_cb, guarded_done_cb
 
     def enter(self):
         """
@@ -579,10 +610,14 @@ class Goal(geoutil.TargetPlace):
     def __repr__(self):
         return F"{super(Goal, self).__repr__()}"
 
+    def _goal_handle_callback(self, handle, send_seq, cancel_callback=None):
+        self._handles.append((send_seq, handle, cancel_callback))
+        if send_seq <= self._cancel_upto_send_seq:
+            self._cancel_handles_upto_send_seq()
+
+    # Backward compatible entry point (some callers pass this directly)
     def goal_handle_callback(self, handle, cancel_callback=None):
-        self._handles.append((handle, cancel_callback))
-        if self._is_canceled:
-            self.cancel()
+        self._goal_handle_callback(handle, self._active_send_seq, cancel_callback=cancel_callback)
 
     def cancel(self, callback=None):
         CaBotRclpyUtil.info(F"{self.__class__.__name__}.cancel is called")
@@ -599,9 +634,27 @@ class Goal(geoutil.TargetPlace):
 
     def _cancel(self, callback=None):
         self._is_canceled = True
+        self._cancel_upto_send_seq = max(self._cancel_upto_send_seq, self._active_send_seq)
 
-        if len(self._handles) > 0:
-            (handle, cancel_callback) = self._handles.pop(0)
+        def done_when_drained():
+            if callback:
+                callback()
+
+        self._cancel_handles_upto_send_seq(done_when_drained)
+
+    def _cancel_handles_upto_send_seq(self, callback=None):
+        cancel_upto = self._cancel_upto_send_seq
+        handles_to_cancel = [(s, h, cb) for (s, h, cb) in self._handles if s <= cancel_upto]
+        self._handles = [(s, h, cb) for (s, h, cb) in self._handles if s > cancel_upto]
+
+        def cancel_next():
+            if len(handles_to_cancel) == 0:
+                self._logger.info("done cancel goal")
+                if callback:
+                    callback()
+                return
+
+            (_, handle, cancel_callback) = handles_to_cancel.pop(0)
             future = handle.cancel_goal_async()
 
             def done_callback(future):
@@ -615,7 +668,7 @@ class Goal(geoutil.TargetPlace):
                         self._logger.info(f"cancel future result = {future.result}")
                 if cancel_callback:
                     cancel_callback()
-                self.delegate._process_queue.add(self.cancel, callback)
+                self.delegate._process_queue.add(cancel_next)
             future.add_done_callback(done_callback)
 
             def timeout_watcher(future, timeout_duration):
@@ -630,11 +683,9 @@ class Goal(geoutil.TargetPlace):
             timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
             timeout_tread.start()
 
-            self._logger.info(f"sent cancel goal: {len(self._handles)} handles remaining")
-        else:
-            if callback:
-                callback()
-            self._logger.info("done cancel goal")
+            self._logger.info(f"sent cancel goal: {len(handles_to_cancel)} handles remaining")
+
+        cancel_next()
 
     def match(self, pose, floor):
         CaBotRclpyUtil.error(F"{inspect.currentframe().f_code.co_name} is not implemented")
@@ -951,7 +1002,8 @@ class NavGoal(Goal):
         # bt_navigator will path only a pair of consecutive poses in the path to the plugin
         # so we use navigate_to_pose and planner will listen the published path
         # self.delegate.navigate_through_poses(self.ros_path.poses[1:], NavGoal.DEFAULT_BT_XML, self.done_callback)
-        self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, self.goal_handle_callback, self.done_callback)
+        goal_handle_callback, done_callback = self._new_action_callbacks(self.done_callback)
+        self.delegate.navigate_to_pose(path.poses[-1], NavGoal.DEFAULT_BT_XML, goal_handle_callback, done_callback)
 
     def done_callback(self, future):
         if future:
@@ -1218,7 +1270,8 @@ class ElevatorInGoal(ElevatorGoal):
     def _enter(self):
         elevator_controller.open_door()
         # use odom frame for navigation
-        self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, self.goal_handle_callback, self.done_callback)
+        goal_handle_callback, done_callback = self._new_action_callbacks(self.done_callback)
+        self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), ElevatorGoal.ELEVATOR_BT_XML, goal_handle_callback, done_callback)
 
     def done_callback(self, future):
         if future is None:
@@ -1329,7 +1382,8 @@ class ElevatorOutGoal(ElevatorGoal):
         CaBotRclpyUtil.info(F"publish path {str(pose)}")
         self.delegate.publish_path(path, False)
 
-        self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, self.goal_handle_callback, self.done_callback, namespace='/local')
+        goal_handle_callback, done_callback = self._new_action_callbacks(self.done_callback)
+        self.delegate.navigate_to_pose(end, ElevatorGoal.LOCAL_ODOM_BT_XML, goal_handle_callback, done_callback, namespace='/local')
 
     def done_callback(self, future):
         if future is None:
@@ -1469,9 +1523,11 @@ class QueueNavGoal(NavGoal):
         path.header.stamp = CaBotRclpyUtil.now().to_msg()
         self.delegate.publish_path(path)
         if self.is_exiting:
-            self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_EXIT_BT_XML, self.goal_handle_callback, self.done_callback)
+            goal_handle_callback, done_callback = self._new_action_callbacks(self.done_callback)
+            self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_EXIT_BT_XML, goal_handle_callback, done_callback)
         else:
-            self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_BT_XML, self.goal_handle_callback, self.done_callback)
+            goal_handle_callback, done_callback = self._new_action_callbacks(self.done_callback)
+            self.delegate.navigate_to_pose(self.to_pose_stamped_msg(frame_id=self.global_map_name), QueueNavGoal.QUEUE_BT_XML, goal_handle_callback, done_callback)
 
     def done_callback(self, future):
         self._is_completed = future.done()
