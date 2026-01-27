@@ -548,7 +548,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger.info("wait_for_restart_navigation done_callback")
                 self.wait_for_restart_timer = self._node.create_timer(2.0, wait_resume_navigation)
 
-                self._status_manager.set_state(State.in_pausing)
+            self._status_manager.set_state(State.in_pausing)
             self.pause_navigation(done_callback)
 
     def _plan_callback(self, path):
