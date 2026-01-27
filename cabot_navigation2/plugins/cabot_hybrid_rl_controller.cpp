@@ -164,18 +164,19 @@ void CaBotHybridRLController::localGoalVisualizationCallback()
   local_goal_visualization_pub_->publish(vis_msg);
 }
 
-void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people)
+void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people_msg)
 {
   auto node = node_.lock();
   rl_people_.clear();
-  horizon_people_ = rl_people->positions_history.size();
+  horizon_people_ = rl_people_msg->positions_history.size();
+  rl_people_tmp_ = rl_people_msg->positions_history;
   if (horizon_people_ == 0) {
     num_people_ = 0;
     return;
   }
   try {
     for (size_t i = 0; i < horizon_people_; ++i) {
-      const auto & hist = rl_people->positions_history.at(i);  // at() for bounds check
+      const auto & hist = rl_people_tmp_.at(i);  // at() for bounds check
 
       const size_t pos_sz = hist.positions.size();
       const size_t ids_sz = hist.ids.size();
@@ -199,7 +200,7 @@ void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::Po
     }
   } catch (const std::out_of_range &e) {
     RCLCPP_ERROR(logger_, "rlPeopleCallback out_of_range: history=%zu horizon=%zu what=%s",
-      rl_people->positions_history.size(), horizon_people_, e.what());
+      rl_people_tmp_.size(), horizon_people_, e.what());
     // Leave rl_people_ as-is (cleared) to fail-safe
     num_people_ = 0;
   } catch (const std::exception &e) {
@@ -275,6 +276,10 @@ void CaBotHybridRLController::setPlan(const nav_msgs::msg::Path & path)
     global_plan_ = path;
     last_visited_index_ = 0;
     RCLCPP_INFO(logger_, "Received new global plan with %zu points.", global_plan_.poses.size());
+    for (size_t i = 0; i < global_plan_.poses.size(); ++i) {
+      auto pose = global_plan_.poses[i];
+      RCLCPP_INFO(logger_, "Path point %zu: (%.2f, %.2f)", i, pose.pose.position.x, pose.pose.position.y);
+    }
     return;
   }
 }
@@ -303,18 +308,18 @@ geometry_msgs::msg::TwistStamped CaBotHybridRLController::computeVelocityCommand
   }
 
   // Call your RL function to compute the optimal control action
-  geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan_);
+  geometry_msgs::msg::PoseStamped  local_goal= getLookaheadPoint(pose, global_plan_);
   curr_local_goal_ = local_goal;
 
-   // temporary code for goal handling! (DANGER!)
-  double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
-  if (goal_dist < focus_goal_dist_) {
-    double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
-    double current_heading = tf2::getYaw(pose.pose.orientation);
-    velocity_cmd.twist.linear.x = 1.0;
-    velocity_cmd.twist.angular.z = std::min(1.0, desired_heading - current_heading);
-    return velocity_cmd;
-  }
+  //  // temporary code for goal handling! (DANGER!)
+  // double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+  // if (goal_dist < focus_goal_dist_) {
+  //   double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
+  //   double current_heading = tf2::getYaw(pose.pose.orientation);
+  //   velocity_cmd.twist.linear.x = 1.0;
+  //   velocity_cmd.twist.angular.z = std::min(1.0, desired_heading - current_heading);
+  //   return velocity_cmd;
+  // }
 
   robot_info.robot_pos.x = pose.pose.position.x;
   robot_info.robot_pos.y = pose.pose.position.y;
@@ -343,14 +348,14 @@ geometry_msgs::msg::Twist CaBotHybridRLController::computeMPCControl(
 
   nav_msgs::msg::Path best_trajectory;
 
-  // temporary code for goal handling! (DANGER!)
+  // temporary code for goal handling! The robot heads straight to the goal.
   double goal_dist = pointDist(pose.pose.position, curr_local_goal_.pose.position);
   if (goal_dist < focus_goal_dist_) {
     double desired_heading = std::atan2(curr_local_goal_.pose.position.y - pose.pose.position.y, 
                                         curr_local_goal_.pose.position.x - pose.pose.position.x);
     double current_heading = tf2::getYaw(pose.pose.orientation);
-    best_control.linear.x = 1.0;
-    best_control.angular.z = std::max(-1.0, std::min(1.0, desired_heading - current_heading));
+    best_control.linear.x = max_linear_velocity_;
+    best_control.angular.z = std::max(-max_angular_velocity_, std::min(max_angular_velocity_, desired_heading - current_heading));
     return best_control;
   }
 
@@ -542,10 +547,11 @@ geometry_msgs::msg::PoseStamped CaBotHybridRLController::getLookaheadPoint(
   // on the global plan
 
   geometry_msgs::msg::PoseStamped lookahead_point;
-  lookahead_point = global_plan.poses.back();
 
   double current_x = current_pose.pose.position.x;
   double current_y = current_pose.pose.position.y;
+
+  bool found_point = false;
 
   for (size_t i = last_visited_index_; i < global_plan.poses.size(); ++i)
   {
@@ -557,10 +563,19 @@ geometry_msgs::msg::PoseStamped CaBotHybridRLController::getLookaheadPoint(
     {
       lookahead_point = global_plan.poses[i];
       last_visited_index_ = i;  // Update last visited index
+      found_point = true;
       break;
     }
   }
 
+  // If no point is found beyond the lookahead distance, use the last point
+  if (!found_point)
+  {
+    lookahead_point = global_plan.poses.back();
+    last_visited_index_ = global_plan.poses.size() - 1;
+  }
+
+  // Clamp the lookahead point to be within max_lookahead_
   if (pointDist(current_pose.pose.position, lookahead_point.pose.position) > max_lookahead_) {
     double angle_to_goal = std::atan2(lookahead_point.pose.position.y - current_y, lookahead_point.pose.position.x - current_x);
     lookahead_point.pose.position.x = current_x + max_lookahead_ * std::cos(angle_to_goal);

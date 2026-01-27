@@ -158,12 +158,12 @@ void CaBotSamplingMPCController::configure(
 
 }
 
-void CaBotSamplingMPCController::groupPredictionCallback(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group)
+void CaBotSamplingMPCController::groupPredictionCallback(const lidar_process_msgs::msg::GroupArray1D::SharedPtr group_msg)
 {
   // Group sequences: First time, then groups
   auto node = node_.lock();
-  group_quantity_ = group->quantity;
-  groups_ = group->groups;
+  group_quantity_ = group_msg->quantity;
+  groups_ = group_msg->groups;
 
   group_trajectories_.clear();
   if (groups_.size() == 0) {

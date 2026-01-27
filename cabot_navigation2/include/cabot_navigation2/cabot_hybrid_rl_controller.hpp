@@ -117,6 +117,7 @@ private:
   int horizon_people_;
   int num_people_;
   std::vector<lidar_process_msgs::msg::PositionArray> rl_people_;
+  std::vector<lidar_process_msgs::msg::PositionArray> rl_people_tmp_;
   rclcpp::Subscription<lidar_process_msgs::msg::PositionHistoryArray>::SharedPtr rl_people_sub_;  // group prediction subscriber
   void rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people);
 
