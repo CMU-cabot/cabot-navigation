@@ -450,7 +450,9 @@ class Goal(geoutil.TargetPlace):
         self._send_seq = 0
         self._active_send_seq = 0
         # Cancel applies to all sends up to this sequence number.
-        self._cancel_upto_send_seq = 0
+        # Use -1 so that goals which don't use _new_action_callbacks (e.g., TurnGoal/Spin)
+        # are not accidentally canceled when their first handle arrives with send_seq==0.
+        self._cancel_upto_send_seq = -1
 
     def reset(self):
         self._is_completed = False
