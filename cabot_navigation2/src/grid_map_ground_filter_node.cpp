@@ -392,15 +392,13 @@ void GridMapGroundFilterNode::filterGround(
       // do not observe enough points in the grid, use points in patch
       const int patch_size = visible_grid_spiral_patch_sizes[i];
       const int half_patch_size = visible_grid_spiral_half_patch_sizes[i];
-      const int patch_rows = std::min(patch_size, static_cast<int>(gmap_size(0)));
-      const int patch_cols = std::min(patch_size, static_cast<int>(gmap_size(1)));
       const int patch_row_start = std::clamp(
-        static_cast<int>(gmap_index(0)) - half_patch_size, 0, static_cast<int>(gmap_size(0)) - patch_rows);
+        static_cast<int>(gmap_index(0)) - half_patch_size, 0, static_cast<int>(gmap_size(0)) - patch_size - 1);
       const int patch_col_start = std::clamp(
-        static_cast<int>(gmap_index(1)) - half_patch_size, 0, static_cast<int>(gmap_size(1)) - patch_cols);
+        static_cast<int>(gmap_index(1)) - half_patch_size, 0, static_cast<int>(gmap_size(1)) - patch_size - 1);
 
-      const auto & num_points_patch = num_points_layer.block(patch_row_start, patch_col_start, patch_rows, patch_cols);
-      const auto & var_points_z_patch = var_points_z_layer.block(patch_row_start, patch_col_start, patch_rows, patch_cols);
+      const auto & num_points_patch = num_points_layer.block(patch_row_start, patch_col_start, patch_size, patch_size);
+      const auto & var_points_z_patch = var_points_z_layer.block(patch_row_start, patch_col_start, patch_size, patch_size);
       const float & num_points_patch_sum = num_points_patch.sum();
       if (num_points_patch_sum > grid_num_points_threshold) {
         is_enough_points = true;
@@ -534,17 +532,15 @@ void GridMapGroundFilterNode::filterGround(
       // estimate ground height by surrounding free area
       const int patch_size = visible_grid_spiral_patch_sizes[i];
       const int half_patch_size = visible_grid_spiral_half_patch_sizes[i];
-      const int patch_rows = std::min(patch_size, static_cast<int>(gmap_size(0)));
-      const int patch_cols = std::min(patch_size, static_cast<int>(gmap_size(1)));
       const int patch_row_start = std::clamp(
-        static_cast<int>(gmap_index(0)) - half_patch_size, 0, static_cast<int>(gmap_size(0)) - patch_rows);
+        static_cast<int>(gmap_index(0)) - half_patch_size, 0, static_cast<int>(gmap_size(0)) - patch_size - 1);
       const int patch_col_start = std::clamp(
-        static_cast<int>(gmap_index(1)) - half_patch_size, 0, static_cast<int>(gmap_size(1)) - patch_cols);
+        static_cast<int>(gmap_index(1)) - half_patch_size, 0, static_cast<int>(gmap_size(1)) - patch_size - 1);
 
       const auto & estimated_ground_z_patch =
-        estimated_ground_z_layer.block(patch_row_start, patch_col_start, patch_rows, patch_cols);
+        estimated_ground_z_layer.block(patch_row_start, patch_col_start, patch_size, patch_size);
       const auto & ground_confidence_patch =
-        ground_confidence_layer.block(patch_row_start, patch_col_start, patch_rows, patch_cols);
+        ground_confidence_layer.block(patch_row_start, patch_col_start, patch_size, patch_size);
 
       // calculate weighted average of estimated ground height
       float sum_estimated_ground_z = 0.0;
