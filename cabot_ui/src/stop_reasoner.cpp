@@ -100,6 +100,7 @@ StopReasoner::StopReasoner(const std::shared_ptr<rclcpp::Node> node)
   navigation_timeout_(0),
   last_log_(""),
   current_frame_(""),
+  no_signal_info_start_(0, 0, RCL_SYSTEM_TIME),
   linear_velocity_(Constant::FILTER_DURATION_SHORT),
   angular_velocity_(Constant::FILTER_DURATION_SHORT),
   cmd_vel_linear_(Constant::FILTER_DURATION_SHORT),
@@ -283,6 +284,7 @@ std::tuple<double, StopReason> StopReasoner::update()
     {
       is_preparing_ = false;
     } else {
+      no_signal_info_start_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
       return std::make_tuple(0.0, StopReason::NOT_STOPPED);
     }
   }
@@ -314,6 +316,7 @@ std::tuple<double, StopReason> StopReasoner::update()
   // }
 
   if (is_stopped_ == false) {
+    no_signal_info_start_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
     return std::make_tuple(0.0, StopReason::NOT_STOPPED);
   }
 
@@ -329,14 +332,23 @@ std::tuple<double, StopReason> StopReasoner::update()
     return std::make_tuple(duration, StopReason::STOPPED_BUT_UNDER_THRESHOLD);
   }
 
+  if (signal_state_ == StopReasonUtil::toStr(StopReason::NO_SIGNAL_INFO)) {
+    if (no_signal_info_start_.nanoseconds() == 0) {
+      no_signal_info_start_ = get_current_time();
+    }
+    const double no_signal_duration =
+      (get_current_time() - no_signal_info_start_).nanoseconds() / 1e9;
+    if (no_signal_duration >= Constant::NO_SIGNAL_INFO_DURATION_THRESHOLD) {
+      return std::make_tuple(duration, StopReason::NO_SIGNAL_INFO);
+    }
+  } else {
+    no_signal_info_start_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
+  }
   if (signal_state_ == StopReasonUtil::toStr(StopReason::RED_SIGNAL)) {
     return std::make_tuple(duration, StopReason::RED_SIGNAL);
   }
   if (signal_state_ == StopReasonUtil::toStr(StopReason::GREEN_SIGNAL_SHORT)) {
     return std::make_tuple(duration, StopReason::GREEN_SIGNAL_SHORT);
-  }
-  if (signal_state_ == StopReasonUtil::toStr(StopReason::NO_SIGNAL_INFO)) {
-    return std::make_tuple(duration, StopReason::NO_SIGNAL_INFO);
   }
 
   auto ts_latest = touch_speed_.latest(get_current_time());
