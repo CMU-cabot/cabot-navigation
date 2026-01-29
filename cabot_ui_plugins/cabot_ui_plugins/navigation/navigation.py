@@ -330,9 +330,22 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def process_event(self, event) -> None:
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
-            self.activity_log("cabot_ui/navigation", "in preparation")
-            self.delegate.in_preparation()
-            return
+            # While preparing, consume navigation-control events so they don't
+            # trigger other plugins (e.g. description) before navigation is ready.
+            if event.subtype in {
+                "destination",
+                "summons",
+                "decision",
+                "pause",
+                "cancel",
+                "resume",
+                "resume_or_stop_reason",
+            }:
+                self.activity_log("cabot_ui/navigation", "in preparation")
+                self.delegate.in_preparation()
+                return True
+            # Let non-navigation control events be handled by other plugins.
+            return False
 
         if event.subtype == "event":
             self.process_navigation_event(event)
