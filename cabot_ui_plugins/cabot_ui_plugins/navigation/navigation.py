@@ -328,11 +328,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.localize_status = msg.status
 
     def process_event(self, event) -> None:
+        if event.subtype == "reqfeatures":
+            return False   # can be handled by other plugins
+
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
             self.activity_log("cabot_ui/navigation", "in preparation")
             self.delegate.in_preparation()
-            return
+            return False
 
         if event.subtype == "event":
             self.process_navigation_event(event)
