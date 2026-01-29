@@ -26,6 +26,8 @@ services:
       context: ./docker/ros2
       additional_contexts:
         cabot_src: ./
+        vlm_social_nav_src: ./VLM-Social-Nav-ROS2
+        people_msgs_src: ../cabot-base/docker/humble-custom/people/people_msgs
       args:
         - BASE_IMAGE=${BASE_IMAGE:-cabot-base}
       x-bake:
@@ -75,12 +77,15 @@ services:
       - CABOT_IMAGE_DESCRIPTION_ROTATE_RIGHT
       - CABOT_IMAGE_DESCRIPTION_API_KEY
       - CABOT_IMAGE_DESCRIPTION_TIMEOUT
+      - AZURE_OPENAI_API_KEY
+      - AZURE_OPENAI_BASEURL
       - CABOT_HANDLE_BUTTON_MAPPING
       - CABOT_USE_GNSS
       - CABOT_USE_DIRECTIONAL_INDICATOR
       - CABOT_VIBRATOR_TYPE
       - CABOT_MAX_SPEED
       - CABOT_UI_PLUGINS
+      - CABOT_NAVIGATION_METHOD
 # ROS2/DDS
       - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
@@ -286,6 +291,9 @@ services:
       - ./cabot_diagnostics:/home/developer/ros2_ws/src/cabot_diagnostics
       - ./cabot_gazebo:/home/developer/ros2_ws/src/cabot_gazebo
       - ./cabot_navigation2:/home/developer/ros2_ws/src/cabot_navigation2
+      - ./cabot_sngnn:/home/developer/ros2_ws/src/cabot_sngnn
+      - ./cabot_sngnn_layer:/home/developer/ros2_ws/src/cabot_sngnn_layer
+      - ../SNGNN2D-v2:/home/developer/ros2_ws/src/SNGNN2D-v2
       - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
       - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
       - ./cabot_ui_plugins:/home/developer/ros2_ws/src/cabot_ui_plugins
@@ -299,6 +307,9 @@ services:
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
       - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
       - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
+      - ./rank_nav_msgs:/home/developer/ros2_ws/src/rank_nav_msgs
+      - ./VLM-Social-Nav-ROS2:/home/developer/ros2_ws/src/VLM-Social-Nav-ROS2
+      - ../host_ws/src/people_msgs:/home/developer/ros2_ws/src/people_msgs
 
   navigation-dev:
     extends: navigation-dev-base
@@ -592,3 +603,23 @@ services:
 
 networks:
   mongodb_network:
+
+  sngnn:
+    image: sngnn:latest
+    build:
+      context: ../
+      dockerfile: docker/sngnn/Dockerfile
+      args:
+        - BASE_IMAGE=${CABOT_NAVIGATION_IMAGE:-cmucal/cabot-navigation:latest}
+    extends:
+      file: docker-compose-common.yaml
+      service: navigation-base
+    volumes:
+      - .:/home/developer/workspace/src/cabot-navigation
+      - ../cabot-common:/home/developer/workspace/src/cabot-common
+      - ../SNGNN2D-v2:/home/developer/workspace/src/SNGNN2D-v2
+      - ../docker/home:/home/developer/
+    environment:
+      - CABOT_GAZEBO
+      - CABOT_USE_SIM_TIME
+      - CABOT_MODEL

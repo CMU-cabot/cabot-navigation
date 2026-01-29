@@ -1,0 +1,7 @@
+<library path="social_nav_plugin">
+  <class name="social_nav_plugin/SocialCritic" type="social_nav_plugin::SocialCritic" base_class_type="dwb_core::TrajectoryCritic">
+    <description>
+      Social Navigation Critic based on VLM input
+    </description>
+  </class>
+</library>

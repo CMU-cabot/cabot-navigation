@@ -56,6 +56,13 @@ services:
     profiles:
       - dev
 
+  vlm-rank:
+    extends:
+      file: docker-compose.yaml
+      service: vlm-rank
+    profiles:
+      - vlm-rank
+
   # prodimg
   navigation-prod:
     extends:

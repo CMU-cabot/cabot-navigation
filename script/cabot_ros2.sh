@@ -101,6 +101,7 @@ export CABOT_INITAR=$(echo "$CABOT_INITA * 3.1415926535 / 180.0" | bc -l)
 : ${CABOT_ANNOUNCE_NO_TOUCH:=false}
 : ${CABOT_GAMEPAD:=}
 : ${CABOT_USE_HANDLE_SIMULATOR:=0}
+: ${CABOT_NAVIGATION_METHOD:=1}
 
 : ${CABOT_LOW_OBSTABLE_DETECT_VERSION:=0}
 : ${CABOT_PUBLISH_LOW_OBSTABLE_GROUND:=0}
@@ -187,6 +188,46 @@ ros2_ws=`pwd`
 cd $ros2_ws
 source $ros2_ws/install/setup.bash
 
+params_dir=$(ros2 pkg prefix cabot_navigation2)/share/cabot_navigation2/params
+params_file="$params_dir/nav2_params.yaml"
+params_file2="$params_dir/nav2_params2.yaml"
+if [[ "$CABOT_NAVIGATION_METHOD" == "0" ]]; then
+    if [[ -f "$params_dir/nav2_params_vlm_socialnav.yaml" ]]; then
+        params_file="$params_dir/nav2_params_vlm_socialnav.yaml"
+    else
+        echo "nav2_params_vlm_socialnav.yaml not found, fallback to nav2_params.yaml"
+    fi
+    if [[ -f "$params_dir/nav2_params2_vlm_socialnav.yaml" ]]; then
+        params_file2="$params_dir/nav2_params2_vlm_socialnav.yaml"
+    else
+        echo "nav2_params2_vlm_socialnav.yaml not found, fallback to nav2_params2.yaml"
+    fi
+fi
+if [[ "$CABOT_NAVIGATION_METHOD" == "1" ]]; then
+    if [[ -f "$params_dir/nav2_params_sngnn.yaml" ]]; then
+        params_file="$params_dir/nav2_params_sngnn.yaml"
+    else
+        echo "nav2_params_sngnn.yaml not found, fallback to nav2_params.yaml"
+    fi
+    if [[ -f "$params_dir/nav2_params2_sngnn.yaml" ]]; then
+        params_file2="$params_dir/nav2_params2_sngnn.yaml"
+    else
+        echo "nav2_params2_sngnn.yaml not found, fallback to nav2_params2.yaml"
+    fi
+fi
+if [[ "$CABOT_NAVIGATION_METHOD" == "2" ]]; then
+    if [[ -f "$params_dir/nav2_params_vlm_ranknav.yaml" ]]; then
+        params_file="$params_dir/nav2_params_vlm_ranknav.yaml"
+    else
+        echo "nav2_params_vlm_ranknav.yaml not found, fallback to nav2_params.yaml"
+    fi
+    if [[ -f "$params_dir/nav2_params2_vlm_ranknav.yaml" ]]; then
+        params_file2="$params_dir/nav2_params2_vlm_ranknav.yaml"
+    else
+        echo "nav2_params2_vlm_ranknav.yaml not found, fallback to nav2_params2.yaml"
+    fi
+fi
+
 # TODO: Remove cabot_site_configuration from shell script
 if [ ! -z $CABOT_SITE ]; then
     sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
@@ -210,6 +251,7 @@ echo "CABOT_SITE                : $CABOT_SITE"
 echo "Map                       : $map"
 echo "Use Sim Time              : $use_sim_time"
 echo "Use BLE                 : $use_ble"
+echo "CABOT_NAVIGATION_METHOD   : $CABOT_NAVIGATION_METHOD"
 
 blue "bringup cabot control"
 com="$command_prefix ros2 launch -n cabot cabot_control.launch.py \
@@ -249,6 +291,8 @@ pids+=($!)
 
 com="$command_prefix ros2 launch -n cabot_navigation2 bringup_launch.py \
     map:=$map \
+    params_file:=$params_file \
+    params_file2:=$params_file2 \
     autostart:=true \
     use_sim_time:=$use_sim_time \
     record_bt_log:=false \
@@ -281,6 +325,19 @@ if [ $use_ble -ne 0 ]; then
     eval $com
     checks+=($!)
     pids+=($!)
+fi
+
+# Launch SNGNN Node only when SNGNN2D is selected
+if [[ "$CABOT_NAVIGATION_METHOD" == "1" ]]; then
+    if ros2 pkg list | grep -q cabot_sngnn; then
+        echo "launch sngnn_node"
+        com="$command_prefix ros2 run cabot_sngnn sngnn_node --ros-args -r /odom:=/cabot/odometry/filtered $command_postfix"
+        echo $com
+        eval $com
+        pids+=($!)
+    else
+        blue "cabot_sngnn package not found, skipping sngnn_node"
+    fi
 fi
 
 ### launch queue detect

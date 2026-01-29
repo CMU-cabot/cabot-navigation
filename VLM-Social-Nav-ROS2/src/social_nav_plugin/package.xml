@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>social_nav_plugin</name>
+  <version>0.0.1</version>
+  <description>Social Navigation Plugin for Nav2</description>
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>nav2_core</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>dwb_core</depend>
+  <depend>pluginlib</depend>
+  <depend>vlm_social_nav</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <dwb_core plugin="${prefix}/plugins_description.xml"/>
+  </export>
+</package>

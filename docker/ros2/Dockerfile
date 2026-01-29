@@ -135,6 +135,12 @@ RUN pip3 install --no-cache-dir \
     # for test aggregation
     pandas
 
+RUN pip3 install --no-cache-dir \
+    ultralytics==8.2.0 \
+    torchvision==0.16.0 \
+    openai \
+    numpy==1.24.4
+
 # for debug
 # RUN apt update && \
 #     apt install -y --no-install-recommends \
@@ -202,7 +208,17 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_msgs src/queue_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_people_py src/queue_people_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_utils_py src/queue_utils_py
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./rank_nav_msgs src/rank_nav_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
+COPY --chown=$USERNAME:$USERNAME --from=vlm_social_nav_src ./src/vlm_social_nav src/vlm_social_nav
+COPY --chown=$USERNAME:$USERNAME --from=vlm_social_nav_src ./src/vsn_yolo_msgs src/vsn_yolo_msgs
+COPY --chown=$USERNAME:$USERNAME --from=vlm_social_nav_src ./src/vsn_yolo_ros src/vsn_yolo_ros
+COPY --chown=$USERNAME:$USERNAME --from=vlm_social_nav_src ./src/social_nav_plugin src/social_nav_plugin
+COPY --chown=$USERNAME:$USERNAME --from=people_msgs_src . src/people_msgs
+
+RUN sudo apt update && rosdep update && rosdep install -q -y \
+	--from-paths src \
+	--ignore-src
 
 RUN /ros_entrypoint.sh /launch.sh build
 
@@ -250,6 +266,7 @@ RUN apt update && \
     ros-$ROS_DISTRO-joint-state-publisher \
     ros-$ROS_DISTRO-joint-state-publisher-gui \
     ros-$ROS_DISTRO-navigation2 \
+    ros-$ROS_DISTRO-nav2-mppi-controller \
     ros-$ROS_DISTRO-rosidl-runtime-cpp \
 # pcl-ros is not ported yet
 # #    ros-$ROS_DISTRO-pcl-msgs \
@@ -287,6 +304,12 @@ RUN pip3 install --no-cache-dir \
 # for pedestrian test
 RUN pip3 install --no-cache-dir \
     'pysocialforce[test,plot]'
+
+RUN pip3 install --no-cache-dir \
+    ultralytics==8.2.0 \
+    torchvision==0.16.0 \
+    openai \
+    numpy==1.24.4
 
 # for debug
 # RUN apt update && \
@@ -339,4 +362,3 @@ COPY --chown=$USERNAME:$USERNAME --from=build $HOME/ros2_ws/script $HOME/ros2_ws
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD [ "/launch.sh" ]
-

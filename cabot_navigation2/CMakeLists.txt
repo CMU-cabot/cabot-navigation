@@ -32,6 +32,7 @@ find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(people_msgs REQUIRED)
+find_package(rank_nav_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
@@ -82,6 +83,7 @@ set(dependencies
   tf2
   tf2_ros
   people_msgs
+  rank_nav_msgs
   queue_msgs
   sensor_msgs
   diagnostic_updater
@@ -122,6 +124,7 @@ add_library(cabot_layers SHARED
   plugins/temporal_obstacle_layer.cpp
   plugins/navcog_path_layer.cpp
   plugins/people_obstacle_layer.cpp
+  plugins/personal_space_layer.cpp
   plugins/navcog_path_util.cpp
 )
 
@@ -131,6 +134,7 @@ ament_target_dependencies(cabot_layers
   nav2_costmap_2d
   nav2_core
   people_msgs
+  rank_nav_msgs
   pluginlib
 )
 

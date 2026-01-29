@@ -310,7 +310,13 @@ if [ ! -e $dcfile ]; then
     exit
 fi
 
-dccom="docker compose -f $dcfile -p $launch_prefix --profile $profile"
+profile_option="--profile $profile"
+if [[ "$CABOT_NAVIGATION_METHOD" == "0" ]]; then
+    profile_option="$profile_option --profile vlm"
+elif [[ "$CABOT_NAVIGATION_METHOD" == "2" ]]; then
+    profile_option="$profile_option --profile vlm-rank"
+fi
+dccom="docker compose -f $dcfile -p $launch_prefix $profile_option"
 
 ## launch server
 if [[ $profile == "dev" ]]; then
@@ -323,12 +329,17 @@ eval $com
 
 if [[ $run_test -eq 1 ]]; then
     nav_service="navigation-$profile"
-    test_env=$(docker compose -p $launch_prefix -f $dcfile run --rm $nav_service /home/developer/ros2_ws/script/run_test.sh -e $module 2> /dev/null)
+    test_env_raw=$(docker compose -p $launch_prefix -f $dcfile run --rm $nav_service /home/developer/ros2_ws/script/run_test.sh -e $module 2> /dev/null)
+    test_env=$(printf "%s\n" "$test_env_raw" | awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{print}')
     set -a
     eval $test_env
     set +a
     blue "------------ Environment variables for the test -----------"
-    blue "$test_env"
+    if [[ -n "$test_env" ]]; then
+        blue "$test_env"
+    else
+        blue "(no KEY=VALUE lines found)"
+    fi
     blue "-----------------------------------------------------------"
 fi
 

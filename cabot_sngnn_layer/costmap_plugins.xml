@@ -1,0 +1,7 @@
+<library path="cabot_sngnn_layer">
+  <class name="cabot_sngnn_layer/SNGNNLayer" type="cabot_sngnn_layer::SNGNNLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>
+      SNGNN Layer
+    </description>
+  </class>
+</library>

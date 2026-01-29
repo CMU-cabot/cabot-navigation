@@ -52,6 +52,54 @@ services:
     profiles:
       - dev
 
+  vlm:
+    extends:
+      file: docker-compose-common.yaml
+      service: navigation-dev
+    command: /bin/bash -c "source /opt/underlay_ws/install/setup.bash && cd /home/developer/ros2_ws && colcon build --packages-select vlm_social_nav vsn_yolo_ros vsn_yolo_msgs --cmake-clean-cache && source /home/developer/ros2_ws/install/setup.bash && source /home/developer/ros2_ws/install/vlm_social_nav/share/vlm_social_nav/local_setup.bash && ros2 launch vlm_social_nav vlm_social_nav_system.launch.py view_image:=false"
+    profiles:
+      - vlm
+
+  vlm-rank:
+    build:
+      context: ../VLM_Rank_Nav/docker
+      dockerfile: Dockerfile
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-vlm-rank
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
+    image: cmucal/cabot-vlm-rank:${CABOT_LAUNCH_IMAGE_TAG:-latest}
+    network_mode: host
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - ROS_DOMAIN_ID
+      - ROS_LOCALHOST_ONLY=0
+      - RMW_IMPLEMENTATION
+      - CYCLONEDDS_URI=file:///etc/cyclonedds/config.xml
+      - DISPLAY
+      - CABOT_VLM_RANKNAV_CAMERA_SERIAL
+    volumes:
+      - ../VLM_Rank_Nav:/workspace
+      - ./rank_nav_msgs:/tmp/rank_nav_msgs_src:ro
+      - ../cabot-people/track_people_msgs:/tmp/track_people_msgs_src:ro
+      - ../host_ws/src/people_msgs:/tmp/people_msgs_src:ro
+      - ../VLM_Rank_Nav/docker/cyclonedds.xml:/etc/cyclonedds/config.xml
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev/shm:/dev/shm
+    devices:
+      - /dev/dri:/dev/dri
+    stdin_open: true
+    tty: true
+    command: ros2 launch /workspace/launch.py
+    profiles:
+      - vlm-rank
+
   gazebo-dev:
     extends:
       file: docker-compose-common.yaml

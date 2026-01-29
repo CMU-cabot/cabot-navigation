@@ -37,6 +37,9 @@ ros2_ws=`pwd`
 
 debug=0
 sequential=0
+vlm_pkgs=(vlm_social_nav vsn_yolo_ros vsn_yolo_msgs social_nav_plugin)
+vlm_root="$ros2_ws/src/VLM-Social-Nav-ROS2"
+vlm_src_root="$vlm_root/src"
 
 while getopts "ds" arg; do
     case $arg in
@@ -50,6 +53,20 @@ while getopts "ds" arg; do
 done
 shift $((OPTIND-1))
 
+if [[ -d "$vlm_src_root" ]]; then
+    for pkg in "${vlm_pkgs[@]}"; do
+        cache="$ros2_ws/build/$pkg/CMakeCache.txt"
+        if [[ -f "$cache" ]]; then
+            src_dir=$(grep -E "^${pkg}_SOURCE_DIR:" "$cache" | head -n1 | cut -d= -f2-)
+            expected="$vlm_src_root/$pkg"
+            if [[ -n "$src_dir" ]] && [[ "$src_dir" != "$expected" ]]; then
+                echo "cleaning stale build cache for $pkg (expected $expected, got $src_dir)"
+                rm -rf "$ros2_ws/build/$pkg" "$ros2_ws/install/$pkg"
+            fi
+        fi
+    done
+fi
+
 build_option=
 if [[ $debug -eq 1 ]]; then
     build_option+=" --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install"
@@ -59,7 +76,11 @@ fi
 if [[ $sequential -eq 1 ]]; then
     build_option+=" --executor sequential"
 fi
-colcon build $build_option
+if [[ -d "$vlm_src_root" ]]; then
+    colcon build $build_option --cmake-clean-cache --cmake-force-configure --packages-select "${vlm_pkgs[@]}"
+    if [[ $? -ne 0 ]]; then exit 1; fi
+fi
+colcon build $build_option "$@"
 
 if [[ $? -ne 0 ]]; then exit 1; fi
 
