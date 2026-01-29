@@ -659,10 +659,10 @@ class Nav2Params:
     FollowPath.max_speed_xy: 2.75
     FollowPath.sim_time: 1.7
     cabot_goal_checker.xy_goal_tolerance: 0.5
-/global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.75
-/local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.75
+# /global_costmap/global_costmap:
+#     inflation_layer.inflation_radius: 0.75
+# /local_costmap/local_costmap:
+#     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
     center_min_distance: 1.0
     side_min_distance: 0.4
@@ -690,10 +690,10 @@ class Nav2Params:
     FollowPath.max_vel_x: 0.5
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
-/global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.55
-/local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.55
+# /global_costmap/global_costmap:
+#     inflation_layer.inflation_radius: 0.55
+# /local_costmap/local_costmap:
+#     inflation_layer.inflation_radius: 0.55
 /cabot/lidar_speed_control_node:
     center_min_distance: 0.6
     side_min_distance: 0.4
@@ -721,10 +721,10 @@ class Nav2Params:
     FollowPath.max_vel_x: 0.5
     FollowPath.sim_time: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
-/global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.35
-/local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.35
+# /global_costmap/global_costmap:
+#     inflation_layer.inflation_radius: 0.35
+# /local_costmap/local_costmap:
+#     inflation_layer.inflation_radius: 0.35
 /cabot/lidar_speed_control_node:
     center_min_distance: 0.6
     side_min_distance: 0.4
@@ -752,10 +752,10 @@ class Nav2Params:
     FollowPath.max_vel_x: 1.0
     FollowPath.sim_time: 0.37
     cabot_goal_checker.xy_goal_tolerance: 0.5
-/global_costmap/global_costmap:
-    inflation_layer.inflation_radius: 0.75
-/local_costmap/local_costmap:
-    inflation_layer.inflation_radius: 0.75
+# /global_costmap/global_costmap:
+#     inflation_layer.inflation_radius: 0.75
+# /local_costmap/local_costmap:
+#     inflation_layer.inflation_radius: 0.75
 /cabot/lidar_speed_control_node:
     min_distance: 0.60
 /cabot/low_lidar_speed_control_node:

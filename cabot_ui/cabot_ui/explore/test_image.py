@@ -99,6 +99,8 @@ class CaBotImageNode(Node):
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
         self.prompt_sub = self.create_subscription(std_msgs.msg.String, "/cabot/persona", self.persona_callback, 10)
 
+        self.current_image = 0
+
         self.log_dir = os.path.join(self.log_dir, "gpt")
         os.makedirs(self.log_dir, exist_ok=True)
         self.logger.info(f"Saving images to {self.log_dir}")
@@ -379,6 +381,15 @@ class CaBotImageNode(Node):
         if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
 
             wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+            # if self.current_image == 0:
+            #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
+            # elif self.current_image == 1:
+            #     wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
+            # elif self.current_image == 2:
+            #     wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
+
+            # self.current_image = (self.current_image + 1) % 3
+
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
             if explain != "" and self.can_speak_explanation:
@@ -619,30 +630,31 @@ class GPTExplainer():
 
             use_realsense = False
 
-            if (front_image is not None) and (left_image is not None) and (right_image is not None):
-                if not self.okay_images:
-                    self.logger.info("Okay")
-                    self.okay_images = True
-                    test_speak.speak_text("実験準備ができました")
-                use_realsense = True
+            # if (front_image is not None) and (left_image is not None) and (right_image is not None):
+            #     # if not self.okay_images:
+            #     #     self.logger.info("Okay")
+            #     #     self.okay_images = True
+            #     #     test_speak.speak_text("実験準備ができました")
+            #     # use_realsense = True
 
+            if (left_image is not None):
                 left_image = self.resize_images(left_image, max_width=768)
                 left_image_with_text = self.add_text_to_image(left_image, "Left")
                 images.append(left_image_with_text)
-
+            if (front_image is not None):
                 front_image = self.resize_images(front_image, max_width=768)
                 front_image_with_text = self.add_text_to_image(front_image, "Front")
                 images.append(front_image_with_text)
-
+            if (right_image is not None):
                 right_image = self.resize_images(right_image, max_width=768)
                 right_image_with_text = self.add_text_to_image(right_image, "Right")
                 images.append(right_image_with_text)
 
             if use_realsense:
                 prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
-                images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
+                #images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
             
-            if (front_image is None or left_image is None or right_image is None):
+            if (front_image is None and left_image is None and right_image is None):
                 self.logger.info(f"Front image: {front_image}")
                 self.logger.info(f"Left image: {left_image}")
                 self.logger.info(f"Right image: {right_image}")
@@ -706,7 +718,7 @@ class GPTExplainer():
 
             pretty_response = json.dumps(gpt_response, indent=4)
 
-            log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
+            #log_image_and_gpt_response(images_with_text, str(extracted_json["description"]), self.folder_name)
             self.logger.info(f"History and response: {self.conversation_history}, {gpt_response}")              # print(f"{self.mode}: {gpt_response}")
         except Exception as e:
             self.logger.info(f"Error in GPTExplainer.explain: {e}")

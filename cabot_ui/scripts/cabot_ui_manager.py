@@ -37,9 +37,15 @@ Author: Daisuke Sato<daisuke@cmu.edu>
 import signal
 import sys
 import threading
+import time
 import traceback
 import yaml
 
+import tf_transformations
+import numpy as np
+
+
+import geometry_msgs
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
 import rclpy.client
@@ -51,6 +57,8 @@ from rclpy.qos import QoSProfile, QoSDurabilityPolicy, qos_profile_sensor_data
 import sensor_msgs
 import std_msgs.msg
 import std_srvs.srv
+from nav_msgs.msg import Odometry, OccupancyGrid
+
 
 import cabot_common.button
 from cabot_common.event import BaseEvent, ButtonEvent, ClickEvent, HoldDownEvent
@@ -102,12 +110,22 @@ class CabotUIManager(NavigationInterface, object):
 
         self._retry_count = 0
 
-        self._lidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        #self._lidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        #self._lowLidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/low_lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+
         #self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+
+        self.registering_map = False
+        self.map_sub = self._node.create_subscription(OccupancyGrid, "/local_costmap/costmap", self._map_callback, transient_local_qos)
+        self.odom_sub = self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        self.register_map_lock = threading.RLock()
 
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
+        self._speedOverwritePub = self._node.create_publisher(std_msgs.msg.Float32, "/cabot/speed_overwrite", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._personaPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/persona", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.persona_list = ["navigation", "middle", "explore"]
@@ -157,9 +175,71 @@ class CabotUIManager(NavigationInterface, object):
 
         self.send_speaker_audio_files()
 
+    def _map_callback(self, msg):
+        self._logger.info("Map callback")
+
+        with self.register_map_lock:
+            if self.registering_map == True:
+                return
+            self.registering_map = True
+
+        self.map_x = msg.info.origin.position.x
+        self.map_y = msg.info.origin.position.y
+        self.map_width = msg.info.width
+        self.map_height = msg.info.height
+        self.map_resolution = msg.info.resolution
+
+        # self.global_map_pub.publish(msg)
+
+        # calculate map orientation in radian
+        map_quaternion = (msg.info.origin.orientation.x, msg.info.origin.orientation.y, msg.info.origin.orientation.z, msg.info.origin.orientation.w)
+        roll, pitch, yaw = tf_transformations.euler_from_quaternion(map_quaternion)
+        self.map_orientation = yaw
+
+        if(self.map_width == 0):
+            self.logger.info("[CaBotMapNode] map callback received but map width is 0, waiting for valid map...")
+            return
+
+        # get occupancy grid data
+        self.map_data = np.asarray(msg.data).reshape((msg.info.height, msg.info.width))
+
+        with self.register_map_lock:
+            self.registering_map = False
+
+    def _odom_callback(self, msg):
+        self._logger.info("Odom callback")
+
+        self.odom_x = msg.pose.pose.position.x
+        self.odom_y = msg.pose.pose.position.y
+
+        # Calculate costmap coordinates
+        if not hasattr(self, 'map_x'):
+            return
+        # Transform odom coordinates to map coordinates
+        dx = self.odom_x - self.map_x
+        dy = self.odom_y - self.map_y
+
+        # Rotate according to map orientation
+        rotated_x = dx * math.cos(-self.map_orientation) - dy * math.sin(-self.map_orientation)
+        rotated_y = dx * math.sin(-self.map_orientation) + dy * math.cos(-self.map_orientation)
+
+        # Convert to map grid indices
+        self.robot_map_x = int(rotated_x / self.map_resolution)
+        self.robot_map_y = int(rotated_y / self.map_resolution)
+
+        # Get cost at robot's position
+        if 0 <= self.robot_map_x < self.map_width and 0 <= self.robot_map_y < self.map_height:
+            self.current_cost = self.map_data[self.robot_map_y, self.robot_map_x]
+
+            # Log current cost
+            self._logger.info(f"Current cost at robot position: {self.current_cost}")
+
+            if self.current_cost >= 50:
+                self._event_mapper.checkLidarLimit(self._logger, 0.0, self._speedOverwritePub)
+
     def _lidar_limit_callback(self, msg):
         self._logger.debug("Lidar limit callback")
-        self._event_mapper.checkLidarLimit(self._logger, msg)
+        self._event_mapper.checkLidarLimit(self._logger, msg.data, self._speedOverwritePub)
 
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
@@ -905,6 +985,7 @@ class EventMapper1(object):
         MANUAL = 0
         SHARED = 1
         AUTONOMOUS = 2
+        TOTAL_FREE = 3
 
     def __init__(self):
         self._manager = StatusManager.get_instance()
@@ -913,9 +994,7 @@ class EventMapper1(object):
         self.exploration_mode = self.ExplorationMode.AUTONOMOUS  # Default to AUTONOMOUS mode
         self.lock = threading.RLock()
 
-    def checkLidarLimit(self, logger, lidar_limit):
-
-        lidar_dist = lidar_limit.data
+    def checkLidarLimit(self, logger, lidar_dist, speedOverwritePub):
 
         # lidar_dist = 0.0
 
@@ -930,9 +1009,30 @@ class EventMapper1(object):
         with self.lock:
             logger.info(f"Checking Lidar Limit: {lidar_dist}")
             if self.exploration_mode == self.ExplorationMode.MANUAL and lidar_dist <= 0.05:
-                self.exploration_mode = self.ExplorationMode.AUTONOMOUS        
+                #self.exploration_mode = self.ExplorationMode.SHARED        
                 self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
                 speak_text("障害物を検知しました。オートノマスモードに切り替えます。")
+
+                # we go backward a bit to avoid being stuck
+                # self.delegate.process_event(ExplorationEvent(subtype="back"))
+
+                # backward speed : geometry_msgs.msg.Twist()
+                backward_speed = 0.2
+                speed_msg = std_msgs.msg.Float32()
+                speed_msg.data = -backward_speed
+                speedOverwritePub.publish(speed_msg)
+
+                time.sleep(1)  # wait for 1 seconds
+
+                stop_speed_msg = std_msgs.msg.Float32()
+                stop_speed_msg.data = 0.0
+                speedOverwritePub.publish(stop_speed_msg)
+
+                #self.exploration_mode = self.ExplorationMode.MANUAL
+                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
+
+                time.sleep(0.5) # wait for half second before detecting again
+
 
                 
 
@@ -1011,26 +1111,26 @@ class EventMapper1(object):
         return None
 
     def map_button_to_exploration(self, event, logger):
-        if event.type == "click" and event.count == 1:
-            if event.buttons == cabot_common.button.BUTTON_UP:
+        if event.type == HoldDownEvent.TYPE: 
+            if event.holddown == cabot_common.button.BUTTON_UP:
                 return [ExplorationEvent(subtype="front")]
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
                 return [ExplorationEvent(subtype="back")]
-            if event.buttons == cabot_common.button.BUTTON_LEFT:
+            if event.holddown == cabot_common.button.BUTTON_LEFT:
                 return [ExplorationEvent(subtype="left")]
-            if event.buttons == cabot_common.button.BUTTON_RIGHT:
+            if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 return [ExplorationEvent(subtype="right")]
 
-        if event.type == HoldDownEvent.TYPE:
+        if event.type == "click" and event.count == 1:
             new_mode = self.exploration_mode
 
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
-                return [ExplorationEvent(subtype="reset_navigation")]
-            elif event.holddown == cabot_common.button.BUTTON_LEFT:
+            if event.buttons == cabot_common.button.BUTTON_DOWN:
+                new_mode = self.ExplorationMode.TOTAL_FREE
+            elif event.buttons == cabot_common.button.BUTTON_LEFT:
                 new_mode = self.ExplorationMode.MANUAL
-            elif event.holddown == cabot_common.button.BUTTON_RIGHT:
+            elif event.buttons == cabot_common.button.BUTTON_RIGHT:
                 new_mode = self.ExplorationMode.SHARED
-            elif event.holddown == cabot_common.button.BUTTON_UP:
+            elif event.buttons == cabot_common.button.BUTTON_UP:
                 new_mode = self.ExplorationMode.AUTONOMOUS
 
             logger.info(f"Requested exploration mode change to {new_mode.name}")
@@ -1038,7 +1138,17 @@ class EventMapper1(object):
             if new_mode != self.exploration_mode:
                 events = []
 
-                if self.exploration_mode == self.ExplorationMode.MANUAL or new_mode == self.ExplorationMode.MANUAL:
+                if new_mode == self.ExplorationMode.TOTAL_FREE:
+                    if self.exploration_mode != self.ExplorationMode.MANUAL:
+                        # switching to TOTAL_FREE mode from non-MANUAL mode resets wheel_switch
+                        events.append(ExplorationEvent(subtype="wheel_switch"))
+
+                elif self.exploration_mode == self.ExplorationMode.TOTAL_FREE:
+                    if new_mode != self.ExplorationMode.MANUAL:
+                        # switching from TOTAL_FREE mode to non-MANUAL mode resets wheel_switch
+                        events.append(ExplorationEvent(subtype="wheel_switch"))
+
+                elif self.exploration_mode == self.ExplorationMode.MANUAL or new_mode == self.ExplorationMode.MANUAL:
                     # switching to or from MANUAL mode resets wheel_switch
                     events.append(ExplorationEvent(subtype="wheel_switch"))
 

@@ -78,8 +78,8 @@ def generate_launch_description():
         # 'default_bt_xml_filename': default_bt_xml_file,
         'default_nav_to_pose_bt_xml': default_bt_xml_file,
         # 'footprint_normal': footprint_radius,
-        'robot_radius': footprint_radius,
-        'inflation_radius': PythonExpression([footprint_radius, "+ 0.30"]),
+        # 'robot_radius': footprint_radius,
+        #'inflation_radius': PythonExpression([footprint_radius, "+ 0.30"]),
         'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
         'offset_normal': offset
     }
@@ -96,7 +96,7 @@ def generate_launch_description():
         # 'default_bt_xml_filename': default_bt_xml_file2,
         'default_nav_to_pose_bt_xml': default_bt_xml_file2,
         # 'footprint_normal': footprint_radius,
-        'robot_radius': footprint_radius,
+        # 'robot_radius': footprint_radius,
         'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
         'offset_normal': offset
     }

@@ -95,6 +95,8 @@ private:
     configurable_ = declare_parameter("configurable", configurable_);
     targetRate_ = declare_parameter("target_rate", targetRate_);
 
+    userSpeedOverwrite_ = 0.0f;
+
     for (uint64_t index = 0; index < speedInput_.size(); index++) {
       auto topic = speedInput_[index];
       std::function<void(const std_msgs::msg::Float32::SharedPtr)> callback =
@@ -151,6 +153,11 @@ private:
         if (currentOdomLinear > 0.25 && currentLinear_ > 0) {
           need_stop_alert_ = std::floor(currentOdomLinear / 0.25);
         }
+      });
+      userSpeedOverwriteSub_ = create_subscription<std_msgs::msg::Float32>(
+      "/cabot/speed_overwrite", 10,
+      [this](const std_msgs::msg::Float32::SharedPtr msg) {
+        userSpeedOverwrite_ = msg->data;
       });
     vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
     timer_ = create_wall_timer(
@@ -244,6 +251,11 @@ private:
       }
     }
 
+    // Overwrite by user speed overwrite topic
+    if (userSpeedOverwrite_ != 0.0f) {
+      l = userSpeedOverwrite_;
+    }
+
     geometry_msgs::msg::Twist cmd_vel;
     cmd_vel.linear.x = l;
 
@@ -307,9 +319,12 @@ private:
 
   std::string odomInput_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odomSub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr userSpeedOverwriteSub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
   int need_stop_alert_;
   rclcpp::Time lastVibrator1Time_;
+
+  float userSpeedOverwrite_;
 
   double userSpeedLimit_;
   double mapSpeedLimit_;

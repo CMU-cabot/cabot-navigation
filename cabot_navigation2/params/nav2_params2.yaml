@@ -202,12 +202,13 @@ local_costmap:
       height: 10
       resolution: 0.1
       plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
-      robot_radius: 0.45
+      robot_radius: 0.1
       inflation_layer:
+        enabled: False
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.45
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.0 # 0.45 default
+        #cost_scaling_factor: 10.0 # 3.0 default
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -259,12 +260,12 @@ global_costmap:
       height: 20
       use_sim_time: True
       plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
-      robot_radius: 0.45
+      robot_radius: 0.1
       resolution: 0.1
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.35
+        #inflation_radius: 0.35
         cost_scaling_factor: 5.0
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"

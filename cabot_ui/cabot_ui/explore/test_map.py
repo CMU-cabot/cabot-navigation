@@ -330,11 +330,12 @@ def compute_accessibility_score(submap: np.ndarray, robot_submap_coords: List[in
     
     # Vectorized cost assignment based on submap values
     # Low cost
-    costs[(submap > 0) & (submap < 20)] = 5.0
+    costs[(submap > 0) & (submap < 20)] = 1.0
     # Medium cost
-    costs[(submap >= 20) & (submap < 50)] = 20.0
+    costs[(submap >= 20) & (submap < 50)] = 2.0
     # High cost
-    costs[(submap >= 50) & (submap < 98)] = 50.0
+    costs[(submap >= 50) & (submap < 80)] = 5.0
+    costs[(submap >= 80) & (submap < 98)] = 50.0
     # Obstacles / Unknown (Infinite cost)
     costs[(submap >= 98) | (submap == -1)] = np.inf
 

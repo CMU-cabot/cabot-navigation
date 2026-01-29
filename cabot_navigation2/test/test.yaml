@@ -21,8 +21,8 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.70
-        cost_scaling_factor: 10.0
+        #inflation_radius: 0.70
+        #cost_scaling_factor: 10.0
 
       always_send_full_costmap: True
 
