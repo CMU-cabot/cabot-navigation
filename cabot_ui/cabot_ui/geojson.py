@@ -1171,7 +1171,7 @@ class SignalPOI(POI):
             return None
 
         timestamp = SignalPOI.last_status[0]['timestamp'] if 'timestamp' in SignalPOI.last_status[0] else None
-        if timestamp is None or (time.time() - timestamp) > 1.0:
+        if timestamp is None or (time.time() - timestamp) > 3.0:
             SignalPOI.last_status = []
             return None
 
