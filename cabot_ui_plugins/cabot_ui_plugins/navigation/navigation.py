@@ -1071,8 +1071,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist >= 5.0:
                 continue
+
             if not poi.in_angle(current_pose):
-                continue
+                # check if the signal POI and current_pose is facing in angle, but ignore if it has been past
+                if not poi.in_angle(current_pose, include_past=False):
+                    continue
+                else:
+                    if poi.signal.state != geojson.Signal.RED:
+                        continue
+                    if abs(dist) > 2.0:
+                        continue
+                    # pass if the signal is red and the pose is close to the signal poi
             temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
 
             distances = poi.distances if poi.distances else [10.0]
@@ -1113,6 +1122,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 remaining_time = poi.signal.remaining_seconds
                 next_programmed_seconds = poi.signal.next_programmed_seconds
                 limit = temp_limit
+                if -1.0 < dist and dist < 0:
+                    limit = 0.0
                 self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (signal is red)", throttle_duration_sec=1.0)
                 # self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                 state = "RED_SIGNAL"
