@@ -114,7 +114,7 @@ def get_yaw(q):
 
 
 # pose1 and pose2 is supporsed to be facing
-def in_angle(pose1, pose2, margin_in_degree):
+def in_angle(pose1, pose2, margin_in_degree, include_past=True):
     """
     pose1: robot pose
     pose2: POI pose
@@ -138,8 +138,11 @@ def in_angle(pose1, pose2, margin_in_degree):
     # check orientation diff from pose2 orientation to rotated p1->p2 orientation
     _, _, yaw2 = euler_from_quaternion(q_diff(quat2, p1_p2))
 
-    # check both in the margin
-    return abs(yaw1) <= margin and abs(yaw2) <= margin
+    if include_past:
+        # check both in the margin
+        return abs(yaw1) <= margin and abs(yaw2) <= margin
+    else:
+        return abs(yaw1) <= margin
 
 
 # quat1 and quat2 is supporsed to be facing
@@ -580,8 +583,8 @@ class TargetPlace(Pose):
     PASSED_THRETHOLD = 1.0
     ON_THRETHOLD = 0.25
 
-    def in_angle(self, pose):
-        return in_angle(pose, self, self._angle)
+    def in_angle(self, pose, include_past=True):
+        return in_angle(pose, self, self._angle, include_past=include_past)
 
     def is_approaching(self, pose):
         """the pose is approaching to the poi"""

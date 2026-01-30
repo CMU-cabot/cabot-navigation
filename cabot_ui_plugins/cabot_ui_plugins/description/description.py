@@ -31,6 +31,8 @@ import os
 import math
 from enum import Enum
 
+from cabot_ui.status import State, StatusManager
+
 import requests
 import threading
 
@@ -72,6 +74,7 @@ class Description:
             self.surround_enabled = False
             self.stop_reason_enabled = False
             self.stop_reason_data_collect_enabled = False
+        self._status_manager = StatusManager.get_instance()
         self._logger = rclpy.logging.get_logger("cabot_ui_manager.description")
         self._logger.info(F"Description enabled: {self.enabled}")
         self._logger.info(F"Description surround: {self.surround_enabled}")
@@ -117,6 +120,9 @@ class Description:
         return True
 
     def process_event(self, event) -> None:
+        if event.subtype == "reqfeatures":
+            return False   # can be handled by other plugins
+
         def description_callback(result):
             try:
                 if result:
@@ -145,6 +151,7 @@ class Description:
                 elif not self.stop_reason_enabled and self.surround_enabled:
                     self.delegate.requesting_describe_surround()
                 self.request_description_with_images1(gp, cf, self.delegate.lang, length_index=length_index, callback=description_callback)
+                return True
 
         # request description internal functions
         def request_stop_reason_description():
@@ -188,12 +195,18 @@ class Description:
 
         if event.subtype == "description_stop_reason" and self.enabled:
             request_stop_reason_description()
+            return True
 
         if event.subtype == "description_surround" and self.enabled:
             request_surround_description()
+            return True
 
         if event.subtype == "resume_or_stop_reason" and self.enabled:
-            request_stop_reason_description()
+            if self._status_manager.state == State.in_action:
+                request_stop_reason_description()
+                return True
+
+        return False
 
     @property
     def is_requesting(self):
