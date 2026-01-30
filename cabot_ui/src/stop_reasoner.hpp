@@ -99,7 +99,7 @@ static constexpr double NO_SIGNAL_INFO_DURATION_THRESHOLD = 5.0;
 static constexpr int REPLAN_REASON_COUNT = 2;
 static constexpr double STOP_LINEAR_VELOCITY_THRESHOLD = 0.05;
 static constexpr double STOP_ANGULAR_VELOCITY_THRESHOLD = 0.05;
-}
+}  // namespace Constant
 
 template<typename DataT>
 class FilterBase
