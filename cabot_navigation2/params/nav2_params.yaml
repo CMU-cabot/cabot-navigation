@@ -379,12 +379,7 @@ local_costmap:
       width: 8
       height: 8
       resolution: 0.05
-      # plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
-      plugins: ["obstacle_layer", "low_obstacle_layer", "sngnn_layer", "inflation_layer"]
-      sngnn_layer:
-        plugin: "cabot_sngnn_layer/SNGNNLayer"
-        enabled: True
-        topic: "/sngnn_costmap"
+      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
       robot_radius: 0.45
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"

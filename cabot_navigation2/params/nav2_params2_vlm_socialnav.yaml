@@ -150,7 +150,11 @@ controller_server:
       angular_granularity: 0.025
       transform_tolerance: 0.5
       #critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
-      critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      # critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign", "SocialCritic"]
+      SocialCritic:
+        class: social_nav_plugin/SocialCritic
+        scale: 24.0
       PathForwardPrefer:
         class: dwb_critics::PathForwardPreferCritic
         scale: 24.0

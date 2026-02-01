@@ -25,13 +25,46 @@ sys.path.append(os.path.join(SNGNN_PATH, 'utils'))
 sys.path.append(os.path.join(SNGNN_PATH, 'dataset'))
 sys.path.append(os.path.join(SNGNN_PATH, 'nets'))
 
-try:
-    from utils.socnav2d_V2_API import SocNavAPI
-    from dataset.socnav2d_dataset import SocNavDataset
-except ImportError as e:
-    print(f"Error importing SNGNN: {e}")
-    # Fallback or exit?
-    # sys.exit(1)
+def _try_import_sngnn():
+    try:
+        from utils.socnav2d_V2_API import SocNavAPI  # noqa: F401
+        from dataset.socnav2d_dataset import SocNavDataset  # noqa: F401
+        return SocNavAPI, SocNavDataset, None
+    except Exception as e:
+        return None, None, e
+
+
+def _install_sngnn_deps():
+    # Best-effort install for missing runtime deps (e.g., dgl).
+    # Uses the same wheel repo as SNGNN2D-v2/requirements.txt.
+    import subprocess
+    links = [
+        "https://data.dgl.ai/wheels/cu121/repo.html",
+        "https://data.dgl.ai/wheels-test/repo.html",
+    ]
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--no-cache-dir",
+        "dgl==2.0.0+cu121",
+        "dglgo==0.0.2",
+    ]
+    for link in links:
+        cmd.extend(["--find-links", link])
+    subprocess.check_call(cmd)
+
+
+SocNavAPI, SocNavDataset, import_error = _try_import_sngnn()
+if import_error is not None:
+    print(f"Error importing SNGNN: {import_error}")
+    if os.environ.get("SNGNN_AUTO_INSTALL_DEPS", "1") == "1":
+        try:
+            _install_sngnn_deps()
+        except Exception as e:
+            print(f"Failed to install SNGNN deps: {e}")
+        SocNavAPI, SocNavDataset, import_error = _try_import_sngnn()
 
 class SNGNNNode(Node):
     def __init__(self):
@@ -86,6 +119,8 @@ class SNGNNNode(Node):
         
         try:
             self.get_logger().info(f"Loading model from {self.model_path}")
+            if SocNavAPI is None:
+                raise RuntimeError("SocNavAPI is not available (import failed)")
             self.api = SocNavAPI(base=self.model_path, device=self.device)
             self.net = self.api.net
             self.get_logger().info("Model loaded")

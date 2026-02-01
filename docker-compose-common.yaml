@@ -28,6 +28,7 @@ services:
         cabot_src: ./
         vlm_social_nav_src: ./VLM-Social-Nav-ROS2
         people_msgs_src: ../cabot-base/docker/humble-custom/people/people_msgs
+        sngnn_src: ../SNGNN2D-v2
       args:
         - BASE_IMAGE=${BASE_IMAGE:-cabot-base}
       x-bake:
@@ -605,12 +606,6 @@ networks:
   mongodb_network:
 
   sngnn:
-    image: sngnn:latest
-    build:
-      context: ../
-      dockerfile: docker/sngnn/Dockerfile
-      args:
-        - BASE_IMAGE=${CABOT_NAVIGATION_IMAGE:-cmucal/cabot-navigation:latest}
     extends:
       file: docker-compose-common.yaml
       service: navigation-base

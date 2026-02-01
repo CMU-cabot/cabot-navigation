@@ -32,8 +32,22 @@ else
     source /opt/underlay_ws/install/setup.bash
 fi
 
+# Ensure colcon writes logs to a writable location in containers.
+COLCON_LOG_PATH=${COLCON_LOG_PATH:-/tmp/colcon_log}
+export COLCON_LOG_PATH
+sudo mkdir -p "$COLCON_LOG_PATH"
+sudo chown -R "$(id -u):$(id -g)" "$COLCON_LOG_PATH"
+
 cd ..
 ros2_ws=`pwd`
+
+# Ensure workspace directories are writable (volume may be root-owned from previous builds).
+for dir in "$ros2_ws/build" "$ros2_ws/install"; do
+    if [[ ! -d "$dir" ]]; then
+        sudo mkdir -p "$dir"
+    fi
+    sudo chown -R "$(id -u):$(id -g)" "$dir"
+done
 
 debug=0
 sequential=0
@@ -67,7 +81,10 @@ if [[ -d "$vlm_src_root" ]]; then
     done
 fi
 
-build_option=
+# Force install/build into the workspace so host bind mount gets populated.
+COLCON_BUILD_BASE="$ros2_ws/build"
+COLCON_INSTALL_BASE="$ros2_ws/install"
+build_option=" --build-base $COLCON_BUILD_BASE --install-base $COLCON_INSTALL_BASE"
 if [[ $debug -eq 1 ]]; then
     build_option+=" --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install"
 else

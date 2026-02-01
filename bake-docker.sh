@@ -42,9 +42,10 @@ function help {
 
 platform=
 base_name=cabot-base
+base_tag=
 local=0
 tags=
-services="navigation localization debug map_server location_tools embedding vlm-rank"
+services="navigation localization debug map_server location_tools embedding"
 
 while getopts "hb:ilP:t:" arg; do
     case $arg in
@@ -84,6 +85,15 @@ if [[ -z $base_name ]] && [[ $build_server -eq 0 ]]; then
     help
     exit 1
 fi
+
+if [[ $base_name =~ ^v[0-9] ]]; then
+    base_tag=$base_name
+    base_name=cabot-base
+    echo "Detected version tag passed via -b ($base_tag). Using base image name '$base_name'."
+    echo "Note: pass image tags with -t, not -b."
+fi
+
+export BUILDX_BAKE_ENTITLEMENTS_FS=0
 
 if [[ -z $(docker network ls | grep "registry-network") ]]; then
     docker network create registry-network

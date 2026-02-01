@@ -78,7 +78,13 @@ RUN apt update && \
     libqt5svg5-dev \
     libzmq3-dev \
     libdw-dev \
+    libgomp1 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
     libyaml-cpp-dev \
+    libxext6 \
+    libxrender-dev \
     libomp-dev \
     libpcl-dev \
     libasound2 \
@@ -118,6 +124,8 @@ RUN apt update && \
     && \
     rm -rf /var/lib/apt/lists/*
 
+COPY --from=sngnn_src requirements.txt /tmp/sngnn_requirements.txt
+
 RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
     ipython==8.0.1 \
@@ -140,6 +148,16 @@ RUN pip3 install --no-cache-dir \
     torchvision==0.16.0 \
     openai \
     numpy==1.24.4
+
+RUN sed -i 's/numpy~=1.26.3/numpy==1.24.4/' /tmp/sngnn_requirements.txt && \
+    pip3 install --no-cache-dir -r /tmp/sngnn_requirements.txt && \
+    pip3 install --no-cache-dir numpy==1.24.4
+
+RUN pip3 install --no-cache-dir \
+    transformers==4.56.0 \
+    accelerate \
+    opencv-python \
+    filterpy
 
 # for debug
 # RUN apt update && \
@@ -216,7 +234,10 @@ COPY --chown=$USERNAME:$USERNAME --from=vlm_social_nav_src ./src/vsn_yolo_ros sr
 COPY --chown=$USERNAME:$USERNAME --from=vlm_social_nav_src ./src/social_nav_plugin src/social_nav_plugin
 COPY --chown=$USERNAME:$USERNAME --from=people_msgs_src . src/people_msgs
 
-RUN sudo apt update && rosdep update && rosdep install -q -y \
+# rosdep key "ament_python" may be missing in some rosdep indexes; add a local mapping.
+RUN printf "ament_python:\n  ubuntu:\n    jammy: [ros-humble-ament-index-python, python3-ament-package]\n" | sudo tee /etc/ros/rosdep/ament-python.yaml > /dev/null && \
+    printf "yaml file:///etc/ros/rosdep/ament-python.yaml\n" | sudo tee /etc/ros/rosdep/sources.list.d/50-ament-python.list > /dev/null && \
+    sudo apt update && rosdep update && rosdep install -q -y \
 	--from-paths src \
 	--ignore-src
 
@@ -236,7 +257,10 @@ COPY --from=cache $UNDERLAY_WS/install $UNDERLAY_WS/install
 # copy package.xml files from cache
 COPY --from=cache /tmp/opt/src $UNDERLAY_WS/src
 
-RUN apt update && rosdep update && rosdep install -q -y \
+# rosdep key "ament_python" may be missing in some rosdep indexes; add a local mapping.
+RUN printf "ament_python:\n  ubuntu:\n    jammy: [ros-humble-ament-index-python, python3-ament-package]\n" | sudo tee /etc/ros/rosdep/ament-python.yaml > /dev/null && \
+    printf "yaml file:///etc/ros/rosdep/ament-python.yaml\n" | sudo tee /etc/ros/rosdep/sources.list.d/50-ament-python.list > /dev/null && \
+    apt update && rosdep update && rosdep install -q -y \
 	--from-paths src \
 	--ignore-src
 
