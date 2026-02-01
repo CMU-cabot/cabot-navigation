@@ -263,7 +263,7 @@ controller_server:
       critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign", "SocialCritic"]
       SocialCritic:
         class: social_nav_plugin/SocialCritic
-        scale: 24.0
+        scale: 60.0
       PathForwardPrefer:
         class: dwb_critics::PathForwardPreferCritic
         scale: 24.0
@@ -271,7 +271,7 @@ controller_server:
       VelocityBaseObstacle:
         class: dwb_critics::VelocityObstacleCritic
         #class: dwb_critics::BaseObstacleCritic
-        scale: 1.0 # default: 1.0
+        scale: 60.0 # default: 1.0
         sum_scores: False # default: False
         low_speed_threshold: 0.3
         cost_threshold: 96.0
