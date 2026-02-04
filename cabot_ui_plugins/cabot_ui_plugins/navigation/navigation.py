@@ -1077,7 +1077,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 if not poi.in_angle(current_pose, include_past=False):
                     continue
                 else:
-                    if poi.signal.state != geojson.Signal.RED:
+                    if poi.signal is not None and poi.signal.state not in [geojson.Signal.RED, geojson.Signal.GREEN_BLINKING]:
                         continue
                     if abs(dist) > 2.0:
                         continue
