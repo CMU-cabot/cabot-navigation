@@ -202,8 +202,8 @@ controller_server:
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["cabot_goal_checker"]
     # controller_plugins: ["FollowPath", "FollowPathElevator", "MPCFollowPath", "RLFollowPath", "HybridRLFollowPath"]
-    controller_plugins: ["FollowPath", "FollowPathElevator", "HybridRLFollowPath"]
-    # controller_plugins: ["FollowPath", "FollowPathElevator", "RLFollowPath"]
+    # controller_plugins: ["FollowPath", "FollowPathElevator", "HybridRLFollowPath"]
+    controller_plugins: ["FollowPath", "FollowPathElevator", "RLFollowPath"]
 
     # Progress checker parameters
     # It is not going to use progress_checker as of 2020/08/27.
@@ -380,7 +380,7 @@ controller_server:
       obstacle_costval: 250.0
       collision_radius: 0.5
       time_cost: 5.0
-      focus_goal_dist: 5.0
+      focus_goal_dist: 0.5
       goal_cost_wt: 0.35
       group_cost_wt: 0.65
       obs_cost_wt: 1.0
@@ -394,7 +394,7 @@ controller_server:
       loc_goal_vis_topic: "/local_goal_vis"
       lookahead_distance: 5.0
       max_lookahead: 12.0
-      focus_goal_dist: 5.0
+      focus_goal_dist: 0.5
     HybridRLFollowPath:
       plugin: "cabot_navigation2::CaBotHybridRLController"
       rl_people_topic: "/rl_people"
