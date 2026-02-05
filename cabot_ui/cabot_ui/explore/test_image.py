@@ -796,7 +796,7 @@ class GPTExplainer():
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
         # assume 1 character takes 0.125 seconds to speak (a bit longer than the average which is 0.1 seconds)
-        return len(text) * 0.15
+        return len(text) * 0.20
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it

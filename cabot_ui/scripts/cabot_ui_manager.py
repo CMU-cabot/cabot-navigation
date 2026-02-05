@@ -58,6 +58,7 @@ import sensor_msgs
 import std_msgs.msg
 import std_srvs.srv
 from nav_msgs.msg import Odometry, OccupancyGrid
+from cabot_msgs.msg import PoseLog
 
 
 import cabot_common.button
@@ -117,10 +118,16 @@ class CabotUIManager(NavigationInterface, object):
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
 
         self.registering_map = False
+        self.registering_odom = False
         self.map_sub = self._node.create_subscription(OccupancyGrid, "/local_costmap/costmap", self._map_callback, transient_local_qos)
-        self.odom_sub = self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        #self.odom_sub = self._node.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        #self.odom_sub = self._node.create_subscription(PoseLog, "/cabot/pose_log", self._odom_callback, 10)
+        self._odom_timer = act_node.create_timer(0.01, self._odom_callback, callback_group=MutuallyExclusiveCallbackGroup())
         self.register_map_lock = threading.RLock()
+        self.register_odom_lock = threading.RLock()
 
+        self.dx = 0.0
+        self.dy = 0.0
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -183,6 +190,8 @@ class CabotUIManager(NavigationInterface, object):
                 return
             self.registering_map = True
 
+        self._logger.info("Processing map callback")
+
         self.map_x = msg.info.origin.position.x
         self.map_y = msg.info.origin.position.y
         self.map_width = msg.info.width
@@ -206,36 +215,99 @@ class CabotUIManager(NavigationInterface, object):
         with self.register_map_lock:
             self.registering_map = False
 
-    def _odom_callback(self, msg):
+    def _odom_callback(self):
         self._logger.info("Odom callback")
 
-        self.odom_x = msg.pose.pose.position.x
-        self.odom_y = msg.pose.pose.position.y
+        with self.register_odom_lock:
+            if self.registering_odom == True:
+                return
+            self.registering_odom = True
+
+        self._logger.info("Processing odom callback")
+
+        try:
+            current_pose = self._navigation.current_local_pose()
+        except:
+            self._logger.info("pose callback not ready")
+            with self.register_odom_lock:
+                self.registering_odom = False
+            return
+        
+        #current_time = self._node.get_clock().now()
+
+        # speed = 0.0
+        # if not hasattr(self, 'odom_x'):
+        #     speed = 0.0
+        #     self.dx = 0.0
+        #     self.dy = 0.0
+        # else:
+        #     self.dx = 0.90*self.dx + 0.1*(current_pose.x - self.odom_x)
+        #     self.dy = 0.90*self.dy + 0.1*(current_pose.y - self.odom_y)
+        #     speed = math.sqrt(self.dx ** 2 + self.dy ** 2) / ((current_time - self.odom_time).nanoseconds / 1e9 + 1e-6)
+        #speed = math.sqrt((current_pose.x - self.odom_x) ** 2 + (current_pose.y - self.odom_y) ** 2) / ((current_time - self.odom_time).nanoseconds / 1e9 + 1e-6)
+
+        self.odom_x = current_pose.x
+        self.odom_y = current_pose.y
+        #self.odom_time = current_time
+
+        # self.odom_x = msg.pose.pose.position.x
+        # self.odom_y = msg.pose.pose.position.y
+        # self.odom_x = msg.pose.position.x
+        # self.odom_y = msg.pose.position.y
+
+        #self._logger.info(f"Robot odom coordinates: ({self.odom_x}, {self.odom_y}) with speed {speed}")
 
         # Calculate costmap coordinates
         if not hasattr(self, 'map_x'):
-            return
+            with self.register_odom_lock:
+                self.registering_odom = False
+                return
+            
         # Transform odom coordinates to map coordinates
         dx = self.odom_x - self.map_x
         dy = self.odom_y - self.map_y
 
+        #self._logger.info(f"Robot odom position: ({self.odom_x}, {self.odom_y})")
+        self._logger.info(f"Map origin rotation: {self.map_orientation} rad")
+
         # Rotate according to map orientation
-        rotated_x = dx * math.cos(-self.map_orientation) - dy * math.sin(-self.map_orientation)
-        rotated_y = dx * math.sin(-self.map_orientation) + dy * math.cos(-self.map_orientation)
+        #rotated_x = dx * math.cos(-self.map_orientation) - dy * math.sin(-self.map_orientation)
+        #rotated_y = dx * math.sin(-self.map_orientation) + dy * math.cos(-self.map_orientation)
+
+        # rotated_x = dx
+        # rotated_y = dy
+
+        # Log robot position in map frame
+        #self._logger.info(f"Robot position in map frame: ({rotated_x}, {rotated_y})")
 
         # Convert to map grid indices
-        self.robot_map_x = int(rotated_x / self.map_resolution)
-        self.robot_map_y = int(rotated_y / self.map_resolution)
+        self.robot_map_x = int(dx / self.map_resolution)
+        self.robot_map_y = int((dy / self.map_resolution))
+
+        #self._logger.info(f"Robot map grid indices: ({self.robot_map_x}, {self.robot_map_y})")
 
         # Get cost at robot's position
         if 0 <= self.robot_map_x < self.map_width and 0 <= self.robot_map_y < self.map_height:
-            self.current_cost = self.map_data[self.robot_map_y, self.robot_map_x]
+            current_cost = self.map_data[self.robot_map_y, self.robot_map_x]
 
             # Log current cost
-            self._logger.info(f"Current cost at robot position: {self.current_cost}")
+            #self._logger.info(f"Current cost at robot position: {current_cost}, current speed : {speed}")
 
-            if self.current_cost >= 50:
+            max_allowed_cost = 30
+            # if speed > 0.5:
+            #     max_allowed_cost = 20
+            # if speed > 1.0:
+            #     max_allowed_cost = 0
+            # if speed > 1.5:
+            #     max_allowed_cost = -1
+
+            #self._logger.info(f"Max allowed cost: {max_allowed_cost}")
+
+            if current_cost > max_allowed_cost or current_cost == -1:
                 self._event_mapper.checkLidarLimit(self._logger, 0.0, self._speedOverwritePub)
+
+        with self.register_odom_lock:
+            self.registering_odom = False
 
     def _lidar_limit_callback(self, msg):
         self._logger.debug("Lidar limit callback")
@@ -1010,26 +1082,28 @@ class EventMapper1(object):
             logger.info(f"Checking Lidar Limit: {lidar_dist}")
             if self.exploration_mode == self.ExplorationMode.MANUAL and lidar_dist <= 0.05:
                 #self.exploration_mode = self.ExplorationMode.SHARED        
-                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
-                speak_text("障害物を検知しました。オートノマスモードに切り替えます。")
+                
+                speak_text("障害物を検知しました。", force=True)
 
                 # we go backward a bit to avoid being stuck
                 # self.delegate.process_event(ExplorationEvent(subtype="back"))
 
                 # backward speed : geometry_msgs.msg.Twist()
-                backward_speed = 0.2
+                backward_speed = 0.00001
                 speed_msg = std_msgs.msg.Float32()
                 speed_msg.data = -backward_speed
                 speedOverwritePub.publish(speed_msg)
+                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
 
-                time.sleep(1)  # wait for 1 seconds
+                time.sleep(0.5)  # wait for 0.5 seconds
 
                 stop_speed_msg = std_msgs.msg.Float32()
                 stop_speed_msg.data = 0.0
+                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
                 speedOverwritePub.publish(stop_speed_msg)
 
                 #self.exploration_mode = self.ExplorationMode.MANUAL
-                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
+
 
                 time.sleep(0.5) # wait for half second before detecting again
 
@@ -1142,15 +1216,19 @@ class EventMapper1(object):
                     if self.exploration_mode != self.ExplorationMode.MANUAL:
                         # switching to TOTAL_FREE mode from non-MANUAL mode resets wheel_switch
                         events.append(ExplorationEvent(subtype="wheel_switch"))
+                        speak_text("全自由走行モードに切り替えました。", force=True)
 
                 elif self.exploration_mode == self.ExplorationMode.TOTAL_FREE:
                     if new_mode != self.ExplorationMode.MANUAL:
                         # switching from TOTAL_FREE mode to non-MANUAL mode resets wheel_switch
                         events.append(ExplorationEvent(subtype="wheel_switch"))
+                        #speak_text("全自由走行モードに切り替えました。", force=True)
 
                 elif self.exploration_mode == self.ExplorationMode.MANUAL or new_mode == self.ExplorationMode.MANUAL:
                     # switching to or from MANUAL mode resets wheel_switch
                     events.append(ExplorationEvent(subtype="wheel_switch"))
+                    if new_mode == self.ExplorationMode.MANUAL:
+                        speak_text("自由走行モードに切り替えました。", force=True)
 
                 if self.exploration_mode == self.ExplorationMode.SHARED or new_mode == self.ExplorationMode.SHARED:
                     # switching to or from SHARED mode resets button_control

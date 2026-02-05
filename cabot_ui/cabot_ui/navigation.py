@@ -333,6 +333,7 @@ class ControlBase(object):
         local = self.current_local_pose()
         _global = geoutil.local2global(local, self._anchor)
         self._logger.debug(F"current global pose ({_global})", throttle_duration_sec=1.0)
+        #self._logger.info(F"current global pose ({_global}), current local pose : {local}", throttle_duration_sec=1.0)
         return _global
 
     def current_location_id(self):

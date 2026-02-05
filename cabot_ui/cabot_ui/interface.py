@@ -454,8 +454,8 @@ class UserInterface(object):
 
     def set_pause_control(self, flag):
         self._activity_log("cabot/interface", "pause_control", str(flag))
-        if flag:
-            self.speak(i18n.localized_string("PAUSE_CONTROL"), priority=SpeechPriority.REQUIRED)
+        # if flag:
+        #     self.speak(i18n.localized_string("PAUSE_CONTROL"), priority=SpeechPriority.REQUIRED)
 
     def please_call_elevator(self, pos):
         self._activity_log("cabot/interface", "navigation", "elevator button")
