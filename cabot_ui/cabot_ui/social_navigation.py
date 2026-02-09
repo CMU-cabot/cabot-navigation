@@ -332,9 +332,13 @@ class SocialNavigation(object):
         if not self._is_active:
             return
         now = self._node.get_clock().now()
-        if self._message.code is not None and \
-            (self._last_message.priority <= self._message.priority and self._last_message.category != self._message.category) or \
-                (now - self._last_message.time) > Duration(seconds=4.9):
+        if (
+            self._message.code is not None
+            and (
+                (self._last_message.priority <= self._message.priority and self._last_message.category != self._message.category)
+                or (now - self._last_message.time) > Duration(seconds=4.9)
+            )
+        ):
             self._logger.info(f"get_message {self._message}")
             self._last_message = self._message
             self._message = SNMessage.empty_message(self._node.get_clock())
