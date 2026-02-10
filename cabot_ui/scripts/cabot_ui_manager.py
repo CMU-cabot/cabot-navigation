@@ -34,12 +34,14 @@ Low-level (cabot_common.event) should be mapped into ui-level (cabot_ui.event)
 Author: Daisuke Sato<daisuke@cmu.edu>
 """
 
+import os
 import signal
 import sys
 import threading
 import time
 import traceback
 import yaml
+
 
 import tf_transformations
 import numpy as np
@@ -88,6 +90,7 @@ class CabotUIManager(NavigationInterface, object):
 
         CaBotRclpyUtil.info("CabotUIManager initializing")
 
+        CabotUIManager.instance = self
         self.in_navigation = False
         self.destination = None
 
@@ -108,11 +111,41 @@ class CabotUIManager(NavigationInterface, object):
         self._description = Description(desc_node)
         self._exploration = Exploration(self._node)
         self._exploration.delegate = self
+        
+
+        self.free_mode_detect_lidar_obstacles = self._node.declare_parameter('free_mode_detect_lidar_obstacles', False).value
+        self.free_mode_detect_low_obstacles = self._node.declare_parameter('free_mode_detect_low_obstacles', False).value
+        self.free_mode_detect_lidar_max_limit_speed = self._node.declare_parameter('free_mode_detect_lidar_max_limit_speed', 0.05).value
+        self.free_mode_detect_costmap_obstacles = self._node.declare_parameter('free_mode_detect_costmap_obstacles', True).value
+        self.free_mode_detect_costmap_threshold = self._node.declare_parameter('free_mode_detect_costmap_threshold', 30).value
+        self.free_mode_detect_costmap_forward_distance = self._node.declare_parameter('free_mode_detect_costmap_forward_distance', 0.5).value
+        self.free_mode_warn_cost_threshold = self._node.declare_parameter('free_mode_warn_cost_threshold', 50).value
+        self.free_mode_warn_forward_distance = self._node.declare_parameter('free_mode_warn_forward_distance', 0.7).value
+        self.free_mode_warn_left_distance = self._node.declare_parameter('free_mode_warn_left_distance', 0.3).value
+        self.free_mode_warn_right_distance = self._node.declare_parameter('free_mode_warn_right_distance', 0.3).value
+        self.free_mode_warn_back_distance = self._node.declare_parameter('free_mode_warn_back_distance', 0.3).value
+        self.free_mode_stop_duration = self._node.declare_parameter('free_mode_stop_duration', 0.5).value
+        self.free_mode_correction_duration = self._node.declare_parameter('free_mode_correction_duration', 0.5).value
+        self.free_mode_correction_back_enabled = self._node.declare_parameter('free_mode_correction_back_enabled', True).value
+        self.free_mode_correction_back_speed = self._node.declare_parameter('free_mode_correction_back_speed', 0.2).value
+        self.free_mode_correction_side_enabled = self._node.declare_parameter('free_mode_correction_side_enabled', True).value
+        self.free_mode_correction_side_speed = self._node.declare_parameter('free_mode_correction_side_speed', 0.2).value
+        self.free_mode_correction_side_turnspeed = self._node.declare_parameter('free_mode_correction_side_turnspeed', 0.5).value
+        self.free_mode_correction_touch_required = self._node.declare_parameter('free_mode_correction_touch_required', True).value
+        self.free_mode_switch_autonomous_mode = self._node.declare_parameter('free_mode_switch_autonomous_mode', False).value
+        self.free_mode_end_userfree_movement_time = self._node.declare_parameter('free_mode_end_userfree_movement_time', 0.5).value
 
         self._retry_count = 0
 
-        #self._lidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
-        #self._lowLidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/low_lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        if self.free_mode_detect_lidar_obstacles:
+            self._lidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+        if self.free_mode_detect_low_obstacles:
+            self._lowLidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/low_lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+
+        self._touchHandle = False
+
+        self._touchSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/touch_speed_switched", self._touch_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+
 
         #self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
@@ -128,11 +161,16 @@ class CabotUIManager(NavigationInterface, object):
 
         self.dx = 0.0
         self.dy = 0.0
+        self.odom_x = 0.0
+        self.odom_y = 0.0
+        self.odom_orientation = 0.0
 
         self._node.create_subscription(std_msgs.msg.String, "/cabot/event", self._event_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self._eventPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._speedOverwritePub = self._node.create_publisher(std_msgs.msg.Float32, "/cabot/speed_overwrite", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._turnSpeedOverwritePub = self._node.create_publisher(std_msgs.msg.Float32, "/cabot/turn_speed_overwrite", 10, callback_group=MutuallyExclusiveCallbackGroup())
+
 
         self._personaPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/persona", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.persona_list = ["navigation", "middle", "explore"]
@@ -141,6 +179,7 @@ class CabotUIManager(NavigationInterface, object):
 
         CaBotRclpyUtil.info("CabotUIManager initializing 2")
 
+        CaBotRclpyUtil.info(f"CabotUIManager LIDAR Detect Obstacles: {self.free_mode_warn_cost_threshold}")
 
         # request language
         e = NavigationEvent("getlanguage", None)
@@ -181,6 +220,10 @@ class CabotUIManager(NavigationInterface, object):
         self.create_menu_timer = self._node.create_timer(1.0, self.create_menu, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.send_speaker_audio_files()
+
+
+    def _touch_callback(self, msg):
+        self._touchHandle = msg.data > 0.0
 
     def _map_callback(self, msg):
         self._logger.info("Map callback")
@@ -248,6 +291,7 @@ class CabotUIManager(NavigationInterface, object):
 
         self.odom_x = current_pose.x
         self.odom_y = current_pose.y
+        self.odom_orientation = current_pose.r
         #self.odom_time = current_time
 
         # self.odom_x = msg.pose.pose.position.x
@@ -264,26 +308,19 @@ class CabotUIManager(NavigationInterface, object):
                 return
             
         # Transform odom coordinates to map coordinates
-        dx = self.odom_x - self.map_x
-        dy = self.odom_y - self.map_y
+        posX = self.odom_x - self.map_x
+        posY = self.odom_y - self.map_y
 
-        #self._logger.info(f"Robot odom position: ({self.odom_x}, {self.odom_y})")
-        self._logger.info(f"Map origin rotation: {self.map_orientation} rad")
+        self._logger.info(f"Robot odom position: ({self.odom_x}, {self.odom_y})")
 
-        # Rotate according to map orientation
-        #rotated_x = dx * math.cos(-self.map_orientation) - dy * math.sin(-self.map_orientation)
-        #rotated_y = dx * math.sin(-self.map_orientation) + dy * math.cos(-self.map_orientation)
-
-        # rotated_x = dx
-        # rotated_y = dy
-
-        # Log robot position in map frame
-        #self._logger.info(f"Robot position in map frame: ({rotated_x}, {rotated_y})")
+        # Local offset, check forward direction
+        forwardDistance = self.free_mode_detect_costmap_forward_distance  # meters
+        checkX = posX + forwardDistance * math.cos(self.odom_orientation)
+        checkY = posY + forwardDistance * math.sin(self.odom_orientation)
 
         # Convert to map grid indices
-        self.robot_map_x = int(dx / self.map_resolution)
-        self.robot_map_y = int((dy / self.map_resolution))
-
+        self.robot_map_x = int(checkX / self.map_resolution)
+        self.robot_map_y = int((checkY / self.map_resolution))
         #self._logger.info(f"Robot map grid indices: ({self.robot_map_x}, {self.robot_map_y})")
 
         # Get cost at robot's position
@@ -293,7 +330,7 @@ class CabotUIManager(NavigationInterface, object):
             # Log current cost
             #self._logger.info(f"Current cost at robot position: {current_cost}, current speed : {speed}")
 
-            max_allowed_cost = 30
+            max_allowed_cost = self.free_mode_detect_costmap_threshold
             # if speed > 0.5:
             #     max_allowed_cost = 20
             # if speed > 1.0:
@@ -303,15 +340,16 @@ class CabotUIManager(NavigationInterface, object):
 
             #self._logger.info(f"Max allowed cost: {max_allowed_cost}")
 
-            if current_cost > max_allowed_cost or current_cost == -1:
-                self._event_mapper.checkLidarLimit(self._logger, 0.0, self._speedOverwritePub)
+            if self.free_mode_detect_costmap_obstacles:
+                if current_cost > max_allowed_cost or current_cost == -1:
+                    self._event_mapper.checkLidarLimit(self._logger, 0.0, self._speedOverwritePub, self._turnSpeedOverwritePub, self)
 
         with self.register_odom_lock:
             self.registering_odom = False
 
     def _lidar_limit_callback(self, msg):
         self._logger.debug("Lidar limit callback")
-        self._event_mapper.checkLidarLimit(self._logger, msg.data, self._speedOverwritePub)
+        self._event_mapper.checkLidarLimit(self._logger, msg.data, self._speedOverwritePub, self._turnSpeedOverwritePub, self)
 
     def send_handleside(self):
         e = NavigationEvent("gethandleside", self.handleside)
@@ -1065,8 +1103,11 @@ class EventMapper1(object):
         self.mode = "exploration"
         self.exploration_mode = self.ExplorationMode.AUTONOMOUS  # Default to AUTONOMOUS mode
         self.lock = threading.RLock()
+        self.cv = threading.Condition(self.lock)
+        self.wheelsLocked = False
+        self.lock2 = threading.RLock()
 
-    def checkLidarLimit(self, logger, lidar_dist, speedOverwritePub):
+    def checkLidarLimit(self, logger, lidar_dist, speedOverwritePub, turnSpeedOverwritePub, ui_manager):
 
         # lidar_dist = 0.0
 
@@ -1078,63 +1119,212 @@ class EventMapper1(object):
         #         lidar_dist = float('inf')
 
 
-        with self.lock:
-            logger.info(f"Checking Lidar Limit: {lidar_dist}")
-            if self.exploration_mode == self.ExplorationMode.MANUAL and lidar_dist <= 0.05:
-                #self.exploration_mode = self.ExplorationMode.SHARED        
-                
-                speak_text("障害物を検知しました。", force=True)
+        logger.info(f"Checking Lidar Limit: {lidar_dist}")
+        if lidar_dist <= ui_manager.free_mode_detect_lidar_max_limit_speed:
+            #self.exploration_mode = self.ExplorationMode.SHARED        
+            
+            with self.lock:
+                logger.info("Lidar limit reached in MANUAL mode")
+
+                if self.exploration_mode != self.ExplorationMode.MANUAL:
+                    return
 
                 # we go backward a bit to avoid being stuck
-                # self.delegate.process_event(ExplorationEvent(subtype="back"))
 
-                # backward speed : geometry_msgs.msg.Twist()
+                turn_speed = 0.0
+                turn_speed_msg = std_msgs.msg.Float32()
+                turn_speed_msg.data = turn_speed
+                turnSpeedOverwritePub.publish(turn_speed_msg)
+
                 backward_speed = 0.00001
                 speed_msg = std_msgs.msg.Float32()
                 speed_msg.data = -backward_speed
                 speedOverwritePub.publish(speed_msg)
-                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
 
-                time.sleep(0.5)  # wait for 0.5 seconds
 
+                # Obstacle detected in MANUAL mode
+                self.wheelsLocked = True
+                CabotUIManager.instance._interface.set_pause_control(False)
+                CabotUIManager.instance._navigation.set_pause_control(False)
+                CabotUIManager.instance._exploration.set_pause_control(False)
+
+                posX = ui_manager.odom_x - ui_manager.map_x
+                posY = ui_manager.odom_y - ui_manager.map_y
+
+                # Local offset, check forward direction
+                forwardDistance = ui_manager.free_mode_warn_forward_distance  # meters
+                checkXForward = int((posX + forwardDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                checkYForward = int((posY + forwardDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+
+                leftDistance = ui_manager.free_mode_warn_left_distance  # meters
+                checkXLeft = int((posX + leftDistance * math.cos(ui_manager.odom_orientation + math.pi / 2)) / ui_manager.map_resolution)
+                checkYLeft = int((posY + leftDistance * math.sin(ui_manager.odom_orientation + math.pi / 2)) / ui_manager.map_resolution)
+                rightDistance = ui_manager.free_mode_warn_right_distance  # meters
+                checkXRight = int((posX + rightDistance * math.cos(ui_manager.odom_orientation - math.pi / 2)) / ui_manager.map_resolution)
+                checkYRight = int((posY + rightDistance * math.sin(ui_manager.odom_orientation - math.pi / 2)) / ui_manager.map_resolution)
+
+                backDistance = ui_manager.free_mode_warn_back_distance  # meters
+                checkXBack = int((posX - backDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                checkYBack = int((posY - backDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                logger.info(f"Checking obstacle costs at positions - Forward: ({checkXForward}, {checkYForward}), Left: ({checkXLeft}, {checkYLeft}), Right: ({checkXRight}, {checkYRight}), Back: ({checkXBack}, {checkYBack})")
+
+                # Determine the direction where there can be an obstacle (costmap not null)
+                forwardCost = 100 # out of map is treated as obstacle
+                leftCost = 100
+                rightCost = 100
+                backCost = 100
+
+                if 0 <= checkXForward < ui_manager.map_width and 0 <= checkYForward < ui_manager.map_height:
+                    forwardCost = ui_manager.map_data[checkYForward, checkXForward]
+                if 0 <= checkXLeft < ui_manager.map_width and 0 <= checkYLeft < ui_manager.map_height:
+                    leftCost = ui_manager.map_data[checkYLeft, checkXLeft]
+                if 0 <= checkXRight < ui_manager.map_width and 0 <= checkYRight < ui_manager.map_height:
+                    rightCost = ui_manager.map_data[checkYRight, checkXRight]
+                if 0 <= checkXBack < ui_manager.map_width and 0 <= checkYBack < ui_manager.map_height:
+                    backCost = ui_manager.map_data[checkYBack, checkXBack]
+
+                logger.info(f"Obstacle Costs - Forward: {forwardCost}, Left: {leftCost}, Right: {rightCost}, Back: {backCost}")
+
+                warnCostThreshold = ui_manager.free_mode_warn_cost_threshold  # Cost threshold to consider as obstacle level
+
+                textForward = "前方"
+                textLeft = "左側"
+                textRight = "右側"
+                textBack = "後方"
+
+                textAnd = "と"
+
+                obstacleDirections = []
+                if forwardCost >= warnCostThreshold:
+                    obstacleDirections.append(textForward)
+                if leftCost >= warnCostThreshold:
+                    obstacleDirections.append(textLeft)
+                if rightCost >= warnCostThreshold:
+                    obstacleDirections.append(textRight)
+                if backCost >= warnCostThreshold:
+                    obstacleDirections.append(textBack)
+
+                if len(obstacleDirections) == 0:
+                    # Get the direction with the highest cost
+                    maxCost = max(forwardCost, leftCost, rightCost, backCost)
+                    if maxCost == forwardCost:
+                        obstacleDirections.append(textForward)
+                    elif maxCost == leftCost:
+                        obstacleDirections.append(textLeft)
+                    elif maxCost == rightCost:
+                        obstacleDirections.append(textRight)
+                    elif maxCost == backCost:
+                        obstacleDirections.append(textBack)
+
+                if len(obstacleDirections) == 1:
+                    speak_text(f"ご注意{obstacleDirections[0]}に障害物があります。", force=True)
+
+                elif len(obstacleDirections) == 2:
+                    speak_text(f"ご注意{obstacleDirections[0]}{textAnd}{obstacleDirections[1]}に障害物があります。", force=True)
+
+                elif len(obstacleDirections) > 2:
+                    allButLast = "、".join(obstacleDirections[:-1])
+                    last = obstacleDirections[-1]
+                    speak_text(f"ご注意{allButLast}{textAnd}{last}に障害物があります。", force=True)
+                else:
+                    speak_text("ご注意障害物を検知しました。", force=True)
+
+                logger.info("Stopping robot due to obstacle in MANUAL mode")
+
+                time.sleep(ui_manager.free_mode_stop_duration)  # wait for 1.0 seconds
+
+                if ui_manager._touchHandle or not ui_manager.free_mode_correction_touch_required:
+                    # If there is an obstacle in front but not in back, go backward a bit (Macro 1)
+                    if ui_manager.free_mode_correction_back_enabled and textForward in obstacleDirections and textBack not in obstacleDirections:
+                        # go backward a bit
+                        backward_speed = ui_manager.free_mode_correction_back_speed
+                        speed_msg = std_msgs.msg.Float32()
+                        speed_msg.data = -backward_speed
+                        speedOverwritePub.publish(speed_msg)
+                        time.sleep(0.05)
+
+                    # If there is an obstacle on the left but not in front or on the right, turn right a bit and go forward (Macro 2)
+                    elif ui_manager.free_mode_correction_side_enabled and textLeft in obstacleDirections and textForward not in obstacleDirections and textRight not in obstacleDirections:
+                        # turn right a bit and go forward
+                        forward_speed = ui_manager.free_mode_correction_side_speed
+                        speed_msg = std_msgs.msg.Float32()
+                        speed_msg.data = forward_speed
+                        speedOverwritePub.publish(speed_msg)
+
+                        time.sleep(0.05)
+
+                        turn_speed = -ui_manager.free_mode_correction_side_turnspeed
+                        turn_speed_msg = std_msgs.msg.Float32()
+                        turn_speed_msg.data = turn_speed
+                        turnSpeedOverwritePub.publish(turn_speed_msg)
+
+                    # If there is an obstacle on the right but not in front or on the left, turn left a bit and go forward (Macro 3)
+                    elif ui_manager.free_mode_correction_side_enabled and textRight in obstacleDirections and textForward not in obstacleDirections and textLeft not in obstacleDirections:
+                        # turn left a bit and go forward
+                        forward_speed = ui_manager.free_mode_correction_side_speed
+                        speed_msg = std_msgs.msg.Float32()
+                        speed_msg.data = forward_speed
+                        speedOverwritePub.publish(speed_msg)
+
+                        time.sleep(0.05)
+                        
+                        turn_speed = ui_manager.free_mode_correction_side_turnspeed
+                        turn_speed_msg = std_msgs.msg.Float32()
+                        turn_speed_msg.data = turn_speed
+                        turnSpeedOverwritePub.publish(turn_speed_msg)
+
+                time.sleep(ui_manager.free_mode_correction_duration)  # wait for 1.0 seconds
+
+
+                if(not ui_manager.free_mode_switch_autonomous_mode):
+                    CabotUIManager.instance._interface.set_pause_control(True)
+                    CabotUIManager.instance._navigation.set_pause_control(True)
+                    CabotUIManager.instance._exploration.set_pause_control(True)
+                else:
+                    self.exploration_mode = self.ExplorationMode.AUTONOMOUS
+                    speak_text("自律走行モードに切り替えました。", force=True)
+                
                 stop_speed_msg = std_msgs.msg.Float32()
                 stop_speed_msg.data = 0.0
-                self.delegate.process_event(ExplorationEvent(subtype="wheel_switch"))
                 speedOverwritePub.publish(stop_speed_msg)
+                turn_stop_speed_msg = std_msgs.msg.Float32()
+                turn_stop_speed_msg.data = 0.0
+                turnSpeedOverwritePub.publish(turn_stop_speed_msg)
 
                 #self.exploration_mode = self.ExplorationMode.MANUAL
 
+                self.wheelsLocked = False
+                self.cv.notify_all()
 
-                time.sleep(0.5) # wait for half second before detecting again
+                time.sleep(ui_manager.free_mode_end_userfree_movement_time) # wait for half second before detecting again
+
 
 
                 
-
     def push(self, event, logger):
-        with self.lock:
-            # state = self._manager.state
+        # state = self._manager.state
 
-            if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
-            event.type != HoldDownEvent.TYPE:
-                return
+        if event.type != ButtonEvent.TYPE and event.type != ClickEvent.TYPE and \
+        event.type != HoldDownEvent.TYPE:
+            return
 
-            mevent = None
+        mevent = None
 
-            # Commented out the code below to enable switching between exploration and navigation modes
-            # if self.mode == "exploration":
-            #     mevent = self.map_button_to_exploration(event)
-            # elif self.mode == "navigation":
-            #     mevent = self.map_button_to_navigation(event)
+        # Commented out the code below to enable switching between exploration and navigation modes
+        # if self.mode == "exploration":
+        #     mevent = self.map_button_to_exploration(event)
+        # elif self.mode == "navigation":
+        #     mevent = self.map_button_to_navigation(event)
 
 
-            mevents = self.map_button_to_exploration(event, logger)
+        mevents = self.map_button_to_exploration(event, logger)
 
-            if mevents is None or len(mevents) == 0:
-                return
-            
-            for mevent in mevents:
-                if mevent:
-                    self.delegate.process_event(mevent)
+        if mevents is None or len(mevents) == 0:
+            return
+        
+        for mevent in mevents:
+            if mevent:
+                self.delegate.process_event(mevent)
 
     def map_button_to_menu(self, event):
         if event.type == "click" and event.count == 1:
@@ -1196,46 +1386,53 @@ class EventMapper1(object):
                 return [ExplorationEvent(subtype="right")]
 
         if event.type == "click" and event.count == 1:
-            new_mode = self.exploration_mode
+            with self.lock:
+                self.cv.wait_for(lambda: not self.wheelsLocked, timeout=1.0)
 
-            if event.buttons == cabot_common.button.BUTTON_DOWN:
-                new_mode = self.ExplorationMode.TOTAL_FREE
-            elif event.buttons == cabot_common.button.BUTTON_LEFT:
-                new_mode = self.ExplorationMode.MANUAL
-            elif event.buttons == cabot_common.button.BUTTON_RIGHT:
-                new_mode = self.ExplorationMode.SHARED
-            elif event.buttons == cabot_common.button.BUTTON_UP:
-                new_mode = self.ExplorationMode.AUTONOMOUS
+                new_mode = self.exploration_mode
 
-            logger.info(f"Requested exploration mode change to {new_mode.name}")
+                if event.buttons == cabot_common.button.BUTTON_DOWN:
+                    new_mode = self.ExplorationMode.TOTAL_FREE
+                elif event.buttons == cabot_common.button.BUTTON_LEFT:
+                    new_mode = self.ExplorationMode.MANUAL
+                elif event.buttons == cabot_common.button.BUTTON_RIGHT:
+                    new_mode = self.ExplorationMode.SHARED
+                elif event.buttons == cabot_common.button.BUTTON_UP:
+                    new_mode = self.ExplorationMode.AUTONOMOUS
 
-            if new_mode != self.exploration_mode:
-                events = []
+                logger.info(f"Requested exploration mode change to {new_mode.name}")
 
-                if new_mode == self.ExplorationMode.TOTAL_FREE:
-                    if self.exploration_mode != self.ExplorationMode.MANUAL:
-                        # switching to TOTAL_FREE mode from non-MANUAL mode resets wheel_switch
-                        events.append(ExplorationEvent(subtype="wheel_switch"))
+                if new_mode != self.exploration_mode:
+                    events = []
+
+                    if self.exploration_mode == self.ExplorationMode.SHARED or new_mode == self.ExplorationMode.SHARED:
+                        # switching to or from SHARED mode resets button_control
+                        events.append(ExplorationEvent(subtype="button_control"))
+                        
+                    if new_mode == self.ExplorationMode.MANUAL:
+                        CabotUIManager.instance._interface.set_pause_control(True)
+                        CabotUIManager.instance._navigation.set_pause_control(True)
+                        CabotUIManager.instance._exploration.set_pause_control(True)
+                        speak_text("自由走行モードに切り替えました。", force=True)
+                    elif new_mode == self.ExplorationMode.SHARED:
+                        CabotUIManager.instance._interface.set_pause_control(False)
+                        CabotUIManager.instance._navigation.set_pause_control(False)
+                        CabotUIManager.instance._exploration.set_pause_control(False)
+                        speak_text("共有走行モードに切り替えました。", force=True)
+                    elif new_mode == self.ExplorationMode.AUTONOMOUS:
+                        CabotUIManager.instance._interface.set_pause_control(False)
+                        CabotUIManager.instance._navigation.set_pause_control(False)
+                        CabotUIManager.instance._exploration.set_pause_control(False)
+                        speak_text("自律走行モードに切り替えました。", force=True)
+                    elif new_mode == self.ExplorationMode.TOTAL_FREE:
+                        # in TOTAL_FREE mode, wheels are always unlocked
+                        CabotUIManager.instance._interface.set_pause_control(True)
+                        CabotUIManager.instance._navigation.set_pause_control(True)
+                        CabotUIManager.instance._exploration.set_pause_control(True)
                         speak_text("全自由走行モードに切り替えました。", force=True)
 
-                elif self.exploration_mode == self.ExplorationMode.TOTAL_FREE:
-                    if new_mode != self.ExplorationMode.MANUAL:
-                        # switching from TOTAL_FREE mode to non-MANUAL mode resets wheel_switch
-                        events.append(ExplorationEvent(subtype="wheel_switch"))
-                        #speak_text("全自由走行モードに切り替えました。", force=True)
-
-                elif self.exploration_mode == self.ExplorationMode.MANUAL or new_mode == self.ExplorationMode.MANUAL:
-                    # switching to or from MANUAL mode resets wheel_switch
-                    events.append(ExplorationEvent(subtype="wheel_switch"))
-                    if new_mode == self.ExplorationMode.MANUAL:
-                        speak_text("自由走行モードに切り替えました。", force=True)
-
-                if self.exploration_mode == self.ExplorationMode.SHARED or new_mode == self.ExplorationMode.SHARED:
-                    # switching to or from SHARED mode resets button_control
-                    events.append(ExplorationEvent(subtype="button_control"))
-
-                self.exploration_mode = new_mode
-                return events
+                    self.exploration_mode = new_mode
+                    return events
             
         return None
 

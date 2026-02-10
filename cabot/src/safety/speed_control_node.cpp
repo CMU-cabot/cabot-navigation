@@ -96,6 +96,7 @@ private:
     targetRate_ = declare_parameter("target_rate", targetRate_);
 
     userSpeedOverwrite_ = 0.0f;
+    turnSpeedOverwrite_ = 0.0f;
 
     for (uint64_t index = 0; index < speedInput_.size(); index++) {
       auto topic = speedInput_[index];
@@ -154,11 +155,17 @@ private:
           need_stop_alert_ = std::floor(currentOdomLinear / 0.25);
         }
       });
-      userSpeedOverwriteSub_ = create_subscription<std_msgs::msg::Float32>(
-      "/cabot/speed_overwrite", 10,
-      [this](const std_msgs::msg::Float32::SharedPtr msg) {
-        userSpeedOverwrite_ = msg->data;
-      });
+    userSpeedOverwriteSub_ = create_subscription<std_msgs::msg::Float32>(
+    "/cabot/speed_overwrite", 10,
+    [this](const std_msgs::msg::Float32::SharedPtr msg) {
+      userSpeedOverwrite_ = msg->data;
+    });
+    turnSpeedOverwriteSub_ = create_subscription<std_msgs::msg::Float32>(
+    "/cabot/turn_speed_overwrite", 10,
+    [this](const std_msgs::msg::Float32::SharedPtr msg) {
+      turnSpeedOverwrite_ = msg->data;
+    });
+
     vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / targetRate_),
@@ -252,8 +259,22 @@ private:
     }
 
     // Overwrite by user speed overwrite topic
-    if (userSpeedOverwrite_ != 0.0f) {
+    if (userSpeedOverwrite_ < 0.0f) {
       l = userSpeedOverwrite_;
+      r = 0.0f;
+      currentLinear_ = 0.0f;
+    }
+    else if (userSpeedOverwrite_ > 0.0f) {
+      if (turnSpeedOverwrite_ == 0.0f) {
+        r = 0.0f;
+        l = 0.0f;
+        currentLinear_ = 0.0f;
+      }
+      else{
+        l = userSpeedOverwrite_;
+        r = turnSpeedOverwrite_;
+        currentLinear_ = 0.0f;
+      }
     }
 
     geometry_msgs::msg::Twist cmd_vel;
@@ -320,11 +341,13 @@ private:
   std::string odomInput_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odomSub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr userSpeedOverwriteSub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr turnSpeedOverwriteSub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
   int need_stop_alert_;
   rclcpp::Time lastVibrator1Time_;
 
   float userSpeedOverwrite_;
+  float turnSpeedOverwrite_;
 
   double userSpeedLimit_;
   double mapSpeedLimit_;

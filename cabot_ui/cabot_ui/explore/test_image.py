@@ -18,7 +18,7 @@ import requests
 import torch
 from PIL import Image as PILImage
 from packaging.version import Version
-from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
+#from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
 from cv2 import aruco
 
 import rclpy
@@ -464,18 +464,18 @@ class GPTExplainer():
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # load vision model
-        HF_MODEL_PATH = 'line-corporation/clip-japanese-base'
-        self.tokenizer = AutoTokenizer.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
-        self.processor = AutoImageProcessor.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
-        self.model = AutoModel.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
-        self.model.to(self.device)
-        self.model.eval()
+        # HF_MODEL_PATH = 'line-corporation/clip-japanese-base'
+        # self.tokenizer = AutoTokenizer.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+        # self.processor = AutoImageProcessor.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+        # self.model = AutoModel.from_pretrained(HF_MODEL_PATH, trust_remote_code=True)
+        # self.model.to(self.device)
+        # self.model.eval()
 
         # load text model
-        self.text_tokenizer = AutoTokenizer.from_pretrained("cl-nagoya/sup-simcse-ja-large")
-        self.text_model = AutoModel.from_pretrained("cl-nagoya/sup-simcse-ja-large")
-        self.text_model.to(self.device)
-        self.text_model.eval()
+        # self.text_tokenizer = AutoTokenizer.from_pretrained("cl-nagoya/sup-simcse-ja-large")
+        # self.text_model = AutoModel.from_pretrained("cl-nagoya/sup-simcse-ja-large")
+        # self.text_model.to(self.device)
+        # self.text_model.eval()
 
         self.logger.info(f"Initializing GPTExplainer with api_key: {self.api_key[:3]}...{self.api_key[-3:]}")
         self.logger.info(f"Mode: {self.mode}, Persona: {self.persona}, Dummy: {self.dummy}")
@@ -796,7 +796,7 @@ class GPTExplainer():
     def calculate_speak_time(self, text: str) -> float:
         # calculate the time to speak the text
         # assume 1 character takes 0.125 seconds to speak (a bit longer than the average which is 0.1 seconds)
-        return len(text) * 0.20
+        return len(text) * 0.30
 
     def extract_json_part(self, json_like_string: str) -> Optional[Dict[str, Any]]:
         # if json is already in the correct format, return it
