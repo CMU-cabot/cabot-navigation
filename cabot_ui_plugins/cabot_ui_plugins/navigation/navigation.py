@@ -271,6 +271,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.green_start_time = None
+        self._last_published_signal_state = None
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -1067,10 +1068,19 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         distance = 0.0
         expected_time = 0.0
         next_programmed_seconds = 0.0
+        crossing = False
         for poi in self.signal_pois:
-            dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
-            if dist >= 5.0:
+            dist = poi.distance_to(current_pose, adjusted=True)
+            width = poi.width_to(current_pose)
+
+            distances = poi.distances if poi.distances else [10.0]
+            crossing_distance = distances[0]
+
+            if dist >= 5.0 or abs(width) >= 2.0:
                 continue
+
+            if -crossing_distance < dist < 0:
+                crossing = True
 
             if not poi.in_angle(current_pose):
                 # check if the signal POI and current_pose is facing in angle, but ignore if it has been past
@@ -1084,8 +1094,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     # pass if the signal is red and the pose is close to the signal poi
             temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
 
-            distances = poi.distances if poi.distances else [10.0]
-            distance = distances[0]
+            distance = crossing_distance
             margin = 3.0
             rate = 0.9
             expected_time = distance / user_speed / rate + margin
@@ -1142,6 +1151,18 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             msg.expected_time = float(expected_time)
             msg.next_programmed_seconds = float(next_programmed_seconds)
             self.signal_state_pub.publish(msg)
+            self._last_published_signal_state = state
+        elif not crossing and self._last_published_signal_state not in (None, "NONE"):
+            msg = cabot_msgs.msg.SignalState()
+            msg.header.stamp = self._node.get_clock().now().to_msg()
+            msg.state = "NONE"
+            msg.remaining_time = -1.0
+            msg.distance = 0.0
+            msg.user_speed = float(user_speed)
+            msg.expected_time = 0.0
+            msg.next_programmed_seconds = 0.0
+            self.signal_state_pub.publish(msg)
+            self._last_published_signal_state = "NONE"
 
     def _check_turn(self, current_pose):
         # provide turn tactile notification

@@ -294,6 +294,8 @@ private:
   std::string last_log_;
   std::string current_frame_;
   std::string signal_state_;
+  rclcpp::Time last_signal_state_time_;
+  double signal_state_timeout_sec_;
   rclcpp::Time no_signal_info_start_;
   AverageFilter linear_velocity_;
   AverageFilter angular_velocity_;
