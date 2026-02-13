@@ -1132,7 +1132,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         msg = std_msgs.msg.Float32()
         msg.data = limit
         self.speed_limit_pub.publish(msg)
-        if state:
+        if state and (state == "GREEN_SIGNAL" or limit == 0):
             msg = cabot_msgs.msg.SignalState()
             msg.header.stamp = self._node.get_clock().now().to_msg()
             msg.state = state
