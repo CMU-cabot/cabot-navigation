@@ -907,6 +907,18 @@ class POI(Facility, geoutil.TargetPlace):
         # CaBotRclpyUtil.debug(f"dist={dist_TR}, yaw={yaw}, adjusted={adjusted}")
         return adjusted
 
+    # width is the cross-track distance to the POI orientation
+    #                       |
+    #                       | width (+/-)
+    # robot R --------------+--------------> (POI orientation)
+    #                       o POI
+    #
+    def width_to(self, robot):
+        dist_TR = super(POI, self).distance_to(robot)
+        pose_TR = geoutil.Pose.pose_from_points(self, robot)
+        yaw = geoutil.diff_angle(self.orientation, pose_TR.orientation)
+        return dist_TR * math.sin(yaw)
+
 
 class DoorPOI(POI):
     """POI class"""

@@ -100,6 +100,9 @@ StopReasoner::StopReasoner(const std::shared_ptr<rclcpp::Node> node)
   navigation_timeout_(0),
   last_log_(""),
   current_frame_(""),
+  signal_state_(""),
+  last_signal_state_time_(0, 0, node->get_clock()->get_clock_type()),
+  signal_state_timeout_sec_(node->declare_parameter("signal_state_timeout_sec", 3.0)),
   no_signal_info_start_(0, 0, RCL_SYSTEM_TIME),
   linear_velocity_(Constant::FILTER_DURATION_SHORT),
   angular_velocity_(Constant::FILTER_DURATION_SHORT),
@@ -252,6 +255,7 @@ void StopReasoner::input_current_frame(std_msgs::msg::String & msg)
 void StopReasoner::input_signal_state(cabot_msgs::msg::SignalState & msg)
 {
   signal_state_ = msg.state;
+  last_signal_state_time_ = rclcpp::Time(msg.header.stamp, clock_.get_clock_type());
 }
 
 std::tuple<double, StopReason> StopReasoner::update()
@@ -330,6 +334,14 @@ std::tuple<double, StopReason> StopReasoner::update()
 
   if (duration < Constant::STOP_DURATION_THRESHOLD) {
     return std::make_tuple(duration, StopReason::STOPPED_BUT_UNDER_THRESHOLD);
+  }
+
+  if (last_signal_state_time_.nanoseconds() > 0) {
+    const double signal_state_age_sec =
+      (get_current_time() - last_signal_state_time_).nanoseconds() / 1e9;
+    if (signal_state_age_sec >= signal_state_timeout_sec_) {
+      signal_state_ = StopReasonUtil::toStr(StopReason::NONE);
+    }
   }
 
   if (signal_state_ == StopReasonUtil::toStr(StopReason::NO_SIGNAL_INFO)) {
