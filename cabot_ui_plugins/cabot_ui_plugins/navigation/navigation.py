@@ -1068,6 +1068,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         expected_time = 0.0
         next_programmed_seconds = 0.0
         for poi in self.signal_pois:
+            passed_poi_green = False
             dist = poi.distance_to(current_pose, adjusted=True)  # distance adjusted by angle
             if dist >= 5.0:
                 continue
@@ -1078,7 +1079,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     continue
                 else:
                     if poi.signal is not None and poi.signal.state not in [geojson.Signal.RED, geojson.Signal.GREEN_BLINKING]:
-                        continue
+                        if poi.signal.state == geojson.Signal.GREEN:
+                            passed_poi_green = True
+                        else:
+                            continue
                     if abs(dist) > 2.0:
                         continue
                     # pass if the signal is red and the pose is close to the signal poi
@@ -1111,6 +1115,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self.green_start_time = None
                 elif self.green_start_time is None:
                     self.green_start_time = self._node.get_clock().now()
+                elif passed_poi_green:
+                    state = None
+                    continue
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
                 remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
