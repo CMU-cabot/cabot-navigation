@@ -23,6 +23,7 @@
 
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_listener.h>
 #include <time.h>
 #include <memory>
 #include <vector>
@@ -37,10 +38,12 @@
 #include <std_msgs/msg/int16.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float64.hpp>
-#include <sensor_msgs/msg/imu.hpp>
+#include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <nav2_util/robot_utils.hpp>
 #include "button.hpp"
 #include "cabot_handle_v3_node.hpp"
 
@@ -134,12 +137,16 @@ typedef struct directionalIndicator
 {
   std::string control_mode;
   float target_turn_angle;
-  bool is_controlled_by_imu;
+  bool is_controlled_exclusive;
+  int16_t current_servo_pos;
   int16_t target_pos_local;
   int16_t target_pos_global;
   const uint8_t THRESHOLD_RESET = 10;
-  const uint8_t THRESHOLD_PASS_CONTROL_MAX = 180;
+  const uint8_t THRESHOLD_PASS_CONTROL_MAX = 190;
   const uint8_t THRESHOLD_PASS_CONTROL_MIN = 15;
+  geometry_msgs::msg::PoseStamped reference_pose;
+  std::vector<geometry_msgs::msg::PoseStamped> turn_angle_queue_;
+  std::vector<geometry_msgs::msg::PoseStamped> turn_angle_queue_prefer_;
 } DirectionalIndicator;
 
 class Handle : public std::enable_shared_from_this<Handle>
@@ -170,29 +177,37 @@ private:
   float getEulerYawDegrees(const double & x, const double & y, const double & z, const double & w);
   float getWeightedMovingAverage(const std::vector<float> & data);
   float getMedian(const std::vector<float> & data);
+  float getRotationDegree(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2);
+  float getDistance(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2);
+  bool isPoseMatching(const geometry_msgs::msg::Pose & p1, const geometry_msgs::msg::Pose & p2);
+  void transformPoseToReferenceFrame(
+    const geometry_msgs::msg::PoseStamped & pose_in, geometry_msgs::msg::PoseStamped & pose_out,
+    const std::string reference_frame);
+  void checkTurnAngleQueue();
+  void setTurnAngle();
   void timer_callback();
   void vib_waiting_timer_callback();
   void buttonCallback(std_msgs::msg::Int8::SharedPtr msg);
   void buttonCheck(bool btn_push, int index);
   void eventCallback(std_msgs::msg::String::SharedPtr msg);
   void cmdVelCallback(geometry_msgs::msg::Twist::SharedPtr msg);
-  void handleImuCallback(sensor_msgs::msg::Imu::SharedPtr msg);
   void servoPosCallback(std_msgs::msg::Int16::SharedPtr msg);
-  void turnAngleCallback(std_msgs::msg::Float32::SharedPtr msg);
+  void turnPoseCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void turnPosePreferentialCallback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void turnTypeCallback(std_msgs::msg::String::SharedPtr msg);
-  void turnEndCallback(std_msgs::msg::Bool::SharedPtr msg);
   void rotationCompleteCallback(std_msgs::msg::Bool::SharedPtr msg);
+  void pauseControlCallback(std_msgs::msg::Bool::SharedPtr msg);
   void localPlanCallback(nav_msgs::msg::Path::SharedPtr msg);
-  void angularDistanceCallback(std_msgs::msg::Float64::SharedPtr msg);
   void changeDiControlModeCallback(std_msgs::msg::String::SharedPtr msg);
   void planCallback(nav_msgs::msg::Path::SharedPtr msg);
   void startVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr vibratorPub);
   void stopVibration(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr vibratorPub);
   void changeServoPos(int16_t target_pos);
   void setServoFree(bool is_free);
+  void checkServoPosition();
+  void resetServoPosition();
   void navigationArrived();
   void navigationStart();
-  void resetServoPosition();
   void vibrateLeftTurn();
   void vibrateRightTurn();
   void vibrateLeftDeviation();
@@ -208,6 +223,7 @@ private:
   void vibratePattern(
     const rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr & vibratorPub,
     unsigned int numberVibrations, unsigned int duration, unsigned int sleep);
+  geometry_msgs::msg::Pose getCurrentPose();
   std::weak_ptr<CaBotHandleV3Node> node_;    // Change to weak_ptr to avoid circular references
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator1_pub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr vibrator2_pub_;
@@ -218,12 +234,12 @@ private:
   rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr button_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr event_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Subscription<std_msgs::msg::Int16>::SharedPtr servo_pos_sub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr turn_angle_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr turn_pose_prefer_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr turn_type_sub_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr turn_end_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr rotation_complete_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr pause_control_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr change_di_control_mode_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr local_plan_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
@@ -234,6 +250,8 @@ private:
   int vibratorType_;
   tf2::Quaternion q_;
   tf2::Matrix3x3 m_;
+  geometry_msgs::msg::Pose previous_pose_;
+  geometry_msgs::msg::Pose current_pose_;
   int up_count[9];
   bool btn_dwn[9];
   bool is_navigating_;
@@ -244,8 +262,6 @@ private:
   uint8_t recalculation_cnt_of_path;
   uint8_t last_turn_type_;
   uint8_t wma_window_size_;
-  float current_imu_yaw_;
-  float previous_imu_yaw_;
   float wma_filter_coef_;
   std::vector<float> wma_data_buffer_;
   std::map<std::string, std::string> event;
@@ -262,6 +278,8 @@ private:
   std::vector<Vibration> vibration_queue_;
   rclcpp::TimerBase::SharedPtr vibration_timer_;
   rclcpp::TimerBase::SharedPtr vib_waiting_timer_;
+  tf2_ros::Buffer * tfBuffer;
+  tf2_ros::TransformListener * tfListener;
 };
 
 #endif  // CABOT__HANDLE_V3_HPP_

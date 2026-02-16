@@ -308,8 +308,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.turn_end_pub = node.create_publisher(std_msgs.msg.Bool, turn_end_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
         rotation_complete_output = node.declare_parameter("rotation_complete_topic", "/cabot/rotation_complete").value
         self.rotation_complete_pub = node.create_publisher(std_msgs.msg.Bool, rotation_complete_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
-        turn_angle_output = node.declare_parameter("turn_angle_topic", "/cabot/turn_angle").value
-        self.turn_angle_pub = node.create_publisher(std_msgs.msg.Float32, turn_angle_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
+        turn_pose_prefer_output = node.declare_parameter("turn_pose_prefer_topic", "/cabot/turn_pose_prefer").value
+        self.turn_pose_prefer_pub = node.create_publisher(geometry_msgs.msg.PoseStamped, turn_pose_prefer_output, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._touchModeProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/set_touch_speed_active_mode", callback_group=MutuallyExclusiveCallbackGroup())
         self._userSpeedEnabledProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/user_speed_enabled", callback_group=MutuallyExclusiveCallbackGroup())
@@ -1151,14 +1151,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info("check turn", throttle_duration_sec=1)
         if self.turns is not None:
             for turn in self.turns:
-                if turn.passed_vibrator and turn.passed_directional_indicator:
-                    dist_to_end = numpy.sqrt((current_pose.x - turn.end.pose.position.x)**2 + (current_pose.y - turn.end.pose.position.y)**2)
-                    self._logger.info(F"Distance to turn end: {dist_to_end}")
-                    if dist_to_end < 0.75:
-                        msg = std_msgs.msg.Bool()
-                        msg.data = True
-                        self.turn_end_pub.publish(msg)
-                    continue
                 try:
                     dist = turn.distance_to(current_pose)
                     if dist < self._notify_vib_threshold and not turn.passed_vibrator:
@@ -1447,9 +1439,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         turn_yaw = diff - (diff / abs(diff) * 0.05)
         goal.target_yaw = turn_yaw
 
-        msg = std_msgs.msg.Float32()
-        msg.data = geoutil.normalize_angle(turn_yaw)
-        self.turn_angle_pub.publish(msg)
+        msg = geometry_msgs.msg.PoseStamped()
+        msg.header.frame_id = "base_footprint"
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        quaternion = tf_transformations.quaternion_from_euler(0.0, 0.0, turn_yaw)
+        msg.pose.orientation.x = quaternion[0]
+        msg.pose.orientation.y = quaternion[1]
+        msg.pose.orientation.z = quaternion[2]
+        msg.pose.orientation.w = quaternion[3]
+        self.turn_pose_prefer_pub.publish(msg)
 
         future = self._spin_client.send_goal_async(goal)
         future.add_done_callback(lambda future: self._turn_towards_sent_goal(goal, future, orientation, gh_callback, callback, clockwise, turn_yaw, time_limit))
