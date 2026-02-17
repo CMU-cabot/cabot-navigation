@@ -271,6 +271,9 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.signal_state_pub = node.create_publisher(cabot_msgs.msg.SignalState, "/cabot/signal_state", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.gradient_pub = node.create_publisher(std_msgs.msg.Float32, "/cabot/gradient", 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.green_start_time = None
+        self._current_linear_speed = 0.0
+        self._last_odom_pose_for_speed = None
+        self._last_odom_speed_time = None
 
         current_floor_input = node.declare_parameter("current_floor_topic", "/current_floor").value
         self.current_floor_sub = node.create_subscription(std_msgs.msg.Int64, current_floor_input, self._current_floor_callback, transient_local_qos, callback_group=MutuallyExclusiveCallbackGroup())
@@ -900,6 +903,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                     self.last_log_time = self._node.get_clock().now()
             self._logger.debug(F"current pose {self.current_pose}", throttle_duration_sec=1)
             self.current_odom_pose = self.current_local_odom_pose()
+            self._update_current_linear_speed(self._node.get_clock().now())
         except RuntimeError:
             self._logger.info("could not get position", throttle_duration_sec=3)
             return
@@ -965,6 +969,30 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             self._check_goal(self.current_pose)
         except:  # noqa: E722
             self._logger.error(traceback.format_exc(), throttle_duration_sec=3)
+
+    def _update_current_linear_speed(self, stamp):
+        if self.current_odom_pose is None:
+            return
+
+        if self._last_odom_pose_for_speed is None or self._last_odom_speed_time is None:
+            self._last_odom_pose_for_speed = self.current_odom_pose
+            self._last_odom_speed_time = stamp
+            self._current_linear_speed = 0.0
+            return
+
+        dt = (stamp - self._last_odom_speed_time).nanoseconds / 1e9
+        if dt <= 0.0:
+            return
+
+        dx = self.current_odom_pose.x - self._last_odom_pose_for_speed.x
+        dy = self.current_odom_pose.y - self._last_odom_pose_for_speed.y
+        instant_speed = math.sqrt(dx * dx + dy * dy) / dt
+        instant_speed = min(max(instant_speed, 0.0), self._max_speed * 1.5)
+
+        alpha = 0.4
+        self._current_linear_speed = alpha * instant_speed + (1.0 - alpha) * self._current_linear_speed
+        self._last_odom_pose_for_speed = self.current_odom_pose
+        self._last_odom_speed_time = stamp
 
     def _check_info_poi(self, current_pose):
         if not self.info_pois:
@@ -1053,6 +1081,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         goal_dist = 999
         expected_time = 999
         user_speed = self.delegate.user_speed()
+        current_speed = max(self._current_linear_speed, 0.0)
         # if self._current_goal.current_target():
         #     current_target = self._current_goal.current_target().pose.position
         #     dx = current_target.x - current_pose.x
@@ -1085,10 +1114,12 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             temp_limit = min(limit, max(0.0, max_v(max(0, dist - target_distance), expected_deceleration, expected_delay)))
 
             distances = poi.distances if poi.distances else [10.0]
-            distance = distances[0]
-            margin = 3.0
+            crossing_distance = distances[0]
+            distance = crossing_distance
+            distance_to_poi = max(0.0, dist)
             rate = 0.9
-            expected_time = distance / user_speed / rate + margin
+            expected_time = crossing_distance / user_speed / rate + 3.0
+            expected_time2 = distance_to_poi / user_speed / rate
 
             if poi.signal is None:
                 limit = temp_limit
@@ -1098,19 +1129,17 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self.green_start_time = None
             elif poi.signal.state == geojson.Signal.GREEN:
                 remaining_time = poi.signal.next_programmed_seconds + poi.signal.remaining_seconds
-                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, {expected_time=:.1f}s, user_speed={user_speed:.2f}m/s"
-                                  F" clock={self._node.get_clock().now()} self.green_start_time={self.green_start_time}", throttle_duration_sec=1.0)
+                now = self._node.get_clock().now()
+                self._logger.info(F"signal poi dist={dist:.2f}m, {goal_dist=:.1f}m, {remaining_time=:.1f}s, "
+                                  F"{expected_time=:.1f}s, {expected_time2=:.1f}s, user_speed={user_speed:.2f}m/s, current_speed={current_speed:.2f}m/s, "
+                                  F"distance_to_poi={distance_to_poi:.2f}m, ",
+                                  throttle_duration_sec=1.0)
                 state = "GREEN_SIGNAL"
-                if (remaining_time < expected_time and
-                        (self.green_start_time is None or
-                         self._node.get_clock().now() - self.green_start_time > rclpy.duration.Duration(seconds=3.0))):
+                if (remaining_time < expected_time + expected_time2):
                     limit = temp_limit
                     self._logger.info(F"signal poi dist={dist:.2f}m, limit={limit:.2f} (green but short time)", throttle_duration_sec=1.0)
                     # self.delegate.activity_log("cabot/navigation", "signal_poi", f"{limit}")
                     state = "GREEN_SIGNAL_SHORT"
-                    self.green_start_time = None
-                elif self.green_start_time is None:
-                    self.green_start_time = self._node.get_clock().now()
             elif poi.signal.state == geojson.Signal.GREEN_BLINKING:
                 remaining_time = poi.signal.remaining_seconds
                 limit = temp_limit
