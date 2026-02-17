@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+SCRIPT_NAME=$(basename "$0")
 robot=$CABOT_MODEL
 WORKDIR=/home/developer/post_process
 QUIT_WHEN_ROSBAG_FINISH=${QUIT_WHEN_ROSBAG_FINISH:-true}
@@ -131,7 +132,8 @@ if [ "${MAPPING_RESOLUTION}" = "" ]; then
         echo "Failed to read grid resolution from cartographer_2d_mapping.lua. Use default grid_size=$MAPPING_RESOLUTION"
     fi
 else
-    sed -i 's/return options/TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution = '$MAPPING_RESOLUTION'\
+    sed -i 's/return options/-- resolution updated_by='$SCRIPT_NAME' value='$MAPPING_RESOLUTION'\
+TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution = '$MAPPING_RESOLUTION'\
 return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
     echo "Update cartographer_2d_mapping.lua with grid_size=$MAPPING_RESOLUTION"
 fi

@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 set -m
+SCRIPT_NAME=$(basename "$0")
 
 ## termination hook
 trap ctrl_c INT QUIT TERM
@@ -489,7 +490,8 @@ if [ $cart_mapping -eq 1 ]; then
             echo "Failed to read grid resolution from cartographer_2d_mapping.lua. Use default grid_size=$MAPPING_RESOLUTION"
         fi
     else
-        sed -i 's/return options/TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution = '$MAPPING_RESOLUTION'\
+        sed -i 's/return options/-- resolution updated_by='$SCRIPT_NAME' value='$MAPPING_RESOLUTION'\
+TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution = '$MAPPING_RESOLUTION'\
 return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
         echo "Update cartographer_2d_mapping.lua with grid_size=$MAPPING_RESOLUTION"
     fi
