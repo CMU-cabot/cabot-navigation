@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+SCRIPT_NAME=$(basename "$0")
 robot=$CABOT_MODEL
 WORKDIR=/home/developer/post_process
 QUIT_WHEN_ROSBAG_FINISH=${QUIT_WHEN_ROSBAG_FINISH:-true}
@@ -27,7 +28,7 @@ PLAYBAG_RATE_CARTOGRAPHER=${PLAYBAG_RATE_CARTOGRAPHER:-1.0}
 PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
 : ${LIDAR_MODEL:=}
 MAPPING_USE_GNSS=${MAPPING_USE_GNSS:-false}
-MAPPING_RESOLUTION=${MAPPING_RESOLUTION:-0.05}
+: ${MAPPING_RESOLUTION:=}
 CONVERT_BAG=${CONVERT_BAG:-true}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
@@ -115,6 +116,28 @@ gnss_csv_file=$bag_file2.gnss.csv
 
 pkg_share_dir=`ros2 pkg prefix --share mf_localization_mapping`
 
+# copy config file to a temp directory
+configuration_directory=$pkg_share_dir/configuration_files/cartographer
+configuration_directory_tmp=$configuration_directory/tmp
+mkdir -p $configuration_directory_tmp
+cp $configuration_directory/cartographer_2d_mapping.lua $configuration_directory_tmp
+
+# read grid size from config file or update grid size with the environment variable
+if [ "${MAPPING_RESOLUTION}" = "" ]; then
+    MAPPING_RESOLUTION=$(grep '^TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution' $configuration_directory/cartographer_2d_mapping.lua | sed -E 's/.*= ([0-9.]+).*/\1/')
+    if [ "${MAPPING_RESOLUTION}" != "" ]; then
+        echo "Read grid resolution from cartographer_2d_mapping.lua (grid_size=$MAPPING_RESOLUTION)"
+    else
+        MAPPING_RESOLUTION=0.05
+        echo "Failed to read grid resolution from cartographer_2d_mapping.lua. Use default grid_size=$MAPPING_RESOLUTION"
+    fi
+else
+    sed -i 's/return options/-- resolution updated_by='$SCRIPT_NAME' value='$MAPPING_RESOLUTION'\
+TRAJECTORY_BUILDER_2D.submaps.grid_options_2d.resolution = '$MAPPING_RESOLUTION'\
+return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
+    echo "Update cartographer_2d_mapping.lua with grid_size=$MAPPING_RESOLUTION"
+fi
+
 if [[ ! -e $WORKDIR/${bag_file2} ]]; then
     ros2 launch mf_localization_mapping convert_rosbag_for_cartographer.launch.py \
 	      points2:=${points2_topic} \
@@ -129,7 +152,7 @@ else
 fi
 
 if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; then
-    cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping.lua \
+    cp $configuration_directory_tmp/cartographer_2d_mapping.lua \
           $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping.lua
     cp $pkg_share_dir/configuration_files/mapping_config.yaml \
           $WORKDIR/${BAG_FILENAME}.mapping_config.yaml
@@ -146,6 +169,7 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 	      quit_when_rosbag_finish:=${QUIT_WHEN_ROSBAG_FINISH} \
 	      fix_status_threshold:=${fix_status_threshold} \
 	      grid_resolution:=${MAPPING_RESOLUTION} \
+	      configuration_directory:=$configuration_directory_tmp \
 	      save_pose:=true \
 	      save_trajectory:=true \
 	      interpolate_samples_by_trajectory:=true \
@@ -159,7 +183,8 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 
     # outdoor mapping
     if [ "$MAPPING_USE_GNSS" = true ]; then
-        cp $pkg_share_dir/configuration_files/cartographer/cartographer_2d_mapping_gnss.lua \
+        cp $configuration_directory/cartographer_2d_mapping_gnss.lua $configuration_directory_tmp
+        cp $configuration_directory_tmp/cartographer_2d_mapping_gnss.lua \
               $WORKDIR/${BAG_FILENAME}.cartographer_2d_mapping_gnss.lua
 
         com="$com \

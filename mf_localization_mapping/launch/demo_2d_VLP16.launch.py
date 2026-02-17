@@ -81,6 +81,7 @@ def generate_launch_description():
     fix = LaunchConfiguration('fix')
 
     configuration_basename = LaunchConfiguration('configuration_basename')
+    configuration_directory = LaunchConfiguration('configuration_directory')
     play_limited_topics = LaunchConfiguration('play_limited_topics')
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
@@ -159,6 +160,7 @@ def generate_launch_description():
         DeclareLaunchArgument('fix', default_value='ublox/fix'),
 
         DeclareLaunchArgument('configuration_basename', default_value='cartographer_2d_mapping.lua'),
+        DeclareLaunchArgument('configuration_directory', default_value=PathJoinSubstitution([pkg_dir, 'configuration_files', 'cartographer'])),
         DeclareLaunchArgument('start_trajectory_with_default_topics', default_value="$(eval load_state_filename=='')"),
         DeclareLaunchArgument('play_limited_topics', default_value='false'),
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
@@ -180,6 +182,7 @@ def generate_launch_description():
                 'imu': imu,
                 'fix': fix,
                 'configuration_basename': configuration_basename,
+                'configuration_directory': configuration_directory,
                 'load_state_filename': load_state_filename,
                 'save_state_filename': PythonExpression(['"', bag_filename, '.pbstream" if "', save_state, '"=="true" else ""']),
                 'start_trajectory_with_default_topics': PythonExpression(['"', load_state_filename, '"==""'])
