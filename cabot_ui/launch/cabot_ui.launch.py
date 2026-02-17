@@ -60,19 +60,26 @@ def generate_launch_description():
     free_mode_detect_costmap_forward_distance = LaunchConfiguration('free_mode_detect_costmap_forward_distance')
     free_mode_warn_cost_threshold = LaunchConfiguration('free_mode_warn_cost_threshold')
     free_mode_warn_forward_distance = LaunchConfiguration('free_mode_warn_forward_distance')
-    free_mode_warn_left_distance = LaunchConfiguration('free_mode_warn_left_distance')
-    free_mode_warn_right_distance = LaunchConfiguration('free_mode_warn_right_distance')
+    free_mode_warn_left_side_distance = LaunchConfiguration('free_mode_warn_left_side_distance')
+    free_mode_warn_left_forward_distance = LaunchConfiguration('free_mode_warn_left_forward_distance')
+    free_mode_warn_right_side_distance = LaunchConfiguration('free_mode_warn_right_side_distance')
+    free_mode_warn_right_forward_distance = LaunchConfiguration('free_mode_warn_right_forward_distance')
     free_mode_warn_back_distance = LaunchConfiguration('free_mode_warn_back_distance')
     free_mode_stop_duration = LaunchConfiguration('free_mode_stop_duration')
-    free_mode_correction_duration = LaunchConfiguration('free_mode_correction_duration')
+    free_mode_correction_back_duration = LaunchConfiguration('free_mode_correction_back_duration')
     free_mode_correction_back_enabled = LaunchConfiguration('free_mode_correction_back_enabled')
     free_mode_correction_back_speed = LaunchConfiguration('free_mode_correction_back_speed')
+    free_mode_correction_side_duration = LaunchConfiguration('free_mode_correction_side_duration')
     free_mode_correction_side_enabled = LaunchConfiguration('free_mode_correction_side_enabled')
     free_mode_correction_side_speed = LaunchConfiguration('free_mode_correction_side_speed')
     free_mode_correction_side_turnspeed = LaunchConfiguration('free_mode_correction_side_turnspeed')
     free_mode_correction_touch_required = LaunchConfiguration('free_mode_correction_touch_required')
     free_mode_switch_autonomous_mode = LaunchConfiguration('free_mode_switch_autonomous_mode')
+    free_mode_switch_autonomous_mode_temp = LaunchConfiguration('free_mode_switch_autonomous_mode_temp')
+    free_mode_switch_autonomous_mode_temp_duration = LaunchConfiguration('free_mode_switch_autonomous_mode_temp_duration')
     free_mode_end_userfree_movement_time = LaunchConfiguration('free_mode_end_userfree_movement_time')
+    cabot_vlm_use_button = LaunchConfiguration('cabot_vlm_use_button')
+    cabot_allowed_modes_bitmask = LaunchConfiguration('cabot_allowed_modes_bitmask')
 
     def hoge(text):
         return text
@@ -198,12 +205,20 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_FORWARD_DISTANCE', default_value='0.7'),
         ),
         DeclareLaunchArgument(
-            'free_mode_warn_left_distance',
-            default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_LEFT_DISTANCE', default_value='0.3'),
+            'free_mode_warn_left_side_distance',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_LEFT_SIDE_DISTANCE', default_value='0.3'),
         ),
         DeclareLaunchArgument(
-            'free_mode_warn_right_distance',
-            default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_RIGHT_DISTANCE', default_value='0.3'),
+            'free_mode_warn_left_forward_distance',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_LEFT_FORWARD_DISTANCE', default_value='0.3'),
+        ),
+        DeclareLaunchArgument(
+            'free_mode_warn_right_side_distance',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_RIGHT_SIDE_DISTANCE', default_value='0.3'),
+        ),
+        DeclareLaunchArgument(
+            'free_mode_warn_right_forward_distance',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_WARN_RIGHT_FORWARD_DISTANCE', default_value='0.3'),
         ),
         DeclareLaunchArgument(
             'free_mode_warn_back_distance',
@@ -214,8 +229,8 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_FREE_MODE_STOP_DURATION', default_value='0.5'),
         ),
         DeclareLaunchArgument(
-            'free_mode_correction_duration',
-            default_value=EnvironmentVariable('CABOT_FREE_MODE_CORRECTION_DURATION', default_value='0.5'),
+            'free_mode_correction_back_duration',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_CORRECTION_BACK_DURATION', default_value='0.5'),
         ),
         DeclareLaunchArgument(
             'free_mode_correction_back_enabled',
@@ -224,6 +239,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'free_mode_correction_back_speed',
             default_value=EnvironmentVariable('CABOT_FREE_MODE_CORRECTION_BACK_SPEED', default_value='0.2'),
+        ),
+        DeclareLaunchArgument(
+            'free_mode_correction_side_duration',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_CORRECTION_SIDE_DURATION', default_value='0.5'),
         ),
         DeclareLaunchArgument(
             'free_mode_correction_side_enabled',
@@ -246,8 +265,24 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_FREE_MODE_SWITCH_AUTONOMOUS_MODE', default_value='false'),
         ),
         DeclareLaunchArgument(
+            'free_mode_switch_autonomous_mode_temp',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_SWITCH_AUTONOMOUS_MODE_TEMP', default_value='false'),
+        ),
+        DeclareLaunchArgument(
+            'free_mode_switch_autonomous_mode_temp_duration',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_SWITCH_AUTONOMOUS_MODE_TEMP_DURATION', default_value='5.0'),
+        ),
+        DeclareLaunchArgument(
             'free_mode_end_userfree_movement_time',
             default_value=EnvironmentVariable('CABOT_FREE_MODE_END_USERFREE_MOVEMENT_TIME', default_value='0.5'),
+        ),
+        DeclareLaunchArgument(
+            'cabot_vlm_use_button',
+            default_value=EnvironmentVariable('CABOT_VLM_USE_BUTTON', default_value='false'),
+        ),
+        DeclareLaunchArgument(
+            'cabot_allowed_modes_bitmask',
+            default_value=EnvironmentVariable('CABOT_ALLOWED_MODES_BITMASK', default_value='15'),
         ),
         Node(
             package="cabot_ui",
@@ -273,19 +308,26 @@ def generate_launch_description():
                 'free_mode_detect_costmap_forward_distance': free_mode_detect_costmap_forward_distance,
                 'free_mode_warn_cost_threshold': free_mode_warn_cost_threshold,
                 'free_mode_warn_forward_distance': free_mode_warn_forward_distance,
-                'free_mode_warn_left_distance': free_mode_warn_left_distance,
-                'free_mode_warn_right_distance': free_mode_warn_right_distance,
+                'free_mode_warn_left_side_distance': free_mode_warn_left_side_distance,
+                'free_mode_warn_left_forward_distance': free_mode_warn_left_forward_distance,
+                'free_mode_warn_right_side_distance': free_mode_warn_right_side_distance,
+                'free_mode_warn_right_forward_distance': free_mode_warn_right_forward_distance,
                 'free_mode_warn_back_distance': free_mode_warn_back_distance,
                 'free_mode_stop_duration': free_mode_stop_duration,
-                'free_mode_correction_duration': free_mode_correction_duration,
+                'free_mode_correction_back_duration': free_mode_correction_back_duration,
                 'free_mode_correction_back_enabled': free_mode_correction_back_enabled,
                 'free_mode_correction_back_speed': free_mode_correction_back_speed,
+                'free_mode_correction_side_duration': free_mode_correction_side_duration,
                 'free_mode_correction_side_enabled': free_mode_correction_side_enabled,
                 'free_mode_correction_side_speed': free_mode_correction_side_speed,
                 'free_mode_correction_side_turnspeed': free_mode_correction_side_turnspeed,
                 'free_mode_correction_touch_required': free_mode_correction_touch_required,
                 'free_mode_switch_autonomous_mode': free_mode_switch_autonomous_mode,
+                'free_mode_switch_autonomous_mode_temp': free_mode_switch_autonomous_mode_temp,
+                'free_mode_switch_autonomous_mode_temp_duration': free_mode_switch_autonomous_mode_temp_duration,
                 'free_mode_end_userfree_movement_time': free_mode_end_userfree_movement_time,
+                'cabot_vlm_use_button': cabot_vlm_use_button,
+                'cabot_allowed_modes_bitmask': cabot_allowed_modes_bitmask,
             }, NamespaceParameterFile('cabot_ui_manager_navigation', config_path)],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'

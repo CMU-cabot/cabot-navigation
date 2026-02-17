@@ -74,7 +74,7 @@ class ExplorationMainLoop(Node):
         self.did_go_around = False
 
         self.logger.info("ExplorationMainLoop initialized")
-        speak_text(f"現在、{self.floor}階の展示エリアにいます。")
+        # speak_text(f"現在、{self.floor}階の展示エリアにいます。")
 
     def event_callback(self, msg):
         self.logger.info(f"[Main Loop] Received event: {msg.data}")
@@ -363,7 +363,7 @@ class ExplorationMainLoop(Node):
 
             if len(sampled_points) == 0:
                 state_client.logger.info("No sampled points found; retrying...")
-                speak_text("進める方向が見つかりません。探索を終了します。")
+                #speak_text("進める方向が見つかりません。探索を終了します。")
                 continue
 
             # pick up one direction

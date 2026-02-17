@@ -98,6 +98,9 @@ class CaBotImageNode(Node):
         self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
         self.prompt_sub = self.create_subscription(std_msgs.msg.String, "/cabot/persona", self.persona_callback, 10)
+        #self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.Bool, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._vlmButtonSub = self.create_subscription(std_msgs.msg.Bool, "/cabot/vlm_button", self.vlm_button_callback, 10)
+        self.allowAutoVLM = True
 
         self.current_image = 0
 
@@ -203,6 +206,12 @@ class CaBotImageNode(Node):
         self.publish_camera_ready()
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
+
+    def vlm_button_callback(self, msg: std_msgs.msg.Bool):
+        self.logger.info(f"Received VLM button message: {msg.data}")
+        self.allowAutoVLM = False
+        if msg.data:
+            self.loop()
 
     def persona_callback(self, msg: std_msgs.msg.String):
         self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
@@ -440,6 +449,9 @@ class CaBotImageNode(Node):
             self.change_timer_interval(interval=0.5)
 
     def change_timer_interval(self, interval: float):
+        if not self.allowAutoVLM:
+            return
+
         self.timer = threading.Timer(interval, self.loop).start()
 
 

@@ -1044,6 +1044,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self.gradient_pub.publish(msg)
 
     def _check_nearby_facility(self, current_pose):
+        if not hasattr(self, "nearby_facilities"):
+            return
         if not self.nearby_facilities:
             return
         entry = min(self.nearby_facilities, key=lambda p, c=current_pose: abs(p["entrance"].distance_to(c)))

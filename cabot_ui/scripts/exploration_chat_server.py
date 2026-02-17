@@ -528,39 +528,39 @@ class ExplorationChatServer(Node):
     def event_callback(self, msg):
         event = msg.data
         self.logger.info(f"Received event: {event}")
-        if event == "navigation_arrived":
-            if self.searched_location is not None:
-                # speak_text(f"{self.searched_location}に到着しました。")
-                if not self.searched_direction:
-                    speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。", force=True)
-                else:
-                    try:
-                        # compare self.searched_yaw and self.odom[2] and determine which direction is the searched direction in
-                        if self.searched_yaw is not None:
-                            diff_yaw = self.searched_yaw - self.odom[2]
-                            # if difference is small, just use self.searched_direction
-                            # if difference is large (the robot is facing opposite way as where the searched_yaw is acquired), reverse the direction
-                            if diff_yaw < np.pi:
-                                self.searched_directio = self.searched_direction
-                            elif abs(diff_yaw) > np.pi:
-                                if self.searched_direction == "front":
-                                    self.searched_direction = "back"
-                                elif self.searched_direction == "left":
-                                    self.searched_direction = "right"
-                                elif self.searched_direction == "right":
-                                    self.searched_direction = "left"
-                                elif self.searched_direction == "back":
-                                    self.searched_direction = "front"
+        # if event == "navigation_arrived":
+        #     if self.searched_location is not None:
+        #         # speak_text(f"{self.searched_location}に到着しました。")
+        #         if not self.searched_direction:
+        #             speak_text(f"{self.searched_location}に到着しました。止まるためには手を離してください。", force=True)
+        #         else:
+        #             try:
+        #                 # compare self.searched_yaw and self.odom[2] and determine which direction is the searched direction in
+        #                 if self.searched_yaw is not None:
+        #                     diff_yaw = self.searched_yaw - self.odom[2]
+        #                     # if difference is small, just use self.searched_direction
+        #                     # if difference is large (the robot is facing opposite way as where the searched_yaw is acquired), reverse the direction
+        #                     if diff_yaw < np.pi:
+        #                         self.searched_directio = self.searched_direction
+        #                     elif abs(diff_yaw) > np.pi:
+        #                         if self.searched_direction == "front":
+        #                             self.searched_direction = "back"
+        #                         elif self.searched_direction == "left":
+        #                             self.searched_direction = "right"
+        #                         elif self.searched_direction == "right":
+        #                             self.searched_direction = "left"
+        #                         elif self.searched_direction == "back":
+        #                             self.searched_direction = "front"
 
-                        direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
-                        speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。", force=True)
-                    except Exception as e:
-                        speak_text(f"{self.searched_location}に到着しました。", force=True)
-                self.logger.info(f"Arrived at {self.searched_location}")
-                self.searched_location = None
-                self.searched_direction = None
-                self.searched_yaw = None
-                self.logger.info("searched_location is reset")
+        #                 direction_in_jp = self.dir_to_jp.get(self.searched_direction, self.searched_direction)
+        #                 speak_text(f"{self.searched_location}に到着しました。{direction_in_jp}にあります。", force=True)
+        #             except Exception as e:
+        #                 speak_text(f"{self.searched_location}に到着しました。", force=True)
+        #         self.logger.info(f"Arrived at {self.searched_location}")
+        #         self.searched_location = None
+        #         self.searched_direction = None
+        #         self.searched_yaw = None
+        #         self.logger.info("searched_location is reset")
 
 class GPTExplainer():
     def __init__(

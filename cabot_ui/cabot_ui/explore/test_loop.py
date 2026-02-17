@@ -89,10 +89,10 @@ class CabotQueryNode(Node):
             
             if self.query_string not in self.candidates:
                 self.get_logger().info(f"Invalid direction: {self.query_string}; please select from {self.candidates}")
-                speak_text(f"指定された{self.dir_to_jp[self.query_string]}方向には進めないようです。")
+                #speak_text(f"指定された{self.dir_to_jp[self.query_string]}方向には進めないようです。")
             else:
                 # finish the node
-                speak_text(f"{self.dir_to_jp[self.query_string]}の方向に進みます。")
+                #speak_text(f"{self.dir_to_jp[self.query_string]}の方向に進みます。")
                 sys.exit(0)
         elif self.query_type == "search":
             self.logger.info("get search query")
@@ -259,11 +259,11 @@ def main(
                     availability[direction] = False
             avail_dir = [avail_jp[key] for key, value in availability.items() if value]
             no_avail_dir = [avail_jp[key] for key, value in availability.items() if not value]
-            if len(avail_dir) > 0:
-                availability_speech = "、".join(avail_dir) + "方向に進めそうです。"
-            if len(no_avail_dir) > 0:
-                availability_speech += "、".join(no_avail_dir) + "方向には進めなさそうです。"
-            speak_text(availability_speech)
+            # if len(avail_dir) > 0:
+            #     availability_speech = "、".join(avail_dir) + "方向に進めそうです。"
+            # if len(no_avail_dir) > 0:
+            #     availability_speech += "、".join(no_avail_dir) + "方向には進めなさそうです。"
+            #speak_text(availability_speech)
         else:
             availability_from_image = None
 
@@ -293,7 +293,7 @@ def main(
             state_client.logger.info("Left the initial area")
         if has_left_initial_area is True and dist_from_initial < 3.0:
             state_client.logger.info("Initial coords reached; stopping the exploration")
-            speak_text("一周しました。探索を終了します。")
+            #speak_text("一周しました。探索を終了します。")
             # break
 
         # calculate map's highlihgted area's diff 
@@ -410,10 +410,10 @@ def main(
             "back_left": "左後ろ",
             "back_right": "右後ろ"
         }
-        if output_direction == "coordinates":
-            speak_text(f"次は、指定された座標、およそ{dist:.2f}メートル先に進みます。")
-        else:
-            speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
+        # if output_direction == "coordinates":
+        #     speak_text(f"次は、指定された座標、およそ{dist:.2f}メートル先に進みます。")
+        # else:
+        #     speak_text(f"次は、{japanese_directions[output_direction]}方向、およそ{dist:.2f}メートル先に進みます。")
         # return output_point, cand_filter.forbidden_area_centers
         
         state_client.logger.info(f"Exploring next point: {output_point}\n")
