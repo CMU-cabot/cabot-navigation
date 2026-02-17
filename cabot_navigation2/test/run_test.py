@@ -261,6 +261,15 @@ class Tester:
         test_summary_path = os.path.join(self.output_dir, 'test_summary.csv')
         test_evaluation_path = os.path.join(self.output_dir, 'test_evaluation_results.csv')
 
+        logger.info("Test case summary:")
+        for test_name in sorted(self.test_summary.keys()):
+            counts = self.test_summary[test_name]
+            success_count = counts['success']
+            fail_count = counts['failure']
+            status = "Success" if fail_count == 0 and success_count > 0 else "Failure"
+            logger.info(f" - {test_name}: {status}")
+        logger.info("--------------------------")
+
         with open(test_summary_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Test module name", "Test case name", "Number of success", "Number of failure", "Success rate"])
