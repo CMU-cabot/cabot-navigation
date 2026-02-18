@@ -253,7 +253,7 @@ class UserInterface(object):
         self._activity_log("cabot/interface", "vibration", vibration.get_name(pattern), visualize=True)
         msg = std_msgs.msg.Int8()
         msg.data = pattern
-        self.note_pub.publish(msg)
+        #self.note_pub.publish(msg)
 
     def read_aloud_vibration(self, pattern=vibration.UNKNOWN):
         if not self.read_aloud:

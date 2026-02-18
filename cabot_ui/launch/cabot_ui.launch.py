@@ -75,6 +75,7 @@ def generate_launch_description():
     free_mode_correction_side_turnspeed = LaunchConfiguration('free_mode_correction_side_turnspeed')
     free_mode_correction_touch_required = LaunchConfiguration('free_mode_correction_touch_required')
     free_mode_switch_autonomous_mode = LaunchConfiguration('free_mode_switch_autonomous_mode')
+    free_mode_switch_autonomous_wizard_mode = LaunchConfiguration('free_mode_switch_autonomous_wizard_mode')
     free_mode_switch_autonomous_mode_temp = LaunchConfiguration('free_mode_switch_autonomous_mode_temp')
     free_mode_switch_autonomous_mode_temp_duration = LaunchConfiguration('free_mode_switch_autonomous_mode_temp_duration')
     free_mode_end_userfree_movement_time = LaunchConfiguration('free_mode_end_userfree_movement_time')
@@ -265,6 +266,10 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_FREE_MODE_SWITCH_AUTONOMOUS_MODE', default_value='false'),
         ),
         DeclareLaunchArgument(
+            'free_mode_switch_autonomous_wizard_mode',
+            default_value=EnvironmentVariable('CABOT_FREE_MODE_SWITCH_AUTONOMOUS_WIZARD_MODE', default_value='false'),
+        ),
+        DeclareLaunchArgument(
             'free_mode_switch_autonomous_mode_temp',
             default_value=EnvironmentVariable('CABOT_FREE_MODE_SWITCH_AUTONOMOUS_MODE_TEMP', default_value='false'),
         ),
@@ -323,6 +328,7 @@ def generate_launch_description():
                 'free_mode_correction_side_turnspeed': free_mode_correction_side_turnspeed,
                 'free_mode_correction_touch_required': free_mode_correction_touch_required,
                 'free_mode_switch_autonomous_mode': free_mode_switch_autonomous_mode,
+                'free_mode_switch_autonomous_wizard_mode': free_mode_switch_autonomous_wizard_mode,
                 'free_mode_switch_autonomous_mode_temp': free_mode_switch_autonomous_mode_temp,
                 'free_mode_switch_autonomous_mode_temp_duration': free_mode_switch_autonomous_mode_temp_duration,
                 'free_mode_end_userfree_movement_time': free_mode_end_userfree_movement_time,

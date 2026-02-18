@@ -125,6 +125,7 @@ class CabotUIManager(NavigationInterface, object):
         self.free_mode_correction_side_turnspeed = self._node.declare_parameter('free_mode_correction_side_turnspeed', 0.5).value
         self.free_mode_correction_touch_required = self._node.declare_parameter('free_mode_correction_touch_required', True).value
         self.free_mode_switch_autonomous_mode = self._node.declare_parameter('free_mode_switch_autonomous_mode', False).value
+        self.free_mode_switch_autonomous_wizard_mode = self._node.declare_parameter('free_mode_switch_autonomous_wizard_mode', False).value
         self.free_mode_switch_autonomous_mode_temp = self._node.declare_parameter('free_mode_switch_autonomous_mode_temp', False).value
         self.free_mode_switch_autonomous_mode_temp_duration = self._node.declare_parameter('free_mode_switch_autonomous_mode_temp_duration', 5.0).value
         self.free_mode_end_userfree_movement_time = self._node.declare_parameter('free_mode_end_userfree_movement_time', 0.5).value
@@ -139,6 +140,8 @@ class CabotUIManager(NavigationInterface, object):
         self._logger.info(f"CabotUIManager cabot_allowed_modes_bitmask: {self.cabot_allowed_modes_bitmask}")
 
         self._logger.info(f"free_mode_switch_autonomous_mode_temp : {self.free_mode_switch_autonomous_mode_temp}, free_mode_switch_autonomous_mode_temp_duration : {self.free_mode_switch_autonomous_mode_temp_duration}")
+        self._logger.info(f"free_mode_switch_autonomous_wizard_mode : {self.free_mode_switch_autonomous_wizard_mode}")
+
 
         # process allowed modes bitmask
         allowed_modes_bytes = self.cabot_allowed_modes_bitmask & 0x0F  # only lower 4 bits are used
@@ -189,6 +192,9 @@ class CabotUIManager(NavigationInterface, object):
             self._lidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
         if self.free_mode_detect_low_obstacles:
             self._lowLidarLimitSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/low_lidar_speed", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+
+        self._allowButtons = True
+        self._enableHandleButtons = self._node.create_subscription(std_msgs.msg.Bool, "/cabot/allow_buttons", self._allow_buttons_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
 
         self._touchHandle = False
 
@@ -275,6 +281,9 @@ class CabotUIManager(NavigationInterface, object):
 
         self.send_speaker_audio_files()
 
+
+    def _allow_buttons_callback(self, msg):
+        self._allowButtons = msg.data
 
     def _touch_callback(self, msg):
         self._touchHandle = msg.data > 0.0
@@ -1150,6 +1159,7 @@ class EventMapper1(object):
 
     def __init__(self, delegate):
         self.delegate = delegate
+        self.clearWaiters = False
         self._manager = StatusManager.get_instance()
         self.description_duration = 0
         self.mode = "exploration"
@@ -1204,6 +1214,9 @@ class EventMapper1(object):
                 if self.exploration_mode != ExplorationMode.MANUAL:
                     return
 
+                if self.clearWaiters:
+                    return
+                
                 # we go backward a bit to avoid being stuck
 
                 turn_speed = 0.0
@@ -1368,8 +1381,15 @@ class EventMapper1(object):
                     CabotUIManager.instance._navigation.set_pause_control(True)
                     CabotUIManager.instance._exploration.set_pause_control(True)
                 else:
-                    self.exploration_mode = ExplorationMode.AUTONOMOUS
-                    speak_text("自律走行モードに切り替えました。", force=True)
+                    if self.delegate.free_mode_switch_autonomous_wizard_mode:
+                        # Cancel navigation
+                        CabotUIManager.instance._navigation.cancel_navigation()
+                        self.exploration_mode = ExplorationMode.SHARED
+                        speak_text("共有走行モードに切り替えました。", force=True)
+                    else:
+                        self.exploration_mode = ExplorationMode.AUTONOMOUS
+                        speak_text("自律走行モードに切り替えました。", force=True)
+
                     if ui_manager.free_mode_switch_autonomous_mode_temp:
                         time.sleep(ui_manager.free_mode_switch_autonomous_mode_temp_duration)
                         speak_text("自由走行モードに切り替えました。", force=True)
@@ -1383,8 +1403,10 @@ class EventMapper1(object):
                 self.cv.notify_all()
 
                 time.sleep(ui_manager.free_mode_end_userfree_movement_time) # wait for half second before detecting again
+                self.clearWaiters = True
 
-
+            time.sleep(0.2)
+            self.clearWaiters = False
 
                 
     def push(self, event, logger):
@@ -1461,15 +1483,32 @@ class EventMapper1(object):
         return None
 
     def map_button_to_exploration(self, event, logger, ui_manager):
+
+        
         if event.type == HoldDownEvent.TYPE: 
+            if not self.delegate._allowButtons:
+                return
+
+            #if self.current_mode == ExplorationMode.MANUAL:
             if event.holddown == cabot_common.button.BUTTON_UP:
-                return [ExplorationEvent(subtype="front")]
-            if event.holddown == cabot_common.button.BUTTON_DOWN:
-                return [ExplorationEvent(subtype="back")]
-            if event.holddown == cabot_common.button.BUTTON_LEFT:
-                return [ExplorationEvent(subtype="left")]
+                self.delegate.free_mode_switch_autonomous_mode = True
+                speak_text("ウィザードモードに切り替えました。", force=True)
+
+                
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
-                return [ExplorationEvent(subtype="right")]
+                self.delegate.free_mode_switch_autonomous_mode = False
+                speak_text("ブレーキ・停止モードに切り替えました。", force=True)
+
+            return []
+            # else:
+            #     if event.holddown == cabot_common.button.BUTTON_UP:
+            #         return [ExplorationEvent(subtype="front")]
+            #     if event.holddown == cabot_common.button.BUTTON_DOWN:
+            #         return [ExplorationEvent(subtype="back")]
+            #     if event.holddown == cabot_common.button.BUTTON_LEFT:
+            #         return [ExplorationEvent(subtype="left")]
+            #     if event.holddown == cabot_common.button.BUTTON_RIGHT:
+            #         return [ExplorationEvent(subtype="right")]
 
         if event.type == "click" and event.count == 1:
             if self.delegate.cabot_vlm_use_button:
@@ -1480,6 +1519,9 @@ class EventMapper1(object):
 
             with self.lock:
                 self.cv.wait_for(lambda: not self.wheelsLocked, timeout=1.0)
+
+                if not self.delegate._allowButtons:
+                    return
 
                 new_mode = self.exploration_mode
 

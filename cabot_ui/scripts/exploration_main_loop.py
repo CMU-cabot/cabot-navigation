@@ -530,7 +530,7 @@ class ExplorationMainLoop(Node):
         self.logger.info(f"Vibrating with pattern: {pattern}")
         msg = std_msgs.msg.Int8()
         msg.data = pattern
-        self.note_pub.publish(msg)
+        #self.note_pub.publish(msg)
 
     def camera_ready_callback(self, msg):
         if not self.camera_ready:
