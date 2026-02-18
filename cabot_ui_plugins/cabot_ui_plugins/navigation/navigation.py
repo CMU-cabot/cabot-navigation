@@ -1010,9 +1010,6 @@ class Navigation(ControlBase, navgoal.GoalInterface):
             elif poi.is_approached(current_pose):
                 self._logger.info(F"approached {poi._id}")
                 self.delegate.approached_to_poi(poi=poi)
-            elif poi.is_on_poi(current_pose):
-                self._logger.info(F"on {poi._id}")
-                self.delegate.on_poi(poi=poi)
             elif poi.is_passed(current_pose):
                 self._logger.info(F"passed {poi._id}")
                 self.delegate.passed_poi(poi=poi)

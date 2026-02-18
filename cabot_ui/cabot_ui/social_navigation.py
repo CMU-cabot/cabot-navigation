@@ -274,8 +274,14 @@ class SocialNavigation(object):
             elif code == "UNKNOWN" or code == "NOT_STOPPED":
                 # announce green signal only when changing from red to green
                 if self._last_stop_reason == "RED_SIGNAL":
-                    if self._latest_signal_state.state == "GREEN_SIGNAL":
+                    if self._latest_signal_state is None:
                         self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.GREEN_SIGNAL, 9)
+                    elif self._latest_signal_state.state == "GREEN_SIGNAL":
+                        remaining_time = int(self._latest_signal_state.remaining_time)
+                        if remaining_time >= 0:
+                            self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.GREEN_SIGNAL, 9, param=remaining_time)
+                        else:
+                            self._set_message(SNMessage.Code.GREEN_SIGNAL, SNMessage.Category.GREEN_SIGNAL, 9)
                     else:
                         skip = True
             if not skip:

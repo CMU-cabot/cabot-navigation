@@ -340,12 +340,6 @@ class UserInterface(object):
             self.speak(statement, priority=self.get_speech_priority(poi))
             self._activity_log("cabot/interface", "poi", "approached")
 
-    def on_poi(self, poi=None):
-        statement = poi.on_poi_statement()
-        if statement:
-            self.speak(statement, priority=self.get_speech_priority(poi))
-            self._activity_log("cabot/interface", "poi", "on")
-
     def passed_poi(self, poi=None):
         statement = poi.passed_statement()
         if statement:
@@ -363,7 +357,10 @@ class UserInterface(object):
 
     def announce_social(self, message: SNMessage):
         self._activity_log("cabot/interface", message.type.name, message.code.name)
-        if message.param is not None:
+        if message.code == SNMessage.Code.GREEN_SIGNAL and message.param is not None:
+            statement = f"{i18n.localized_string('GREEN_SIGNAL')} {i18n.localized_string('GOING_INTO_CROSSING', message.param)}"
+            self.speak(statement)
+        elif message.param is not None:
             if isinstance(message.param, list):
                 self.speak(i18n.localized_string(message.code.name, *message.param))
             else:
