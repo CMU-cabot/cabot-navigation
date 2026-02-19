@@ -47,6 +47,8 @@ FOLLOWING_A_PERSON: "正在跟随前方的人。"
 FOLLOWING_PEOPLE: "正在跟随前方的人群。"
 RED_SIGNAL: "红信号，剩余{0}秒"
 GREEN_SIGNAL_SHORT: "绿信号，但时间不足"
+GREEN_SIGNAL: "绿信号"
+GOING_INTO_CROSSING: "剩余{0}秒"
 NO_SIGNAL_INFO: "没有信号信息"
 
 ## queue
