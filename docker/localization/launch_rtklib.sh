@@ -85,8 +85,20 @@ else
     if [ "${NTRIP_HOST}" = "" ]; then
         echo "NTRIP_HOST does not exist in environment variables. load NTRIP_HOST from CABOT_SITE package"
         if [ "${CABOT_SITE}" != "" ]; then
-        sitedir=`ros2 pkg prefix $CABOT_SITE`/share/$CABOT_SITE
-            source $sitedir/config/rtk_config.sh
+            pkg_dir=`ros2 pkg prefix $CABOT_SITE`
+            if [ "${pkg_dir}" != "" ]; then
+                # ros package found
+                rtk_config=`find $pkg_dir -wholename "*/$CABOT_SITE/config/rtk_config.sh"`
+                echo "Found $CABOT_SITE package and rtk_config=$rtk_config"
+                source $rtk_config
+            else
+                # ros package not found
+                # workaround to load rtk_config from CABOT_SITE directory bound to loc_ws/install in prod mode
+                sitedir=$HOME/loc_ws/install/$CABOT_SITE
+                rtk_config=`find $sitedir -wholename "*/$CABOT_SITE/config/rtk_config.sh"`
+                echo "Found rtk_config=$rtk_config"
+                source $rtk_config
+            fi
         fi
     fi
 
