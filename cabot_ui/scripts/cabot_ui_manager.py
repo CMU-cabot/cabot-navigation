@@ -1246,79 +1246,97 @@ class EventMapper1(object):
 
                 leftSideDistance = ui_manager.free_mode_warn_left_side_distance  # meters
                 leftForwardDistance = ui_manager.free_mode_warn_left_forward_distance  # meters
-                checkXLeft = int((posX + leftSideDistance * math.cos(ui_manager.odom_orientation + math.pi / 2) + leftForwardDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
-                checkYLeft = int((posY + leftSideDistance * math.sin(ui_manager.odom_orientation + math.pi / 2) + leftForwardDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                checkXLeftFor = int((posX + leftSideDistance * math.cos(ui_manager.odom_orientation + math.pi / 2) + leftForwardDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                checkYLeftFor = int((posY + leftSideDistance * math.sin(ui_manager.odom_orientation + math.pi / 2) + leftForwardDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+
+                checkXLeft = int((posX + leftSideDistance * math.cos(ui_manager.odom_orientation + math.pi / 2)) / ui_manager.map_resolution)
+                checkYLeft = int((posY + leftSideDistance * math.sin(ui_manager.odom_orientation + math.pi / 2)) / ui_manager.map_resolution)
 
                 rightSideDistance = ui_manager.free_mode_warn_right_side_distance  # meters
                 rightForwardDistance = ui_manager.free_mode_warn_right_forward_distance  # meters
-                checkXRight = int((posX + rightSideDistance * math.cos(ui_manager.odom_orientation - math.pi / 2) + rightForwardDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
-                checkYRight = int((posY + rightSideDistance * math.sin(ui_manager.odom_orientation - math.pi / 2) + rightForwardDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                checkXRightFor = int((posX + rightSideDistance * math.cos(ui_manager.odom_orientation - math.pi / 2) + rightForwardDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+                checkYRightFor = int((posY + rightSideDistance * math.sin(ui_manager.odom_orientation - math.pi / 2) + rightForwardDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
+
+                checkXRight = int((posX + rightSideDistance * math.cos(ui_manager.odom_orientation - math.pi / 2)) / ui_manager.map_resolution)
+                checkYRight = int((posY + rightSideDistance * math.sin(ui_manager.odom_orientation - math.pi / 2)) / ui_manager.map_resolution)
 
                 backDistance = ui_manager.free_mode_warn_back_distance  # meters
                 checkXBack = int((posX - backDistance * math.cos(ui_manager.odom_orientation)) / ui_manager.map_resolution)
                 checkYBack = int((posY - backDistance * math.sin(ui_manager.odom_orientation)) / ui_manager.map_resolution)
-                logger.info(f"Checking obstacle costs at positions - Forward: ({checkXForward}, {checkYForward}), Left: ({checkXLeft}, {checkYLeft}), Right: ({checkXRight}, {checkYRight}), Back: ({checkXBack}, {checkYBack})")
+                logger.info(f"Checking obstacle costs at positions - Forward: ({checkXForward}, {checkYForward}), Left: ({checkXLeftFor}, {checkYLeftFor}), Right: ({checkXRightFor}, {checkYRightFor}), Back: ({checkXBack}, {checkYBack})")
 
                 # Determine the direction where there can be an obstacle (costmap not null)
                 forwardCost = 100 # out of map is treated as obstacle
+                leftForCost = 100
                 leftCost = 100
+                rightForCost = 100
                 rightCost = 100
                 backCost = 100
 
                 if 0 <= checkXForward < ui_manager.map_width and 0 <= checkYForward < ui_manager.map_height:
                     forwardCost = ui_manager.map_data[checkYForward, checkXForward]
+                if 0 <= checkXLeftFor < ui_manager.map_width and 0 <= checkYLeftFor < ui_manager.map_height:
+                    leftForCost = ui_manager.map_data[checkYLeftFor, checkXLeftFor]
                 if 0 <= checkXLeft < ui_manager.map_width and 0 <= checkYLeft < ui_manager.map_height:
                     leftCost = ui_manager.map_data[checkYLeft, checkXLeft]
+                if 0 <= checkXRightFor < ui_manager.map_width and 0 <= checkYRightFor < ui_manager.map_height:
+                    rightForCost = ui_manager.map_data[checkYRightFor, checkXRightFor]
                 if 0 <= checkXRight < ui_manager.map_width and 0 <= checkYRight < ui_manager.map_height:
                     rightCost = ui_manager.map_data[checkYRight, checkXRight]
                 if 0 <= checkXBack < ui_manager.map_width and 0 <= checkYBack < ui_manager.map_height:
                     backCost = ui_manager.map_data[checkYBack, checkXBack]
 
-                logger.info(f"Obstacle Costs - Forward: {forwardCost}, Left: {leftCost}, Right: {rightCost}, Back: {backCost}")
-
+                logger.info(f"Obstacle Costs - Forward: {forwardCost}, Left: {leftForCost}, Right: {rightForCost}, Back: {backCost}")
                 warnCostThreshold = ui_manager.free_mode_warn_cost_threshold  # Cost threshold to consider as obstacle level
 
                 textForward = "前方"
-                textLeft = "左側"
-                textRight = "右側"
-                textBack = "後方"
+                textForLeft = "斜め左"
+                textLeft = "左"
+                textForRight = "斜め右"
+                textRight = "右"
+                textBack = "後ろ"
 
-                textAnd = "と"
+                textAnd = ", "
 
                 obstacleDirections = []
                 if forwardCost >= warnCostThreshold:
                     obstacleDirections.append(textForward)
+                if leftForCost >= warnCostThreshold:
+                    obstacleDirections.append(textForLeft)
                 if leftCost >= warnCostThreshold:
                     obstacleDirections.append(textLeft)
+                if rightForCost >= warnCostThreshold:
+                    obstacleDirections.append(textForRight)
                 if rightCost >= warnCostThreshold:
                     obstacleDirections.append(textRight)
                 if backCost >= warnCostThreshold:
                     obstacleDirections.append(textBack)
+                
 
                 if len(obstacleDirections) == 0:
                     # Get the direction with the highest cost
-                    maxCost = max(forwardCost, leftCost, rightCost, backCost)
+                    maxCost = max(forwardCost, leftForCost, rightForCost, backCost)
                     if maxCost == forwardCost:
                         obstacleDirections.append(textForward)
-                    elif maxCost == leftCost:
-                        obstacleDirections.append(textLeft)
-                    elif maxCost == rightCost:
-                        obstacleDirections.append(textRight)
+                    elif maxCost == leftForCost:
+                        obstacleDirections.append(textForLeft)
+                    elif maxCost == rightForCost:
+                        obstacleDirections.append(textForRight)
                     elif maxCost == backCost:
                         obstacleDirections.append(textBack)
 
                 if len(obstacleDirections) == 1:
-                    speak_text(f"ご注意{obstacleDirections[0]}に障害物があります。", force=True)
+                    speak_text(f"{obstacleDirections[0]}に障害物。", force=True)
 
                 elif len(obstacleDirections) == 2:
-                    speak_text(f"ご注意{obstacleDirections[0]}{textAnd}{obstacleDirections[1]}に障害物があります。", force=True)
+                    speak_text(f"{obstacleDirections[0]}{textAnd}{obstacleDirections[1]}に障害物。", force=True)
 
                 elif len(obstacleDirections) > 2:
                     allButLast = "、".join(obstacleDirections[:-1])
                     last = obstacleDirections[-1]
-                    speak_text(f"ご注意{allButLast}{textAnd}{last}に障害物があります。", force=True)
+                    speak_text(f"{allButLast}{textAnd}{last}に障害物。", force=True)
                 else:
-                    speak_text("ご注意障害物を検知しました。", force=True)
+                    speak_text("障害物を検知しました。", force=True)
 
                 logger.info("Stopping robot due to obstacle in MANUAL mode")
 
@@ -1327,7 +1345,7 @@ class EventMapper1(object):
                 if ui_manager._touchHandle or not ui_manager.free_mode_correction_touch_required:
                     # If there is an obstacle in front but not in back, go backward a bit (Macro 1)
                     if ui_manager.free_mode_correction_back_enabled and textForward in obstacleDirections and textBack not in obstacleDirections:
-                        # go backward a bit
+                        # go backward a bitF
                         backward_speed = ui_manager.free_mode_correction_back_speed
                         speed_msg = std_msgs.msg.Float32()
                         speed_msg.data = -backward_speed
@@ -1385,14 +1403,14 @@ class EventMapper1(object):
                         # Cancel navigation
                         CabotUIManager.instance._navigation.cancel_navigation()
                         self.exploration_mode = ExplorationMode.SHARED
-                        speak_text("共有走行モードに切り替えました。", force=True)
+                        speak_text("自律モード。", force=True)
                     else:
                         self.exploration_mode = ExplorationMode.AUTONOMOUS
-                        speak_text("自律走行モードに切り替えました。", force=True)
+                        speak_text("自律モード。", force=True)
 
                     if ui_manager.free_mode_switch_autonomous_mode_temp:
                         time.sleep(ui_manager.free_mode_switch_autonomous_mode_temp_duration)
-                        speak_text("自由走行モードに切り替えました。", force=True)
+                        speak_text("自由モード。", force=True)
                         CabotUIManager.instance._interface.set_pause_control(True)
                         CabotUIManager.instance._navigation.set_pause_control(True)
                         CabotUIManager.instance._exploration.set_pause_control(True)

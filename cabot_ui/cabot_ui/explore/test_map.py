@@ -527,6 +527,7 @@ def set_next_point_based_on_skeleton(
     sampled_directions = [point[1] for point in sampled_points]
     sampled_points_and_directions = [[[point[0], point[1]], direction] for point, direction in zip(sampled_point_in_odom, sampled_directions)]
 
+    sampled_points_and_directions = []
     
     return sampled_points_and_directions, current_coords_odom, orientation[-1]
 
