@@ -327,20 +327,22 @@ class CabotUIManager(NavigationInterface, object):
     def _odom_callback(self):
         self._logger.info("Odom callback")
 
+        try:
+            current_pose = self._navigation.current_local_pose()
+        except:
+            self._logger.info("pose callback not ready")
+            return
+
+        self.odom_x = current_pose.x
+        self.odom_y = current_pose.y
+        self.odom_orientation = current_pose.r
+
         with self.register_odom_lock:
             if self.registering_odom == True:
                 return
             self.registering_odom = True
 
-        self._logger.info("Processing odom callback")
-
-        try:
-            current_pose = self._navigation.current_local_pose()
-        except:
-            self._logger.info("pose callback not ready")
-            with self.register_odom_lock:
-                self.registering_odom = False
-            return
+        self._logger.info("Processing odom callback")        
         
         #current_time = self._node.get_clock().now()
 
@@ -1159,6 +1161,8 @@ class EventMapper1(object):
 
     def __init__(self, delegate):
         self.delegate = delegate
+        self.lastPosX = 0.0
+        self.lastPosY = 0.0
         self.clearWaiters = False
         self._manager = StatusManager.get_instance()
         self.description_duration = 0
@@ -1238,6 +1242,16 @@ class EventMapper1(object):
 
                 posX = ui_manager.odom_x - ui_manager.map_x
                 posY = ui_manager.odom_y - ui_manager.map_y
+
+                distanceOldNew = math.sqrt((posX - self.lastPosX)**2 + (posY - self.lastPosY)**2)
+
+                shouldSpeak = False
+
+                if distanceOldNew >= 0.2:
+                    shouldSpeak = True
+                    self.lastPosX = posX
+                    self.lastPosY = posY
+
 
                 # Local offset, check forward direction
                 forwardDistance = ui_manager.free_mode_warn_forward_distance  # meters
@@ -1325,18 +1339,23 @@ class EventMapper1(object):
                     elif maxCost == backCost:
                         obstacleDirections.append(textBack)
 
+
                 if len(obstacleDirections) == 1:
-                    speak_text(f"{obstacleDirections[0]}に障害物。", force=True)
+                    if shouldSpeak:
+                        speak_text(f"{obstacleDirections[0]}。", force=True)
 
                 elif len(obstacleDirections) == 2:
-                    speak_text(f"{obstacleDirections[0]}{textAnd}{obstacleDirections[1]}に障害物。", force=True)
+                    if shouldSpeak:
+                        speak_text(f"{obstacleDirections[0]}{textAnd}{obstacleDirections[1]}。", force=True)
 
                 elif len(obstacleDirections) > 2:
                     allButLast = "、".join(obstacleDirections[:-1])
                     last = obstacleDirections[-1]
-                    speak_text(f"{allButLast}{textAnd}{last}に障害物。", force=True)
+                    if shouldSpeak:
+                        speak_text(f"{allButLast}{textAnd}{last}。", force=True)
                 else:
-                    speak_text("障害物を検知しました。", force=True)
+                    if shouldSpeak:
+                        speak_text("障害物を検知しました。", force=True)
 
                 logger.info("Stopping robot due to obstacle in MANUAL mode")
 
@@ -1403,14 +1422,17 @@ class EventMapper1(object):
                         # Cancel navigation
                         CabotUIManager.instance._navigation.cancel_navigation()
                         self.exploration_mode = ExplorationMode.SHARED
-                        speak_text("自律モード。", force=True)
+                        if shouldSpeak:
+                            speak_text("自律モード。", force=True)
                     else:
                         self.exploration_mode = ExplorationMode.AUTONOMOUS
-                        speak_text("自律モード。", force=True)
+                        if shouldSpeak:
+                            speak_text("自律モード。", force=True)
 
                     if ui_manager.free_mode_switch_autonomous_mode_temp:
                         time.sleep(ui_manager.free_mode_switch_autonomous_mode_temp_duration)
-                        speak_text("自由モード。", force=True)
+                        if shouldSpeak:
+                            speak_text("自由モード。", force=True)
                         CabotUIManager.instance._interface.set_pause_control(True)
                         CabotUIManager.instance._navigation.set_pause_control(True)
                         CabotUIManager.instance._exploration.set_pause_control(True)
@@ -1510,12 +1532,12 @@ class EventMapper1(object):
             #if self.current_mode == ExplorationMode.MANUAL:
             if event.holddown == cabot_common.button.BUTTON_UP:
                 self.delegate.free_mode_switch_autonomous_mode = True
-                speak_text("ウィザードモードに切り替えました。", force=True)
+                speak_text("ウィザードモード", force=True)
 
                 
             if event.holddown == cabot_common.button.BUTTON_RIGHT:
                 self.delegate.free_mode_switch_autonomous_mode = False
-                speak_text("ブレーキ・停止モードに切り替えました。", force=True)
+                speak_text("自由モード", force=True)
 
             return []
             # else:
@@ -1563,23 +1585,23 @@ class EventMapper1(object):
                     CabotUIManager.instance._interface.set_pause_control(True)
                     CabotUIManager.instance._navigation.set_pause_control(True)
                     CabotUIManager.instance._exploration.set_pause_control(True)
-                    speak_text("自由走行モードに切り替えました。", force=True)
+                    speak_text("自由モード。", force=True)
                 elif new_mode == ExplorationMode.SHARED:
                     CabotUIManager.instance._interface.set_pause_control(False)
                     CabotUIManager.instance._navigation.set_pause_control(False)
                     CabotUIManager.instance._exploration.set_pause_control(False)
-                    speak_text("共有走行モードに切り替えました。", force=True)
+                    speak_text("自律走行モード", force=True)
                 elif new_mode == ExplorationMode.AUTONOMOUS:
                     CabotUIManager.instance._interface.set_pause_control(False)
                     CabotUIManager.instance._navigation.set_pause_control(False)
                     CabotUIManager.instance._exploration.set_pause_control(False)
-                    speak_text("自律走行モードに切り替えました。", force=True)
+                    speak_text("自律走行モード", force=True)
                 elif new_mode == ExplorationMode.TOTAL_FREE:
                     # in TOTAL_FREE mode, wheels are always unlocked
                     CabotUIManager.instance._interface.set_pause_control(True)
                     CabotUIManager.instance._navigation.set_pause_control(True)
                     CabotUIManager.instance._exploration.set_pause_control(True)
-                    speak_text("全自由走行モードに切り替えました。", force=True)
+                    speak_text("全自由走行モード", force=True)
 
                 if new_mode != self.exploration_mode:
                     events = []
