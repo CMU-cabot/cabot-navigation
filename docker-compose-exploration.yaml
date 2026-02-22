@@ -100,7 +100,7 @@ services:
     profiles:
       - prod
 
-  exploration-dev:
+  exploration-prod:
     extends:
       file: docker-compose-common.yaml
       service: exploration-prod
