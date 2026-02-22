@@ -178,7 +178,7 @@ class CabotUIManager(NavigationInterface, object):
             self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
             self._vlmButtonPub.publish(std_msgs.msg.String(data="all"))
 
-        self._switchModePub = self._node.create_publisher(std_msgs.msg.UInt8, "/cabot/shared_control_mode", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._switchModePub = self._node.create_publisher(std_msgs.msg.UInt8, "/shared_control_mode", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         #self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
@@ -1202,7 +1202,7 @@ class EventMapper1(object):
 
                 # Obstacle detected in MANUAL mode
                 self.wheelsLocked = True
-                CabotUIManager.instance.set_pause_control(True)
+                CabotUIManager.instance.set_pause_control(False)
 
                 posX = ui_manager.odom_x - ui_manager.map_x
                 posY = ui_manager.odom_y - ui_manager.map_y
@@ -1378,7 +1378,29 @@ class EventMapper1(object):
                 turnSpeedOverwritePub.publish(turn_stop_speed_msg)
                                 
                 if(not ui_manager.free_mode_switch_autonomous_mode):
-                    CabotUIManager.instance.set_pause_control(True)
+                    CabotUIManager.instance._interface.set_pause_control(True)
+                    CabotUIManager.instance._navigation.set_pause_control(True)
+                    CabotUIManager.instance._exploration.set_pause_control(True)
+                else:
+                    if self.delegate.free_mode_switch_autonomous_wizard_mode:
+                        # Cancel navigation
+                        CabotUIManager.instance._navigation.cancel_navigation()
+                        self.exploration_mode = ExplorationMode.AUTONOMOUS
+                        if shouldSpeak:
+                            speak_text("自律モード。", force=True)
+                    else:
+                        self.exploration_mode = ExplorationMode.AUTONOMOUS
+                        if shouldSpeak:
+                            speak_text("自律モード。", force=True)
+
+                    if ui_manager.free_mode_switch_autonomous_mode_temp:
+                        time.sleep(ui_manager.free_mode_switch_autonomous_mode_temp_duration)
+                        if shouldSpeak:
+                            speak_text("自由モード。", force=True)
+                        CabotUIManager.instance._interface.set_pause_control(True)
+                        CabotUIManager.instance._navigation.set_pause_control(True)
+                        CabotUIManager.instance._exploration.set_pause_control(True)
+                        self.exploration_mode = ExplorationMode.GASTON_MODE
 
                 self.wheelsLocked = False
                 self.cv.notify_all()
@@ -1478,10 +1500,12 @@ class EventMapper1(object):
 
                 CabotUIManager.instance._switchModePub.publish(std_msgs.msg.UInt8(data=new_mode_index))
                 if new_mode == ExplorationMode.GASTON_MODE or new_mode == ExplorationMode.SATO_SAN_MDOE:
-                    CabotUIManager.instance.set_pause_control(True)
+                    
                     if new_mode == ExplorationMode.GASTON_MODE:
+                        CabotUIManager.instance.set_pause_control(True)
                         speak_text("ガストンモード", force=True)
                     else:
+                        CabotUIManager.instance.set_pause_control(False)
                         speak_text("佐藤モード", force=True)
                 else:
                     CabotUIManager.instance.set_pause_control(False)
