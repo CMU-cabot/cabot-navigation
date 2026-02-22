@@ -83,10 +83,9 @@ from enum import Enum
 import math
 
 class ExplorationMode(Enum):
-        MANUAL = 0
-        SHARED = 1
-        AUTONOMOUS = 2
-        TOTAL_FREE = 3
+        AUTONOMOUS = 0
+        SATO_SAN_MDOE = 1
+        GASTON_MODE = 2
 
 class CabotUIManager(NavigationInterface, object): 
     def __init__(self, node, nav_node, tf_node, srv_node, act_node, soc_node, desc_node): #TODO : Resume from here, try to verify logs and if the code is called properly
@@ -142,33 +141,8 @@ class CabotUIManager(NavigationInterface, object):
         self._logger.info(f"free_mode_switch_autonomous_mode_temp : {self.free_mode_switch_autonomous_mode_temp}, free_mode_switch_autonomous_mode_temp_duration : {self.free_mode_switch_autonomous_mode_temp_duration}")
         self._logger.info(f"free_mode_switch_autonomous_wizard_mode : {self.free_mode_switch_autonomous_wizard_mode}")
 
-
-        # process allowed modes bitmask
-        allowed_modes_bytes = self.cabot_allowed_modes_bitmask & 0x0F  # only lower 4 bits are used
-        if allowed_modes_bytes == 0:
-            self.allowed_modes = [
-                ExplorationMode.AUTONOMOUS,
-                ExplorationMode.SHARED,
-                ExplorationMode.MANUAL,
-                ExplorationMode.TOTAL_FREE
-            ]
-        else:
-            self.allowed_modes = []
-            if allowed_modes_bytes & 0x01:
-                self.allowed_modes.append(ExplorationMode.AUTONOMOUS)
-                self._logger.info("CabotUIManager AUTONOMOUS mode allowed")
-            if allowed_modes_bytes & 0x02:
-                self.allowed_modes.append(ExplorationMode.SHARED)
-                self._logger.info("CabotUIManager SHARED mode allowed")
-            if allowed_modes_bytes & 0x04:
-                self.allowed_modes.append(ExplorationMode.MANUAL)
-                self._logger.info("CabotUIManager MANUAL mode allowed")
-            if allowed_modes_bytes & 0x08:
-                self.allowed_modes.append(ExplorationMode.TOTAL_FREE)
-                self._logger.info("CabotUIManager TOTAL_FREE mode allowed")
-
         # Force allowed mode
-        self.default_mode = self.allowed_modes[0]
+        self.default_mode = ExplorationMode.GASTON_MODE
 
         self._handle_button_mapping = node.declare_parameter('handle_button_mapping', 2).value
         if self._handle_button_mapping == 2:
@@ -201,8 +175,10 @@ class CabotUIManager(NavigationInterface, object):
         self._touchSub = self._node.create_subscription(std_msgs.msg.Float32, "/cabot/touch_speed_switched", self._touch_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
 
         if self.cabot_vlm_use_button:
-            self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.Bool, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
-            self._vlmButtonPub.publish(std_msgs.msg.Bool(data=False))
+            self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
+            self._vlmButtonPub.publish(std_msgs.msg.String(data="all"))
+
+        self._switchModePub = self._node.create_publisher(std_msgs.msg.UInt8, "/cabot/shared_control_mode", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         #self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
@@ -291,8 +267,8 @@ class CabotUIManager(NavigationInterface, object):
     def _map_callback(self, msg):
         self._logger.info("Map callback")
 
-        if self.cabot_vlm_use_button: # Using this as a slow update
-            self._vlmButtonPub.publish(std_msgs.msg.Bool(data=False))
+        # if self.cabot_vlm_use_button: # Using this as a slow update
+        #     self._vlmButtonPub.publish(std_msgs.msg.String(data="all"))
 
         with self.register_map_lock:
             if self.registering_map == True:
@@ -1123,15 +1099,11 @@ class CabotUIManager(NavigationInterface, object):
                 self._logger.info("[CHILOG] [BUTTON] [WHEEL_SWITCH_START]")
                 self._logger.info("NavigationState: Pause control = False")
                 self._eventPub.publish(std_msgs.msg.String(data="navigation;cancel"))
-                self._interface.set_pause_control(False)
-                self._navigation.set_pause_control(False)
-                self._exploration.set_pause_control(False)
+                self.set_pause_control(False)
             else:
                 self._logger.info("[CHILOG] [BUTTON] [WHEEL_SWITCH_STOP]")
                 self._logger.info("NavigationState: Pause control = True")
-                self._interface.set_pause_control(True)
-                self._navigation.set_pause_control(True)
-                self._exploration.set_pause_control(True)
+                self.set_pause_control(True)
 
         if event.subtype == "reset_navigation":
             self._logger.info("NavigationState: Reset Navigation")
@@ -1156,6 +1128,12 @@ class CabotUIManager(NavigationInterface, object):
         msg.data = self.persona_list[self.persona_index]
         self._personaPub.publish(msg)
 
+    def set_pause_control(self, pause):
+        self._interface.set_pause_control(pause)
+        self._navigation.set_pause_control(pause)
+        self._exploration.set_pause_control(pause)
+        self.wheelsLocked = not pause
+
 
 class EventMapper1(object):
 
@@ -1174,29 +1152,12 @@ class EventMapper1(object):
         self.lock2 = threading.RLock()
             
     def late_initialize(self):
-        if self.exploration_mode == ExplorationMode.MANUAL:
-            CabotUIManager.instance._interface.set_pause_control(True)
-            CabotUIManager.instance._navigation.set_pause_control(True)
-            CabotUIManager.instance._exploration.set_pause_control(True)
-            speak_text("自由走行モードに切り替えました。", force=True)
-        elif self.exploration_mode == ExplorationMode.SHARED:
-            CabotUIManager.instance._interface.set_pause_control(False)
-            CabotUIManager.instance._navigation.set_pause_control(False)
-            CabotUIManager.instance._exploration.set_pause_control(False)
-            e = ExplorationEvent(subtype="button_control")
-            self.delegate.process_event(e)
-            speak_text("共有走行モードに切り替えました。", force=True)
+        if self.exploration_mode == ExplorationMode.SATO_SAN_MDOE or self.exploration_mode == ExplorationMode.GASTON_MODE:
+            CabotUIManager.instance.set_pause_control(True)
+            speak_text("自由走行モード", force=True)
         elif self.exploration_mode == ExplorationMode.AUTONOMOUS:
-            CabotUIManager.instance._interface.set_pause_control(False)
-            CabotUIManager.instance._navigation.set_pause_control(False)
-            CabotUIManager.instance._exploration.set_pause_control(False)
-            speak_text("自律走行モードに切り替えました。", force=True)
-        elif self.exploration_mode == ExplorationMode.TOTAL_FREE:
-            # in TOTAL_FREE mode, wheels are always unlocked
-            CabotUIManager.instance._interface.set_pause_control(True)
-            CabotUIManager.instance._navigation.set_pause_control(True)
-            CabotUIManager.instance._exploration.set_pause_control(True)
-            speak_text("全自由走行モードに切り替えました。", force=True)
+            CabotUIManager.instance.set_pause_control(False)
+            speak_text("自動モードに切り替えました。", force=True)
 
     def checkLidarLimit(self, logger, lidar_dist, speedOverwritePub, turnSpeedOverwritePub, ui_manager):
 
@@ -1211,11 +1172,16 @@ class EventMapper1(object):
 
 
         logger.info(f"Checking Lidar Limit: {lidar_dist}")
+
+        if not (hasattr(ui_manager, "map_x") and hasattr(ui_manager, "map_y")):
+            logger.warning("Map position not available, skipping lidar limit check")
+            return
+        
         if lidar_dist <= ui_manager.free_mode_detect_lidar_max_limit_speed:            
             with self.lock:
                 logger.info("Lidar limit reached in MANUAL mode")
 
-                if self.exploration_mode != ExplorationMode.MANUAL:
+                if self.exploration_mode != ExplorationMode.GASTON_MODE:
                     return
 
                 if self.clearWaiters:
@@ -1236,9 +1202,7 @@ class EventMapper1(object):
 
                 # Obstacle detected in MANUAL mode
                 self.wheelsLocked = True
-                CabotUIManager.instance._interface.set_pause_control(False)
-                CabotUIManager.instance._navigation.set_pause_control(False)
-                CabotUIManager.instance._exploration.set_pause_control(False)
+                CabotUIManager.instance.set_pause_control(True)
 
                 posX = ui_manager.odom_x - ui_manager.map_x
                 posY = ui_manager.odom_y - ui_manager.map_y
@@ -1414,31 +1378,8 @@ class EventMapper1(object):
                 turnSpeedOverwritePub.publish(turn_stop_speed_msg)
                                 
                 if(not ui_manager.free_mode_switch_autonomous_mode):
-                    CabotUIManager.instance._interface.set_pause_control(True)
-                    CabotUIManager.instance._navigation.set_pause_control(True)
-                    CabotUIManager.instance._exploration.set_pause_control(True)
-                else:
-                    if self.delegate.free_mode_switch_autonomous_wizard_mode:
-                        # Cancel navigation
-                        CabotUIManager.instance._navigation.cancel_navigation()
-                        self.exploration_mode = ExplorationMode.SHARED
-                        if shouldSpeak:
-                            speak_text("自律モード。", force=True)
-                    else:
-                        self.exploration_mode = ExplorationMode.AUTONOMOUS
-                        if shouldSpeak:
-                            speak_text("自律モード。", force=True)
+                    CabotUIManager.instance.set_pause_control(True)
 
-                    if ui_manager.free_mode_switch_autonomous_mode_temp:
-                        time.sleep(ui_manager.free_mode_switch_autonomous_mode_temp_duration)
-                        if shouldSpeak:
-                            speak_text("自由モード。", force=True)
-                        CabotUIManager.instance._interface.set_pause_control(True)
-                        CabotUIManager.instance._navigation.set_pause_control(True)
-                        CabotUIManager.instance._exploration.set_pause_control(True)
-                        self.exploration_mode = ExplorationMode.MANUAL
-                               
-                #self.exploration_mode = ExplorationMode.MANUAL
                 self.wheelsLocked = False
                 self.cv.notify_all()
 
@@ -1523,95 +1464,45 @@ class EventMapper1(object):
         return None
 
     def map_button_to_exploration(self, event, logger, ui_manager):
+        logger.info(f"[MASAKI] Mapping button to exploration event: {str(event)}")
 
-        
         if event.type == HoldDownEvent.TYPE: 
-            if not self.delegate._allowButtons:
-                return
+            logger.info(f"[MASAKI] Mapping HoldDownEvent: button={event.holddown}, duration={event.duration}")
+            
+            if event.holddown == cabot_common.button.BUTTON_DOWN and event.duration == 3:
+                new_mode_index = (self.exploration_mode.value + 1) % 3
+                new_mode = ExplorationMode(new_mode_index)
+                self.exploration_mode = new_mode
 
-            #if self.current_mode == ExplorationMode.MANUAL:
-            if event.holddown == cabot_common.button.BUTTON_UP:
-                self.delegate.free_mode_switch_autonomous_mode = True
-                speak_text("ウィザードモード", force=True)
+                logger.info(f"[MASAKI] Switching exploration mode from {self.exploration_mode} to {new_mode}")
 
-                
-            if event.holddown == cabot_common.button.BUTTON_RIGHT:
-                self.delegate.free_mode_switch_autonomous_mode = False
-                speak_text("自由モード", force=True)
+                CabotUIManager.instance._switchModePub.publish(std_msgs.msg.UInt8(data=new_mode_index))
+                if new_mode == ExplorationMode.GASTON_MODE or new_mode == ExplorationMode.SATO_SAN_MDOE:
+                    CabotUIManager.instance.set_pause_control(True)
+                    if new_mode == ExplorationMode.GASTON_MODE:
+                        speak_text("ガストンモード", force=True)
+                    else:
+                        speak_text("佐藤モード", force=True)
+                else:
+                    CabotUIManager.instance.set_pause_control(False)
+                    speak_text("自動モード", force=True)
 
-            return []
-            # else:
-            #     if event.holddown == cabot_common.button.BUTTON_UP:
-            #         return [ExplorationEvent(subtype="front")]
-            #     if event.holddown == cabot_common.button.BUTTON_DOWN:
-            #         return [ExplorationEvent(subtype="back")]
-            #     if event.holddown == cabot_common.button.BUTTON_LEFT:
-            #         return [ExplorationEvent(subtype="left")]
-            #     if event.holddown == cabot_common.button.BUTTON_RIGHT:
-            #         return [ExplorationEvent(subtype="right")]
+                return []
 
         if event.type == "click" and event.count == 1:
-            if self.delegate.cabot_vlm_use_button:
-                if event.buttons == cabot_common.button.BUTTON_DOWN:
-                    self.delegate._vlmButtonPub.publish(std_msgs.msg.Bool(data=True))
-                    return []
-
-
             with self.lock:
                 self.cv.wait_for(lambda: not self.wheelsLocked, timeout=1.0)
-
-                if not self.delegate._allowButtons:
-                    return
-
-                new_mode = self.exploration_mode
-
-                if event.buttons == cabot_common.button.BUTTON_DOWN:
-                    new_mode = ExplorationMode.TOTAL_FREE
-                elif event.buttons == cabot_common.button.BUTTON_LEFT:
-                    new_mode = ExplorationMode.MANUAL
-                elif event.buttons == cabot_common.button.BUTTON_RIGHT:
-                    new_mode = ExplorationMode.SHARED
-                elif event.buttons == cabot_common.button.BUTTON_UP:
-                    new_mode = ExplorationMode.AUTONOMOUS
-
-                # CHECK THE NEW MODE IS ALLOWED
-                if not new_mode in self.delegate.allowed_modes:
-                    logger.info(f"Mode request not allowed by the env settings : {new_mode.name}")
-                    return
-
-                logger.info(f"Requested exploration mode change to {new_mode.name}")
-
-                if new_mode == ExplorationMode.MANUAL:
-                    CabotUIManager.instance._interface.set_pause_control(True)
-                    CabotUIManager.instance._navigation.set_pause_control(True)
-                    CabotUIManager.instance._exploration.set_pause_control(True)
-                    speak_text("自由モード。", force=True)
-                elif new_mode == ExplorationMode.SHARED:
-                    CabotUIManager.instance._interface.set_pause_control(False)
-                    CabotUIManager.instance._navigation.set_pause_control(False)
-                    CabotUIManager.instance._exploration.set_pause_control(False)
-                    speak_text("自律走行モード", force=True)
-                elif new_mode == ExplorationMode.AUTONOMOUS:
-                    CabotUIManager.instance._interface.set_pause_control(False)
-                    CabotUIManager.instance._navigation.set_pause_control(False)
-                    CabotUIManager.instance._exploration.set_pause_control(False)
-                    speak_text("自律走行モード", force=True)
-                elif new_mode == ExplorationMode.TOTAL_FREE:
-                    # in TOTAL_FREE mode, wheels are always unlocked
-                    CabotUIManager.instance._interface.set_pause_control(True)
-                    CabotUIManager.instance._navigation.set_pause_control(True)
-                    CabotUIManager.instance._exploration.set_pause_control(True)
-                    speak_text("全自由走行モード", force=True)
-
-                if new_mode != self.exploration_mode:
-                    events = []
-
-                    if self.exploration_mode == ExplorationMode.SHARED or new_mode == ExplorationMode.SHARED:
-                        # switching to or from SHARED mode resets button_control
-                        events.append(ExplorationEvent(subtype="button_control"))
-                        
-                    self.exploration_mode = new_mode
-                    return events
+            
+                if self.delegate.cabot_vlm_use_button:
+                    if event.buttons == cabot_common.button.BUTTON_UP:
+                        self.delegate._vlmButtonPub.publish(std_msgs.msg.String(data="front"))
+                        return []
+                    elif event.buttons == cabot_common.button.BUTTON_LEFT:
+                        self.delegate._vlmButtonPub.publish(std_msgs.msg.String(data="left"))
+                        return []
+                    elif event.buttons == cabot_common.button.BUTTON_RIGHT:
+                        self.delegate._vlmButtonPub.publish(std_msgs.msg.String(data="right"))
+                        return []
             
         return None
 

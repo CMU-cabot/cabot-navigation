@@ -37,6 +37,7 @@ from . import test_speak
 from .log_maker import log_image_and_gpt_response
 from .test_semantic import concat_features, extract_image_feature, extract_text_feature
 from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION
+from enum import Enum
 
 
 """
@@ -62,6 +63,12 @@ $ python3 test_image.py
 
 This script will output the current local costmap to `local_costmap.npy` file.
 """
+
+class Direction(Enum):
+        ALL = "all"
+        LEFT = "left"
+        FRONT = "front"
+        RIGHT = "right"
 
 class CaBotImageNode(Node):
     def __init__(self, use_left: bool = True, use_right: bool = True):
@@ -97,11 +104,8 @@ class CaBotImageNode(Node):
         self.latest_explained_left_image_pub = self.create_publisher(Image, "/cabot/latest_explained_left_image", 10)
         self.latest_explained_right_image_pub = self.create_publisher(Image, "/cabot/latest_explained_right_image", 10)
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
-        self.prompt_sub = self.create_subscription(std_msgs.msg.String, "/cabot/persona", self.persona_callback, 10)
         #self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.Bool, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self._vlmButtonSub = self.create_subscription(std_msgs.msg.Bool, "/cabot/vlm_button", self.vlm_button_callback, 10)
-        self.allowAutoVLM = True
-
+        self._vlmButtonSub = self.create_subscription(std_msgs.msg.String, "/cabot/vlm_button", self.vlm_button_callback, 10)
         self.current_image = 0
 
         self.log_dir = os.path.join(self.log_dir, "gpt")
@@ -176,7 +180,6 @@ class CaBotImageNode(Node):
         
         self.activity_sub = self.create_subscription(Log, "/cabot/activity_log", self.activity_callback, 10)
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
-        self.touch_sub = self.create_subscription(std_msgs.msg.Int16, "/cabot/touch", self.touch_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
         subscribers = [self.image_front_sub, self.image_left_sub, self.image_right_sub]
 
@@ -201,22 +204,18 @@ class CaBotImageNode(Node):
         self.loop_count = 0
 
         #do loop in different threading no timer
-        self.timer = threading.Timer(0.1, self.loop).start()
 
         self.publish_camera_ready()
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
 
-    def vlm_button_callback(self, msg: std_msgs.msg.Bool):
+    def vlm_button_callback(self, msg: std_msgs.msg.String):
         self.logger.info(f"Received VLM button message: {msg.data}")
-        self.allowAutoVLM = False
         if msg.data:
-            self.loop()
-
-    def persona_callback(self, msg: std_msgs.msg.String):
-        self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
-        self.persona = msg.data
-        self.gpt_explainer.update_persona(self.persona)
+            try:
+                self.describe(direction=Direction(msg.data))
+            except ValueError:
+                self.logger.error(f"Invalid direction received from VLM button: {msg.data}")
 
     def publish_camera_ready(self):
         def _publish_camera_ready():
@@ -227,25 +226,6 @@ class CaBotImageNode(Node):
                 time.sleep(1)
         thread = threading.Thread(target=_publish_camera_ready)
         thread.start()
-
-    def touch_callback(self, msg: std_msgs.msg.Int16):
-        if msg.data == 1:
-            self.consequtive_touch_count += 1
-        else:
-            self.consequtive_touch_count -= 1
-
-        self.consequtive_touch_count = max(0, self.consequtive_touch_count)
-        self.consequtive_touch_count = min(10, self.consequtive_touch_count)
-
-        if self.consequtive_touch_count > 5:
-            self.touching = True
-            if not self.touching:
-                self.logger.info("[CHILOG] [TOUCHING]")
-        else:
-            if self.touching:
-                #test_speak.speak_text("", force=True)
-                self.logger.info("[CHILOG] [NOT_TOUCHING]")
-            self.touching = False
 
     def publish_latest_explained_info(self):
         self.logger.info("Publishing latest explained info")
@@ -378,81 +358,23 @@ class CaBotImageNode(Node):
 
         return image
 
-    def loop(self):
-        if self.max_loop > 0 and self.loop_count >= self.max_loop:
-            self.logger.info(f"Max loop count reached. Exiting.")
-            return
-        is_in_valid_state = self.cabot_nav_state == self.valid_state
-        self.logger.info(f"[LOOP] State; mode: {self.mode}, state: {self.cabot_nav_state}, valid_state: {self.valid_state}")
-        self.loop_count += 1
+    def describe(self, direction = Direction.ALL):
         camera_ready = self.realsense_ready
-        self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
-        if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
-
+        self.logger.info(f"Describe called. camera_ready: {camera_ready}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, direction: {direction}")
+        if direction == Direction.ALL:
             wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
-            # if self.current_image == 0:
-            #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
-            # elif self.current_image == 1:
-            #     wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
-            # elif self.current_image == 2:
-            #     wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
-
-            # self.current_image = (self.current_image + 1) % 3
-
-
-            is_in_valid_state = self.cabot_nav_state == self.valid_state
-            if explain != "" and self.can_speak_explanation:
-                self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is not empty")
-                test_speak.speak_text(explain)
-                self.logger.info(f"[CHILOG] [EXPLAIN] [{explain}]")
-                self.can_speak_explanation = False
-                self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
-                self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
-                next_loop_wait_time = 1.0
-            else:
-                self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
-                next_loop_wait_time = 0.1
-
-            self.latest_explained_front_image = self.front_image
-            self.latest_explained_left_image = self.left_image
-            self.latest_explained_right_image = self.right_image
-            self.latest_explain = explain
-
-            self.publish_latest_explained_info()
-
-            if self.mode == "intersection_detection_mode":
-                self.logger.info("Availability of each direction")
-                self.logger.info(f"Front marker : {self.front_marker_detected}")
-                self.logger.info(f"Left marker  : {self.left_marker_detected}")
-                self.logger.info(f"Right marker : {self.right_marker_detected}")
-                if not self.no_explain_mode:
-                    self.logger.info(f"Front available (GPT) : {self.gpt_explainer.front_available}")
-                    self.logger.info(f"Left available (GPT)  : {self.gpt_explainer.left_available}")
-                    self.logger.info(f"Right available (GPT) : {self.gpt_explainer.right_available}")
-            
-            if self.debug:
-                # randomly decide the values
-                self.logger.info("random mode; setting the values randomly")
-                self.front_marker_detected = np.random.choice([True, False])
-                self.left_marker_detected = np.random.choice([True, False])
-                self.right_marker_detected = np.random.choice([True, False])
-                self.gpt_explainer.front_available = np.random.choice([True, False])
-                self.gpt_explainer.left_available = np.random.choice([True, False])
-                self.gpt_explainer.right_available = np.random.choice([True, False])
-                
-            if self.mode == "surronding_explain_mode":
-                self.logger.info(f"surronding_explain_mode next wait time: {next_loop_wait_time}")
-                self.change_timer_interval(interval=next_loop_wait_time)
+        elif direction == Direction.LEFT:
+            wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
+        elif direction == Direction.FRONT:
+            wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
+        elif direction == Direction.RIGHT:
+            wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
         else:
-            self.logger.info(f"NOT generating description because: not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, is_in_valid_state: {is_in_valid_state}")
-            self.logger.info(f"next wait time: 0.5 (constant)")
-            self.change_timer_interval(interval=0.5)
-
-    def change_timer_interval(self, interval: float):
-        if not self.allowAutoVLM:
+            self.logger.error(f"Invalid direction: {direction}")
             return
+        test_speak.speak_text(explain)
 
-        self.timer = threading.Timer(interval, self.loop).start()
+
 
 
 class GPTExplainer():
@@ -500,11 +422,10 @@ class GPTExplainer():
             self.prompt = """
             ### 指示
             画像を説明してください。
-            %s
             画像を説明するには、以下のルールに必ず従ってください。
 
             ### 指示に従うために必ず守るべきルール
-            1. 画像の左/前/右にある物体を特定し、そのシーンを知るのに必要な大枠の情報および詳細な情報、両方を説明すること。ただ、説明する必要がない方向があれば（例：右側には何もない）その方向に関しては説明する必要はないです。
+            1. そのシーンを知るのに必要な大枠の情報および詳細な情報、両方を説明すること。ただ、説明する必要がない方向があれば（例：右側には何もない）その方向に関しては説明する必要はないです。
             2. 床や天井に関する説明はしなくて大丈夫です。左/前/右の説明に注力してください。
             3. 口調として、「右手には~~があります」等、視覚障害者ガイドのように話してください。
             4. 特徴的なオプジェクトや展示がある場合説明に含めること。
@@ -597,18 +518,6 @@ class GPTExplainer():
         _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 60])
         image_bytes = buffer.tobytes()
         return base64.b64encode(image_bytes).decode('utf-8')
-    
-    def update_persona(self, persona: str):
-        self.logger.info(f"Updating persona to {persona}")
-        self.persona = persona
-        if self.persona == "explore":
-            self.prompt = PROMPT_EXPLORE
-        elif self.persona == "middle":
-            self.prompt = PROMPT_MIDDLE
-        elif self.persona == "navigation":
-            self.prompt = PROMPT_NAVIGATION
-        else:
-            self.logger.info(f"Persona {persona} is not recognized.")
 
     def resize_images(self, image, max_width=None, max_height=None):
         image_width = image.shape[1]
@@ -626,13 +535,10 @@ class GPTExplainer():
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
-        use_initial_prompt = False
         if len(self.conversation_history) == 0:
             prompt = copy(self.prompt)
-            use_initial_prompt = True
         else:
             prompt = copy(self.prompt)
-            use_initial_prompt = True
             self.conversation_history = []
 
         total_begin_time = time.time()
@@ -641,13 +547,6 @@ class GPTExplainer():
             images = []
 
             use_realsense = False
-
-            # if (front_image is not None) and (left_image is not None) and (right_image is not None):
-            #     # if not self.okay_images:
-            #     #     self.logger.info("Okay")
-            #     #     self.okay_images = True
-            #     #     test_speak.speak_text("実験準備ができました")
-            #     # use_realsense = True
 
             if (left_image is not None):
                 left_image = self.resize_images(left_image, max_width=768)
@@ -663,7 +562,15 @@ class GPTExplainer():
                 images.append(right_image_with_text)
 
             if use_realsense:
-                prompt = prompt % "画像は3枚あります。順番に左、前、右の画像です。"
+                if len(images) == 3:
+                    prompt = prompt % "画像は3枚あります。順番にロボットの左、前、右の画像です。"
+                elif len(images) == 1:
+                    if not left_image is None:
+                        prompt = prompt % "画像は1枚あります。ロボットの左の画像です。"
+                    elif not front_image is None:
+                        prompt = prompt % "画像は1枚あります。ロボットの前の画像です。"
+                    elif not right_image is None:
+                        prompt = prompt % "画像は1枚あります。ロボットの右の画像です。"
                 #images_with_text = [front_image_with_text, left_image_with_text, right_image_with_text]
             
             if (front_image is None and left_image is None and right_image is None):
@@ -743,57 +650,6 @@ class GPTExplainer():
         if self.should_speak and not extracted_json["description"] == "":
             wait_time = self.calculate_speak_time(extracted_json["description"])
             self.logger.info(f"Speaking the {self.mode} explanation")
-        
-        # # extract features from image & text
-        # left_feature = extract_image_feature(PILImage.fromarray(left_image), self.processor, self.model, self.device)
-        # front_feature = extract_image_feature(PILImage.fromarray(front_image), self.processor, self.model, self.device)
-        # right_feature = extract_image_feature(PILImage.fromarray(right_image), self.processor, self.model, self.device)
-
-        # # feature dir is the parent directory of the log_dir
-        # image_feature_path = os.path.join(self.log_dir, "image_features.pickle")
-        # # image_file_key is the dir name of self.log_dir
-        # image_file_key = os.path.basename(self.folder_name)
-        # if os.path.exists(image_feature_path):
-        #     with open(image_feature_path, "rb") as f:
-        #         image_features = pickle.load(f)
-        #     image_features["front"] = concat_features(image_features["front"], front_feature)
-        #     image_features["left"] = concat_features(image_features["left"], left_feature)
-        #     image_features["right"] = concat_features(image_features["right"], right_feature)
-        #     image_features["odoms"] = image_features.get("odoms", []) + [self.node.odom]
-        #     image_features["image_file_key"] = image_features.get("image_file_key", []) + [image_file_key]
-        # else:
-        #     image_features = {
-        #         "front": front_feature,
-        #         "left": left_feature,
-        #         "right": right_feature,
-        #         "odoms": [self.node.odom],
-        #         "image_file_key": [image_file_key]
-        #     }
-        # # save the image features
-        # with open(image_feature_path, "wb") as f:
-        #     pickle.dump(image_features, f)
-
-        # # extract text features
-        # text_feature = extract_text_feature(extracted_json["description"], self.text_tokenizer, self.text_model, self.device)
-        # text_feature_path = os.path.join(self.log_dir, "text_features.pickle")
-        # if os.path.exists(text_feature_path):
-        #     with open(text_feature_path, "rb") as f:
-        #         text_features = pickle.load(f)
-        #     # text_features has four keys: "features", "odoms", "text_file_key", "texts"
-        #     text_features["features"] = concat_features(text_features["features"], text_feature)
-        #     text_features["odoms"] = text_features.get("odoms", []) + [self.node.odom]
-        #     text_features["text_file_key"] = text_features.get("text_file_key", []) + [image_file_key]
-        #     text_features["texts"] = text_features.get("texts", []) + [extracted_json["description"]]
-        # else:
-        #     text_features = {
-        #         "features": text_feature,
-        #         "odoms": [self.node.odom],
-        #         "text_file_key": [image_file_key],
-        #         "texts": [extracted_json["description"]]
-        #     }
-        # # save the text features
-        # with open(text_feature_path, "wb") as f:
-        #     pickle.dump(text_features, f)
 
         self.logger.info(f">>>>>>>\n{self.mode}: {gpt_response}\n<<<<<<<")
 
