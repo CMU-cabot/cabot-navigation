@@ -178,7 +178,7 @@ class CabotUIManager(NavigationInterface, object):
             self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
             self._vlmButtonPub.publish(std_msgs.msg.String(data="all"))
 
-        self._switchModePub = self._node.create_publisher(std_msgs.msg.UInt8, "/shared_control_mode", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self._switchModePub = self._node.create_publisher(std_msgs.msg.Int8, "/shared_control_mode", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         #self._lidarLimitSub = self._node.create_subscription(sensor_msgs.msg.LaserScan, "/scan", self._lidar_limit_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
         transient_local_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
@@ -1504,7 +1504,7 @@ class EventMapper1(object):
 
                     logger.info(f"[MASAKI] Switching exploration mode from {self.exploration_mode} to {new_mode}")
                     self.delegate.free_mode_switch_autonomous_mode = False
-                    CabotUIManager.instance._switchModePub.publish(std_msgs.msg.UInt8(data=new_mode_index))
+                    CabotUIManager.instance._switchModePub.publish(std_msgs.msg.Int8(data=new_mode_index))
                     if new_mode == ExplorationMode.GASTON_MODE:                    
                         CabotUIManager.instance._interface.set_pause_control(True)
                         CabotUIManager.instance._navigation.set_pause_control(True)
