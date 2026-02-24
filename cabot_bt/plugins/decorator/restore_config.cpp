@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include <behaviortree_cpp_v3/decorator_node.h>
+#include <behaviortree_cpp_v3/blackboard.h>
 
 #include <chrono>
 #include <cmath>
@@ -45,8 +46,12 @@ public:
     node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
 
     if (getInput("store", store_name_)) {
-      store_ = std::make_shared<std::map<std::string, std::vector<rclcpp::Parameter>>>();
-      config().blackboard->set<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+      try {
+        config().blackboard->get<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+      } catch (const BT::RuntimeError &) {
+        store_ = std::make_shared<std::map<std::string, std::vector<rclcpp::Parameter>>>();
+        config().blackboard->set<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+      }
     }
   }
 
@@ -63,6 +68,9 @@ public:
     if (child_state == BT::NodeStatus::SUCCESS ||
       child_state == BT::NodeStatus::FAILURE)
     {
+      if (!store_) {
+        return child_state;
+      }
       while (store_->size() > 0) {
         auto name = store_->begin()->first;
         auto client_ = std::make_shared<rclcpp::AsyncParametersClient>(node_, name);
@@ -83,17 +91,19 @@ public:
   void halt()
   {
     // if parameters are not stored yet (canceled), call set_parameters
-    while (store_->size() > 0) {
-      auto name = store_->begin()->first;
-      auto client_ = std::make_shared<rclcpp::AsyncParametersClient>(node_, name);
-      RCLCPP_INFO(node_->get_logger(), "Restored parameters (normal) %s", store_->begin()->first.c_str());
-      client_->wait_for_service();
-      restore_future_ = std::make_shared<std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>>>(
-        client_->set_parameters(store_->begin()->second));
-      while (restore_future_->wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-        rclcpp::spin_some(node_);
+    if (store_) {
+      while (store_->size() > 0) {
+        auto name = store_->begin()->first;
+        auto client_ = std::make_shared<rclcpp::AsyncParametersClient>(node_, name);
+        RCLCPP_INFO(node_->get_logger(), "Restored parameters (normal) %s", store_->begin()->first.c_str());
+        client_->wait_for_service();
+        restore_future_ = std::make_shared<std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>>>(
+          client_->set_parameters(store_->begin()->second));
+        while (restore_future_->wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+          rclcpp::spin_some(node_);
+        }
+        store_->erase(store_->begin());
       }
-      store_->erase(store_->begin());
     }
 
     restore_future_ = nullptr;

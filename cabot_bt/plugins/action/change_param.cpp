@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include <behaviortree_cpp_v3/action_node.h>
+#include <behaviortree_cpp_v3/blackboard.h>
 #include <rcl_yaml_param_parser/parser.h>
 #include <rcl_yaml_param_parser/types.h>
 #include <rcutils/allocator.h>
@@ -63,7 +64,12 @@ public:
       parameters_client_ = std::make_shared<rclcpp::AsyncParametersClient>(node_, remote_node_name_);
     }
     if (getInput("store", store_name_)) {
-      config().blackboard->get<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+      try {
+        config().blackboard->get<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+      } catch (const BT::RuntimeError &) {
+        store_ = std::make_shared<std::map<std::string, std::vector<rclcpp::Parameter>>>();
+        config().blackboard->set<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+      }
     }
 
     int count = 30;
@@ -106,15 +112,26 @@ public:
   {
     rclcpp::spin_some(node_);
     if (state_ == Status::Saving) {
+      if (!store_ && !store_name_.empty()) {
+        try {
+          config().blackboard->get<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+        } catch (const BT::RuntimeError &) {
+          store_ = std::make_shared<std::map<std::string, std::vector<rclcpp::Parameter>>>();
+          config().blackboard->set<std::shared_ptr<std::map<std::string, std::vector<rclcpp::Parameter>>>>(store_name_, store_);
+        }
+      }
+
       if (parameters_.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
         RCLCPP_INFO(node_->get_logger(), "parameters size = %ld", parameters_.get().size());
         if (parameters_.get().size() > 0) {
           auto param = parameters_.get().at(0);
 
-          if (store_->find(remote_node_name_) == store_->end()) {
-            store_->insert(std::pair<std::string, std::vector<rclcpp::Parameter>>(remote_node_name_, std::vector<rclcpp::Parameter>()));
+          if (store_) {
+            if (store_->find(remote_node_name_) == store_->end()) {
+              store_->insert(std::pair<std::string, std::vector<rclcpp::Parameter>>(remote_node_name_, std::vector<rclcpp::Parameter>()));
+            }
+            store_->at(remote_node_name_).push_back(param);
           }
-          store_->at(remote_node_name_).push_back(param);
         }
         state_ = Status::Setting;
       }
