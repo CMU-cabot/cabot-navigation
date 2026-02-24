@@ -1,5 +1,7 @@
+<?xml version="1.0"?>
+
 <!--
- Copyright (c) 2020  Carnegie Mellon University
+ Copyright (c) 2025  Carnegie Mellon University and Miraikan
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -19,23 +21,27 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 -->
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rank_nav_msgs</name>
+  <version>1.0.0</version>
+  <description>The navigation message package with RankNav</description>
+  <maintainer email="ynitta@andrew.cmu.edu">Yasuhiro Nitta</maintainer>
+  <license>MIT</license>
 
-<class_libraries>
-  <library path="cabot_layers">
-    <class type="cabot_navigation2::NavCogPathLayer"  base_class_type="nav2_costmap_2d::Layer">
-      <description>Cost for NavCog path</description>
-    </class>
-    <class type="cabot_navigation2::PeopleObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
-      <description>Obstacle layer dealing with People</description>
-    </class>
-    <class type="cabot_navigation2::TemporalObstacleLayer"  base_class_type="nav2_costmap_2d::Layer">
-      <description>Temporal Obstacle layer</description>
-    </class>
-    <class type="cabot_navigation2::PersonalSpaceLayer"  base_class_type="nav2_costmap_2d::Layer">
-      <description>Personal space layer for ranknav</description>
-    </class>
-    <class type="cabot_navigation2::SNGNNLayer"  base_class_type="nav2_costmap_2d::Layer">
-      <description>costmap layer with SNGNN2D</description>
-    </class>
-  </library>
-</class_libraries>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <depend>std_msgs</depend>
+
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

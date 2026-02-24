@@ -29,6 +29,7 @@ trap ctrl_c INT QUIT TERM
 
 terminating=0
 launched=0
+do_not_record=0
 
 function ctrl_c() {
     red "catch the signal"
@@ -51,6 +52,19 @@ function ctrl_c() {
             $dccom down
         else
             $dccom down > /dev/null 2>&1
+        fi
+    fi
+    if [[ ! -z $bag_dccom ]]; then
+        red "kill -INT $bag_dcpid"
+        kill -INT $bag_dcpid
+        while kill -0 $bag_dcpid 2> /dev/null; do
+            snore 1
+        done
+        red "$bag_dccom down"
+        if [ $verbose -eq 1 ]; then
+            $bag_dccom down
+        else
+            $bag_dccom down > /dev/null 2>&1
         fi
     fi
     if [[ $run_test -eq 1 ]]; then
@@ -92,6 +106,7 @@ function help()
     echo "-d          development"
     echo "-s          simulation mode"
     echo "-S <site>   override CABOT_SITE"
+    echo "-R          do not record"
     echo "-t          run test"
     echo "-i <title>  specify the title for the launch_metadata yaml file"
     echo "-y          do not confirm (deprecated - always launch server if there is no server)"
@@ -138,7 +153,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
+while getopts "hDE:f:HlLMn:drsS:Rti:T:uvy" arg; do
     case $arg in
         h)
             help
@@ -174,6 +189,9 @@ while getopts "hDE:f:HlLMn:drsS:ti:T:uvy" arg; do
             ;;
         r)
             retryoption="-r"
+            ;;
+        R)
+            do_not_record=1
             ;;
         s)
             simulation=1
@@ -295,6 +313,23 @@ fi
 
 if [[ $terminating -eq 1 ]]; then
     exit
+fi
+
+## launch docker image for bag recording
+if [ $do_not_record -eq 0 ]; then
+    if [ -e ../docker-compose-bag.yaml ]; then
+        bag_dccom="docker compose -f ../docker-compose-bag.yaml -p $launch_prefix --profile $profile"
+        
+        com="$bag_dccom --ansi never up --no-build --abort-on-container-exit > $host_ros_log_dir/docker-compose-bag.log &"
+        blue $com
+        eval $com
+        bag_dcpid=($!)
+        blue "[$bag_dcpid] recording ROS2 topics $( echo "$(date +%s.%N) - $start" | bc -l )"
+    else
+        blue "bag compose file not found at ../docker-compose-bag.yaml"
+    fi
+else
+    blue "do not record ROS2 topics"
 fi
 
 ## launch docker compose

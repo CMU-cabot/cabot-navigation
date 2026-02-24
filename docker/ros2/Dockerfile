@@ -202,6 +202,8 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-common/cabot_msgs src/
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_msgs src/queue_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_people_py src/queue_people_py
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./queue_utils_py src/queue_utils_py
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./rank_nav_msgs src/rank_nav_msgs
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./social_nav_msgs src/social_nav_msgs
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
 
 RUN /ros_entrypoint.sh /launch.sh build

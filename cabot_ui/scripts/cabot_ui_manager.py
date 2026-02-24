@@ -110,7 +110,8 @@ class CabotUIManager(object):
                         desc = ParameterDescriptor()
                         desc.type = ParameterType.PARAMETER_NOT_SET
                         desc.dynamic_typing = True
-                        self._node.declare_parameter('init_speed', None, descriptor=desc)
+                        if not self._node.has_parameter('init_speed'):
+                            self._node.declare_parameter('init_speed', None, descriptor=desc)
                         init_speed = self._node.get_parameter("init_speed").value
                         # check if init_speed is not empty and is float num
                         if init_speed is not None and isinstance(init_speed, float):
@@ -133,7 +134,8 @@ class CabotUIManager(object):
                 try:
                     desc = ParameterDescriptor()
                     desc.type = ParameterType.PARAMETER_DOUBLE
-                    self._node.declare_parameter('init_speed', None, descriptor=desc)
+                    if not self._node.has_parameter('init_speed'):
+                        self._node.declare_parameter('init_speed', None, descriptor=desc)
                     temp = self._node.get_parameter("init_speed").value
                     if temp is not None:
                         init_speed = min(temp, max_speed)

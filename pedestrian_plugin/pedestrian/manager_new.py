@@ -20,9 +20,6 @@
 
 import logging
 import uuid
-
-import logging
-import uuid
 import glob
 import os
 import random
@@ -45,19 +42,19 @@ def get_hips_rotation(dae_path):
         # Locate Hips node start
         hips_match = re.search(r'<node [^>]*id="Hips"[^>]*>', content)
         if not hips_match:
-            return None, None
+            return None
             
         start_idx = hips_match.end()
         # Find the next matrix element
         matrix_match = re.search(r'<matrix[^>]*>(.*?)</matrix>', content[start_idx:], re.DOTALL)
         if not matrix_match:
-            return None, None
+            return None
             
         matrix_str = matrix_match.group(1).strip()
         values = [float(x) for x in matrix_str.split()]
         
         if len(values) != 16:
-            return None, None
+            return None
             
         # m5 = cos(theta), m9 = sin(theta) for X-rotation
         # row-major: 0, 1, 2, 3 / 4, 5, 6, 7 / 8, 9, 10, 11
@@ -100,45 +97,27 @@ class PedestrianManager():
         self.serviceReady = False
         self.actorMap = {}
         self.futures = {}
-        self.spawn_index = 0
-        self.spawn_service_checked = False
-        
+        self.spawn_index = 0  # Track total spawned actors for unique positioning
+        self.spawn_service_checked = False  # Track if spawn service was checked
+
         self.models = []
         self.child_models = []
         self.adult_models = []
-        
-        # Try to find models from environment or default paths
-        model_paths = [
-            "/home/developer/models/LIRS-HMLG",
-            os.path.expanduser("~/models/LIRS-HMLG"),
-            os.path.join(os.getcwd(), "LIRS-HMLG"),
-            "/home/ai-suitcase-1/nitta_workspace/cabot/cabot-navigation/LIRS-HMLG" # Fallback for host execution
-        ]
-        
-        selected_path = None
-        for path in model_paths:
-            if os.path.exists(path):
-                selected_path = path
-                break
-        
-        if selected_path:
-            self.node.get_logger().info(f"Loading models from {selected_path}")
-            # Load adult models. Use glob.glob recursively if needed but here structure is known
-            # Check directory structure matching: <root>/Male/<ModelName>/walk.dae
-            self.adult_models.extend(glob.glob(os.path.join(selected_path, "Male", "*", "walk.dae")))
-            self.adult_models.extend(glob.glob(os.path.join(selected_path, "Female", "*", "walk.dae")))
-            
-            # Load child models: <root>/Children/self_made/<ModelName>/*_walk.dae
-            # Note: The pattern might be deeper or slightly different.
-            self.child_models.extend(glob.glob(os.path.join(selected_path, "Children", "self_made", "*", "*_walk.dae")))
-            
-            self.models = self.adult_models + self.child_models
-            self.node.get_logger().info(f"Found {len(self.adult_models)} adult models and {len(self.child_models)} child models")
-        else:
-            self.node.get_logger().error(f"Could not find LIRS-HMLG models in any of {model_paths}")
+        model_path = "/home/developer/models/LIRS-HMLG"
+        if os.path.exists(model_path):
+            self.child_models = glob.glob(os.path.join(model_path, "Children", "self_made", "*", "*_walk.dae"))
+            male_models = glob.glob(os.path.join(model_path, "Male", "*", "walk.dae"))
+            female_models = glob.glob(os.path.join(model_path, "Female", "*", "walk.dae"))
+            self.adult_models = male_models + female_models
 
-        if not self.models:
-            self.node.get_logger().warn("No custom models found, will use default walk.dae")
+            # filter out broken or unwanted models if necessary
+            logging.info(f"Found {len(self.models)} models in {model_path}")
+            logging.info(f"Found {len(self.child_models)} child models")
+            logging.info(f"Found {len(self.adult_models)} adult models")
+            if len(self.models) == 0:
+                logging.error(f"Models directory exists but no .dae files found in {model_path}. contents: {os.listdir(model_path)}")
+        else:
+            logging.error(f"{model_path} does not exist. Current dir: {os.getcwd()}, listing /home/developer: {os.listdir('/home/developer') if os.path.exists('/home/developer') else 'not found'}")
 
     def human_states_callback(self, msg):
         if len(self.actorMap) < len(msg.agents):
@@ -223,19 +202,15 @@ class PedestrianManager():
             self._update(actors=update_actors, callback=complete1)
 
     def _spawn(self, actor=None, callback=None):
-        name = actor['name'] if 'name' in actor else uuid.uuid4()
+        name = actor['name'] if 'name' in actor else uuid
         module = actor['module'] if 'module' in actor else "pedestrian.pool"
         params = actor['params'] if 'params' in actor else {}
         params_xml = ""
         for k, v in params.items():
             t = identify_variable_type(v)
-            if t == "bool":
-                v = "true" if v else "false"
-            elif t == "list":
-                v = " ".join([str(x) for x in v])
-            params_xml += f"<{k} type='{t}'>{v}</{k}>\n"
-        self.actorMap[name] = actor
-
+            params_xml += f"<{k} type=\"{t}\">{v}</{k}>"
+        # Note: actorMap[name] will be set in the callback after spawn completes
+        # Use spawn_index for unique initial position
         self.spawn_index += 1
         xx = self.spawn_index
         yy = 10
@@ -245,7 +220,7 @@ class PedestrianManager():
         
         is_child = "child" in name.lower() or "child" in module.lower()
         
-        selected_models = []
+        selected_models = self.models
         if is_child and self.child_models:
              selected_models = self.child_models
         elif not is_child and self.adult_models:
@@ -275,24 +250,28 @@ class PedestrianManager():
             
             # Apply correction to ACTOR pose (pose_r), as skin pose is ignored
             if theta is not None:
+                # pose_r = (theta + 0.35)
                 pose_r = theta - 1.57
                 
                 # Dynamic Z correction
-                if translation:
-                    tx, ty, tz = translation
-                    pose_z = tz - 1.05
+                # Assuming translation[2] (Z in DAE) corresponds to vertical offset error due to rotation
+                tx, ty, tz = translation
+                pose_z = tz - 1.05
             else:
                  # Fallback if parsing fails
                 if "Children" in skin_file:
-                    pose_r = -0.96
+                    pose_r = -0.96 # approx -(0.66 + 0.30)
                     pose_z = -0.15
                 elif "Female" in skin_file:
-                    pose_r = -1.35
+                    pose_r = -1.35 # approx -(1.0 + 0.35)
                     pose_z = -0.05
                 else: 
-                    pose_r = -1.57
+                    pose_r = -1.57 # approx -(1.22 + 0.35) - Male default
                     pose_z = -0.05
 
+            # Note: If the model faces Y or -Y instead of X, a skin_y correction (+/- 1.57) might be needed.
+            # Based on "Forward tilt" observation with X-rotation, the model likely faces Y/-Y.
+            
         actor_xml = f"""
 <?xml version="1.0" ?>
 <sdf version="1.6">
@@ -318,19 +297,20 @@ class PedestrianManager():
 """
         logging.debug(actor_xml)
         
+        # Wait for spawn_entity service only on first spawn to avoid blocking
         if not self.spawn_service_checked:
             if not self.spawn_entity_client.wait_for_service(timeout_sec=10.0):
                 logging.error(f"spawn_entity service not available")
-                # Ensure callback is called to prevent hanging
                 if callback:
-                    # Create a dummy future or just call with None
+                    # Create a dummy future to maintain callback compatibility
                     from rclpy.task import Future
                     dummy_future = Future()
                     dummy_future.set_result(None)
                     callback(dummy_future)
                 return
             self.spawn_service_checked = True
-
+            logging.info("spawn_entity service is available")
+        
         request = SpawnEntity.Request()
         request.name = name
         request.xml = actor_xml
@@ -339,12 +319,36 @@ class PedestrianManager():
         self.futures[uuid.uuid4()] = future
 
         def complete(future):
+            try:
+                result = future.result()
+                logging.debug(f"Spawned {name}: {result}")
+            except Exception as e:
+                logging.error(f"Failed to spawn {name}: {e}")
             if callback:
                 callback(future)
             self.actorMap[name] = actor
         future.add_done_callback(complete)
 
     def _update(self, actors=None, callback=None):
+        # Always wait for the pedestrian_plugin_update service to be available
+        # even if check_service timer previously detected it
+        logging.debug("Ensuring pedestrian_plugin_update service is available...")
+        if not self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=60.0):
+            logging.error("pedestrian_plugin_update service not available after 60 seconds")
+            if callback:
+                # Create a dummy future to maintain callback compatibility
+                from rclpy.task import Future
+                dummy_future = Future()
+                dummy_future.set_result(None)
+                callback(dummy_future)
+            return
+        
+        if not self.serviceReady:
+            logging.info("pedestrian_plugin_update service now available")
+            self.serviceReady = True
+            if self.timer is not None:
+                self.timer.cancel()
+        
         request = PluginUpdate.Request()
         for actor in actors:
             msg = Plugin()
@@ -367,11 +371,14 @@ class PedestrianManager():
         self.futures[uuid.uuid4()] = future
 
         def done_callback(future):
-            result = future.result()
-            logging.debug(f"pedestrian_plugin_update service done: {result}")
-            for name in result.plugin_names:
-                if name not in self.actorMap:
-                    self.actorMap[name] = {"name": name}
+            try:
+                result = future.result()
+                logging.debug(f"pedestrian_plugin_update service done: {result}")
+                for name in result.plugin_names:
+                    if name not in self.actorMap:
+                        self.actorMap[name] = {"name": name}
+            except Exception as e:
+                logging.error(f"pedestrian_plugin_update service failed: {e}")
             if callback:
                 callback(future)
         future.add_done_callback(done_callback)

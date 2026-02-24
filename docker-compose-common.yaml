@@ -81,6 +81,7 @@ services:
       - CABOT_VIBRATOR_TYPE
       - CABOT_MAX_SPEED
       - CABOT_UI_PLUGINS
+      - CABOT_NAVIGATION_METHOD
 # ROS2/DDS
       - RCUTILS_LOGGING_USE_STDOUT=1
       - ROS_LOG_DIR
@@ -299,6 +300,8 @@ services:
       - ./queue_msgs:/home/developer/ros2_ws/src/queue_msgs
       - ./queue_people_py:/home/developer/ros2_ws/src/queue_people_py
       - ./queue_utils_py:/home/developer/ros2_ws/src/queue_utils_py
+      - ./rank_nav_msgs:/home/developer/ros2_ws/src/rank_nav_msgs
+      - ./social_nav_msgs:/home/developer/ros2_ws/src/social_nav_msgs
 
   navigation-dev:
     extends: navigation-dev-base
@@ -364,6 +367,7 @@ services:
     extends: gui-dev-base
     volumes:
       - ./docker/home/:/home/developer/
+      - ./LIRS-HMLG:/home/developer/models/LIRS-HMLG
 
   gui-prod-base:
     extends: navigation-prod-base

@@ -45,6 +45,22 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('cabot_navigation2')
     output = {'stderr': {'log'}}
 
+    # Determine nav2_params file based on CABOT_NAVIGATION_METHOD
+    nav_method = os.environ.get('CABOT_NAVIGATION_METHOD', '0')
+    files = {
+        '1': 'nav2_params_vlmsocnav.yaml',
+        '2': 'nav2_params_sngnn.yaml',
+        '3': 'nav2_params_ranknav.yaml',
+    }
+    nav2_param_file = files.get(nav_method, 'nav2_params.yaml')
+
+    files2 = {
+        '1': 'nav2_params2_vlmsocnav.yaml',
+        '2': 'nav2_params2_sngnn.yaml',
+        '3': 'nav2_params2_ranknav.yaml',
+    }
+    nav2_param_file2 = files2.get(nav_method, 'nav2_params2.yaml')
+
     # Create the launch configuration variables
     namespace = LaunchConfiguration('namespace')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -124,12 +140,12 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'params_file',
-            default_value=os.path.join(pkg_dir, 'params', 'nav2_params.yaml'),
+            default_value=os.path.join(pkg_dir, 'params', nav2_param_file),
             description='Full path to the ROS2 parameters file to use for all launched nodes'),
 
         DeclareLaunchArgument(
             'params_file2',
-            default_value=os.path.join(pkg_dir, 'params', 'nav2_params2.yaml'),
+            default_value=os.path.join(pkg_dir, 'params', nav2_param_file2),
             description='Full path to the ROS2 parameters file to use for all launched nodes'),
 
         DeclareLaunchArgument(

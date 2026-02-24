@@ -169,6 +169,44 @@ def minimum_distance_to_people(agents, robot):
             if d < 0.0:
                 d = 0.0
             min_distance.append(d)
+    
+    if len(min_distance) == 0:
+        return [float('inf')]
+
+    min_dist = min(min_distance)
+    return [min_dist]
+
+
+def minimum_distance_to_child(agents, robot):
+    min_distance = list()
+    for i in range(len(robot)):
+        for agent in agents[i].agents:
+            if "child" in agent.name.lower():
+                d = euclidean_distance(robot[i].position, agent.position) - robot[i].radius - agent.radius
+                if d < 0.0:
+                    d = 0.0
+                min_distance.append(d)
+    
+    if len(min_distance) == 0:
+        return [float('inf')]
+
+    min_dist = min(min_distance)
+    return [min_dist]
+
+
+def minimum_distance_to_adult(agents, robot):
+    min_distance = list()
+    for i in range(len(robot)):
+        for agent in agents[i].agents:
+            if "child" not in agent.name.lower():
+                d = euclidean_distance(robot[i].position, agent.position) - robot[i].radius - agent.radius
+                if d < 0.0:
+                    d = 0.0
+                min_distance.append(d)
+
+    if len(min_distance) == 0:
+        return [float('inf')]
+
     min_dist = min(min_distance)
     return [min_dist]
 
@@ -660,6 +698,38 @@ def static_obs_collision(agents, robot):
 # Personal space and o/p/r-space metrics are similar to the ones in Teaching Robot Navigation Behaviors to Optimal RRT Planners paper.
 
 
+def distance_violation_count(agents, robot, threshold):
+    violations = 0
+    # Track which agents are currently violating to count episodes instead of frames
+    agents_in_violation = {}
+
+    for i in range(len(robot)):
+        for agent in agents[i].agents:
+            agent_name = agent.name
+            # Calculate distance between centers (ignoring radii) as requested
+            d = euclidean_distance(robot[i].position, agent.position)
+            
+            is_violating = d < threshold
+            was_violating = agents_in_violation.get(agent_name, False)
+
+            if is_violating:
+                if not was_violating:
+                    violations += 1
+                agents_in_violation[agent_name] = True
+            else:
+                agents_in_violation[agent_name] = False
+            
+    return [violations]
+
+
+def collision(agents, robot):
+    return distance_violation_count(agents, robot, 0.3)
+
+
+def proximity_violation(agents, robot):
+    return distance_violation_count(agents, robot, 0.5)
+
+
 metrics = {
     # N. Perez-Higueras, F. Caballero, and L. Merino, “Teaching Robot Nav-
     # igation Behaviors to Optimal RRT Planners,” International Journal of
@@ -729,4 +799,6 @@ metrics = {
     # 'social_work': social_work,
     # 'obstacle_force_on_robot': obstacle_force_on_robot,
     # 'obstacle_force_on_agents': obstacle_force_on_agents,
+    'collision': collision,
+    'proximity_violation': proximity_violation,
 }

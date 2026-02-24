@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 project(cabot_navigation2)
 
+if(POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
@@ -33,6 +37,8 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(people_msgs REQUIRED)
 find_package(queue_msgs REQUIRED)
+find_package(rank_nav_msgs REQUIRED)
+find_package(social_nav_msgs REQUIRED)
 find_package(dwb_core REQUIRED)
 find_package(dwb_critics REQUIRED)
 find_package(diagnostic_updater REQUIRED)
@@ -83,6 +89,8 @@ set(dependencies
   tf2_ros
   people_msgs
   queue_msgs
+  rank_nav_msgs
+  social_nav_msgs
   sensor_msgs
   diagnostic_updater
   visualization_msgs
@@ -95,6 +103,7 @@ add_library(cabot_critics SHARED
   plugins/pose_align.cpp
   plugins/velocity_obstacle.cpp
   plugins/path_forward_prefer.cpp
+  plugins/social_critic.cpp
 )
 
 target_compile_definitions(cabot_critics PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -102,6 +111,8 @@ target_compile_definitions(cabot_critics PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTI
 ament_target_dependencies(cabot_critics
   dwb_core
   dwb_critics
+  social_nav_msgs
+  rclcpp
 )
 
 ### goal checker
@@ -123,6 +134,8 @@ add_library(cabot_layers SHARED
   plugins/navcog_path_layer.cpp
   plugins/people_obstacle_layer.cpp
   plugins/navcog_path_util.cpp
+  plugins/personal_space_layer.cpp
+  plugins/sngnn_layer.cpp
 )
 
 target_compile_definitions(cabot_layers PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -132,6 +145,7 @@ ament_target_dependencies(cabot_layers
   nav2_core
   people_msgs
   pluginlib
+  rank_nav_msgs
 )
 
 ### planner plugin
@@ -351,6 +365,8 @@ set(dependencies_test
   sensor_msgs
   people_msgs
   queue_msgs
+  rank_nav_msgs
+  social_nav_msgs
   rclcpp
   nav2_lifecycle_manager
   nav2_navfn_planner

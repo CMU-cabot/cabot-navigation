@@ -45,8 +45,12 @@ class Evaluator:
         self._recording = False
         self._ready = False
         self._logger = None
-        self._metrics_to_compute = []
-        self._metrics_func_list = []
+        self._metrics_to_compute = [
+            'minimum_distance_to_people',
+            'minimum_distance_to_child',
+            'minimum_distance_to_adult'
+        ]
+        self._metrics_func_list = [getattr(evaluation_metrics, metric) for metric in self._metrics_to_compute]
 
         # self evaluation parameters
         self._robot_radius = None

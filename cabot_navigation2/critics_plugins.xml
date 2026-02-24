@@ -22,6 +22,9 @@
 
 <class_libraries>
   <library path="cabot_critics">
+    <class type="cabot_navigation2::SocialCritic" base_class_type="dwb_core::TrajectoryCritic">
+      <description>Critics with VLMSocNav</description>
+    </class>
     <class type="dwb_critics::PoseAlignCritic" base_class_type="dwb_core::TrajectoryCritic">
       <description>Penalize trajectories with not aligning pose</description>
     </class>

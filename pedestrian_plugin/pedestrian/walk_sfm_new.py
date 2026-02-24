@@ -85,7 +85,7 @@ def onUpdate(**args):
             x = st['x']
             y = st['y']
             yaw = st['yaw']
-            vel = args['velocity']
+            vel = st.get('velocity', 1.0)
             vx = vel*math.cos(yaw)
             vy = vel*math.sin(yaw)
             gx = x + math.cos(yaw) if st['goal_x'] is None else st['goal_x']
@@ -94,7 +94,7 @@ def onUpdate(**args):
             indicies[key] = index
             index += 1
         # add robot state
-        if pRobot:
+        if pRobot and robot:
             rx = robot['x']
             ry = robot['y']
             drx = rx - pRobot['x']
@@ -103,14 +103,19 @@ def onUpdate(**args):
             ryaw = robot['yaw']
             rvx = rv * math.cos(ryaw)
             rvy = rv * math.sin(ryaw)
-            grx = robot['x'] + math.cos(yaw)
-            gry = robot['y'] + math.sin(yaw)
+            grx = robot['x'] + math.cos(ryaw)
+            gry = robot['y'] + math.sin(ryaw)
             temp.append([rx, ry, rvx, rvy, grx, gry])
 
         # here needs to be hacked a bit
-        sim.peds = pysocialforce.scene.PedState(np.array(temp), None, sim.scene_config)
-        sim.forces = sim.make_forces(sim.config)
-        sim.step(1)
+        try:
+            sim.peds = pysocialforce.scene.PedState(np.array(temp, dtype=np.float64), None, sim.scene_config)
+            sim.forces = sim.make_forces(sim.config)
+            sim.step(1)
+        except Exception as e:
+            ros.info(f"Error in simulation step: {e}")
+            import traceback
+            ros.info(traceback.format_exc())
 
         # debug outpu
         if count == 0:

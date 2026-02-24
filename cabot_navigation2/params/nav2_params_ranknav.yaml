@@ -55,7 +55,7 @@ footprint_publisher:
 people_vis:
   ros__parameters:
     use_sim_time: True
-    people_topic: "/people"
+    people_topic: "people"
     vis_topic: "people_vis"
 
 grid_map_visualization:
@@ -259,11 +259,6 @@ controller_server:
       angular_granularity: 0.025
       transform_tolerance: 0.5
       critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
-      # critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign", "SocialCritic"]
-      # SocialCritic:
-      #   class: cabot_navigation2::SocialCritic
-      #   scale: 32.0
-
       PathForwardPrefer:
         class: dwb_critics::PathForwardPreferCritic
         scale: 24.0
@@ -271,7 +266,7 @@ controller_server:
       VelocityBaseObstacle:
         class: dwb_critics::VelocityObstacleCritic
         #class: dwb_critics::BaseObstacleCritic
-        scale: 60.0 # default: 1.0
+        scale: 24.0 # default: 1.0
         sum_scores: False # default: False
         low_speed_threshold: 0.3
         cost_threshold: 96.0
@@ -383,12 +378,21 @@ local_costmap:
       width: 8
       height: 8
       resolution: 0.05
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer", "personal_space_layer"]
       robot_radius: 0.45
+      personal_space_layer:
+        plugin: "cabot_navigation2::PersonalSpaceLayer"
+        enabled: true
+        update_width: 5.0
+        update_height: 5.0
+        max_cost: 252.0  # Maximum cost at center (x,y), avoiding 253-255 reserved values
+        min_cost: 50.0
+        cost_threshold: 0.35  # Cost values below this threshold are rounded to 0
+        timeout_duration: 2.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.75
+        inflation_radius: 0.4
         cost_scaling_factor: 5.0
       obstacle_layer:
         # plugin: "cabot_navigation2::TemporalObstacleLayer"
@@ -460,14 +464,23 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       use_sim_time: True
-      plugins: ["static_layer", "obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "low_obstacle_layer", "inflation_layer", "personal_space_layer"]
       robot_radius: 0.45
       resolution: 0.05
       track_unknown_space: False
+      personal_space_layer:
+        plugin: "cabot_navigation2::PersonalSpaceLayer"
+        enabled: True
+        update_width: 7.5
+        update_height: 7.5
+        max_cost: 252.0  # Maximum cost at center (x,y), avoiding 253-255 reserved values
+        min_cost: 180.0
+        cost_threshold: 0.35  # Cost values below this threshold are rounded to 0
+        timeout_duration: 2.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # robot_radius + safe_margin
-        inflation_radius: 0.75
+        inflation_radius: 0.4
         cost_scaling_factor: 5.0
       obstacle_layer:
         plugin: "cabot_navigation2::TemporalObstacleLayer"
@@ -561,7 +574,7 @@ planner_server:
     bond_timeout: 30.0
     bond_connect_timeout: 30.0
     bond_heartbeat_period: 1.0
-    expected_planner_frequency: 2.0
+    expected_planner_frequency: 10.0
     use_sim_time: True
     planner_plugins: ["GridBased", "NavCog", "CaBot"]
     GridBased:

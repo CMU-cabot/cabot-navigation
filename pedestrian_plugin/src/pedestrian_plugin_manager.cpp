@@ -168,7 +168,12 @@ PedestrianPluginManager::PedestrianPluginManager()
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(node_->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  people_pub_ = node_->create_publisher<people_msgs::msg::People>("/people", 10);
+  if (!node_->has_parameter("pedestrian_plugin.people_topic")) {
+    node_->declare_parameter<std::string>("pedestrian_plugin.people_topic", "/people_ground_truth");
+  }
+  std::string people_topic = node_->get_parameter("pedestrian_plugin.people_topic").as_string();
+
+  people_pub_ = node_->create_publisher<people_msgs::msg::People>(people_topic, 10);
   collision_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Collision>("/collision_person", 10);
   metric_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Metric>("/metric", 10);
   robot_pub_ = node_->create_publisher<pedestrian_plugin_msgs::msg::Agent>("/robot_states", 10);

@@ -30,6 +30,15 @@ services:
     profiles:
       - build
 
+  people:
+    extends:
+      file: ../cabot-people/docker-compose-base.yaml
+      service: people-all-dev-base
+    volumes:
+      - ../docker/home:/home/developer
+    profiles:
+      - build
+
   localization:
     extends:
       file: docker-compose-common.yaml
@@ -49,6 +58,8 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: navigation-dev
+    volumes:
+      - ./LIRS-HMLG:/home/developer/models/LIRS-HMLG
     profiles:
       - dev
 
@@ -56,6 +67,8 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: gazebo-dev
+    volumes:
+      - ./LIRS-HMLG:/home/developer/models/LIRS-HMLG
     profiles:
       - dev
 
@@ -72,6 +85,18 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: localization-dev
+    profiles:
+      - dev
+
+  people-dev:
+    extends:
+      file: ../cabot-people/docker-compose-base.yaml
+      service: people-all-dev-base
+    environment:
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
+    volumes:
+      - ../docker/home:/home/developer
     profiles:
       - dev
 
@@ -103,6 +128,18 @@ services:
     extends:
       file: docker-compose-common.yaml
       service: localization-prod
+    profiles:
+      - prod
+
+  people-prod:
+    extends:
+      file: ../cabot-people/docker-compose-base.yaml
+      service: people-all-prod-base
+    environment:
+      - CABOT_GAZEBO=1
+      - CABOT_USE_SIM_TIME=1
+    volumes:
+      - ../docker/home/.ros:/home/developer/.ros
     profiles:
       - prod
 
