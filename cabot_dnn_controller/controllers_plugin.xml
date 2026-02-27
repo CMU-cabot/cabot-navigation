@@ -1,0 +1,10 @@
+<class_libraries>
+  <library path="dnn_controllers">
+    <class type="cabot_dnn_controller::DaggerController" base_class_type="nav2_core::Controller">
+      <description>Cabot Dagger Controller</description>
+    </class>
+    <class type="cabot_dnn_controller::DnnController" base_class_type="nav2_core::Controller">
+      <description>Cabot DNN Controller</description>
+    </class>
+  </library>
+</class_libraries>

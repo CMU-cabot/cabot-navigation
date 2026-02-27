@@ -87,6 +87,7 @@ RUN apt update && \
     python3-sklearn \
     python3-venv \
     qtbase5-dev \
+    ros-$ROS_DISTRO-cv-bridge \
     ros-$ROS_DISTRO-diagnostic-aggregator \
     ros-$ROS_DISTRO-gazebo-msgs \
     ros-$ROS_DISTRO-image-transport-plugins \
@@ -116,6 +117,31 @@ RUN apt update && \
     xterm \
     gosu \
     && \
+    rm -rf /var/lib/apt/lists/*
+
+# install CUDA toolkit, TensorRT packages
+RUN apt update && \
+    apt install -y --no-install-recommends \
+    software-properties-common \
+    && \
+    rm -rf /var/lib/apt/lists/*
+RUN CUDA_V="12.9" TENSORRT_DEB_V="10.15.1.29-1+cuda13.1" && \
+    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+    add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
+    apt update && \
+    apt-get install -y --no-install-recommends \
+    cuda-toolkit-${CUDA_V} \
+    libnvinfer-dev=${TENSORRT_DEB_V} \
+    libnvinfer-headers-dev=${TENSORRT_DEB_V} \
+    libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
+    libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
+    libnvinfer-plugin10=${TENSORRT_DEB_V} \
+    libnvinfer-vc-plugin10=${TENSORRT_DEB_V} \
+    libnvinfer10=${TENSORRT_DEB_V} \
+    libnvonnxparsers10=${TENSORRT_DEB_V} \ 
+    python3-libnvinfer=${TENSORRT_DEB_V} \
+    && \
+    apt clean && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir \
@@ -189,6 +215,7 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot src/cabot
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_bt src/cabot_bt
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot-description/cabot_description src/cabot_description
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_diagnostics src/cabot_diagnostics
+COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_dnn_controller src/cabot_dnn_controller
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_gazebo src/cabot_gazebo
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_navigation2 src/cabot_navigation2
 COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./cabot_ui src/cabot_ui
@@ -244,6 +271,7 @@ RUN apt update && \
     python3-sklearn \
     python3-venv \
     qtbase5-dev \
+    ros-$ROS_DISTRO-cv-bridge \
     ros-$ROS_DISTRO-diagnostic-aggregator \
     ros-$ROS_DISTRO-gazebo-msgs \
     ros-$ROS_DISTRO-image-transport-plugins \
@@ -261,7 +289,7 @@ RUN apt update && \
     libgeographic-dev \
 # workaround end
     ros-$ROS_DISTRO-rosbridge-server \
-    ros-$ROS_DISTRO-ros-testing \
+    ros-$ROS_DISTRO-ros-testing \   
     ros-$ROS_DISTRO-rqt-robot-monitor \
     ros-$ROS_DISTRO-teleop-twist-keyboard \
     ros-$ROS_DISTRO-tf-transformations \
@@ -271,6 +299,31 @@ RUN apt update && \
     xterm \
     gosu \
     && \
+    rm -rf /var/lib/apt/lists/*
+
+# install CUDA toolkit, TensorRT packages
+RUN apt update && \
+    apt install -y --no-install-recommends \
+    software-properties-common \
+    && \
+    rm -rf /var/lib/apt/lists/*
+RUN CUDA_V="12.9" TENSORRT_DEB_V="10.15.1.29-1+cuda13.1" && \
+    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+    add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
+    apt update && \
+    apt-get install -y --no-install-recommends \
+    cuda-toolkit-${CUDA_V} \
+    libnvinfer-dev=${TENSORRT_DEB_V} \
+    libnvinfer-headers-dev=${TENSORRT_DEB_V} \
+    libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
+    libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
+    libnvinfer-plugin10=${TENSORRT_DEB_V} \
+    libnvinfer-vc-plugin10=${TENSORRT_DEB_V} \
+    libnvinfer10=${TENSORRT_DEB_V} \
+    libnvonnxparsers10=${TENSORRT_DEB_V} \ 
+    python3-libnvinfer=${TENSORRT_DEB_V} \
+    && \
+    apt clean && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir \

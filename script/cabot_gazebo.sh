@@ -81,6 +81,8 @@ function signal() {
 # initialize environment variables
 # required variables
 : ${CABOT_SIDE:=left}
+: ${CABOT_CONTROLLER:=dwb}
+: ${CABOT_CONTROLLER_TRT_MODEL:=}
 : ${CABOT_SITE:=}
 : ${CABOT_MODEL:=}
 : ${CABOT_USE_GNSS:=0}
