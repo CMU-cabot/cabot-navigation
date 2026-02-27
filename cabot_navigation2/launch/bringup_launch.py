@@ -55,6 +55,8 @@ def generate_launch_description():
     autostart = LaunchConfiguration('autostart')
     footprint_radius = LaunchConfiguration('footprint_radius')
     offset = LaunchConfiguration('offset')
+    controller = LaunchConfiguration('controller')
+    trt_model = LaunchConfiguration('trt_model')
     cabot_side = LaunchConfiguration('cabot_side')
     low_obstacle_detect_version = LaunchConfiguration('low_obstacle_detect_version')
     publish_low_obstacle_ground = LaunchConfiguration('publish_low_obstacle_ground')
@@ -89,6 +91,14 @@ def generate_launch_description():
         param_rewrites=param_substitutions,
         convert_types=True)
 
+    configured_params_dnn_controller = RewrittenYaml(
+        source_file=os.path.join(pkg_dir, 'params', 'nav2_params_dnn_controller.yaml'),
+        root_key=namespace,
+        param_rewrites={
+            'trt_model': trt_model,
+        },
+        convert_types=True)
+
     param_substitutions2 = {
         'use_sim_time': use_sim_time,
         'autostart': autostart,
@@ -103,6 +113,14 @@ def generate_launch_description():
         source_file=params_file2,
         root_key="local",
         param_rewrites=param_substitutions2,
+        convert_types=True)
+
+    configured_params2_dnn_controller = RewrittenYaml(
+        source_file=os.path.join(pkg_dir, 'params', 'nav2_params2_dnn_controller.yaml'),
+        root_key="local",
+        param_rewrites={
+            'trt_model': trt_model,
+        },
         convert_types=True)
 
     return LaunchDescription([
@@ -163,6 +181,14 @@ def generate_launch_description():
             description='Normal offset'),
 
         DeclareLaunchArgument(
+            'controller', default_value=EnvironmentVariable('CABOT_CONTROLLER', default_value='dwb'),
+            description='Controller type (dwb or dnn)'),
+
+        DeclareLaunchArgument(
+            'trt_model', default_value=EnvironmentVariable('CABOT_CONTROLLER_TRT_MODEL', default_value=''),
+            description='TensorRT model path for dnn controller'),
+
+        DeclareLaunchArgument(
             'cabot_side', default_value='left',
             description='cabot side (left -> user stands right) left/right'),
 
@@ -188,6 +214,19 @@ def generate_launch_description():
             output=output,
             parameters=[configured_params],
             remappings=remappings,
+            condition=IfCondition(PythonExpression(["'", controller, "' != 'dnn'"]))
+        ),
+
+        Node(
+            package='nav2_controller',
+            executable='controller_server',
+            name='controller_server',
+            respawn=True,
+            respawn_delay=2.0,
+            output=output,
+            parameters=[configured_params, configured_params_dnn_controller],
+            remappings=remappings,
+            condition=IfCondition(PythonExpression(["'", controller, "' == 'dnn'"]))
         ),
 
         Node(
@@ -260,6 +299,21 @@ def generate_launch_description():
             parameters=[configured_params2],
             remappings=remappings2,
             #            arguments=["--ros-args", "--log-level", "debug"]
+            condition=IfCondition(PythonExpression(["'", controller, "' != 'dnn'"]))
+        ),
+
+        Node(
+            package='nav2_controller',
+            executable='controller_server',
+            name='controller_server',
+            namespace='local',
+            respawn=True,
+            respawn_delay=2.0,
+            output=output,
+            parameters=[configured_params2, configured_params2_dnn_controller],
+            remappings=remappings2,
+            #            arguments=["--ros-args", "--log-level", "debug"]
+            condition=IfCondition(PythonExpression(["'", controller, "' == 'dnn'"]))
         ),
 
         Node(

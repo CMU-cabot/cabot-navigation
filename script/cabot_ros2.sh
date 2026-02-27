@@ -82,6 +82,8 @@ function signal() {
 # initialize environment variables
 # required variables
 : ${CABOT_SIDE:=left}
+: ${CABOT_CONTROLLER:=dwb}
+: ${CABOT_CONTROLLER_TRT_MODEL:=}
 : ${CABOT_SITE:=}
 : ${CABOT_MODEL:=}
 : ${CABOT_TOUCH_PARAMS:=}
@@ -255,7 +257,11 @@ com="$command_prefix ros2 launch -n cabot_navigation2 bringup_launch.py \
     cabot_side:=$CABOT_SIDE \
     low_obstacle_detect_version:=$CABOT_LOW_OBSTABLE_DETECT_VERSION \
     publish_low_obstacle_ground:=$publish_low_obstacle_ground \
-    $command_postfix"
+    controller:=$CABOT_CONTROLLER "
+if [[ ! -z $CABOT_CONTROLLER_TRT_MODEL ]]; then
+    com+="trt_model:='$CABOT_CONTROLLER_TRT_MODEL' "
+fi
+com+=$command_postfix
 echo $com
 eval $com
 checks+=($!)

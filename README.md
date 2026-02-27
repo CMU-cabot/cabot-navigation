@@ -7,6 +7,7 @@
 |[cabot](./cabot)|This package includes cabot basic functions|
 |[cabot_bt](./cabot_bt)|cabot behavior trees (BT), BT plugins, and some utilities|
 |[cabot_description](./cabot_description)|robot URDF description|
+|[cabot_dnn_controller](./cabot_dnn_controller)|cabot DNN controller|
 |[cabot_gazebo](./cabot_gazebo)|robot launch files for gazebo environment, counter part of cabot package|
 |[cabot_mf_localization](./cabot_mf_localization)|launch file and script for launching multi floor localization using RF signals (WiFi/BLE) and cartographer|
 |[cabot_msgs](./cabot_msgs)|cabot message definition|
@@ -114,6 +115,8 @@ popd
   CABOT_USE_GNSS       # to use GNSS fix for localization (default=0)
   CABOT_ANNOUNCE_NO_TOUCH # announce when the reason robot is stopped is NO_TOUCH(default=false)
   CABOT_SIDE           # left: user stands on the right, right: user stands on the left
+  CABOT_CONTROLLER     # controller type for nav2 (default=dwb, set dnn to use DNN controller)
+  CABOT_CONTROLLER_TRT_MODEL # TensorRT model path used when CABOT_CONTROLLER=dnn
   CYCLONEDDS_NETWORK_INTERFACE_NAME # to specify network interface name for Cyclone DDS
   CABOT_HANDLE_BUTTON_MAPPING # specify button mapping of handle
                               # (default=2, see [detail](./cabot_ui/README.md))
