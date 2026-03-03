@@ -920,7 +920,20 @@ class NavGoal(Goal):
     def nav_params(self):
         new_mode = self.navcog_routes[self.route_index][2]
         self.mode = new_mode
-        return Nav2Params.get_parameters_for(new_mode)
+        params = Nav2Params.get_parameters_for(new_mode)
+        if new_mode == geojson.NavigationMode.Standard:
+            follow_exact_path_enabled = False
+            getter = getattr(self.delegate, "get_follow_exact_path_enabled", None)
+            if callable(getter):
+                follow_exact_path_enabled = bool(getter())
+            if follow_exact_path_enabled:
+                params = copy.deepcopy(params)
+                params.setdefault("/planner_server", {})["CaBot.ignore_people"] = True
+                params.setdefault("/planner_server", {})["CaBot.path_width"] = 0.0
+                params.setdefault("/planner_server", {})["CaBot.path_adjusted_minimum_path_width"] = 0.0
+                params.setdefault("/planner_server", {})["CaBot.min_iteration_count"] = 5
+                params.setdefault("/planner_server", {})["CaBot.max_iteration_count"] = 10
+        return params
 
     def enter(self):
         CaBotRclpyUtil.info("NavGoal enter")
