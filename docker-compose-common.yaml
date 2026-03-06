@@ -263,6 +263,57 @@ services:
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
 
+  localllm-base:
+    image: cmucal/cabot-localllm:${CABOT_LAUNCH_IMAGE_TAG:-latest}
+    build:
+      context: ./docker/localllm
+      additional_contexts:
+        cabot_src: ./
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-localllm
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        output:
+          - type=registry
+    # ports:
+    #   - "127.0.0.1:8002:8002"
+    environment:
+      - HOST_UID
+      - HOST_GID
+      - HOST_TZ
+      - DISPLAY
+      - LOCAL_LLM_SERVER_PORT
+      - LOCAL_LLM_MODEL_ID
+      - LOCAL_LLM_DTYPE
+      - LOCAL_LLM_DEVICE_MAP
+      - LOCAL_LLM_TRUST_REMOTE_CODE
+      - LOCAL_LLM_IMAGE_TOKEN
+      - HUGGINGFACE_HUB_TOKEN
+      - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,video,display
+      - NVIDIA_VISIBLE_DEVICES=all
+    privileged: true
+    network_mode: host
+    command: uvicorn server.local_llm_app:app --host 127.0.0.1 --port ${LOCAL_LLM_SERVER_PORT:-8002}
+
+  localllm:
+    extends: localllm-base
+
+  localllm-dev:
+    extends: localllm
+    volumes:
+      - ./mf_app:/home/developer/mf_app
+      - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
+    command: uvicorn server.local_llm_app:app --host 127.0.0.1 --port ${LOCAL_LLM_SERVER_PORT:-8002} --reload
+
+  localllm-prod:
+    extends: localllm
+    volumes:
+      - ./docker/home/.ros:/home/developer/.ros
+      - ./docker/home/.cache:/home/developer/.cache
+
   navigation-base:
     extends: ros2-base
     environment:

@@ -130,6 +130,10 @@ class CabotUIManager(NavigationInterface, object):
         self.free_mode_end_userfree_movement_time = self._node.declare_parameter('free_mode_end_userfree_movement_time', 0.5).value
 
         self.cabot_vlm_use_button = self._node.declare_parameter('cabot_vlm_use_button', True).value
+        self.cabot_vlm_backend = self._node.declare_parameter('cabot_vlm_backend', 'local').value
+        if self.cabot_vlm_backend not in ("gpt", "local"):
+            self._logger.warn(f"Unknown cabot_vlm_backend={self.cabot_vlm_backend}, fallback to gpt")
+            self.cabot_vlm_backend = "gpt"
 
         self.cabot_allowed_modes_bitmask = self._node.declare_parameter('cabot_allowed_modes_bitmask', 15).value
 
@@ -176,7 +180,6 @@ class CabotUIManager(NavigationInterface, object):
 
         if self.cabot_vlm_use_button:
             self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.String, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
-            self._vlmButtonPub.publish(std_msgs.msg.String(data="all"))
 
         self._switchModePub = self._node.create_publisher(std_msgs.msg.Int8, "/shared_control_mode", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -996,6 +999,17 @@ class CabotUIManager(NavigationInterface, object):
             self._interface.set_pause_control(False)
             self._navigation.set_pause_control(False)
 
+    def _publish_vlm_button(self, direction: str):
+        self._logger.info(f"[MASAKI]Publishing VLM button request: {data}")
+        if not self.cabot_vlm_use_button or not hasattr(self, "_vlmButtonPub"):
+            return
+        data = direction
+        if self.cabot_vlm_backend == "local":
+            data = f"local:{direction}"
+        elif self.cabot_vlm_backend == "gpt":
+            data = f"gpt:{direction}"
+        self._vlmButtonPub.publish(std_msgs.msg.String(data=data))
+
     def _process_exploration_event(self, event):
         self._logger.info(f"process_exploration_event {str(event)}")
         if event.type != ExplorationEvent.TYPE:
@@ -1525,13 +1539,13 @@ class EventMapper1(object):
         if event.type == "click" and event.count == 1:
             if self.delegate.cabot_vlm_use_button:
                 if event.buttons == cabot_common.button.BUTTON_UP:
-                    self.delegate._vlmButtonPub.publish(std_msgs.msg.String(data="front"))
+                    self.delegate._publish_vlm_button("front")
                     return []
                 elif event.buttons == cabot_common.button.BUTTON_LEFT:
-                    self.delegate._vlmButtonPub.publish(std_msgs.msg.String(data="left"))
+                    self.delegate._publish_vlm_button("left")
                     return []
                 elif event.buttons == cabot_common.button.BUTTON_RIGHT:
-                    self.delegate._vlmButtonPub.publish(std_msgs.msg.String(data="right"))
+                    self.delegate._publish_vlm_button("right")
                     return []
             
         return None

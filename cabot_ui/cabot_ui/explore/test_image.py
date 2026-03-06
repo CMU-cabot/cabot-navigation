@@ -70,6 +70,17 @@ class Direction(Enum):
         FRONT = "front"
         RIGHT = "right"
 
+
+def parse_vlm_button_message(data: str):
+    backend = "gpt"
+    direction = data
+    if data and ":" in data:
+        candidate_backend, candidate_direction = data.split(":", 1)
+        if candidate_backend in {"gpt", "local"}:
+            backend = candidate_backend
+            direction = candidate_direction
+    return backend, direction
+
 class CaBotImageNode(Node):
     def __init__(self, use_left: bool = True, use_right: bool = True):
         super().__init__("cabot_image_node")
@@ -213,7 +224,8 @@ class CaBotImageNode(Node):
         self.logger.info(f"Received VLM button message: {msg.data}")
         if msg.data:
             try:
-                self.describe(direction=Direction(msg.data))
+                backend, direction = parse_vlm_button_message(msg.data)
+                self.describe(direction=Direction(direction), backend=backend)
             except ValueError:
                 self.logger.error(f"Invalid direction received from VLM button: {msg.data}")
 
@@ -358,17 +370,17 @@ class CaBotImageNode(Node):
 
         return image
 
-    def describe(self, direction = Direction.ALL):
+    def describe(self, direction = Direction.ALL, backend="gpt"):
         camera_ready = self.realsense_ready
-        self.logger.info(f"Describe called. camera_ready: {camera_ready}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, direction: {direction}")
+        self.logger.info(f"Describe called. camera_ready: {camera_ready}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}, direction: {direction}, backend: {backend}")
         if direction == Direction.ALL:
-            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image, backend=backend)
         elif direction == Direction.LEFT:
-            wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
+            wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None, backend=backend)
         elif direction == Direction.FRONT:
-            wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
+            wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None, backend=backend)
         elif direction == Direction.RIGHT:
-            wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
+            wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image, backend=backend)
         else:
             self.logger.error(f"Invalid direction: {direction}")
             return
@@ -418,6 +430,10 @@ class GPTExplainer():
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
+        self.openai_chat_completions_url = os.environ.get("CABOT_VLM_OPENAI_URL", "https://api.openai.com/v1/chat/completions")
+        self.local_llm_chat_completions_url = os.environ.get("CABOT_LOCAL_LLM_CHAT_COMPLETIONS_URL", "http://127.0.0.1:8002/v1/chat/completions")
+        self.local_llm_model = os.environ.get("CABOT_LOCAL_LLM_MODEL_ID", "sbintuitions/sarashina2.2-vision-3b")
+        self.default_vlm_backend = os.environ.get("CABOT_VLM_DEFAULT_BACKEND", "gpt")
         if self.mode == "semantic_map_mode":
             self.prompt = """
             ### 指示
@@ -500,7 +516,7 @@ class GPTExplainer():
 
         self.should_speak = should_speak
         self.conversation_history = []
-        test_inference = self.query_with_images(prompt="test", images=[])
+        test_inference = self.query_with_images(prompt="test", images=[], backend=self.default_vlm_backend)
         self.okay_images = False
 
         if  self.mode == "semantic_map_mode":
@@ -531,7 +547,7 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray]) -> float:
+    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], backend: str = "gpt") -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
@@ -581,7 +597,7 @@ class GPTExplainer():
                 return 1.0, "エラー"
 
             self.logger.info(f"Persona: {self.persona} Prompt: {prompt}")
-            gpt_response = self.query_with_images(prompt, images)
+            gpt_response = self.query_with_images(prompt, images, backend=backend)
             gpt_response["log_dir"] = self.log_dir
 
             # get front/left/right availability
@@ -687,7 +703,7 @@ class GPTExplainer():
         else:
             return None
 
-    def query_with_images(self, prompt, images, max_tokens=2000) -> Dict[str, Any]:
+    def query_with_images(self, prompt, images, max_tokens=2000, backend: str = "gpt") -> Dict[str, Any]:
         # Preparing the content with the prompt and images
         new_content = [{"type": "text", "text": prompt}]
         self.conversation_history.append({"role": "user", "content": copy(new_content)})
@@ -705,30 +721,38 @@ class GPTExplainer():
         else:
             new_input = [{"role": "user", "content": new_content}]
 
+        model_name = "gpt-4o-mini"
+        endpoint = self.openai_chat_completions_url
+        headers = self.headers
+        if backend == "local":
+            model_name = self.local_llm_model
+            endpoint = self.local_llm_chat_completions_url
+            headers = {"Content-Type": "application/json"}
+
         payload = {
-            "model": "gpt-4o-mini",
+            "model": model_name,
             "messages": new_input,
             "max_tokens": max_tokens
         }
 
         self.logger.info(f"Payload size: {sys.getsizeof(str(payload))} bytes")
 
-        self.logger.info("Sending the request to OpenAI API...")
+        self.logger.info(f"Sending the request to VLM backend={backend} endpoint={endpoint} ...")
         request_start = time.time()
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
+        response = requests.post(endpoint, headers=headers, json=payload)
         try:
             res_json = response.json()
             extracted_json = self.extract_json_part(res_json["choices"][0]["message"]["content"])
             res_json["choices"][0]["message"]["content"] = extracted_json
 
             request_elapsed = time.time() - request_start
-            self.logger.info("OpenAI API Request success.")
+            self.logger.info(f"VLM backend request success ({backend}).")
             self.logger.info(f"Mode: {self.mode} Received response ({request_elapsed:.3f}s)")
             self.conversation_history.append({"role": "system", "content": str(res_json["choices"][0]["message"]["content"])})
         except Exception as e:
-            self.logger.info(f"OpenAI API Request failed. Error message: {e}")
-            self.logger.info(f"OpenAI Error Response: {response}")
-            res_json = {"choices": [{"message": {"content": "Error", "role": "assistant"}}]}
+            self.logger.info(f"VLM backend request failed ({backend}). Error message: {e}")
+            self.logger.info(f"VLM backend error response: {response}")
+            res_json = {"choices": [{"message": {"content": response, "role": "assistant"}}]}
         
         return res_json
 

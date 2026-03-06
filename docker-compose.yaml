@@ -128,6 +128,28 @@ services:
     profiles:
       - prod
 
+  # local llm
+  localllm:
+    extends:
+      file: docker-compose-common.yaml
+      service: localllm
+    profiles:
+      - build
+
+  localllm-dev:
+    extends:
+      file: docker-compose-common.yaml
+      service: localllm-dev
+    profiles:
+      - dev
+
+  localllm-prod:
+    extends:
+      file: docker-compose-common.yaml
+      service: localllm-prod
+    profiles:
+      - prod
+
   # map server
   map_server:
     extends:

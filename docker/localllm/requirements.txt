@@ -1,0 +1,13 @@
+accelerate
+einops
+fastapi
+huggingface_hub
+pillow
+protobuf
+requests
+safetensors
+sentencepiece
+timm
+torchvision
+transformers==4.57.1
+uvicorn
