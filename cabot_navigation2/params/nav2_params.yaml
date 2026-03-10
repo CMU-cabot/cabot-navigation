@@ -559,7 +559,8 @@ planner_server:
     bond_heartbeat_period: 1.0
     expected_planner_frequency: 2.0
     use_sim_time: True
-    planner_plugins: ["GridBased", "NavCog", "CaBot"]
+    planner_plugins: ["GridBased", "NavCog", "CaBot", "PathForward"]
+    # planner_plugins: ["PathForward"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
@@ -586,6 +587,10 @@ planner_server:
       safe_margin: 0.25
       path_length_to_width_factor: 1.0
       adjust_start: true
+    PathForward:
+      plugin: "cabot_navigation2/CabotPathForwardPlanner"
+      path_topic: "/path"
+      path_resolution: 0.05
 
 
 planner_server_rclcpp_node:
