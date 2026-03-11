@@ -60,6 +60,11 @@ CheckPathCondition::~CheckPathCondition()
 
 void CheckPathCondition::path_callback(const nav_msgs::msg::Path::SharedPtr msg)
 {
+  if (!msg) {
+    RCLCPP_WARN(node_->get_logger(), "Received null path message");
+    return;
+  }
+
   nav_msgs::msg::Path target_path = *msg;
 
   normalize_path(target_path);
@@ -70,7 +75,11 @@ void CheckPathCondition::path_callback(const nav_msgs::msg::Path::SharedPtr msg)
 
 void CheckPathCondition::normalize_path(nav_msgs::msg::Path & path)
 {
-  double MIN_DIST = 0.1;
+  if (path.poses.size() < 2) {
+    return;
+  }
+
+  const double MIN_DIST = 0.1;
   auto dist = [](geometry_msgs::msg::PoseStamped p1, geometry_msgs::msg::PoseStamped p2) {
       auto dx = p1.pose.position.x - p2.pose.position.x;
       auto dy = p1.pose.position.y - p2.pose.position.y;
@@ -120,6 +129,10 @@ void CheckPathCondition::normalize_path(nav_msgs::msg::Path & path)
 
 void CheckPathCondition::correct_orientation(nav_msgs::msg::Path & path)
 {
+  if (path.poses.size() < 2) {
+    return;
+  }
+
   for (uint64_t i = 0; i < path.poses.size() - 1; i++) {
     double yaw = atan2(
       path.poses[i + 1].pose.position.y - path.poses[i].pose.position.y,

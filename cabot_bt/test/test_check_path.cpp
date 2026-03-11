@@ -120,6 +120,20 @@ TEST_F(CheckPathConditionTest, TestSimilarEnough3) {
   EXPECT_TRUE(result);
 }
 
+TEST_F(CheckPathConditionTest, TestPathCallbackWithNullptr) {
+  check_path_condition_->path_callback(nullptr);
+}
+
+TEST_F(CheckPathConditionTest, TestPathCallbackWithSinglePose) {
+  nav_msgs::msg::Path path;
+  geometry_msgs::msg::PoseStamped pose;
+  pose.pose.position.x = 1.0;
+  pose.pose.position.y = 2.0;
+  path.poses.push_back(pose);
+
+  check_path_condition_->path_callback(std::make_shared<nav_msgs::msg::Path>(path));
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
