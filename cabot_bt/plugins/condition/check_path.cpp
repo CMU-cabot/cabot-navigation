@@ -153,7 +153,7 @@ bool CheckPathCondition::check_path()
     return path_okay_;
   }
 
-  if (path_.poses.size() == 0 || target_path_.poses.size() == 0) {
+  if (path_.poses.size() < 2 || target_path_.poses.size() < 2) {
     return path_okay_;
   }
 
