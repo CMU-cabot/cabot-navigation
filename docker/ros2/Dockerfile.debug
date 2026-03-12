@@ -115,6 +115,7 @@ RUN apt update && \
     ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     ros-$ROS_DISTRO-rosbag2-storage-mcap \
     xterm \
+    gosu \
     && \
     rm -rf /var/lib/apt/lists/*
 
@@ -171,11 +172,10 @@ RUN usermod -aG video $USERNAME
 
 # install entrypoint
 COPY launch.sh /
+COPY ros_entrypoint.sh /ros_entrypoint.sh
 
 # change location of ros base
 RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
-
-USER $USERNAME
 
 ENV HOME /home/$USERNAME
 
