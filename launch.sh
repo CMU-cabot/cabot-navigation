@@ -42,11 +42,10 @@ function ctrl_c() {
         done
 
         red "kill -INT $dcpid"
-        kill -INT $dcpid
-        while kill -0 $dcpid 2> /dev/null; do
-            snore 1
-        done
-        red "$dccom down"
+        kill -INT "$dcpid" 2> /dev/null || true
+        # Reap the docker compose process to avoid leaving a zombie.
+        wait "$dcpid" 2> /dev/null || true
+        red "$ddccomccom down"
         if [ $verbose -eq 1 ]; then
             $dccom down
         else
@@ -346,7 +345,7 @@ if [[ $terminating -eq 1 ]]; then
 fi
 
 eval $com2
-dcpid=($!)
+dcpid=$!
 blue "[$dcpid] $dccom up $( echo "$(date +%s.%N) - $start" | bc -l )"
 
 
