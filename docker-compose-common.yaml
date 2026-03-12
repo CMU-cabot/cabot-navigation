@@ -91,6 +91,7 @@ services:
       - OVERRIDE_LAUNCH_PROCESS_OUTPUT
       - ROS_LOCALHOST_ONLY
       - ROS_DOMAIN_ID
+      - LIBGL_ALWAYS_SOFTWARE
       - __NV_PRIME_RENDER_OFFLOAD
       - __GLX_VENDOR_LIBRARY_NAME
       - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
@@ -154,6 +155,9 @@ services:
       - OVERRIDE_LAUNCH_PROCESS_OUTPUT
       - ROS_LOCALHOST_ONLY
       - ROS_DOMAIN_ID
+      - LIBGL_ALWAYS_SOFTWARE
+      - __NV_PRIME_RENDER_OFFLOAD
+      - __GLX_VENDOR_LIBRARY_NAME
       # ntrip client
       - NTRIP_CLIENT # rtklib, str2str_node, or ntrip_client
       - NTRIP_CLIENT_START_AT_LAUNCH=${NTRIP_CLIENT_START_AT_LAUNCH:-0}
