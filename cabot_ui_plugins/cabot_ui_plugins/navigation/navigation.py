@@ -1569,10 +1569,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
                 self._logger = nav._logger
                 self.buffer = nav.buffer
                 self.delegate = nav.delegate
-                self.future = self._node.executor.create_task(self.handler)
-                self.future.add_done_callback(lambda x: callback(True))
                 self.rate = self._nav._node.create_rate(2)
                 self.cancelled = False
+                self.future = self._node.executor.create_task(self.handler)
+                self.future.add_done_callback(lambda x: callback(True))
 
             def cancel_goal_async(self):
                 def dummy():
