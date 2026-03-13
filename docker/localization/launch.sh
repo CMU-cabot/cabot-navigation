@@ -31,7 +31,7 @@ function usage {
     echo "Please specify a valid mode"
     echo ""
     echo " Usage:"
-    echo "  $ $0 [mapping|topic_checker|localization]"
+    echo "  $ $0 [mapping|topic_checker|localization|play]"
     echo ""
 }
 
@@ -89,10 +89,16 @@ case $1 in
 	cd src/cabot_mf_localization/script
 	exec ./cabot_mf_localization.sh $@
 	;;
+
+    play)
+        shift
+        source install/setup.bash
+        cd src/cabot_mf_localization/script
+        exec ./play_localization.sh "$@"
+        ;;
     
     *)
 	red "There is no \"$1\" mode"
 	usage
 	;;
 esac
-
