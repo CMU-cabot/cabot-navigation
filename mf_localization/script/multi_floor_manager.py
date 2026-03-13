@@ -1533,6 +1533,9 @@ class MultiFloorManager:
         try:
             # convert global position on global_map_frame to lat lng
             end_time = tfBuffer.get_latest_common_time(self.global_map_frame, self.global_position_frame)  # latest available time
+            # handle not ready condition
+            if end_time.nanoseconds == 0:
+                return
             start_time = end_time - Duration(seconds=averaging_interval)
             trans_pos = tfBuffer.lookup_transform(self.global_map_frame, self.global_position_frame, end_time)
             xy = geoutil.Point(x=trans_pos.transform.translation.x, y=trans_pos.transform.translation.y)
