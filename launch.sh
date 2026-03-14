@@ -119,6 +119,7 @@ function help()
     echo "  -L                list test modules"
     echo "  -l                list test functions"
     echo "  -r                retry test when segmentation fault"
+    echo "  -N <method>       specify CABOT_NAVIGATION_METHOD"
     echo "  -T <module>       specify test module CABOT_SITE.<module> (default=tests)"
 }
 
@@ -153,7 +154,7 @@ if [ -n "$CABOT_LAUNCH_LOG_PREFIX" ]; then
     log_prefix=$CABOT_LAUNCH_LOG_PREFIX
 fi
 
-while getopts "hDE:f:HlLMn:drsS:Rti:T:uvy" arg; do
+while getopts "hDE:f:HlLMn:N:drsS:Rti:T:uvy" arg; do
     case $arg in
         h)
             help
@@ -187,6 +188,9 @@ while getopts "hDE:f:HlLMn:drsS:Rti:T:uvy" arg; do
         n)
             log_prefix=$OPTARG
             ;;
+        N)
+            export CABOT_NAVIGATION_METHOD=$OPTARG
+            ;;
         r)
             retryoption="-r"
             ;;
@@ -206,7 +210,7 @@ while getopts "hDE:f:HlLMn:drsS:Rti:T:uvy" arg; do
             title=$OPTARG
             ;;
         T)
-            module=$OPTARG
+            module=$(basename $OPTARG .py)
             ;;
         u)
             unittest=1
@@ -277,6 +281,8 @@ if [[ -n $environment ]]; then
     export ROS_DOMAIN_ID=$((20+environment))
     export CABOT_MAP_SERVER_HOST="localhost:$((9090+environment*10))/map"
     export CABOT_ROSBRIDGE_PORT=$((9090+environment*10+1))
+    export EMBEDDING_SERVER_PORT=$((8001+environment*10))
+    export EMBEDDING_SERVER_URL="http://localhost:${EMBEDDING_SERVER_PORT}"
     export GAZEBO_MASTER_URI="http://127.0.0.1:$((11345+environment))"
     launch_prefix="${launch_prefix}-env${environment}"
     ./build-docker.sh -p -i -P $launch_prefix
@@ -292,6 +298,8 @@ ln -snf $host_ros_log_dir $host_ros_log/latest
 blue "log dir is : $host_ros_log_dir"
 mkdir -p $host_ros_log_dir
 cp $scriptdir/.env $host_ros_log_dir/env-file
+echo "CABOT_NAVIGATION_METHOD=$CABOT_NAVIGATION_METHOD" >> $host_ros_log_dir/env-file
+echo "TEST_MODULE=$module" >> $host_ros_log_dir/env-file
 
 ## output launch_metadata yaml file
 ./script/output_launch_metadata.sh -i ${title:-$log_name} -o $host_ros_log_dir

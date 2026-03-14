@@ -102,6 +102,8 @@ class PedestrianManager():
         self.futures = {}
         self.spawn_index = 0
         self.spawn_service_checked = False
+        self._pending_actor_names = None   # set of actor names awaited via /human_states
+        self._pending_actor_callback = None  # called when all pending actors appear
         
         self.models = []
         self.child_models = []
@@ -146,6 +148,19 @@ class PedestrianManager():
                 if agent.name not in self.actorMap:
                     self.actorMap[agent.name] = {}
 
+        # When spawning new actors, detect readiness via /human_states instead of
+        # relying on spawn_entity service responses (which can be dropped or delayed
+        # when many concurrent requests are outstanding).
+        if self._pending_actor_names is not None:
+            current_names = {agent.name for agent in msg.agents}
+            if self._pending_actor_names.issubset(current_names):
+                actor_callback = self._pending_actor_callback
+                self._pending_actor_names = None
+                self._pending_actor_callback = None
+                logging.debug(f"All pending actors appeared in /human_states, firing callback")
+                if actor_callback:
+                    actor_callback()
+
     def check_service(self):
         if self.pedestrian_plugin_update_client.wait_for_service(timeout_sec=0):
             logging.debug("service available")
@@ -170,24 +185,13 @@ class PedestrianManager():
         if actors is None:
             logging.debug("needs to specify actors")
             return
+
+        # Reset any pending state from a previous (possibly timed-out) call.
+        self._pending_actor_names = None
+        self._pending_actor_callback = None
+
         update_actors = []
-        self.task_count = 0
-
-        def complete(future):
-            self.task_count -= 1
-            logging.debug(f"remaining task = {self.task_count}")
-            if self.task_count > 0:
-                return
-
-            def complete2(future):
-                logging.debug(f"done complete2 {future.result()}")
-                if callback:
-                    callback(future)
-            if len(update_actors) > 0:
-                self._update(actors=update_actors, callback=complete2)
-            else:
-                if callback:
-                    callback(future)
+        new_actors = []
 
         if len(actors) > 0:
             alreadyAdded = {}
@@ -199,8 +203,12 @@ class PedestrianManager():
                 if actor['name'] in self.actorMap:
                     update_actors.append(actor)
                 else:
-                    self.task_count += 1
-                    self._spawn(actor=actor, callback=complete)
+                    new_actors.append(actor)
+                    # Fire-and-forget: spawn the entity but do not wait for the
+                    # service response (responses can be dropped by DDS when many
+                    # concurrent requests are outstanding).  Completion is detected
+                    # via /human_states instead (see human_states_callback).
+                    self._spawn(actor=actor, callback=None)
             pcount = 0
             for key, value in self.actorMap.items():
                 if key not in alreadyAdded:
@@ -215,7 +223,51 @@ class PedestrianManager():
                         },
                     })
                     pcount += 1
-        if self.task_count == 0:
+
+        if new_actors:
+            # Spawn new actors and wait for them to appear in /human_states.
+            # Simultaneously send pool-update for existing actors IMMEDIATELY so
+            # that old actors are removed from the simulation early, reducing the
+            # total number of concurrently active actors and preventing Gazebo
+            # from being overloaded by two full sets of actors running at once.
+            new_actor_names = {actor['name'] for actor in new_actors}
+            logging.debug(f"Waiting for {len(new_actor_names)} new actors in /human_states: {new_actor_names}")
+
+            # Two conditions must BOTH be satisfied before calling the completion callback:
+            #   [0] all new actors have appeared in /human_states
+            #   [1] pool-update service response received for existing actors
+            #        (skipped immediately when update_actors is empty)
+            completion_flags = [False, False]
+            saved_future = [None]
+
+            def try_complete():
+                if completion_flags[0] and completion_flags[1]:
+                    if callback:
+                        callback(saved_future[0])
+
+            def on_all_spawned():
+                completion_flags[0] = True
+                try_complete()
+
+            self._pending_actor_names = new_actor_names
+            self._pending_actor_callback = on_all_spawned
+
+            if update_actors:
+                # Send pool-update immediately to get a proper ROS future and to
+                # move old actors to pool as soon as possible.
+                def pool_done(future):
+                    saved_future[0] = future
+                    completion_flags[1] = True
+                    try_complete()
+
+                self._update(actors=update_actors, callback=pool_done)
+            else:
+                # No existing actors to pool-update; skip the service call and
+                # mark that condition as already satisfied so that the completion
+                # callback fires as soon as all new actors appear in /human_states.
+                completion_flags[1] = True
+        else:
+            # All actors already existed; just send parameter updates.
             def complete1(future):
                 logging.debug(f"done complete1 {future.result()}")
                 if callback:

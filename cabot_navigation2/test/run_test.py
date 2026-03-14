@@ -96,6 +96,14 @@ def wait_test(timeout=60):
 
             while not case['done'] and time.time() - start < t:
                 rclpy.spin_once(node, timeout_sec=0.1)
+                # Early exit if collision or error was detected by a check_topic_error subscription
+                if tester.abort_current_test and not case['done']:
+                    case['done'] = True
+                    if case['success'] is None:
+                        case['success'] = False
+                        case['error'] = 'Aborted: collision/error detected'
+                    break
+
             if not case['done']:
                 case['success'] = False
                 case['error'] = f"Timeout ({t} seconds)"
@@ -138,9 +146,26 @@ class Tester:
         self.condition_list = []
         # evaluation
         self.evaluator = None
+        # collision/error abort flag
+        self.abort_current_test = False
+        # abort_enabled is False until start_evaluation() is called (i.e. after navigation destination
+        # is published). This prevents leftover queued messages on /collision_person from
+        # triggering an abort during reset_position / setup_actors.
+        self.abort_enabled = False
+        self._nav_cancel_pub = None  # lazy-initialized publisher for navigation cancel
 
     def set_evaluator(self, evaluator):
         self.evaluator = evaluator
+
+    def _send_navigation_cancel(self):
+        """Immediately publish a navigation cancel event to stop the robot."""
+        from std_msgs.msg import String as StringMsg
+        if self._nav_cancel_pub is None:
+            self._nav_cancel_pub = self.node.create_publisher(StringMsg, '/cabot/event', 10)
+        msg = StringMsg()
+        msg.data = 'navigation;cancel'
+        self._nav_cancel_pub.publish(msg)
+        logger.info("Sent navigation cancel due to collision/error detection")
 
     def add_metric_condition(self, condition):
         self.condition_list.append(condition)
@@ -200,11 +225,38 @@ class Tester:
             if test_pat and not test_pat.match(func):
                 continue
             logger.info(f"Testing {func}")
+            self.abort_current_test = False  # reset abort flag for each test case
+            self.abort_enabled = False        # disable abort until start_evaluation() is called
             self.test_func_name = func
             getattr(module, func)(self)
+
+            # If test was aborted due to collision, ensure navigation is cancelled and
+            # allow time for the cancel command to be processed before resetting for
+            # the next test case (prevents robot moving while actors are being set up).
+            if self.abort_current_test:
+                logger.warning(f"Test {func} was aborted due to collision/error. Waiting for navigation to stop...")
+                self._send_navigation_cancel()  # send once more to be safe
+                # Drain the ROS event loop briefly so the cancel message is delivered
+                cancel_wait_start = time.time()
+                while time.time() - cancel_wait_start < 3.0:
+                    rclpy.spin_once(node, timeout_sec=0.1)
+
             self.stop_evaluation()  # automatically stop metric evaluation
-            evaluation_results = self.evaluator.get_evaluation_results()
-            self.evaluator_summary[func] = self.evaluator.get_evaluation_results()
+
+            self._save_trajectory(func)
+
+            try:
+                evaluation_results = self.evaluator.get_evaluation_results()
+                self.evaluator_summary[func] = evaluation_results
+            except IndexError as e:
+                logger.warning(f"Failed to calculate metrics for {func} due to empty data (IndexError): {e}")
+                evaluation_results = []
+                self.evaluator_summary[func] = []
+            except Exception as e:
+                logger.error(f"Failed to calculate metrics for {func}: {e}")
+                evaluation_results = []
+                self.evaluator_summary[func] = []
+
             self.check_conditions(evaluation_results, func)
             self.condition_list = []
 
@@ -212,7 +264,7 @@ class Tester:
             self.register_action_result(func, self.result)
             self.cancel_subscription(func)
             allSuccess = allSuccess and success
-
+            
             if func not in self.test_summary:
                 self.test_summary[func] = {'success': 0, 'failure': 0}
             if success:
@@ -261,22 +313,101 @@ class Tester:
         test_summary_path = os.path.join(self.output_dir, 'test_summary.csv')
         test_evaluation_path = os.path.join(self.output_dir, 'test_evaluation_results.csv')
 
+        # Read existing summary if available
+        existing_summary = {}
+        if os.path.exists(test_summary_path):
+            with open(test_summary_path, mode='r', newline='') as file:
+                reader = csv.reader(file)
+                header = next(reader, None)
+                if header:
+                    for row in reader:
+                        if len(row) >= 4:
+                            # Skip Total row if it exists
+                            if row[0] == "Total":
+                                continue
+                            
+                            # Key: (module_name, case_name)
+                            # CSV format: Test module name, Test case name, Success, Failure, Rate
+                            key = (row[0], row[1])
+                            existing_summary[key] = {
+                                'success': int(row[2]),
+                                'failure': int(row[3])
+                            }
+
+        # Update existing summary with current results
+        for test_name, counts in self.test_summary.items():
+            key = (self.test_module_name, test_name)
+            if key not in existing_summary:
+                existing_summary[key] = {'success': 0, 'failure': 0}
+            
+            existing_summary[key]['success'] += counts['success']
+            existing_summary[key]['failure'] += counts['failure']
+
+        # Calculate total statistics
+        total_success = 0
+        total_failure = 0
+        for key, counts in existing_summary.items():
+            total_success += counts['success']
+            total_failure += counts['failure']
+        
+        total_count = total_success + total_failure
+        total_rate = total_success / total_count if total_count > 0 else 0.0
+
+        # Write back to file
         with open(test_summary_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Test module name", "Test case name", "Number of success", "Number of failure", "Success rate"])
-            for test_name, counts in self.test_summary.items():
+            # Sort by keys for consistent output
+            for key in sorted(existing_summary.keys()):
+                module_name, case_name = key
+                counts = existing_summary[key]
                 success_count = counts['success']
                 fail_count = counts['failure']
-                total_count = success_count + fail_count
-                success_rate = success_count / total_count if total_count > 0 else 0
-                writer.writerow([self.test_module_name, test_name, success_count, fail_count, f"{success_rate:.2f}"])
+                current_total = success_count + fail_count
+                success_rate = success_count / current_total if current_total > 0 else 0.0
+                writer.writerow([module_name, case_name, success_count, fail_count, "{:.2f}".format(success_rate)])
+            
+            # Write Total row
+            writer.writerow(["Total", "All cases", total_success, total_failure, "{:.2f}".format(total_rate)])
 
-        with open(test_evaluation_path, mode='w', newline='') as file:
+        # For evaluation results, we append to keep history if user wants history, 
+        # or overwrite if they want fresh results for this run?
+        # User asked for cumulative summary. Usually evaluation results are large.
+        # But for consistency, maybe we should append?
+        # The previous code overwrote it. Let's keep it overwrite for now OR do append?
+        # If I change summary to be cumulative, evaluation results should probably correspond to the latest run or all runs?
+        # If I append, the file grows indefinitely.
+        # However, without appending, we lose the details of previous runs that contribute to the summary.
+        # Let's assume user wants cumulative stats in summary, but maybe latest details in evaluation?
+        # Actually, let's look at the original code again. It overwrote.
+        # If I change to append, I must ensure the header is handled.
+        
+        file_exists = os.path.isfile(test_evaluation_path)
+        with open(test_evaluation_path, mode='a', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Test module name", "Test case name", "evaluator", "value"])
+            if not file_exists or os.path.getsize(test_evaluation_path) == 0:
+                writer.writerow(["Test module name", "Test case name", "evaluator", "value"])
             for test_name, results in self.evaluator_summary.items():
                 for result in results:
                     writer.writerow([self.test_module_name, test_name, result["name"], result["value"]])
+
+    def _save_trajectory(self, func_name):
+        """Save the trajectory of the robot and all actors for the given test case to a CSV file."""
+        trajectory_data = self.evaluator.get_trajectory_data()
+        if not trajectory_data:
+            logger.info(f"No trajectory data to save for {func_name}")
+            return
+        trajectory_path = os.path.join(self.output_dir, f'trajectory_{func_name}.csv')
+        fieldnames = [
+            'timestamp_sec', 'elapsed_sec', 'entity_name', 'entity_type',
+            'pos_x', 'pos_y', 'pos_z', 'yaw',
+            'quat_x', 'quat_y', 'quat_z', 'quat_w',
+        ]
+        with open(trajectory_path, mode='w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(trajectory_data)
+        logger.info(f"Trajectory saved to {trajectory_path} ({len(trajectory_data)} rows)")
 
     def register_action_result(self, target_function_name, case):
         if target_function_name not in self.result:
@@ -357,6 +488,8 @@ class Tester:
         This method should be called when ready to start the navigation
         """
         self.evaluator.start()
+        # Allow abort from this point onward (navigation has started, so collisions are real)
+        self.abort_enabled = True
 
     def stop_evaluation(self):
         """
@@ -767,6 +900,16 @@ class Tester:
                     logger.error(f"check_topic_error: condition ({condition}) matched\n{msg}")
                     case['success'] = False
                     case['error'] = f"condition {condition} matched\n{msg}"
+                    if self.abort_enabled:
+                        # Abort the current test immediately and cancel navigation.
+                        # Only when abort_enabled is True (i.e. after start_evaluation()),
+                        # so that leftover queued messages during reset_position/setup_actors
+                        # do not trigger a false abort.
+                        self.abort_current_test = True
+                        self._send_navigation_cancel()
+                    else:
+                        logger.warning("check_topic_error matched but abort is not yet enabled "
+                                       "(navigation has not started). Ignoring abort, recording failure.")
                     self.cancel_subscription(case)
             except:  # noqa: #722
                 logger.error(traceback.format_exc())
@@ -964,7 +1107,8 @@ class Tester:
         logger.debug(f"{callee_name()} {test_action}")
 
         def done_callback(future):
-            logger.debug(future.result())
+            if future is not None:
+                logger.debug(future.result())
             case['done'] = True
             case['success'] = True
         manager.update(

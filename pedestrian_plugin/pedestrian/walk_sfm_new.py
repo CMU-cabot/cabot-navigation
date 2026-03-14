@@ -36,17 +36,20 @@ pRobot = None  # previous robot state
 # debug
 count = 0
 initialized = False
+last_n_actors = 0
 
 
 def onUpdate(**args):
-    global count, pRobot, initialized
-    if not initialized:
+    global count, pRobot, initialized, last_n_actors
+    n_actors = args.get("n_actors", 10)
+    if not initialized or n_actors != last_n_actors:
         state.state.clear()
+        indicies.clear()
         initialized = True
+        last_n_actors = n_actors
 
     # parameter
     collision_threshold = args['collision_threshold'] if 'collision_threshold' in args else 0.5
-    n_actors = args.get("n_actors", 10)
     goal_x = args.get('goal_x', None)
     goal_y = args.get('goal_y', None)
     min_x = args.get('min_x', -np.inf)

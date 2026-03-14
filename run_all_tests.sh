@@ -3,8 +3,6 @@
 # Configuration
 TEST_DIR="/home/ai-suitcase-1/nitta_workspace/cabot/cabot-navigation/cabot_sites/cabot_sites_test/cabot_site_large_room/cabot_site_large_room"
 TEST_FILES=(
-    "tests_adult_0_child_100.py"
-    "tests_adult_10_child_90.py"
     "tests_adult_100_child_0.py"
     "tests_adult_90_child_10.py"
     "tests_adult_80_child_20.py"
@@ -14,8 +12,8 @@ TEST_FILES=(
     "tests_adult_40_child_60.py"
     "tests_adult_30_child_70.py"
     "tests_adult_20_child_80.py"
-    
-    
+    "tests_adult_10_child_90.py"
+    "tests_adult_0_child_100.py"
 )
 
 # Backup original tests.py

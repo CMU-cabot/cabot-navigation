@@ -52,7 +52,7 @@
         <!-- navigation -->
         <PipelineSequence name="NavigateWithReplanning">
           <!-- Check people status frequently -->
-          <RateController hz="1.0" name="AvoidPeople">
+          <RateController hz="2.0" name="AvoidPeople">
             <Fallback name="AvoidPersonFallback">
               <Sequence>
                 <CurrentPose global_frame="map" robot_base_frame="base_footprint"

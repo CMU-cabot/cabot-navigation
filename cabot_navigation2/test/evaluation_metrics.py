@@ -96,6 +96,8 @@ def get_time_stamps(agents, robot):
 
 
 def total_time(agents, robot):
+    if not agents or len(agents) == 0:
+        return [0.0]
     t2 = rclpy.time.Time.from_msg(agents[len(agents)-1].header.stamp)
     t1 = rclpy.time.Time.from_msg(agents[0].header.stamp)
     dur = (t2 - t1).to_msg()

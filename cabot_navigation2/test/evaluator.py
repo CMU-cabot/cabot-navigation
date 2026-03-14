@@ -104,6 +104,64 @@ class Evaluator:
             results.append({"name": metric, "value": result[0]})
         return results
 
+    def get_trajectory_data(self):
+        """Return time-stamped trajectory (pose) data for the robot and all actors.
+
+        Returns a list of dicts, one row per (timestep, entity), with fields:
+            timestamp_sec  : absolute ROS time in seconds (float)
+            elapsed_sec    : seconds elapsed since the first recorded timestamp (float)
+            entity_name    : name string of the entity
+            entity_type    : 'robot' or 'actor'
+            pos_x, pos_y, pos_z : position in map frame (float)
+            yaw            : heading angle in radians (float)
+            quat_x, quat_y, quat_z, quat_w : orientation quaternion (float)
+        """
+        import rclpy.time as rclpy_time
+        rows = []
+        t0_ns = None
+
+        for robot, humans in zip(self.robot_list, self.human_list):
+            t_ns = rclpy_time.Time.from_msg(robot.header.stamp).nanoseconds
+            if t0_ns is None:
+                t0_ns = t_ns
+            t_sec = t_ns / 1e9
+            elapsed = (t_ns - t0_ns) / 1e9
+
+            # Robot row
+            rows.append({
+                'timestamp_sec': t_sec,
+                'elapsed_sec': elapsed,
+                'entity_name': robot.name if robot.name else 'robot',
+                'entity_type': 'robot',
+                'pos_x': robot.position.position.x,
+                'pos_y': robot.position.position.y,
+                'pos_z': robot.position.position.z,
+                'yaw': robot.yaw,
+                'quat_x': robot.position.orientation.x,
+                'quat_y': robot.position.orientation.y,
+                'quat_z': robot.position.orientation.z,
+                'quat_w': robot.position.orientation.w,
+            })
+
+            # Actor rows (only ACTIVE agents are stored during recording)
+            for agent in humans.agents:
+                rows.append({
+                    'timestamp_sec': t_sec,
+                    'elapsed_sec': elapsed,
+                    'entity_name': agent.name,
+                    'entity_type': 'actor',
+                    'pos_x': agent.position.position.x,
+                    'pos_y': agent.position.position.y,
+                    'pos_z': agent.position.position.z,
+                    'yaw': agent.yaw,
+                    'quat_x': agent.position.orientation.x,
+                    'quat_y': agent.position.orientation.y,
+                    'quat_z': agent.position.orientation.z,
+                    'quat_w': agent.position.orientation.w,
+                })
+
+        return rows
+
     def reset(self):
         self.robot_list = []
         self.human_list = []

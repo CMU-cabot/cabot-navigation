@@ -258,12 +258,7 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.5
-      critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
-      # critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign", "SocialCritic"]
-      # SocialCritic:
-      #   class: cabot_navigation2::SocialCritic
-      #   scale: 32.0
-
+      critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
       PathForwardPrefer:
         class: dwb_critics::PathForwardPreferCritic
         scale: 24.0
@@ -271,7 +266,7 @@ controller_server:
       VelocityBaseObstacle:
         class: dwb_critics::VelocityObstacleCritic
         #class: dwb_critics::BaseObstacleCritic
-        scale: 60.0 # default: 1.0
+        scale: 1.0 # default: 1.0
         sum_scores: False # default: False
         low_speed_threshold: 0.3
         cost_threshold: 96.0
