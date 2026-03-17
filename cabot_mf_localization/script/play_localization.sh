@@ -46,6 +46,8 @@ function usage {
     echo "Optional environment variables:"
     echo "CABOT_SITE_TAGS            map tags override"
     echo "CABOT_SITE_PKG_DIR         site package search root"
+    echo "CABOT_PRESSURE_AVAILABLE   enables pressure topic usage when set to 1"
+    echo "CABOT_USE_GNSS             enables GNSS inputs when set to 1"
     echo "CABOT_GLOBAL_LOCALIZER_RUN run the global localizer node when set to 1"
     echo "CABOT_GLOBAL_LOCALIZER_USE use the global localizer result when set to 1"
 }
