@@ -927,6 +927,7 @@ class MultiFloorManager:
     def restart_floor(self, local_pose: Pose, target_floor=None, target_area=None, target_mode=None) -> int:
 
         # local variable
+        previous_floor = self.floor
         _target_floor = self.floor if target_floor is None else target_floor
         _target_area = self.area if target_area is None else target_area
         _target_mode = self.mode if target_mode is None else target_mode
@@ -954,6 +955,12 @@ class MultiFloorManager:
             self.logger.error(F"failed to call start_trajectory_with_pose. Error={e}")
             raise e
         self.logger.info(F"called /{floor_manager.node_id}/{_target_mode}/start_trajectory, code={status_code_start_trajectory}")
+
+        # Drop stale floor estimates from the previous floor after a successful floor transition.
+        if status_code_start_trajectory == StatusCode.OK and previous_floor != _target_floor:
+            self.floor_queue = []
+            if self.verbose:
+                self.logger.info(F"restart_floor: floor_queue reset ({previous_floor} -> {_target_floor})")
 
         # set current_frame and publish it in the setter
         self.current_frame = frame_id
