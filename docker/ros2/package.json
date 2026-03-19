@@ -1,0 +1,8 @@
+{
+  "name": "cabot-debug-playwright",
+  "private": true,
+  "description": "Playwright runtime for cabot_debug scripts",
+  "dependencies": {
+    "playwright": "1.58.2"
+  }
+}

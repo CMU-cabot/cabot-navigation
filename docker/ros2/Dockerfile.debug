@@ -155,6 +155,8 @@ RUN python3 -m venv --system-site-packages /opt/venv/cabot2 && \
 RUN python3 -m venv --system-site-packages /opt/venv/cabot3
 
 ENV USERNAME developer
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # Replace 1000 with your user/group id
 ARG UID=1000
 RUN useradd -m $USERNAME && \
@@ -178,7 +180,17 @@ COPY ros_entrypoint.sh /ros_entrypoint.sh
 RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
 
 ENV HOME /home/$USERNAME
+WORKDIR /home/developer/src
 
-WORKDIR $HOME/ros2_ws
+COPY package.json ./
+RUN npm ci
 
-CMD [ "/launch.sh" ]
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh && \
+    mkdir -p /home/"${USERNAME}"/Downloads /home/"${USERNAME}"/src/cabot/docker/home/sandbox && \
+    chown -R "${USERNAME}:${USERNAME}" /home/"${USERNAME}"
+
+WORKDIR /home/developer/src/cabot
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["sleep", "infinity"]
