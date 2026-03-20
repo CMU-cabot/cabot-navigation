@@ -191,6 +191,7 @@ COPY --from=node-runtime /usr/local/lib/node_modules/ /usr/local/lib/node_module
 
 COPY package.json package-lock.json ./
 RUN npm ci
+RUN npx playwright install chromium
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh && \
