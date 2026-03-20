@@ -21,8 +21,11 @@
 
 ARG BASE_IMAGE=cabot-base
 ARG FROM_IMAGE=cmucal/${BASE_IMAGE}:humble-base-custom-mesa
+ARG NODE_RUNTIME_IMAGE=node:24-bookworm-slim
 
 # build underlay
+FROM ${NODE_RUNTIME_IMAGE} as node-runtime
+
 FROM ${FROM_IMAGE} as cache
 
 ENV UNDERLAY_WS=/opt/underlay_ws
@@ -116,6 +119,7 @@ RUN apt update && \
     ros-$ROS_DISTRO-rosbag2-storage-mcap \
     xterm \
     gosu \
+    xauth \
     && \
     rm -rf /var/lib/apt/lists/*
 
@@ -182,7 +186,10 @@ RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
 ENV HOME /home/$USERNAME
 WORKDIR /home/developer/src
 
-COPY package.json ./
+COPY --from=node-runtime /usr/local/bin/ /usr/local/bin/
+COPY --from=node-runtime /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
+
+COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
