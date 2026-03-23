@@ -193,12 +193,14 @@ COPY package.json package-lock.json ./
 RUN npm ci
 RUN npx playwright install chromium
 
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh && \
-    mkdir -p /home/"${USERNAME}"/Downloads /home/"${USERNAME}"/src/cabot/docker/home/sandbox && \
+# change location of ros base
+COPY ros_entrypoint.sh /ros_entrypoint.sh
+RUN sed -i 's:custom_ws:underlay_ws:' /ros_entrypoint.sh
+
+RUN mkdir -p /home/"${USERNAME}"/Downloads /home/"${USERNAME}"/src/cabot/docker/home/sandbox && \
     chown -R "${USERNAME}:${USERNAME}" /home/"${USERNAME}"
 
 WORKDIR /home/developer/src/cabot
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["sleep", "infinity"]
