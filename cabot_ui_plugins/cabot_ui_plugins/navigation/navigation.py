@@ -340,6 +340,8 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def process_event(self, event) -> None:
         if event.subtype == "reqfeatures":
             return False   # can be handled by other plugins
+        if event.subtype == "getfollowexactpath":
+            return True
 
         if event.subtype == "follow_exact_path":
             val = str(event.param).strip().lower() if event.param is not None else ""

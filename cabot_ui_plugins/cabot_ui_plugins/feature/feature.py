@@ -75,8 +75,6 @@ class Feature():
             return True
         if event.subtype == "gettouchmode":
             return True
-        if event.subtype == "getfollowexactpath":
-            return True
 
         # operations indepent from the navigation state
         if event.subtype == "language":
