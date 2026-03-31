@@ -594,7 +594,9 @@ class GPTExplainer():
 
     # Function to encode the image
     def encode_image(self, image):
-        _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        small_image = cv2.resize(image, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+
+        _, buffer = cv2.imencode('.jpg', small_image, [cv2.IMWRITE_JPEG_QUALITY, 60])
         image_bytes = buffer.tobytes()
         return base64.b64encode(image_bytes).decode('utf-8')
     
@@ -850,7 +852,7 @@ class GPTExplainer():
             new_input = [{"role": "user", "content": new_content}]
 
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "Qwen2.5-VL-7B-instruct-Q4_K_M-BF16", #gpt-4o-mini
             "messages": new_input,
             "max_tokens": max_tokens
         }
@@ -859,7 +861,8 @@ class GPTExplainer():
 
         self.logger.info("Sending the request to OpenAI API...")
         request_start = time.time()
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
+        #response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
+        response = requests.post("http://172.17.0.1:8033/v1/chat/completions", headers=self.headers, json=payload)
         try:
             res_json = response.json()
             extracted_json = self.extract_json_part(res_json["choices"][0]["message"]["content"])

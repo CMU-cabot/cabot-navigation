@@ -169,7 +169,7 @@ PROMPT_NAVIGATION_OLD = """
     ```
     """
 
-PROMPT_EXPLORE = """
+PROMPT_EXPLORE_JP = """
 # 指示
 視覚障害者向けのガイドとして、画像を詳しく魅力的に説明してください。
 %s
@@ -188,7 +188,7 @@ PROMPT_EXPLORE = """
 }
 """
 
-PROMPT_MIDDLE = """
+PROMPT_MIDDLE_JP = """
 # 指示
 視覚障害者向けに、周囲の状況を簡潔かつ具体的に説明してください。
 %s
@@ -206,7 +206,7 @@ PROMPT_MIDDLE = """
 }
 """
 
-PROMPT_NAVIGATION = """
+PROMPT_NAVIGATION_JP = """
 # 指示
 目的地の探索を支援するため、最小限の情報を端的に伝えてください。
 %s
@@ -222,4 +222,62 @@ PROMPT_NAVIGATION = """
 {
   "description": "最小限のナビゲーション説明"
 }
+"""
+
+PROMPT_EXPLORE = """
+# Instructions
+As a guide for the visually impaired, provide a detailed and engaging description of the image.
+%s
+
+# Rules
+1. Structure: Combine into a single cohesive paragraph in the order: [Overall Summary] -> [Left] -> [Front] -> [Right].
+2. Content: Specifically include object names, states, roles, text information, human movement, and the genre of shops or exhibits.
+3. Expression: Use a natural guiding tone (polite language), e.g., "On your right, there is..." Do not use words like "image" or "viewpoint."
+4. Limitations: Describe only clearly visible objects. 3-4 sentences (120-240 characters).
+5. Special Notes: Include details on interior design, brightness, guide dog accessibility, whether exhibits are tactile, and specific distances (e.g., "5m to the right").
+
+# Response Format (JSON only)
+```json
+{
+  "description": "Detailed surrounding description using a mix of kanji and hiragana."
+}
+
+"""
+
+PROMPT_MIDDLE = """
+# Instructions
+Provide a concise and specific description of the surroundings for a visually impaired person.
+%s
+
+# Rules
+1. Structure: Explain in the order of [Left] -> [Front] -> [Right].
+2. Content: Include only distinctive objects, shop/exhibit genres, text on signs, and people who pose a collision risk.
+3. Limitations: 2-3 sentences (60-120 characters). Use polite language. Exclude descriptions of decor, lighting, or subjective adjectives.
+4. Prohibitions: Avoid unnatural phrasing like "The image shows" or "Overall." Do not describe things that are not visible.
+
+# Response Format (JSON only)
+```json
+{
+  "description": "Concise and specific surrounding description."
+}
+
+"""
+
+PROMPT_NAVIGATION = """
+# Instructions
+To assist in finding a destination, provide minimal information as briefly as possible.
+%s
+
+# Rules
+1. Structure: Order of [Left] -> [Front] -> [Right].
+2. Content: Path conditions, text on signs, landmarks necessary for identifying the destination, and specific distances.
+3. Limitations: 1-2 sentences (within 60 characters). Use polite language. Omit all unnecessary information such as furniture or decor.
+4. Prohibitions: No subjective expressions, background explanations, or speculation about things not visible.
+
+# Response Format (JSON only)
+```json
+{
+  "description": "Minimal navigation description."
+}
+
 """
