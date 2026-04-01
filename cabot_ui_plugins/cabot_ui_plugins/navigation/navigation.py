@@ -245,6 +245,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._max_speed = node.declare_parameter("max_speed", 2.0).value
         self._max_acc = node.declare_parameter("max_acc", 0.3).value
         self._speed_poi_params = node.declare_parameter("speed_poi_params", [0.5, 0.5, 0.5]).value
+        self._follow_exact_path_enabled = node.declare_parameter("follow_exact_path_enabled", False).value
 
         self._global_map_name = node.declare_parameter("global_map_name", "map_global").value
         self.visualizer.global_map_name = self._global_map_name
@@ -320,6 +321,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._userSpeedEnabledProxy = node.create_client(std_srvs.srv.SetBool, "/cabot/user_speed_enabled", callback_group=MutuallyExclusiveCallbackGroup())
 
         self._eventPub = node.create_publisher(std_msgs.msg.String, "/cabot/event", 10, callback_group=MutuallyExclusiveCallbackGroup())
+        e = NavigationEvent("getfollowexactpath", None)
+        msg = std_msgs.msg.String()
+        msg.data = str(e)
+        self._eventPub.publish(msg)
 
         self._process_queue = ProcessQueue(act_node)
         self._start_loop()
@@ -335,6 +340,15 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def process_event(self, event) -> None:
         if event.subtype == "reqfeatures":
             return False   # can be handled by other plugins
+        if event.subtype == "getfollowexactpath":
+            return True
+
+        if event.subtype == "follow_exact_path":
+            val = str(event.param).strip().lower() if event.param is not None else ""
+            enabled = val in {"1", "true", "on", "enable", "enabled", "yes"}
+            self._logger.info(F"set follow_exact_path_enabled={enabled}")
+            self.set_follow_exact_path_enabled(enabled)
+            return True
 
         # operations depents on the current navigation state
         if self._status_manager.state == State.in_preparation:
@@ -1454,6 +1468,19 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         timeout_tread = threading.Thread(target=timeout_watcher, args=(future, 5))
         timeout_tread.start()
         return future
+
+    def set_follow_exact_path_enabled(self, enabled: bool) -> None:
+        self._follow_exact_path_enabled = bool(enabled)
+        try:
+            self._node.set_parameters([
+                rclpy.parameter.Parameter("follow_exact_path_enabled", value=enabled),
+            ])
+        except Exception as exc:  # noqa: B902
+            self._logger.warn(F"failed to set follow_exact_path_enabled parameter: {exc}")
+        self._logger.info(F"follow_exact_path_enabled={enabled}")
+
+    def get_follow_exact_path_enabled(self) -> bool:
+        return bool(self._follow_exact_path_enabled)
 
     def _navigate_to_pose_sent_goal(self, goal, future, gh_cb, done_cb):
         if future.cancelled():
