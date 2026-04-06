@@ -425,7 +425,18 @@ local_costmap:
         rising_rate: 25
         min_obstacle_height: -2.0
         max_obstacle_height: 2.0
-        observation_sources: scan
+        observation_sources: "livox scan"   # marking with livox and clearing with scan
+        livox:
+          topic: /livox/points_filtered
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          obstacle_min_range: 0.05
+          obstacle_max_range: 4.0
+          raytrace_max_range: 5.0
+          clearing: False
+          marking: True
+          inf_is_valid: True # default: False
+          data_type: "PointCloud2"
         scan:
           topic: /livox_scan # use original scan to prevent clearing the cost during obstacle avoidance
           min_obstacle_height: -2.0
@@ -434,7 +445,7 @@ local_costmap:
           obstacle_max_range: 4.0
           raytrace_max_range: 5.0
           clearing: True
-          marking: True
+          marking: False
           inf_is_valid: True # default: False
           data_type: "LaserScan"
       static_layer:
@@ -505,7 +516,18 @@ global_costmap:
         rising_rate: 25
         min_obstacle_height: -2.0
         max_obstacle_height: 2.0
-        observation_sources: scan
+        observation_sources: "livox scan"   # marking with livox and clearing with scan
+        livox:
+          topic: /livox/points_filtered
+          min_obstacle_height: -2.0
+          max_obstacle_height: 2.0
+          obstacle_min_range: 0.05
+          obstacle_max_range: 4.5
+          raytrace_max_range: 5.0
+          clearing: False
+          marking: True
+          inf_is_valid: True # default: False
+          data_type: "PointCloud2"
         scan:
           topic: /livox_scan_expand # use expanded scan to clear noise at the edge of the field of view
           min_obstacle_height: -2.0
