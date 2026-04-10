@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <array>
 #include <cmath>
+#include <limits>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
@@ -317,12 +318,28 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   }
 
   const std::vector<std::array<float, 2>> base_plan_poses = transformPoints2D(map_plan_poses, tf_base_link_map);
+  size_t nearest_plan_index = 0;
+  float nearest_plan_distance_sq = std::numeric_limits<float>::infinity();
+  for (size_t i = 0; i < base_plan_poses.size(); i++) {
+    const float x = base_plan_poses[i][0];
+    const float y = base_plan_poses[i][1];
+    const float distance_sq = x * x + y * y;
+    if (distance_sq < nearest_plan_distance_sq) {
+      nearest_plan_distance_sq = distance_sq;
+      nearest_plan_index = i;
+    }
+  }
+  // select only the plan points located ahead of the robot
+  const std::vector<std::array<float, 2>> base_plan_poses_from_nearest(
+    base_plan_poses.begin() + nearest_plan_index,
+    base_plan_poses.end());
 
   std::vector<float> h_plan(1 * plan_length_ * 2, 0.0f);
   for (size_t i = 0; i < plan_length_; i++) {
-    const size_t plan_index = (i < base_plan_poses.size()) ? i : (base_plan_poses.size() - 1);
-    h_plan[i * 2 + 0] = base_plan_poses[plan_index][0];
-    h_plan[i * 2 + 1] = base_plan_poses[plan_index][1];
+    const size_t plan_index =
+      (i < base_plan_poses_from_nearest.size()) ? i : (base_plan_poses_from_nearest.size() - 1);
+    h_plan[i * 2 + 0] = base_plan_poses_from_nearest[plan_index][0];
+    h_plan[i * 2 + 1] = base_plan_poses_from_nearest[plan_index][1];
   }
 
   std::vector<float> h_scan(1 * kScanLength, 0.0f);
@@ -469,7 +486,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       }
     }
 
-    for (const auto & point : base_plan_poses) {
+    for (const auto & point : base_plan_poses_from_nearest) {
       const cv::Point px = toPixel(point[0], point[1]);
       if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
         image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(0, 200, 255);
