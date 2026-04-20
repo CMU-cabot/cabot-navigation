@@ -486,8 +486,8 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       }
     }
 
-    for (const auto & point : base_plan_poses_from_nearest) {
-      const cv::Point px = toPixel(point[0], point[1]);
+    for (size_t i = 0; i + 1 < h_plan.size(); i += 2) {
+      const cv::Point px = toPixel(h_plan[i], h_plan[i + 1]);
       if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
         image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(0, 200, 255);
       }
