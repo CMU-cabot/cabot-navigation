@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import cv2
 import numpy as np
 import requests
+import sensor_msgs
 import torch
 from PIL import Image as PILImage
 from packaging.version import Version
@@ -22,8 +23,9 @@ from packaging.version import Version
 from cv2 import aruco
 
 import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Image
+from rclpy.node import MutuallyExclusiveCallbackGroup, Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, qos_profile_sensor_data
+from sensor_msgs.msg import Image, LaserScan
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 import std_msgs.msg
@@ -99,8 +101,14 @@ class CaBotImageNode(Node):
         self.camera_ready_pub = self.create_publisher(std_msgs.msg.Bool, "/cabot/camera_ready", 10)
         self.prompt_sub = self.create_subscription(std_msgs.msg.String, "/cabot/persona", self.persona_callback, 10)
         #self._vlmButtonPub = self._node.create_publisher(std_msgs.msg.Bool, "/cabot/vlm_button", 10, callback_group=MutuallyExclusiveCallbackGroup())
-        self._vlmButtonSub = self.create_subscription(std_msgs.msg.Bool, "/cabot/vlm_button", self.vlm_button_callback, 10)
+        self._vlmButtonSub = self.create_subscription(std_msgs.msg.Int32, "/cabot/vlm_button", self.vlm_button_callback, 10)
         self.allowAutoVLM = True
+
+        
+        self.last_scan_data = None
+
+        self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
+
 
         self.current_image = 0
 
@@ -166,11 +174,11 @@ class CaBotImageNode(Node):
         # self.localize_status_pub = self.create_publisher(MFLocalizeStatus, "/localize_status", transient_local_qos)
         
         self.image_front_sub = message_filters.Subscriber(self, Image, self.front_camera_topic_name)
-        # self.depth_front_sub = message_filters.Subscriber(self, Image, self.front_depth_topic_name)
+        self.depth_front_sub = message_filters.Subscriber(self, Image, self.front_depth_topic_name)
         self.image_left_sub = message_filters.Subscriber(self, Image, self.left_camera_topic_name)
-        # self.depth_left_sub = message_filters.Subscriber(self, Image, self.left_depth_topic_name)
+        self.depth_left_sub = message_filters.Subscriber(self, Image, self.left_depth_topic_name)
         self.image_right_sub = message_filters.Subscriber(self, Image, self.right_camera_topic_name)
-        # self.depth_right_sub = message_filters.Subscriber(self, Image, self.right_depth_topic_name)
+        self.depth_right_sub = message_filters.Subscriber(self, Image, self.right_depth_topic_name)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
         
@@ -178,7 +186,7 @@ class CaBotImageNode(Node):
         self.event_sub = self.create_subscription(std_msgs.msg.String, "/cabot/event", self.event_callback, 10)
         self.touch_sub = self.create_subscription(std_msgs.msg.Int16, "/cabot/touch", self.touch_callback, 10)
         # subscribers = [self.odom_sub, self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
-        subscribers = [self.image_front_sub, self.image_left_sub, self.image_right_sub]
+        subscribers = [self.image_front_sub, self.depth_front_sub, self.image_left_sub, self.depth_left_sub, self.image_right_sub, self.depth_right_sub]
 
         self.logger.info(f"Subscribed to {self.front_camera_topic_name}, {self.left_camera_topic_name}, {self.right_camera_topic_name}")
         self.logger.info(f"CaBotImageNode initialized. in mode = {self.mode} cabot nav state: {self.cabot_nav_state}")
@@ -207,11 +215,16 @@ class CaBotImageNode(Node):
         self.ts = message_filters.ApproximateTimeSynchronizer(subscribers, 10, 0.1)
         self.ts.registerCallback(self.image_callback)
 
-    def vlm_button_callback(self, msg: std_msgs.msg.Bool):
+    def lidar_callback(self, msg: LaserScan):
+        # log
+        self.logger.info(f"Received LiDAR message!")
+        self.last_scan_data = msg
+
+    def vlm_button_callback(self, msg: std_msgs.msg.Int32):
         self.logger.info(f"Received VLM button message: {msg.data}")
         self.allowAutoVLM = False
-        if msg.data:
-            self.loop()
+        if msg.data != 0:
+            self.loop(msg.data)
 
     def persona_callback(self, msg: std_msgs.msg.String):
         self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
@@ -304,7 +317,7 @@ class CaBotImageNode(Node):
             self.logger.info(f"cabot nav state: {self.cabot_nav_state}")
         self.cabot_nav_state = msg.data
     
-    def image_callback(self, msg_front, msg_left, msg_right):
+    def image_callback(self, msg_front, msg_depth_front, msg_left, msg_depth_left, msg_right, msg_depth_right):
         # if self.cabot_nav_state != self.valid_state: return
         if time.time() - self.last_saved_images_time < 0.1: return # just not to overload the system
         self.last_saved_images_time = time.time()
@@ -319,21 +332,33 @@ class CaBotImageNode(Node):
             odom = np.array([position.x, position.y, yaw])
             self.odom = odom        
 
+            self.logger.info(f"Depth Image Format : {msg_depth_front.encoding}, Image Format : {msg_front.encoding}")
+
             front_image = np.flipud(np.fliplr(np.array(msg_front.data).reshape(msg_front.height, msg_front.width, 3)))
+            front_depth = np.frombuffer(msg_depth_front.data, dtype=np.uint16).reshape(msg_depth_front.height, msg_depth_front.width)
             left_image = np.array(msg_left.data).reshape(msg_left.height, msg_left.width, -1)
+            left_depth = np.frombuffer(msg_depth_left.data, dtype=np.uint16).reshape(msg_depth_left.height, msg_depth_left.width)
             right_image = np.array(msg_right.data).reshape(msg_right.height, msg_right.width, -1)
+            right_depth = np.frombuffer(msg_depth_right.data, dtype=np.uint16).reshape(msg_depth_right.height, msg_depth_right.width)
+
 
             # flip left_image vertically and then horizontally
             left_image = cv2.flip(left_image, -1)
+            left_depth = cv2.flip(left_depth, -1)
 
             # convert colors from BGR to RGB for all images
             front_image = cv2.cvtColor(front_image, cv2.COLOR_BGR2RGB)
             left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
             right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
-            
+           
+
             self.front_image = front_image
             self.left_image = left_image
             self.right_image = right_image
+
+            self.front_depth = front_depth
+            self.left_depth = left_depth
+            self.right_depth = right_depth
 
             self.front_marker_detected = self.detect_marker(front_image)
             self.left_marker_detected = self.detect_marker(left_image)
@@ -378,7 +403,44 @@ class CaBotImageNode(Node):
 
         return image
 
-    def loop(self):
+    def gaussian_average_depth(self, depth_map, x, y, r=60, sigma=20.0):
+        h, w = depth_map.shape
+        
+        y1 = max(0, y - r)
+        y2 = min(h, y + r + 1)
+        x1 = max(0, x - r)
+        x2 = min(w, x + r + 1)
+        
+        if y1 >= y2 or x1 >= x2:
+            return 0.0
+            
+        roi = depth_map[y1:y2, x1:x2]
+
+        yy, xx = np.mgrid[y1:y2, x1:x2]
+        
+        dy = yy - y
+        dx = xx - x
+        dist_sq = dx**2 + dy**2
+        
+
+        circular_mask = dist_sq <= r**2
+        kernel = np.exp(-dist_sq / (2.0 * sigma**2))
+        
+        final_weights = kernel * circular_mask
+        
+        valid_mask = (roi > 0) & circular_mask
+        
+        if not np.any(valid_mask):
+            return 0.0
+            
+        sum_weights = np.sum(final_weights[valid_mask])
+        weighted_sum = np.sum(roi[valid_mask] * final_weights[valid_mask])
+        
+        return float(weighted_sum / sum_weights) if sum_weights > 0 else 0.0
+
+    def loop(self, img_id=0):
+        if img_id == 0:
+            return
         if self.max_loop > 0 and self.loop_count >= self.max_loop:
             self.logger.info(f"Max loop count reached. Exiting.")
             return
@@ -388,8 +450,112 @@ class CaBotImageNode(Node):
         camera_ready = self.realsense_ready
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
         if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
+            
 
-            wait_time, explain = self.gpt_explainer.explain(self.front_image, self.left_image, self.right_image)
+            front_im = None
+            left_im = None
+            right_im = None
+
+            clocks = ["12 o'clock", "12 o'clock", "12 o'clock"]
+
+            depth_image = None
+
+            lidar_from = 0.0
+            lidar_to = 1.0
+            if img_id == 1:
+                left_im = self.left_image
+                clocks = ["8 o'clock", "9 o'clock", "10 o'clock"]
+                depth_image = self.left_depth
+                lidar_from = 0.66
+                lidar_to = 1.0
+            elif img_id == 2:
+                front_im = self.front_image
+                clocks = ["11 o'clock", "12 o'clock", "1 o'clock"]
+                depth_image = self.front_depth
+                lidar_from = 0.34
+                lidar_to = 0.66
+            elif img_id == 3:
+                right_im = self.right_image
+                clocks = ["2 o'clock", "3 o'clock", "4 o'clock"]
+                depth_image = self.right_depth
+                lidar_from = 0.0
+                lidar_to = 0.34
+
+            min_distances = []
+
+            if self.last_scan_data is not None:
+                self.logger.info(f"Lidar data available. Ranges length: {len(self.last_scan_data.ranges)}")
+                lidar_min_index = int(lidar_from * len(self.last_scan_data.ranges))
+                lidar_max_index = int(lidar_to * len(self.last_scan_data.ranges))
+                lidar_min_index = max(0, min(len(self.last_scan_data.ranges) - 1, lidar_min_index))
+                lidar_max_index = max(0, min(len(self.last_scan_data.ranges) - 1, lidar_max_index))
+
+                lidar_ranges = self.last_scan_data.ranges[lidar_min_index:lidar_max_index]
+
+                # cut in 3 subparts and take the minimum of each part
+                if len(lidar_ranges) > 0:
+                    part_size = len(lidar_ranges) // 3
+                    for i in [2,1,0]:
+                        part_ranges = lidar_ranges[i*part_size:(i+1)*part_size] if i < 2 else lidar_ranges[i*part_size:]
+                        min_distance = min(part_ranges) if len(part_ranges) > 0 else float('inf')
+                        min_distances.append(min_distance)
+
+            loading_message = ""
+
+            if len(min_distances) == 3:
+                self.logger.info(f"Minimum distances from LiDAR in each direction: {min_distances}")
+                # Generate message with clocks data and min_distances
+                lidar_message_parts = []
+                for clock, distance in zip(clocks, min_distances):
+                    if distance == float('inf'):
+                        lidar_message_parts.append(f"{clock} unknown distance")
+                    else:
+                        lidar_message_parts.append(f"{clock} {distance:.2f} meters")
+
+                loading_message = "Closest objects: " + ", ".join(lidar_message_parts) + ". "
+
+            test_speak.speak_text(loading_message)
+            wait_time, raw_explain = self.gpt_explainer.explain(front_im, left_im, right_im, self.front_depth, self.left_depth, self.right_depth)
+
+            #generate output text
+            names = [item[0] for item in raw_explain]
+            pixels_x = [item[1] for item in raw_explain]
+            pixels_y = [item[2] for item in raw_explain]
+
+            clock_positions = []
+            for pixel_x in pixels_x:
+                if pixel_x < 320/3:
+                    clock_positions.append(clocks[0])
+                elif pixel_x > 320/3*2:
+                    clock_positions.append(clocks[2])
+                else:
+                    clock_positions.append(clocks[1])
+
+            depths = []
+            for pixel_x, pixel_y in zip(pixels_x, pixels_y):
+                if depth_image is not None:
+                    # Clamp the pixel coordinates to be within the image bounds
+                    pixel_x = max(0, min(depth_image.shape[1] - 1, pixel_x))
+                    pixel_y = max(0, min(depth_image.shape[0] - 1, pixel_y))
+
+                    depth = (self.gaussian_average_depth(depth_image, pixel_x, pixel_y, r=15, sigma=5.0) // 100) / 10.0
+                    if depth == 0 or depth > 2:
+                        depth = "many"
+                    depths.append(depth)
+                else:
+                    depths.append("unknown")
+
+            formatted_items = []
+            for name, clock, pixel_x, pixel_y, depth in zip(names, clock_positions, pixels_x, pixels_y, depths):
+                formatted_items.append(f"{name} at {clock}")
+
+            explain = ""
+
+            if len(formatted_items) > 1:
+                explain = ", ".join(formatted_items[:-1]) + " and " + formatted_items[-1] + "."
+            elif len(formatted_items) == 1:
+                explain = formatted_items[0] + "."
+
             # if self.current_image == 0:
             #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
             # elif self.current_image == 1:
@@ -411,6 +577,9 @@ class CaBotImageNode(Node):
                 next_loop_wait_time = 1.0
             else:
                 self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
+                if explain == "":
+                    self.logger.info("explanation is empty")
+                    self.can_speak_timer = self.create_timer(wait_time + 1.0, self.reset_can_speak) 
                 next_loop_wait_time = 0.1
 
             self.latest_explained_front_image = self.front_image
@@ -624,7 +793,7 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray]) -> float:
+    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], front_depth: Optional[np.ndarray], left_depth: Optional[np.ndarray], right_depth: Optional[np.ndarray]) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
@@ -715,6 +884,37 @@ class GPTExplainer():
             os.makedirs(folder_name, exist_ok=True)
             #save the odom as numpy array
             np.save(f"{folder_name}/odom.npy", self.node.odom)
+
+
+            if right_depth is not None:
+                depth_min = 300
+                depth_max = 3000
+
+                depth_8bit = cv2.normalize(right_depth, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+
+                depth_color = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_PLASMA)
+
+                cv2.imwrite(os.path.join(folder_name,"right_depth.jpg"), depth_color)
+
+            if left_depth is not None:
+                depth_min = 300
+                depth_max = 3000
+
+                depth_8bit = cv2.normalize(left_depth, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+
+                depth_color = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_PLASMA)
+
+                cv2.imwrite(os.path.join(folder_name,"left_depth.jpg"), depth_color)
+
+            if front_depth is not None:
+                depth_min = 300
+                depth_max = 3000
+
+                depth_8bit = cv2.normalize(front_depth, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+
+                depth_color = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_PLASMA)
+
+                cv2.imwrite(os.path.join(folder_name,"front_depth.jpg"), depth_color)
 
             if not front_image is None:
                 cv2.imwrite(os.path.join(folder_name,"front.jpg"), front_image)
@@ -862,7 +1062,7 @@ class GPTExplainer():
         self.logger.info("Sending the request to OpenAI API...")
         request_start = time.time()
         #response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
-        response = requests.post("http://172.17.0.1:8033/v1/chat/completions", headers=self.headers, json=payload)
+        response = requests.post("http://172.17.0.1:8033/v1/chat/completions", headers=self.headers, json=payload, timeout=10)
         try:
             res_json = response.json()
             extracted_json = self.extract_json_part(res_json["choices"][0]["message"]["content"])

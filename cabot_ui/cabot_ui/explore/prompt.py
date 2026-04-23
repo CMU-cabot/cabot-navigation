@@ -230,7 +230,7 @@ As a guide for the visually impaired, provide a detailed and engaging descriptio
 %s
 
 # Rules
-1. Structure: Combine into a single cohesive paragraph in the order: [Overall Summary] -> [Left] -> [Front] -> [Right].
+1. Structure: You will receive an image from one of these directions: [Left], [Front], or [Right].
 2. Content: Specifically include object names, states, roles, text information, human movement, and the genre of shops or exhibits.
 3. Expression: Use a natural guiding tone (polite language), e.g., "On your right, there is..." Do not use words like "image" or "viewpoint."
 4. Limitations: Describe only clearly visible objects. 3-4 sentences (120-240 characters).
@@ -244,13 +244,13 @@ As a guide for the visually impaired, provide a detailed and engaging descriptio
 
 """
 
-PROMPT_MIDDLE = """
+PROMPT_MIDDLE_OLD = """
 # Instructions
 Provide a concise and specific description of the surroundings for a visually impaired person.
 %s
 
 # Rules
-1. Structure: Explain in the order of [Left] -> [Front] -> [Right].
+1. Structure: You will receive an image from one of these directions: [Left], [Front], or [Right].
 2. Content: Include only distinctive objects, shop/exhibit genres, text on signs, and people who pose a collision risk.
 3. Limitations: 2-3 sentences (60-120 characters). Use polite language. Exclude descriptions of decor, lighting, or subjective adjectives.
 4. Prohibitions: Avoid unnatural phrasing like "The image shows" or "Overall." Do not describe things that are not visible.
@@ -263,13 +263,24 @@ Provide a concise and specific description of the surroundings for a visually im
 
 """
 
+PROMPT_MIDDLE = """
+Provide description for a visually impaired person.
+Avoid Floor/Ceiling...
+MAXIMUM 5 OBJECTS
+DETAIL EACH OBJECT 30 chars
+YOU MUST GIVE PIXEL COORDINATES OF EACH OBJECTS
+# Response Format
+```json
+{"description": [["object description", pixel_x (int), pixel_y (int)], ...]}
+"""
+
 PROMPT_NAVIGATION = """
 # Instructions
 To assist in finding a destination, provide minimal information as briefly as possible.
 %s
 
 # Rules
-1. Structure: Order of [Left] -> [Front] -> [Right].
+1. Structure: You will receive an image from one of these directions: [Left], [Front], or [Right].
 2. Content: Path conditions, text on signs, landmarks necessary for identifying the destination, and specific distances.
 3. Limitations: 1-2 sentences (within 60 characters). Use polite language. Omit all unnecessary information such as furniture or decor.
 4. Prohibitions: No subjective expressions, background explanations, or speculation about things not visible.
