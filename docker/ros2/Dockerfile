@@ -51,6 +51,7 @@ RUN . /opt/custom_ws/install/setup.sh && \
 
 
 FROM ${FROM_IMAGE} as build
+ARG TARGETARCH
 ENV ROS_DISTRO=humble
 ARG TZ=UTC
 ENV TZ=$TZ
@@ -125,24 +126,76 @@ RUN apt update && \
     software-properties-common \
     && \
     rm -rf /var/lib/apt/lists/*
-RUN CUDA_V="12.9" TENSORRT_DEB_V="10.15.1.29-1+cuda13.1" && \
-    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
-    add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
-    apt update && \
-    apt-get install -y --no-install-recommends \
-    cuda-toolkit-${CUDA_V} \
-    libnvinfer-dev=${TENSORRT_DEB_V} \
-    libnvinfer-headers-dev=${TENSORRT_DEB_V} \
-    libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
-    libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
-    libnvinfer-plugin10=${TENSORRT_DEB_V} \
-    libnvinfer-vc-plugin10=${TENSORRT_DEB_V} \
-    libnvinfer10=${TENSORRT_DEB_V} \
-    libnvonnxparsers10=${TENSORRT_DEB_V} \ 
-    python3-libnvinfer=${TENSORRT_DEB_V} \
-    && \
-    apt clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        CUDA_V="12-9" TENSORRT_DEB_V="10.15.1.29-1+cuda13.1" && \
+        apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+        add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
+        apt update && \
+        apt-get install -y --no-install-recommends \
+        cuda-toolkit-${CUDA_V} \
+        libnvinfer-bin=${TENSORRT_DEB_V} \
+        libnvinfer-dev=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch10=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-lean10=${TENSORRT_DEB_V} \
+        libnvinfer-lean-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin10=${TENSORRT_DEB_V} \
+        libnvinfer-vc-plugin10=${TENSORRT_DEB_V} \
+        libnvinfer10=${TENSORRT_DEB_V} \
+        libnvonnxparsers10=${TENSORRT_DEB_V} \
+        python3-libnvinfer=${TENSORRT_DEB_V} \
+        && \
+        apt clean && \
+        rm -rf /var/lib/apt/lists/* ; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        # if nvidia runtime is not used for build, install l4t packages in cache image
+        L4T_V="36.2" TEGRA_V="t234" && \
+        if [ -z "$(ldconfig -p | grep libcuda.so)" ]; then \
+            apt-key adv --fetch-keys https://repo.download.nvidia.com/jetson/jetson-ota-public.asc && \
+            apt-key adv --fetch-keys http://l4t-repo.nvidia.com/jetson-ota-internal.key && \
+            echo "deb https://repo.download.nvidia.com/jetson/common r${L4T_V} main" > /etc/apt/sources.list.d/nvidia-l4t-apt-source.list && \
+            echo "deb https://repo.download.nvidia.com/jetson/${TEGRA_V} r${L4T_V} main" >> /etc/apt/sources.list.d/nvidia-l4t-apt-source.list && \
+            # workaround to install nvidia-l4t-core in docker container
+            # https://forums.balena.io/t/getting-linux-for-tegra-into-a-container-on-balena-os/179421/20
+            mkdir -p /opt/nvidia/l4t-packages/ && \
+            touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall && \
+            mv /etc/ld.so.conf.d/nvidia-tegra.conf /etc/ld.so.conf.d/nvidia-tegra.conf.bak && \
+            apt update && \
+            apt-get install -y --no-install-recommends \
+            nvidia-l4t-core \
+            nvidia-l4t-cuda \
+            nvidia-l4t-dla-compiler \
+            && \
+            apt-get clean && \
+            rm -rf /var/lib/apt/lists/* ; \
+        fi && \
+
+        CUDA_V="12-2" TENSORRT_DEB_V="8.6.2.3-1+cuda12.2" && \
+        apt update && \
+        apt-get install -y --no-install-recommends \
+        cuda-nvcc-${CUDA_V} \
+        libcudla-dev-${CUDA_V} \
+        libnvinfer-bin=${TENSORRT_DEB_V} \
+        libnvinfer-dev=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch10=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-lean10=${TENSORRT_DEB_V} \
+        libnvinfer-lean-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin8=${TENSORRT_DEB_V} \
+        libnvinfer-vc-plugin8=${TENSORRT_DEB_V} \
+        libnvinfer8=${TENSORRT_DEB_V} \
+        libnvonnxparsers8=${TENSORRT_DEB_V} \
+        python3-libnvinfer=${TENSORRT_DEB_V} \
+        && \
+        apt clean && \
+        rm -rf /var/lib/apt/lists/* ; \
+    fi
 
 RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
@@ -236,6 +289,7 @@ COPY --chown=$USERNAME:$USERNAME --from=cabot_src ./script script
 RUN /ros_entrypoint.sh /launch.sh build
 
 FROM ${FROM_IMAGE} as final
+ARG TARGETARCH
 ENV ROS_DISTRO=humble
 ARG TZ=UTC
 ENV TZ=$TZ
@@ -309,24 +363,62 @@ RUN apt update && \
     software-properties-common \
     && \
     rm -rf /var/lib/apt/lists/*
-RUN CUDA_V="12.9" TENSORRT_DEB_V="10.15.1.29-1+cuda13.1" && \
-    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
-    add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
-    apt update && \
-    apt-get install -y --no-install-recommends \
-    cuda-toolkit-${CUDA_V} \
-    libnvinfer-dev=${TENSORRT_DEB_V} \
-    libnvinfer-headers-dev=${TENSORRT_DEB_V} \
-    libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
-    libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
-    libnvinfer-plugin10=${TENSORRT_DEB_V} \
-    libnvinfer-vc-plugin10=${TENSORRT_DEB_V} \
-    libnvinfer10=${TENSORRT_DEB_V} \
-    libnvonnxparsers10=${TENSORRT_DEB_V} \ 
-    python3-libnvinfer=${TENSORRT_DEB_V} \
-    && \
-    apt clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        CUDA_V="12-9" TENSORRT_DEB_V="10.15.1.29-1+cuda13.1" && \
+        apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+        add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" && \
+        apt update && \
+        apt-get install -y --no-install-recommends \
+        cuda-toolkit-${CUDA_V} \
+        libnvinfer-bin=${TENSORRT_DEB_V} \
+        libnvinfer-dev=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch10=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-lean10=${TENSORRT_DEB_V} \
+        libnvinfer-lean-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin10=${TENSORRT_DEB_V} \
+        libnvinfer-vc-plugin10=${TENSORRT_DEB_V} \
+        libnvinfer10=${TENSORRT_DEB_V} \
+        libnvonnxparsers10=${TENSORRT_DEB_V} \
+        python3-libnvinfer=${TENSORRT_DEB_V} \
+        && \
+        apt clean && \
+        rm -rf /var/lib/apt/lists/* && \
+        # install packages to export TensorRT models
+        pip3 install --no-cache-dir \
+            torch==2.10.0 torchvision==0.25.0 \
+            cuda-python==12.9.4 onnxscript==0.7.0 ; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        CUDA_V="12-2" TENSORRT_DEB_V="8.6.2.3-1+cuda12.2" && \
+        apt update && \
+        apt-get install -y --no-install-recommends \
+        cuda-nvcc-${CUDA_V} \
+        libcudla-dev-${CUDA_V} \
+        libnvinfer-bin=${TENSORRT_DEB_V} \
+        libnvinfer-dev=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch10=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-dev=${TENSORRT_DEB_V} \
+        libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-lean10=${TENSORRT_DEB_V} \
+        libnvinfer-lean-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
+        libnvinfer-plugin8=${TENSORRT_DEB_V} \
+        libnvinfer-vc-plugin8=${TENSORRT_DEB_V} \
+        libnvinfer8=${TENSORRT_DEB_V} \
+        libnvonnxparsers8=${TENSORRT_DEB_V} \
+        python3-libnvinfer=${TENSORRT_DEB_V} \
+        && \
+        apt clean && \
+        rm -rf /var/lib/apt/lists/* && \
+        # install packages to export TensorRT models
+        pip3 install --no-cache-dir \
+            torch==2.10.0 torchvision==0.25.0 \
+            cuda-python==12.2.1 onnxscript==0.7.0 ; \
+    fi
 
 RUN pip3 install --no-cache-dir \
     # install ipython==8.0.1 to prevent errors while using odrivetool
