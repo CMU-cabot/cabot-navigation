@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <mutex>
+#include <stdexcept>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
@@ -16,6 +18,7 @@
 #else
   #error "cv_bridge header not found: expected cv_bridge/cv_bridge.hpp or cv_bridge/cv_bridge.h"
 #endif
+#include <NvInferPlugin.h>
 #include <yaml-cpp/yaml.h>
 
 #include "cabot_dnn_controller/classify_utils.hpp"
@@ -45,6 +48,21 @@ using cabot_dnn_controller::dnn_controller_constants::kInputScanName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputWLogitsName;
+
+void initTensorRTPluginsOnce(nvinfer1::ILogger & logger)
+{
+  static std::once_flag init_flag;
+  static bool initialized = false;
+
+  std::call_once(init_flag, [&]() {
+    // Required for TensorRT builtin plugins
+    initialized = initLibNvInferPlugins(&logger, "");
+  });
+
+  if (!initialized) {
+    throw std::runtime_error("Failed to initialize TensorRT plugins");
+  }
+}
 
 }  // namespace
 
@@ -125,6 +143,8 @@ void DnnController::configure(
       throw std::runtime_error("TensorRT model file is empty: " + trt_model_);
     }
     trt_logger_ = std::make_unique<TrtLogger>(logger_);
+    // Required before deserializing engines that contain TensorRT plugins
+    initTensorRTPluginsOnce(*trt_logger_);
     trt_runtime_.reset(nvinfer1::createInferRuntime(*trt_logger_));
     if (!trt_runtime_) {
       throw std::runtime_error("Failed to create TensorRT runtime");
