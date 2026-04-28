@@ -20,6 +20,7 @@ find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 find_library(NVINFER_LIB nvinfer)
+find_library(NVINFER_PLUGIN_LIB nvinfer_plugin)
 find_package(yaml-cpp REQUIRED)
 
 add_library(dnn_controllers SHARED
@@ -49,6 +50,7 @@ ament_target_dependencies(dnn_controllers
 target_link_libraries(dnn_controllers
   CUDA::cudart
   ${NVINFER_LIB}
+  ${NVINFER_PLUGIN_LIB}
   ${OpenCV_LIBS}
   yaml-cpp
 )
@@ -64,6 +66,7 @@ target_include_directories(test_dnn_controller_model PUBLIC
 target_link_libraries(test_dnn_controller_model
   CUDA::cudart
   ${NVINFER_LIB}
+  ${NVINFER_PLUGIN_LIB}
   yaml-cpp
 )
 
