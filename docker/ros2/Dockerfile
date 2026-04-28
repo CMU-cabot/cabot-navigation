@@ -180,11 +180,11 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
         libcudla-dev-${CUDA_V} \
         libnvinfer-bin=${TENSORRT_DEB_V} \
         libnvinfer-dev=${TENSORRT_DEB_V} \
-        libnvinfer-dispatch10=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch8=${TENSORRT_DEB_V} \
         libnvinfer-dispatch-dev=${TENSORRT_DEB_V} \
         libnvinfer-headers-dev=${TENSORRT_DEB_V} \
         libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
-        libnvinfer-lean10=${TENSORRT_DEB_V} \
+        libnvinfer-lean8=${TENSORRT_DEB_V} \
         libnvinfer-lean-dev=${TENSORRT_DEB_V} \
         libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
         libnvinfer-plugin8=${TENSORRT_DEB_V} \
@@ -399,11 +399,11 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
         libcudla-dev-${CUDA_V} \
         libnvinfer-bin=${TENSORRT_DEB_V} \
         libnvinfer-dev=${TENSORRT_DEB_V} \
-        libnvinfer-dispatch10=${TENSORRT_DEB_V} \
+        libnvinfer-dispatch8=${TENSORRT_DEB_V} \
         libnvinfer-dispatch-dev=${TENSORRT_DEB_V} \
         libnvinfer-headers-dev=${TENSORRT_DEB_V} \
         libnvinfer-headers-plugin-dev=${TENSORRT_DEB_V} \
-        libnvinfer-lean10=${TENSORRT_DEB_V} \
+        libnvinfer-lean8=${TENSORRT_DEB_V} \
         libnvinfer-lean-dev=${TENSORRT_DEB_V} \
         libnvinfer-plugin-dev=${TENSORRT_DEB_V} \
         libnvinfer-plugin8=${TENSORRT_DEB_V} \
