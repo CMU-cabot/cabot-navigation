@@ -128,6 +128,13 @@ services:
     profiles:
       - prod
 
+  conversation_server_local:
+    extends:
+      file: docker-compose-common.yaml
+      service: conversation_server_local
+    profiles:
+      - conversation
+
   # map server
   map_server:
     extends:

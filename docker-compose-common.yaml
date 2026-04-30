@@ -237,6 +237,20 @@ services:
       - ./docker/home/.ros:/home/developer/.ros
       - ./docker/home/.cache:/home/developer/.cache
 
+  conversation_server_local:
+    image: cmucal/cabot-conversation:latest
+    network_mode: host
+    volumes:
+      - ../.env:/opt/cabot/.env:ro
+      - ../log:/opt/cabot/log
+      - ../tools/decode_console_logs.py:/opt/cabot/tools/decode_console_logs.py:ro
+      - ./docker/conversation/run_conversation_server_local.sh:/opt/cabot/conversation/run_conversation_server_local.sh:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    command:
+      - bash
+      - /opt/cabot/conversation/run_conversation_server_local.sh
+
   navigation-base:
     extends: ros2-base
     environment:
