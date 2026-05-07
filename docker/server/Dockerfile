@@ -70,18 +70,56 @@ WORKDIR /home/$USERNAME
 RUN wget https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtime/release/23.0.0.8/openliberty-javaee8-23.0.0.8.zip && \
         unzip openliberty-javaee8-23.0.0.8.zip
 
-ADD https://api.github.com/repos/CMU-cabot/MapService/git/refs/heads/cabot-hokoukukan_2018 MapService-version.json
-RUN git clone https://github.com/CMU-cabot/MapService -b cabot-hokoukukan_2018 && \
-        cd MapService && \
+# For local development, place a git checkout under docker/server/MapService and/or docker/server/QueryService.
+# If no local git repository is present, the image falls back to cloning the pinned GitHub branches.
+COPY --chown=$USERNAME:$USERNAME . /home/$USERNAME/local-src
+
+# MapService
+RUN if [ -e /home/$USERNAME/local-src/MapService/.git ]; then \
+            # local repository
+            cp -r /home/$USERNAME/local-src/MapService /home/$USERNAME/MapService; \
+            cd /home/$USERNAME/MapService; \
+            # generate MapService-version.json
+            ref="$(git symbolic-ref -q HEAD || echo HEAD)"; \
+            sha="$(git rev-parse HEAD)"; \
+            jq -n \
+                --arg ref "$ref" \
+                --arg sha "$sha" \
+                --arg url "local://docker/server/MapService" \
+                '{ref: $ref, url: $url, object: {sha: $sha, type: "commit"}}' \
+                > /home/$USERNAME/MapService-version.json; \
+        else \
+            # clone repository
+            wget -O /home/$USERNAME/MapService-version.json https://api.github.com/repos/CMU-cabot/MapService/git/refs/heads/cabot-hokoukukan_2018 && \
+            git clone https://github.com/CMU-cabot/MapService -b cabot-hokoukukan_2018 /home/$USERNAME/MapService; \
+        fi && \
+        cd /home/$USERNAME/MapService && \
         sh download-lib.sh
 
 RUN cd MapService/MapService && \
         mvn initialize && \
         mvn package
 
-ADD https://api.github.com/repos/CMU-cabot/QueryService/git/refs/heads/hokoukukan-2018 QueryService-version.json
-RUN git clone https://github.com/CMU-cabot/QueryService -b hokoukukan-2018 && \
-        cd QueryService && \
+# QueryService
+RUN if [ -e /home/$USERNAME/local-src/QueryService/.git ]; then \
+            # local repository
+            cp -r /home/$USERNAME/local-src/QueryService /home/$USERNAME/QueryService; \
+            cd /home/$USERNAME/QueryService; \
+            # generate QueryService-version.json
+            ref="$(git symbolic-ref -q HEAD || echo HEAD)"; \
+            sha="$(git rev-parse HEAD)"; \
+            jq -n \
+                --arg ref "$ref" \
+                --arg sha "$sha" \
+                --arg url "local://docker/server/QueryService" \
+                '{ref: $ref, url: $url, object: {sha: $sha, type: "commit"}}' \
+                > /home/$USERNAME/QueryService-version.json; \
+        else \
+            # clone repository
+            wget -O /home/$USERNAME/QueryService-version.json https://api.github.com/repos/CMU-cabot/QueryService/git/refs/heads/hokoukukan-2018 && \
+            git clone https://github.com/CMU-cabot/QueryService -b hokoukukan-2018 /home/$USERNAME/QueryService; \
+        fi && \
+        cd /home/$USERNAME/QueryService && \
         sh download-lib.sh
 
 RUN cd QueryService/QueryService && \
