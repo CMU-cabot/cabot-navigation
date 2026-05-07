@@ -32,10 +32,11 @@ def generate_launch_description():
     output = {'stderr': {'log'}}
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
 
-    rviz_config = PathJoinSubstitution([
+    default_rviz_config = PathJoinSubstitution([
         FindPackageShare("mf_localization"),
         "configuration_files/rviz/demo_2d_floors.rviz"
     ])
+    rviz_config_file = LaunchConfiguration('rviz_config_file')
 
     return LaunchDescription([
         DeclareLaunchArgument('sigterm_timeout', default_value='15'),
@@ -48,12 +49,17 @@ def generate_launch_description():
             default_value='false',
             description='Use simulation time if true'
         ),
+        DeclareLaunchArgument(
+            'rviz_config_file',
+            default_value=default_rviz_config,
+            description='Full path to the RViz config file'
+        ),
         Node(
             package='rviz2',
             executable='rviz2',
             name='rviz2',
             output=output,
-            arguments=['-d', rviz_config],
+            arguments=['-d', rviz_config_file],
             parameters=[{'use_sim_time': use_sim_time}]
         )
     ])

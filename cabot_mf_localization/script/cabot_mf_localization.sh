@@ -112,6 +112,7 @@ publish_current_rate=0
 : ${CABOT_SITE_TAGS:='\"\"'}
 : ${CABOT_MODEL:=}
 : ${CABOT_SHOW_LOC_RVIZ:=0}
+: ${CABOT_LOC_RVIZ_CONFIG:=}
 : ${CABOT_HEADLESS:=0}
 if [[ $CABOT_HEADLESS -eq 1 ]]; then
     CABOT_SHOW_LOC_RVIZ=0
@@ -403,8 +404,12 @@ gazebo_bool=$([[ $gazebo -eq 1 ]] && echo 'true' || echo 'false')\
 ### launch rviz
 if [ $show_rviz -eq 1 ]; then
    echo "launch rviz"
+   rviz_config_option=
+   if [[ -n $CABOT_LOC_RVIZ_CONFIG ]]; then
+       rviz_config_option="rviz_config_file:=$CABOT_LOC_RVIZ_CONFIG"
+   fi
    cmd="$command ros2 launch -n mf_localization view_multi_floor.launch.py \
-         use_sim_time:=$gazebo_bool $commandpost"
+         use_sim_time:=$gazebo_bool $rviz_config_option $commandpost"
    echo $cmd
    eval $cmd
    pids+=($!)

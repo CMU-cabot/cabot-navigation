@@ -143,6 +143,7 @@ popd
   CABOT_SHOW_ROS2_RVIZ       # show ROS2 rviz (default=1)
   CABOT_SHOW_ROS2_LOCAL_RVIZ # show ROS2 local navigation rviz (default=0)
   CABOT_SHOW_LOC_RVIZ        # show ROS1 localization rviz (default=1)
+  CABOT_LOC_RVIZ_CONFIG      # localization rviz config file
   CABOT_SHOW_PEOPLE_RVIZ     # show ROS1 people rviz (default=0)
   CABOT_SHOW_ROBOT_MONITOR   # show robot monitor (default=1)
   CABOT_RECORD_ROSBAG2       # record BT log, controller critics evalation into rosbag2 (default=1)
