@@ -1044,7 +1044,14 @@ class Navigation(ControlBase, navgoal.GoalInterface):
     def _check_nearby_facility(self, current_pose):
         if not self.nearby_facilities:
             return
-        entry = min(self.nearby_facilities, key=lambda p, c=current_pose: abs(p["entrance"].distance_to(c)))
+
+        entries = self.nearby_facilities
+        if self.current_floor is not None:
+            entries = [entry for entry in entries if entry["entrance"].same_floor(self.current_floor)]
+            if not entries:
+                return
+
+        entry = min(entries, key=lambda p, c=current_pose: abs(p["entrance"].distance_to(c)))
         if entry is None:
             return
         entrance = entry["entrance"]
