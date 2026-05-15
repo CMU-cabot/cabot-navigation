@@ -81,6 +81,7 @@ def generate_launch_description():
     free_mode_end_userfree_movement_time = LaunchConfiguration('free_mode_end_userfree_movement_time')
     cabot_vlm_use_button = LaunchConfiguration('cabot_vlm_use_button')
     cabot_allowed_modes_bitmask = LaunchConfiguration('cabot_allowed_modes_bitmask')
+    cabot_autonomous_teleop_goal = LaunchConfiguration('cabot_autonomous_teleop_goal')
 
     def hoge(text):
         return text
@@ -286,6 +287,10 @@ def generate_launch_description():
             default_value=EnvironmentVariable('CABOT_VLM_USE_BUTTON', default_value='false'),
         ),
         DeclareLaunchArgument(
+            'cabot_autonomous_teleop_goal',
+            default_value=EnvironmentVariable('CABOT_AUTONOMOUS_TELEOP_GOAL', default_value='false'),
+        ),
+        DeclareLaunchArgument(
             'cabot_allowed_modes_bitmask',
             default_value=EnvironmentVariable('CABOT_ALLOWED_MODES_BITMASK', default_value='15'),
         ),
@@ -334,6 +339,7 @@ def generate_launch_description():
                 'free_mode_end_userfree_movement_time': free_mode_end_userfree_movement_time,
                 'cabot_vlm_use_button': cabot_vlm_use_button,
                 'cabot_allowed_modes_bitmask': cabot_allowed_modes_bitmask,
+                'cabot_autonomous_teleop_goal': cabot_autonomous_teleop_goal,
             }, NamespaceParameterFile('cabot_ui_manager_navigation', config_path)],
             ros_arguments=[
                 # '--log-level', 'cabot_ui_manager:=debug'
@@ -404,5 +410,12 @@ def generate_launch_description():
                 }
             ],
             condition=IfCondition(use_directional_indicator),
+        ),
+        Node(
+            package='cabot_ui',
+            executable='manual_mode_vibration.py',
+            namespace='cabot',
+            name='manual_mode_vibration',
+            output=output,
         ),
     ])

@@ -5,6 +5,7 @@ import random
 import time
 from typing import List, Optional
 
+import geometry_msgs
 import numpy as np
 import psutil
 import rclpy
@@ -73,8 +74,15 @@ class ExplorationMainLoop(Node):
 
         self.did_go_around = False
 
+        self.goal_overwrite_sub = self.create_subscription(geometry_msgs.msg.PoseStamped, "/cabot/navigation/goal_overwrite", self._goal_overwrite_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.goal_overwrite = None
+
         self.logger.info("ExplorationMainLoop initialized")
         # speak_text(f"現在、{self.floor}階の展示エリアにいます。")
+
+    def _goal_overwrite_callback(self, msg):
+        self.logger.info(f"Received goal overwrite main: {msg}")
+        self.goal_overwrite = msg
 
     def event_callback(self, msg):
         self.logger.info(f"[Main Loop] Received event: {msg.data}")
@@ -467,6 +475,12 @@ class ExplorationMainLoop(Node):
                     output_point_and_direction = [cand for cand in sampled_points if "".join([x[0] for x in cand[1].split("_")]) == selected_dir][0]
                     output_point = output_point_and_direction[0]
                     output_direction = output_point_and_direction[1]
+
+
+            if self.goal_overwrite is not None:
+                output_point = (self.goal_overwrite.pose.position.x, self.goal_overwrite.pose.position.y)
+                output_direction = "coordinates"
+                state_client.logger.info(f"Goal overwrite received; overwriting the next point to {output_point} ({output_direction})")
 
             state_client.logger.info(f"Next point: {output_point} ({output_direction})")
             dist = np.linalg.norm(np.array(output_point) - np.array(current_coords))

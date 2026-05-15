@@ -335,7 +335,7 @@ local_costmap:
       height: 100
       resolution: 0.1
       track_unknown_space: True
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "inflation_layer"]
       robot_radius: 0.1 # 0.45 default
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -373,25 +373,6 @@ local_costmap:
           marking: True
           inf_is_valid: True 
           data_type: "PointCloud2"
-      low_obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        min_obstacle_height: -2.0
-        max_obstacle_height: 2.0
-        observation_sources: scan
-        track_unknown_space: True
-        scan:
-          topic: /livox_scan 
-          min_obstacle_height: -2.0
-          max_obstacle_height: 2.0
-          obstacle_min_range: 0.05
-          obstacle_max_range: 10.0
-          raytrace_max_range: 10.0
-          clearing: True 
-          marking: True
-          inf_is_valid: False 
-          data_type: "LaserScan"
-          observation_persistence: 0.0 
       static_layer:
         map_subscribe_transient_local: True
       always_send_full_costmap: True

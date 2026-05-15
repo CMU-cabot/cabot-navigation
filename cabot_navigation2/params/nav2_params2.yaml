@@ -201,7 +201,7 @@ local_costmap:
       width: 10
       height: 10
       resolution: 0.1
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "inflation_layer"]
       robot_radius: 0.1
       inflation_layer:
         enabled: False
@@ -217,23 +217,6 @@ local_costmap:
           topic: /local/scan
           min_obstacle_height: -100.0
           max_obstacle_height: 100.0
-          obstacle_max_range: 4.0
-          raytrace_max_range: 5.0
-          clearing: True
-          marking: True
-          inf_is_valid: True # default: False
-          data_type: "LaserScan"
-      low_obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        min_obstacle_height: -2.0
-        max_obstacle_height: 2.0
-        observation_sources: scan
-        scan:
-          topic: /local/livox_scan_expand
-          min_obstacle_height: -2.0
-          max_obstacle_height: 2.0
-          obstacle_min_range: 0.05
           obstacle_max_range: 4.0
           raytrace_max_range: 5.0
           clearing: True
@@ -259,7 +242,7 @@ global_costmap:
       width: 20
       height: 20
       use_sim_time: True
-      plugins: ["obstacle_layer", "low_obstacle_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "inflation_layer"]
       robot_radius: 0.1
       resolution: 0.1
       inflation_layer:
@@ -277,23 +260,6 @@ global_costmap:
           max_obstacle_height: 100.0
           obstacle_max_range: 8.0
           raytrace_max_range: 8.0
-          clearing: True
-          marking: True
-          inf_is_valid: True # default: False
-          data_type: "LaserScan"
-      low_obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        min_obstacle_height: -2.0
-        max_obstacle_height: 2.0
-        observation_sources: scan
-        scan:
-          topic: /local/livox_scan_expand
-          min_obstacle_height: -2.0
-          max_obstacle_height: 2.0
-          obstacle_min_range: 0.05
-          obstacle_max_range: 4.5
-          raytrace_max_range: 5.0
           clearing: True
           marking: True
           inf_is_valid: True # default: False

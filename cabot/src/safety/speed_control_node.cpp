@@ -166,7 +166,7 @@ private:
       turnSpeedOverwrite_ = msg->data;
     });
 
-    vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1", 10);
+    vibrator1_pub_ = create_publisher<std_msgs::msg::UInt8>("vibrator1_virtual", 10); // virtual
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / targetRate_),
       std::bind(&SpeedControlNode::timerCallback, this));

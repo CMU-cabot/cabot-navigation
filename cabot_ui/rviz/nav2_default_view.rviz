@@ -662,6 +662,16 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
+      Name: Intersections
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /cabot/intersection_markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
       Name: MarkerArray
       Namespaces:
         {}

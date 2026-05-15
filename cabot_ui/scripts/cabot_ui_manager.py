@@ -48,6 +48,7 @@ import numpy as np
 
 
 import geometry_msgs
+from geometry_msgs.msg import PoseStamped, Twist
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import rclpy
 import rclpy.client
@@ -129,6 +130,7 @@ class CabotUIManager(NavigationInterface, object):
         self.free_mode_switch_autonomous_mode_temp = self._node.declare_parameter('free_mode_switch_autonomous_mode_temp', False).value
         self.free_mode_switch_autonomous_mode_temp_duration = self._node.declare_parameter('free_mode_switch_autonomous_mode_temp_duration', 5.0).value
         self.free_mode_end_userfree_movement_time = self._node.declare_parameter('free_mode_end_userfree_movement_time', 0.5).value
+        self.cabot_autonomous_teleop_goal = self._node.declare_parameter('cabot_autonomous_teleop_goal', False).value
 
         self.cabot_vlm_use_button = self._node.declare_parameter('cabot_vlm_use_button', False).value
 
@@ -142,6 +144,11 @@ class CabotUIManager(NavigationInterface, object):
         self._logger.info(f"free_mode_switch_autonomous_mode_temp : {self.free_mode_switch_autonomous_mode_temp}, free_mode_switch_autonomous_mode_temp_duration : {self.free_mode_switch_autonomous_mode_temp_duration}")
         self._logger.info(f"free_mode_switch_autonomous_wizard_mode : {self.free_mode_switch_autonomous_wizard_mode}")
 
+        # LOG cabot_autonomous_teleop_goal
+        self._logger.info(f"CabotUIManager cabot_autonomous_teleop_goal: {self.cabot_autonomous_teleop_goal}")
+
+        self.goal_overwrite_sub = self._node.create_subscription(geometry_msgs.msg.PoseStamped, "/goal_pose", self._goal_overwrite_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.goal_overwrite_pub = self._node.create_publisher(geometry_msgs.msg.PoseStamped, "/cabot/navigation/goal_overwrite", 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         # process allowed modes bitmask
         allowed_modes_bytes = self.cabot_allowed_modes_bitmask & 0x0F  # only lower 4 bits are used
@@ -264,6 +271,13 @@ class CabotUIManager(NavigationInterface, object):
 
         self.send_speaker_audio_files()
 
+
+    def _goal_overwrite_callback(self, msg):
+        if not self.cabot_autonomous_teleop_goal:
+            return
+        
+        self._logger.info(f"Received goal overwrite ui: {msg}")
+        self.goal_overwrite_pub.publish(msg)
 
     def _allow_buttons_callback(self, msg):
         self._allowButtons = msg.data

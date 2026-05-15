@@ -52,10 +52,10 @@ Handle::Handle(
   logger_(rclcpp::get_logger("handle"))
 {
   power_ = 255;
-  vibrator1_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator1", 100);
-  vibrator2_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator2", 100);
-  vibrator3_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator3", 100);
-  vibrator4_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator4", 100);
+  vibrator1_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator1_virtual", 100); //DISABLED
+  vibrator2_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator2_virtual", 100); //DISABLED
+  vibrator3_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator3_virtual", 100); //DISABLED
+  vibrator4_pub_ = node->create_publisher<std_msgs::msg::UInt8>("vibrator4_virtual", 100); //DISABLED
   for (int i = 0; i < 9; ++i) {
     rclcpp::Time zerotime(0, 0, RCL_ROS_TIME);
     last_up[i] = zerotime;

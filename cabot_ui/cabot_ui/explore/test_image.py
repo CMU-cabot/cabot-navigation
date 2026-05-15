@@ -10,6 +10,7 @@ import time
 import textwrap
 import traceback
 from copy import copy
+from turtle import goto
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
@@ -106,6 +107,7 @@ class CaBotImageNode(Node):
 
         
         self.last_scan_data = None
+        self.vlm_callback_thread = None
 
         self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, qos_profile_sensor_data, callback_group=MutuallyExclusiveCallbackGroup())
 
@@ -208,6 +210,9 @@ class CaBotImageNode(Node):
             self.max_loop = -1
         self.loop_count = 0
 
+        self.latest_ticket = 0
+        self.vlm_busy = False
+
         #do loop in different threading no timer
         self.timer = threading.Timer(0.1, self.loop).start()
 
@@ -224,7 +229,11 @@ class CaBotImageNode(Node):
         self.logger.info(f"Received VLM button message: {msg.data}")
         self.allowAutoVLM = False
         if msg.data != 0:
-            self.loop(msg.data)
+            if self.vlm_callback_thread is not None:
+                self.vlm_callback_thread.cancel()
+
+            self.vlm_callback_thread = threading.Timer(0.01, self.loop, args=[msg.data])
+            self.vlm_callback_thread.start()
 
     def persona_callback(self, msg: std_msgs.msg.String):
         self.logger.info(f"[CabotImageNode] Received persona: {msg.data}")
@@ -464,19 +473,19 @@ class CaBotImageNode(Node):
             lidar_to = 1.0
             if img_id == 1:
                 left_im = self.left_image
-                clocks = ["8 o'clock", "9 o'clock", "10 o'clock"]
+                clocks = ["...8 o'clock...", "...9 o'clock...", "...10 o'clock..."]
                 depth_image = self.left_depth
                 lidar_from = 0.66
                 lidar_to = 1.0
             elif img_id == 2:
                 front_im = self.front_image
-                clocks = ["11 o'clock", "12 o'clock", "1 o'clock"]
+                clocks = ["...11 o'clock...", "...12 o'clock...", "...1 o'clock..."]
                 depth_image = self.front_depth
                 lidar_from = 0.34
                 lidar_to = 0.66
             elif img_id == 3:
                 right_im = self.right_image
-                clocks = ["2 o'clock", "3 o'clock", "4 o'clock"]
+                clocks = ["...2 o'clock...", "...3 o'clock...", "...4 o'clock..."]
                 depth_image = self.right_depth
                 lidar_from = 0.0
                 lidar_to = 0.34
@@ -510,60 +519,112 @@ class CaBotImageNode(Node):
                     if distance == float('inf'):
                         lidar_message_parts.append(f"{clock} unknown distance")
                     else:
-                        lidar_message_parts.append(f"{clock} {distance:.2f} meters")
+                        lidar_message_parts.append(f"{clock} {distance:.1f} meters...")
 
-                loading_message = "Closest objects: " + ", ".join(lidar_message_parts) + ". "
+                loading_message = "Detected Objects: " + ", ".join(lidar_message_parts) + ". "
 
-            test_speak.speak_text(loading_message)
-            wait_time, raw_explain = self.gpt_explainer.explain(front_im, left_im, right_im, self.front_depth, self.left_depth, self.right_depth)
+            test_speak.speak_text(loading_message, force=True)
 
-            #generate output text
-            names = [item[0] for item in raw_explain]
-            pixels_x = [item[1] for item in raw_explain]
-            pixels_y = [item[2] for item in raw_explain]
 
-            clock_positions = []
-            for pixel_x in pixels_x:
-                if pixel_x < 320/3:
-                    clock_positions.append(clocks[0])
-                elif pixel_x > 320/3*2:
-                    clock_positions.append(clocks[2])
-                else:
-                    clock_positions.append(clocks[1])
+            self.latest_ticket += 1
+            my_ticket = self.latest_ticket
 
-            depths = []
-            for pixel_x, pixel_y in zip(pixels_x, pixels_y):
-                if depth_image is not None:
-                    # Clamp the pixel coordinates to be within the image bounds
-                    pixel_x = max(0, min(depth_image.shape[1] - 1, pixel_x))
-                    pixel_y = max(0, min(depth_image.shape[0] - 1, pixel_y))
+            while self.vlm_busy or my_ticket < self.latest_ticket:
+                time.sleep(0.01)
+                if my_ticket < self.latest_ticket:
+                    return
 
-                    depth = (self.gaussian_average_depth(depth_image, pixel_x, pixel_y, r=15, sigma=5.0) // 100) / 10.0
-                    if depth == 0 or depth > 2:
-                        depth = "many"
-                    depths.append(depth)
-                else:
-                    depths.append("unknown")
+            self.vlm_busy = True
+            try:
+                wait_time, raw_explain = self.gpt_explainer.explain(front_im, left_im, right_im, self.front_depth, self.left_depth, self.right_depth)
+            finally:
+                self.vlm_busy = False
 
-            formatted_items = []
-            for name, clock, pixel_x, pixel_y, depth in zip(names, clock_positions, pixels_x, pixels_y, depths):
-                formatted_items.append(f"{name} at {clock}")
+            if my_ticket < self.latest_ticket:
+                return
 
             explain = ""
 
-            if len(formatted_items) > 1:
-                explain = ", ".join(formatted_items[:-1]) + " and " + formatted_items[-1] + "."
-            elif len(formatted_items) == 1:
-                explain = formatted_items[0] + "."
+            invalidOutput = (len(raw_explain) == 0 or len(raw_explain[0]) < 3)
 
-            # if self.current_image == 0:
-            #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
-            # elif self.current_image == 1:
-            #     wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
-            # elif self.current_image == 2:
-            #     wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
+            if not invalidOutput and len(min_distances) == 3:
+                #generate output text
+                names = [item[0] for item in raw_explain]
+                pixels_x = [item[1] for item in raw_explain]
+                pixels_y = [item[2] for item in raw_explain]
 
-            # self.current_image = (self.current_image + 1) % 3
+                clock_positions = []
+                for pixel_x in pixels_x:
+                    if pixel_x < 320/3:
+                        clock_positions.append(clocks[0])
+                    elif pixel_x > 320/3*2:
+                        clock_positions.append(clocks[2])
+                    else:
+                        clock_positions.append(clocks[1])
+
+                depths = []
+                for pixel_x, pixel_y in zip(pixels_x, pixels_y):
+                    if depth_image is not None:
+                        # Clamp the pixel coordinates to be within the image bounds
+                        pixel_x = max(0, min(depth_image.shape[1] - 1, pixel_x))
+                        pixel_y = max(0, min(depth_image.shape[0] - 1, pixel_y))
+
+                        depth = (self.gaussian_average_depth(depth_image, pixel_x, pixel_y, r=15, sigma=5.0) // 100) / 10.0
+                        if depth == 0 or depth > 2:
+                            depth = "many"
+                        depths.append(depth)
+                    else:
+                        depths.append("unknown")
+
+
+            
+                self.logger.info(f"Minimum distances from LiDAR in each direction: {min_distances}")
+    
+
+                formatted_items = []
+                for name, clock, pixel_x, pixel_y, depth in zip(names, clock_positions, pixels_x, pixels_y, depths):
+                    formatted_items.append(f"{name}")
+
+                # Sort formatted_items by clock position
+                clock_items_1 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[0]]
+                clock_items_2 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[1]]
+                clock_items_3 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[2]]
+
+
+                if len(clock_items_1) > 0:
+                    explain += f"{clocks[0]} : "
+
+                if len(clock_items_1) > 1:
+                    explain += ", ".join(clock_items_1[:-1]) + " and " + clock_items_1[-1] + "."
+                elif len(clock_items_1) == 1:
+                    explain += clock_items_1[0] + "."
+
+                #explain += lidar_message_parts[1]
+                if len(clock_items_1) > 0:
+                    explain += f"{clocks[1]} : "
+
+                if len(clock_items_2) > 1:
+                    explain += ", ".join(clock_items_2[:-1]) + " and " + clock_items_2[-1] + "."
+                elif len(clock_items_2) == 1:
+                    explain += clock_items_2[0] + "."
+
+                #explain += lidar_message_parts[2]
+                if len(clock_items_1) > 0:
+                    explain += f"{clocks[2]} : "
+
+                if len(clock_items_3) > 1:
+                    explain += ", ".join(clock_items_3[:-1]) + " and " + clock_items_3[-1] + "."
+                elif len(clock_items_3) == 1:
+                    explain += clock_items_3[0] + "."
+
+                # if self.current_image == 0:
+                #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
+                # elif self.current_image == 1:
+                #     wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
+                # elif self.current_image == 2:
+                #     wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
+
+                # self.current_image = (self.current_image + 1) % 3
 
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
@@ -571,10 +632,10 @@ class CaBotImageNode(Node):
                 self.logger.info(f"reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is not empty")
                 test_speak.speak_text(explain)
                 self.logger.info(f"[CHILOG] [EXPLAIN] [{explain}]")
-                self.can_speak_explanation = False
-                self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
-                self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
-                next_loop_wait_time = 1.0
+                # self.can_speak_explanation = False
+                # self.logger.info(f"can speak explanation set to False, waiting for {wait_time} sec")
+                # self.can_speak_timer = self.create_timer(wait_time + 3.0, self.reset_can_speak) # add 3 sec to the wait time to make a certain gap between the explanation
+                next_loop_wait_time = 0.1
             else:
                 self.logger.info(f"NOT reading because self.touching {self.touching} and not in conversation {self.in_conversation} and in valid state {is_in_valid_state} and can_speak_explanation {self.can_speak_explanation} and explain is {explain}")
                 if explain == "":
@@ -748,7 +809,7 @@ class GPTExplainer():
 
         self.should_speak = should_speak
         self.conversation_history = []
-        test_inference = self.query_with_images(prompt="test", images=[])
+        #test_inference = self.query_with_images(prompt="test", images=[])
         self.okay_images = False
 
         if  self.mode == "semantic_map_mode":
@@ -1033,7 +1094,7 @@ class GPTExplainer():
         else:
             return None
 
-    def query_with_images(self, prompt, images, max_tokens=2000) -> Dict[str, Any]:
+    def query_with_images(self, prompt, images, max_tokens=200) -> Dict[str, Any]:
         # Preparing the content with the prompt and images
         new_content = [{"type": "text", "text": prompt}]
         self.conversation_history.append({"role": "user", "content": copy(new_content)})

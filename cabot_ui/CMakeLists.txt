@@ -102,6 +102,7 @@ install(PROGRAMS
   scripts/navcog_map.py
   scripts/cabot_keyboard.py
   scripts/cabot_ui_manager.py
+  scripts/manual_mode_vibration.py
   scripts/stop_reasons_node.py
   scripts/exploration_chat_server.py
   scripts/exploration_image_explain.py
