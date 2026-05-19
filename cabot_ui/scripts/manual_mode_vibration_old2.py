@@ -28,7 +28,7 @@ class RadarVisualizer:
         # --- AXE 1 : Carte dynamique ---
         self.ax1.set_title("Navigation - Live Map Update")
         # On stocke l'objet image pour pouvoir faire set_data plus tard
-        self.img_plot = self.ax1.imshow(initial_mag_map, cmap='viridis', origin='lower')
+        self.img_plot = self.ax1.imshow(initial_mag_map, cmap='viridis')
         self.robot_dot, = self.ax1.plot(initial_x, initial_y, 'ro', markersize=10)
         
         # --- AXE 2 : Histogramme Polaire ---
@@ -39,8 +39,8 @@ class RadarVisualizer:
         self.theta = np.linspace(0, 2*np.pi, 16, endpoint=False)
         self.bars = self.ax2.bar(self.theta, np.zeros(16), width=0.3, color='orange', alpha=0.8)
         
-        self.ax2.set_theta_zero_location('E')
-        self.ax2.set_theta_direction(1)
+        self.ax2.set_theta_zero_location('N')
+        self.ax2.set_theta_direction(-1)
         self.ax2.set_ylim(0, 2.5)
 
     def update_ui(self, x, y, local_bins, new_mag_map=None, rotation_angle=0):
@@ -53,7 +53,7 @@ class RadarVisualizer:
             print(f"Updating mag map with new data. Min: {new_mag_map.min()}, Max: {new_mag_map.max()}")
 
             # Inverse X Axis for better visualization (optional, depends on how you want to display the map)
-            self.img_plot.set_data(new_mag_map)
+            self.img_plot.set_data(np.flip(new_mag_map, axis=1))
             # Optionnel : si la plage de valeurs change (ex: mag monte subitement)
             self.img_plot.set_clim(vmin=new_mag_map.min(), vmax=new_mag_map.max())
 
@@ -64,7 +64,7 @@ class RadarVisualizer:
         for bar, val in zip(self.bars, local_bins):
             bar.set_height(val)
 
-        #self.ax2.set_theta_offset(np.deg2rad(90 + rotation_angle))
+        self.ax2.set_theta_offset(np.deg2rad(90 + rotation_angle))
         
         # 4. Refresh
         self.fig.canvas.draw_idle()
@@ -101,7 +101,6 @@ def smooth_transfer(image):
 #include the voting algorithm in the numba function to speed up the process
 @njit(parallel=True)
 def voting_algorithm(X, Y, U_UNIT, V_UNIT, score_dir, accessible_mask, cw, ch, max_distance=30, orientation_bins=16):
-
     optimal_opposition = 0.2
     max_distance = 50
     opposition_variation = 0.4
@@ -183,7 +182,7 @@ def voting_algorithm(X, Y, U_UNIT, V_UNIT, score_dir, accessible_mask, cw, ch, m
                         average_grad_x = (origin_grad_x + target_grad_x) / 2
                         average_grad_y = (origin_grad_y + target_grad_y) / 2
 
-                        grad_angle = np.arctan2(-average_grad_x, average_grad_y) - np.pi/2  # Angle in radians
+                        grad_angle = np.arctan2(average_grad_y, average_grad_x)  # Angle in radians
                         # Convert angle to [0, 2π]
                         if grad_angle < 0:
                             grad_angle += 2 * np.pi
@@ -199,7 +198,6 @@ def voting_algorithm(X, Y, U_UNIT, V_UNIT, score_dir, accessible_mask, cw, ch, m
                         
 
                         #score[target_center_y, target_center_x] += local_score  # Increment the score for each valid ray pixel
-
 
 class ManualModeVib(Node):
     def __init__(self):
@@ -230,8 +228,6 @@ class ManualModeVib(Node):
         self.odom_y = 0.0
         self.odom_yaw = 0.0
 
-        self.is_vibrating = False
-
         # --- 3. Publishers & Subscribers ---
         # Listens to the local costmap
         self.costmap_sub = self.create_subscription(
@@ -251,8 +247,6 @@ class ManualModeVib(Node):
 
         self.odom_sub = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
 
-        self.pause_control_sub = self.create_subscription(std_msgs.msg.Bool, "/cabot/pause_control", self.pause_callback, 10)
-
         #leftVibPub = create_publisher<std_msgs::msg::UInt8>("/cabot/vibrator4", 10);
         #rightVibPub = create_publisher<std_msgs::msg::UInt8>("/cabot/vibrator3", 10);
         self.left_vib_pub = self.create_publisher(std_msgs.msg.UInt8, "/cabot/vibrator3", 10)
@@ -261,9 +255,6 @@ class ManualModeVib(Node):
         self.radar_visualizer = RadarVisualizer(np.ones((50, 50)), 25, 25) # Initial mag map and robot position
 
         self.get_logger().info("ManualModeVib node initialized. Waiting for costmap...")
-
-    def pause_callback(self, msg):
-        self.is_vibrating = msg.data
 
     def odom_callback(self, msg):
         try:
@@ -296,7 +287,7 @@ class ManualModeVib(Node):
         # Exemple si robot au centre de la costmap
         robot_px = self.world_to_px(self.odom_x, self.odom_y)
         # Son angle par rapport à la map
-        robot_yaw = self.odom_yaw - self.map_orientation # On soustrait l'orientation de la map pour avoir un angle relatif à la map 
+        robot_yaw = self.odom_yaw - self.map_orientation - np.pi/2  # On soustrait l'orientation de la map pour avoir un angle relatif à la map 
 
         self.get_logger().info(f"Robot World Pos: ({self.odom_x:.2f}, {self.odom_y:.2f}), Yaw: {math.degrees(self.odom_yaw):.1f}° | Robot Px: ({robot_px[0]}, {robot_px[1]}), Yaw Rel: {math.degrees(robot_yaw):.1f}°")
 
@@ -367,7 +358,7 @@ class ManualModeVib(Node):
 
         local_bins = inflated_img[25, 25, :]
         
-        self.radar_visualizer.update_ui(25, 25, local_bins, new_mag_map=data_f, rotation_angle=(math.degrees(robot_yaw)))
+        self.radar_visualizer.update_ui(25, 25, local_bins, new_mag_map=data_f, rotation_angle=(math.degrees(-robot_yaw)))
 
         #angles = np.linspace(0, 2*np.pi, orientation_bins, endpoint=False)
         # angles = np.linspace(0, -2 * np.pi, orientation_bins, endpoint=False)
@@ -382,8 +373,10 @@ class ManualModeVib(Node):
         # 1. On remet la grille dans le même sens que le voting_algorithm (0=Nord, Horaire)
         angles = np.linspace(0, 2 * np.pi, orientation_bins, endpoint=False)
 
-        target_left = (np.pi/2 + robot_yaw) % (2 * np.pi)
-        target_right = (3*np.pi/2 + robot_yaw) % (2 * np.pi)
+        # 2. Alignement parfait des repères (ROS Anti-Horaire vs Image Horaire)
+        # On calcule l'angle exact où se trouvent la GAUCHE et la DROITE du robot dans l'image
+        target_left = (2 * np.pi - robot_yaw) % (2 * np.pi)
+        target_right = (np.pi - robot_yaw) % (2 * np.pi)
 
         # 3. Fonction magique pour calculer la distance angulaire la plus courte (gère le passage de 359° à 0°)
         def get_angular_dist(a1, a2):
@@ -398,10 +391,48 @@ class ManualModeVib(Node):
         left_weights = np.maximum(0, 1 - (dist_to_left / tolerance))
         right_weights = np.maximum(0, 1 - (dist_to_right / tolerance))
 
-        left_score = np.sum(inflated_img[int(25), int(25), :] * left_weights)
-        right_score = np.sum(inflated_img[int(25), int(25), :] * right_weights)
+        cy_left, cx_left = (0, -10)
+        cy_right, cx_right = (0, 10)
 
+        # ROTATE BY ROBOT_YAW
+        cy_new_left = int(cy_left * np.cos(-robot_yaw) - cx_left * np.sin(-robot_yaw)) + 25
+        cx_new_left = int(cy_left * np.sin(-robot_yaw) + cx_left * np.cos(-robot_yaw)) + 25
+        cy_new_right = int(cy_right * np.cos(-robot_yaw) - cx_right * np.sin(-robot_yaw)) + 25
+        cx_new_right = int(cy_right * np.sin(-robot_yaw) + cx_right * np.cos(-robot_yaw)) + 25
 
+        # Sécurité pour ne pas déborder des index de la matrice 50x50
+        cy_new_left = np.clip(cy_new_left, 0, 49)
+        cx_new_left = np.clip(cx_new_left, 0, 49)
+        cy_new_right = np.clip(cy_new_right, 0, 49)
+        cx_new_right = np.clip(cx_new_right, 0, 49)
+
+        left_weight = np.zeros((50, 50))
+        right_weight = np.zeros((50, 50))
+
+        for i in range(50):
+            for j in range(50):
+                #1- distance to cx,cy new
+                left_weight[i, j] = 1 - np.sqrt((i - cy_new_left)**2 + (j - cx_new_left)**2) / 10
+                right_weight[i, j] = 1 - np.sqrt((i - cy_new_right)**2 + (j - cx_new_right)**2) / 10
+                # Max and min at 0 and 1
+                left_weight[i, j] = max(0, min(1, left_weight[i, j]))
+                right_weight[i, j] = max(0, min(1, right_weight[i, j]))
+
+        left_weight_3d = left_weight[:, :, np.newaxis] * left_weights[np.newaxis, np.newaxis, :]
+        right_weight_3d = right_weight[:, :, np.newaxis] * right_weights[np.newaxis, np.newaxis, :]
+
+        img_weighted_left = inflated_img * left_weight_3d
+        img_weighted_right = inflated_img * right_weight_3d
+
+        # 5. Calcul des scores finaux
+        left_score = np.sum(img_weighted_left)
+        right_score = np.sum(img_weighted_right)
+
+        # Debug Print left and right weights and angles
+        self.get_logger().info(f"Angles: {angles}")
+        self.get_logger().info(f"Target Left Angle: {target_left:.2f}, Target Right Angle: {target_right:.2f}")
+        self.get_logger().info(f"Left Weights: {left_weights}")
+        self.get_logger().info(f"Right Weights: {right_weights}")
 
         # # Get score on the left and on the right of the robot, ponderate close to center more than far from the center, use robot_yaw to determine which side is left and which side is right
         # left_score = np.sum(inflated_img[25, 25, :] * np.maximum(np.zeros_like(orientation_bins), np.sin(np.linspace(0, 2*np.pi, orientation_bins, endpoint=False) + robot_yaw)))
@@ -414,14 +445,9 @@ class ManualModeVib(Node):
         left_vib_msg = std_msgs.msg.UInt8()
         right_vib_msg = std_msgs.msg.UInt8()
         max_vib_intensity = 255
-        total_score = 3
+        total_score = 500
         left_vib_msg.data = max(0, min(255, int((left_score / total_score) * max_vib_intensity)))
         right_vib_msg.data = max(0, min(255, int((right_score / total_score) * max_vib_intensity)))
-
-        if not self.is_vibrating:
-            left_vib_msg.data = 0
-            right_vib_msg.data = 0
-
         # left_vib_msg.data = 0
         # right_vib_msg.data = 0
         self.right_vib_pub.publish(right_vib_msg)
