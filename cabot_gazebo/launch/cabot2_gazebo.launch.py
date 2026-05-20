@@ -270,7 +270,7 @@ def generate_launch_description():
                             'target_frame': lidar_target_frame
                         }],
                         remappings=[
-                            ('/cloud_in', '/velodyne_points')
+                            ('/cloud_in', '/velodyne_points_cropped')
                         ],
                     ),
                     ComposableNode(
