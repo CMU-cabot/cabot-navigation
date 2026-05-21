@@ -420,6 +420,9 @@ fi
 if [ $cart_mapping -eq 1 ]; then
     if [[ $gazebo -eq 0 ]]; then
         imu_topic=/imu/data
+    else
+        # Gazebo GNSS fix messages can be published with status 0.
+        fix_status_threshold=0
     fi
 
     # switch lidar if specified
@@ -524,6 +527,7 @@ return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
           use_esp32:=${USE_ESP32:-false} \
           use_velodyne:=${USE_VELODYNE:-true} \
           imu_topic:=${imu_topic} \
+          fix_status_threshold:=${fix_status_threshold} \
           use_sim_time:=$gazebo_bool \
           grid_resolution:=${MAPPING_RESOLUTION} \
           configuration_directory:=$configuration_directory_tmp \

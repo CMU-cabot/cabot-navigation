@@ -26,6 +26,8 @@ import resource_retriever
 
 
 def get_filename(string):
+    if string is None:
+        return None
     if string.startswith("~/"):
         return os.path.expanduser(string)
     elif string.startswith("package://"):

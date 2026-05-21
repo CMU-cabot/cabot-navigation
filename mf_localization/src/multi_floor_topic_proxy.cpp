@@ -26,6 +26,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <unordered_map>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/int64.hpp"
@@ -33,6 +34,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
@@ -55,7 +57,8 @@ public:
   : Node("multi_floor_topic_proxy"),
     current_floor(0),
     current_area(0),
-    current_mode(0)
+    current_mode(0),
+    current_frame_id("")
   {
     std::string map_config_file = this->declare_parameter("map_config_file", "");
     bool verbose = this->declare_parameter("verbose", false);
@@ -70,21 +73,31 @@ public:
     std::string points2_topic_name = this->get_node_topics_interface()->resolve_topic_name("points2");
     std::string odom_topic_name = this->get_node_topics_interface()->resolve_topic_name("odom");
 
+    auto latched_qos = rclcpp::QoS(10).transient_local();
+
     auto map_list = config["map_list"];
+    std::unordered_map<int, int> floor_count;
     for (YAML::const_iterator it = map_list.begin(); it != map_list.end(); ++it) {
       YAML::Node map_dict = *it;
 
-      std::string node_id = map_dict["node_id"].as<std::string>();
+      int floor = static_cast<int>(map_dict["floor"].as<double>());
+      // Resolve missing area/node_id/frame_id with the same defaults as
+      // multi_floor_manager.py:extend_node_parameter_dictionary().
+      int area = resolve_area(map_dict, floor, floor_count);
+      std::string node_id = resolve_node_id(map_dict, floor, area);
+      std::string frame_id = resolve_frame_id(map_dict, node_id);
 
-      int floor = map_dict["floor"].as<int>();
-      int area = map_dict["area"].as<int>();
+      subscribe_map_if_needed(map_dict, node_id, frame_id, latched_qos);
+
       for (int mode = 0; mode < NUM_MODES; mode++) {
         auto mode_str = MODE_NAMES[mode];
 
         std::string key = getKey(floor, area, mode);
 
         FloorData floordata = {nullptr, nullptr, nullptr};
-        RCLCPP_INFO(this->get_logger(), "floor = %d, area = %d, mode=%d, key=%s", floor, area, mode, key.c_str());
+        RCLCPP_INFO(
+          this->get_logger(), "floor = %d, area = %d, mode=%d, key=%s, node_id=%s, frame_id=%s",
+          floor, area, mode, key.c_str(), node_id.c_str(), frame_id.c_str());
 
         floordata.imu_pub = this->create_publisher<sensor_msgs::msg::Imu>(node_id + "/" + mode_str + imu_topic_name, 1000);
         floordata.points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>(node_id + "/" + mode_str + points2_topic_name, 100);
@@ -96,10 +109,10 @@ public:
       }
     }
 
-    auto latched_qos = rclcpp::QoS(10).transient_local();
     current_floor_sub = this->create_subscription<std_msgs::msg::Int64>("current_floor", latched_qos, std::bind(&MultiFloorTopicProxy::current_floor_callback, this, _1));
     current_area_sub = this->create_subscription<std_msgs::msg::Int64>("current_area", latched_qos, std::bind(&MultiFloorTopicProxy::current_area_callback, this, _1));
     current_mode_sub = this->create_subscription<std_msgs::msg::Int64>("current_mode", latched_qos, std::bind(&MultiFloorTopicProxy::current_mode_callback, this, _1));
+    current_frame_sub = this->create_subscription<std_msgs::msg::String>("current_frame", latched_qos, std::bind(&MultiFloorTopicProxy::current_frame_callback, this, _1));
 
     rclcpp::SensorDataQoS sensor_qos;
     imu_sub = this->create_subscription<sensor_msgs::msg::Imu>("imu", sensor_qos, std::bind(&MultiFloorTopicProxy::imu_callback, this, _1));
@@ -136,6 +149,37 @@ public:
     RCLCPP_INFO(this->get_logger(), "floor=%d, area=%d, mode=%d", current_floor, current_area, current_mode);
   }
 
+  void current_frame_callback(const std_msgs::msg::String::SharedPtr msg)
+  {
+    this->current_frame_id = msg->data;
+    RCLCPP_INFO(this->get_logger(), "current_frame=%s", current_frame_id.c_str());
+    publish_cached_map(current_frame_id);
+  }
+
+  void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg, const std::string & frame_id)
+  {
+    latest_maps[frame_id] = msg;
+    if (frame_id == current_frame_id) {
+      publish_map(*msg);
+    }
+  }
+
+  void publish_cached_map(const std::string & frame_id)
+  {
+    auto search = latest_maps.find(frame_id);
+    if (search == latest_maps.end()) {
+      return;
+    }
+    publish_map(*search->second);
+  }
+
+  void publish_map(const nav_msgs::msg::OccupancyGrid & msg)
+  {
+    if (!map_pub) {
+      return;
+    }
+    map_pub->publish(msg);
+  }
 
   void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
   {
@@ -189,21 +233,86 @@ public:
   }
 
 private:
+  int resolve_area(
+    const YAML::Node & map_dict, const int floor, std::unordered_map<int, int> & floor_count)
+  {
+    int area = 0;
+    if (map_dict["area"] && !map_dict["area"].IsNull()) {
+      area = map_dict["area"].as<int>();
+    } else {
+      area = floor_count[floor];
+    }
+    floor_count[floor] += 1;
+    return area;
+  }
+
+  std::string resolve_node_id(const YAML::Node & map_dict, const int floor, const int area)
+  {
+    if (map_dict["node_id"] && !map_dict["node_id"].IsNull()) {
+      return map_dict["node_id"].as<std::string>();
+    }
+
+    return "carto_" + std::to_string(floor) + "_" + std::to_string(area);
+  }
+
+  std::string resolve_frame_id(const YAML::Node & map_dict, const std::string & node_id)
+  {
+    if (map_dict["frame_id"] && !map_dict["frame_id"].IsNull()) {
+      return map_dict["frame_id"].as<std::string>();
+    }
+
+    return "map_" + node_id;
+  }
+
+  bool has_map_filename(const YAML::Node & map_dict) const
+  {
+    return map_dict["map_filename"] && !map_dict["map_filename"].IsNull() &&
+           !map_dict["map_filename"].as<std::string>().empty();
+  }
+
+  void subscribe_map_if_needed(
+    const YAML::Node & map_dict, const std::string & node_id, const std::string & frame_id,
+    const rclcpp::QoS & latched_qos)
+  {
+    if (has_map_filename(map_dict)) {
+      return;
+    }
+
+    std::string map_topic = "/" + node_id + "/map";
+    // Create /map publisher only when relaying maps without static map files.
+    if (!map_pub) {
+      map_pub = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", latched_qos);
+    }
+    map_subs[frame_id] = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
+      map_topic, latched_qos,
+      [this, frame_id](const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
+        this->map_callback(msg, frame_id);
+      });
+    RCLCPP_INFO(
+      this->get_logger(), "remap map topic source=%s, frame_id=%s",
+      map_topic.c_str(), frame_id.c_str());
+  }
+
   std::unordered_map<std::string, FloorData> floor_map;
 
   int current_floor;
   int current_area;
   int current_mode;
+  std::string current_frame_id;
 
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr current_floor_sub;
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr current_area_sub;
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr current_mode_sub;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr current_frame_sub;
 
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr scan_matched_points_pub;
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub;
+  std::unordered_map<std::string, rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr> map_subs;
+  std::unordered_map<std::string, nav_msgs::msg::OccupancyGrid::SharedPtr> latest_maps;
 };
 
 int main(int argc, char * argv[])

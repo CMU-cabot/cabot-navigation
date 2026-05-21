@@ -27,6 +27,7 @@ import tf_transformations
 from geometry_msgs.msg import Pose
 from dataclasses import dataclass
 
+from cartographer_ros_msgs.msg import StatusCode
 from cartographer_ros_msgs.msg import TrajectoryStates
 from cartographer_ros_msgs.srv import GetTrajectoryStates
 from cartographer_ros_msgs.srv import FinishTrajectory
@@ -73,6 +74,7 @@ class CartographerClient:
                  configuration_directory,
                  configuration_basename,
                  min_hist_count=1,
+                 fixed_frame_pose_constraints_min_count=2,
                  callback_group=MutuallyExclusiveCallbackGroup(),
                  ):
         # callback group accessing the same ros node
@@ -90,18 +92,24 @@ class CartographerClient:
 
         # constant
         self.relative_to_trajectory_id = 0
+        self.absolute_initial_pose_trajectory_id = -1
 
         # parameters
         self.min_hist_count = min_hist_count
+        self.fixed_frame_pose_constraints_min_count = fixed_frame_pose_constraints_min_count
 
         # states
         self.constraints_count = 0
+        self.fixed_frame_pose_constraints_count = 0
+        self.current_trajectory_id = None
 
         # memory
         self.trajectory_initial_pose = None
 
     def reset_states(self):
         self.constraints_count = 0
+        self.fixed_frame_pose_constraints_count = 0
+        self.current_trajectory_id = None
 
     def start_trajectory(self, pose: Pose, timeout_sec, max_retries):
         self.logger.info(F"wait for {self._start_trajectory.srv_name} service")
@@ -110,16 +118,26 @@ class CartographerClient:
         configuration_directory = self.configuration_directory
         configuration_basename = self.configuration_basename
         use_initial_pose = True
-        relative_to_trajectory_id = 0
+        relative_to_trajectory_id = self.relative_to_trajectory_id
 
-        # compute relative pose to trajectory initial pose
+        # Keep retrying until the reference trajectory becomes available.
+        # Once found, trajectory 0's initial pose is fixed and can be reused.
         if self.trajectory_initial_pose is None:
-            # trajectory query (for the first time)
-            self.trajectory_initial_pose = self.get_trajectory_initial_pose(timeout_sec=timeout_sec,
-                                                                            max_retries=max_retries)
+            self.trajectory_initial_pose = self.get_trajectory_initial_pose(
+                timeout_sec=timeout_sec,
+                max_retries=max_retries,
+            )
 
-        relative_pose: Pose = compute_relative_pose(self.trajectory_initial_pose, pose)
-        self.logger.info(F"converted initial_pose ({pose}) to relative_pose ({relative_pose}) on trajectory {relative_to_trajectory_id}")
+        if self.trajectory_initial_pose is not None:
+            relative_pose: Pose = compute_relative_pose(self.trajectory_initial_pose, pose)
+            self.logger.info(F"converted initial_pose ({pose}) to relative_pose ({relative_pose}) on trajectory {relative_to_trajectory_id}")
+        else:
+            relative_to_trajectory_id = self.absolute_initial_pose_trajectory_id
+            relative_pose = pose
+            self.logger.info(
+                F"start trajectory with absolute initial pose ({relative_pose}) "
+                F"because reference trajectory is not available. "
+                F"relative_to_trajectory_id={relative_to_trajectory_id}")
 
         self.logger.info("prepare request")
         req = StartTrajectory.Request(
@@ -140,10 +158,35 @@ class CartographerClient:
             raise e
         self.logger.info(F"start_trajectory response = {res2}")
         status_code = res2.status.code
+        if status_code == StatusCode.OK:
+            self.current_trajectory_id = res2.trajectory_id
+            self.fixed_frame_pose_constraints_count = 0
 
         return status_code
 
-    def get_trajectory_initial_pose(self, timeout_sec, max_retries=1) -> Pose:
+    def get_trajectory_initial_pose(self, timeout_sec, max_retries=1) -> Pose | None:
+
+        get_trajectory_states = self._get_trajectory_states
+        self.logger.info(F"wait for {get_trajectory_states.srv_name} service")
+        get_trajectory_states.wait_for_service()
+        try:
+            states_res: GetTrajectoryStates.Response = call_service(
+                get_trajectory_states,
+                GetTrajectoryStates.Request(),
+                timeout_sec=timeout_sec,
+                max_retries=max_retries,
+                logger=self.logger,
+            )
+        except (TimeoutError, Exception) as e:
+            self.logger.error(F"Failed to call get_trajectory_states. error={type(e).__name__}({e})")
+            raise e
+
+        trajectory_states = dict(zip(states_res.trajectory_states.trajectory_id,
+                                     states_res.trajectory_states.trajectory_state))
+        trajectory_state = trajectory_states.get(self.relative_to_trajectory_id)
+        if trajectory_state is None or trajectory_state == TrajectoryStates.DELETED:
+            self.logger.warn(F"trajectory {self.relative_to_trajectory_id} is not available.")
+            return None
 
         trajectory_query = self._trajectory_query
         self.logger.info(F"wait for {trajectory_query.srv_name} service")
@@ -162,6 +205,10 @@ class CartographerClient:
             self.logger.error(F"Failed to call trajectory_query. error={type(e).__name__}({e})")
             raise e
         trajectory = res.trajectory
+        if len(trajectory) == 0:
+            self.logger.warn(F"trajectory {self.relative_to_trajectory_id} is empty.")
+            return None
+
         trajectory_initial_pose: Pose = trajectory[0].pose  # PoseSamped -> Pose
 
         self.logger.info(F"trajectory {self.relative_to_trajectory_id} initial pose = {trajectory_initial_pose}")
@@ -223,21 +270,37 @@ class CartographerClient:
         return res
 
     def is_optimized(self, timeout_sec):
-        count = self.get_pose_graph_constraints_count(timeout_sec)
-        if count is None:
+        counts = self.get_scan_match_and_pose_graph_counts(timeout_sec)
+        if counts is None:
             return False
 
         # monitor mapping_2d_pose_graph_constraints -> inter_submap -> different trajectory to detect inter trajectory pose graph optimization
         # because this value is updated after running optimization
-        optimized = False
-        self.logger.info(f"inter_submap different trajectory constraints. count={count}")
-        # check if the number of constraints changed
-        if self.constraints_count != count:
-            self.constraints_count = count
-            if count >= self.min_hist_count:
-                optimized = True
-                self.logger.info("pose graph optimization detected.")
-        return optimized
+        count = counts.pose_graph_constraints_count
+        if count is not None:
+            self.logger.info(f"inter_submap different trajectory constraints. count={count}")
+            # check if the number of constraints changed
+            if self.constraints_count != count:
+                self.constraints_count = count
+                if count >= self.min_hist_count:
+                    self.logger.info("pose graph optimization detected by inter-submap constraints")
+                    return True
+
+        # monitor mapping_2d_pose_graph_fixed_frame_pose_constraints to detect fixed-frame-based optimization
+        fixed_frame_count = counts.fixed_frame_pose_constraints_count
+        if fixed_frame_count is not None:
+            threshold = self.fixed_frame_pose_constraints_min_count
+            self.logger.info(
+                f"fixed-frame pose constraints. trajectory_id={self.current_trajectory_id}, count={fixed_frame_count}, threshold={threshold}")
+            if self.fixed_frame_pose_constraints_count != fixed_frame_count:
+                self.fixed_frame_pose_constraints_count = fixed_frame_count
+                if fixed_frame_count >= threshold:
+                    self.logger.info(
+                        f"pose graph optimization detected by fixed-frame pose constraints. "
+                        f"trajectory_id={self.current_trajectory_id}, count={fixed_frame_count}, threshold={threshold}")
+                    return True
+
+        return False
 
     def get_pose_graph_constraints_count(self, timeout_sec):
         counts = self.get_scan_match_and_pose_graph_counts(timeout_sec)
@@ -255,6 +318,7 @@ class CartographerClient:
     class ScanMatchPoseGraphCounts:
         constraint_builder_count: float | None
         pose_graph_constraints_count: float | None
+        fixed_frame_pose_constraints_count: float | None
 
     def get_scan_match_and_pose_graph_counts(self, timeout_sec):
         res = self.read_metrics(timeout_sec)
@@ -269,6 +333,11 @@ class CartographerClient:
         constraint_builder_found = False
         pose_graph_total = 0.0
         pose_graph_found = False
+        current_trajectory_id = None
+        if self.current_trajectory_id is not None:
+            current_trajectory_id = str(self.current_trajectory_id)
+        fixed_frame_pose_graph_total = 0.0
+        fixed_frame_pose_graph_found = False
         for metric_family in res.metric_families:
             if metric_family.name in [
                     "mapping_constraints_constraint_builder_2d_constraints",
@@ -288,9 +357,20 @@ class CartographerClient:
                     if labels.get("tag") == "inter_submap" and labels.get("trajectory") == "different":
                         pose_graph_total += metric.value
                         pose_graph_found = True
-        if not (constraint_builder_found or pose_graph_found):
+            elif metric_family.name in [
+                    "mapping_2d_pose_graph_fixed_frame_pose_constraints",
+            ]:
+                if current_trajectory_id is None:
+                    continue
+                for metric in metric_family.metrics:
+                    labels = {label.key: label.value for label in metric.labels}
+                    if labels.get("trajectory_id") == current_trajectory_id:
+                        fixed_frame_pose_graph_total += metric.value
+                        fixed_frame_pose_graph_found = True
+        if not (constraint_builder_found or pose_graph_found or fixed_frame_pose_graph_found):
             return None
         return self.ScanMatchPoseGraphCounts(
             constraint_builder_count=constraint_builder_total if constraint_builder_found else None,
             pose_graph_constraints_count=pose_graph_total if pose_graph_found else None,
+            fixed_frame_pose_constraints_count=fixed_frame_pose_graph_total if fixed_frame_pose_graph_found else None,
         )
