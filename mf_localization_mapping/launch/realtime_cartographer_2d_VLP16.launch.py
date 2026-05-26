@@ -76,6 +76,7 @@ def generate_launch_description():
     save_state_filename = LaunchConfiguration('save_state_filename')
     record_required = LaunchConfiguration('record_required')
     record_points = LaunchConfiguration('record_points')
+    record_camera = LaunchConfiguration('record_camera')
     compression_mode = LaunchConfiguration('compression_mode')
     configuration_basename = LaunchConfiguration('configuration_basename')
     # save_state_filename # todo
@@ -102,6 +103,9 @@ def generate_launch_description():
     fix_overwrite_time = LaunchConfiguration('fix_overwrite_time')
     interpolate_samples_by_trajectory = LaunchConfiguration('interpolate_samples_by_trajectory')
 
+    def is_truthy(context, launch_configuration):
+        return launch_configuration.perform(context).lower() in ('1', 'true', 'yes', 'on')
+
     def configure_ros2_bag_arguments(context, node):
         cmd = node.cmd.copy()
         if use_sim_time.perform(context) == 'true':
@@ -109,10 +113,16 @@ def generate_launch_description():
         if compression_mode.perform(context) != 'none':
             cmd.extend(['--compression-mode', compression_mode, '--compression-format', 'zstd'])
         if record_required.perform(context) == 'true':
+            exclude_camera_topics = "(.*)/image_raw|(.*)/image_raw/(.*)"
+            if is_truthy(context, record_camera):
+                # Match launch.sh same-bag camera recording: keep compressed color images,
+                # camera_info, and metadata, while dropping raw and depth image streams.
+                exclude_camera_topics = "/.*/image_raw$|^.*image_rect_raw.*$|^.*aligned_depth_to_color.*$"
             if record_points.perform(context) == 'true':
-                cmd.extend(['-a', '-x', "'/map|(.*)points_cropped|/pandar_packets|(.*)/image_raw|(.*)/image_raw/(.*)'"])
+                exclude_topics = f"/map|(.*)points_cropped|/pandar_packets|{exclude_camera_topics}"
             else:
-                cmd.extend(['-a', '-x', "'/map|/velodyne_points|(.*)points_cropped|/pandar_packets|(.*)/image_raw|(.*)/image_raw/(.*)'"])
+                exclude_topics = f"/map|/velodyne_points|(.*)points_cropped|/pandar_packets|{exclude_camera_topics}"
+            cmd.extend(['-a', '-x', exclude_topics])
         else:
             cmd.append('-a')
         saved_location_temp = []
@@ -156,6 +166,7 @@ def generate_launch_description():
         DeclareLaunchArgument("load_state_filename", default_value=""),
         DeclareLaunchArgument("record_required", default_value="false"),
         DeclareLaunchArgument("record_points", default_value="false"),
+        DeclareLaunchArgument("record_camera", default_value="false"),
         DeclareLaunchArgument("compression_mode", default_value="message", description="{none,file,message} compress bag"),
 
         DeclareLaunchArgument("configuration_basename", default_value="cartographer_2d_mapping.lua"),

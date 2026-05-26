@@ -119,6 +119,7 @@ if [[ $CABOT_HEADLESS -eq 1 ]]; then
 fi
 : ${CABOT_PRESSURE_AVAILABLE:=0}
 : ${CABOT_ROSBAG_COMPRESSION:='message'}
+: ${CABOT_ROSBAG_RECORD_CAMERA:=0}
 : ${CABOT_USE_GNSS:=0}
 # global localizer
 : ${CABOT_GLOBAL_LOCALIZER_RUN:=0}
@@ -473,6 +474,7 @@ if [ $cart_mapping -eq 1 ]; then
     # show mapping variables
     echo "MAPPING_USE_GNSS=$MAPPING_USE_GNSS"
     echo "MAPPING_RESOLUTION=$MAPPING_RESOLUTION"
+    echo "CABOT_ROSBAG_RECORD_CAMERA=$CABOT_ROSBAG_RECORD_CAMERA"
 
     # pre process config file
     bag_filename=${OUTPUT_PREFIX}_`date +%Y-%m-%d-%H-%M-%S`
@@ -516,6 +518,7 @@ return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
           record_required:=true \
           record_points:=$record_points \
           compression_mode:=$CABOT_ROSBAG_COMPRESSION \
+          record_camera:=$CABOT_ROSBAG_RECORD_CAMERA \
           use_xsens:=${USE_XSENS:-true} \
           use_arduino:=${USE_ARDUINO:-false} \
           use_esp32:=${USE_ESP32:-false} \
