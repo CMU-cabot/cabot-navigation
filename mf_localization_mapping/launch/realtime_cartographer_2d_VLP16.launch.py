@@ -122,7 +122,7 @@ def generate_launch_description():
                 exclude_topics = f"/map|(.*)points_cropped|/pandar_packets|{exclude_camera_topics}"
             else:
                 exclude_topics = f"/map|/velodyne_points|(.*)points_cropped|/pandar_packets|{exclude_camera_topics}"
-            cmd.extend(['-a', '-x', f"'{exclude_topics}'"])
+            cmd.extend(['-a', '-x', exclude_topics])
         else:
             cmd.append('-a')
         saved_location_temp = []
