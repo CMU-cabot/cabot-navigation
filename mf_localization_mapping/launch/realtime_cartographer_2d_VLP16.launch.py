@@ -115,7 +115,9 @@ def generate_launch_description():
         if record_required.perform(context) == 'true':
             exclude_camera_topics = "(.*)/image_raw|(.*)/image_raw/(.*)"
             if is_truthy(context, record_camera):
-                exclude_camera_topics = "/.*/image_raw$"
+                # Match launch.sh same-bag camera recording: keep compressed color images,
+                # camera_info, and metadata, while dropping raw and depth image streams.
+                exclude_camera_topics = "/.*/image_raw$|^.*image_rect_raw.*$|^.*aligned_depth_to_color.*$"
             if record_points.perform(context) == 'true':
                 exclude_topics = f"/map|(.*)points_cropped|/pandar_packets|{exclude_camera_topics}"
             else:
