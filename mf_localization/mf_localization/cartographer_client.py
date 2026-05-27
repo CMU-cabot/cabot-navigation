@@ -115,7 +115,8 @@ class CartographerClient:
         # compute relative pose to trajectory initial pose
         if self.trajectory_initial_pose is None:
             # trajectory query (for the first time)
-            self.trajectory_initial_pose = self.get_trajectory_initial_pose(timeout_sec=timeout_sec)
+            self.trajectory_initial_pose = self.get_trajectory_initial_pose(timeout_sec=timeout_sec,
+                                                                            max_retries=max_retries)
 
         relative_pose: Pose = compute_relative_pose(self.trajectory_initial_pose, pose)
         self.logger.info(F"converted initial_pose ({pose}) to relative_pose ({relative_pose}) on trajectory {relative_to_trajectory_id}")
@@ -142,7 +143,7 @@ class CartographerClient:
 
         return status_code
 
-    def get_trajectory_initial_pose(self, timeout_sec) -> Pose:
+    def get_trajectory_initial_pose(self, timeout_sec, max_retries=1) -> Pose:
 
         trajectory_query = self._trajectory_query
         self.logger.info(F"wait for {trajectory_query.srv_name} service")
@@ -151,7 +152,12 @@ class CartographerClient:
             trajectory_id=self.relative_to_trajectory_id
         )
         try:
-            res: TrajectoryQuery.Response = call_service(trajectory_query, req, timeout_sec=timeout_sec)
+            res: TrajectoryQuery.Response = call_service(trajectory_query,
+                                                         req,
+                                                         timeout_sec=timeout_sec,
+                                                         max_retries=max_retries,
+                                                         logger=self.logger,
+                                                         )
         except (TimeoutError, Exception) as e:
             self.logger.error(F"Failed to call trajectory_query. error={type(e).__name__}({e})")
             raise e
@@ -172,7 +178,9 @@ class CartographerClient:
         try:
             res0: GetTrajectoryStates.Response = call_service(self._get_trajectory_states,
                                                               req,
-                                                              timeout_sec=timeout_sec
+                                                              timeout_sec=timeout_sec,
+                                                              max_retries=max_retries,
+                                                              logger=self.logger,
                                                               )
         except (TimeoutError, Exception) as e:
             self.logger.error(F"Failed to call get_trajectory_states. error={type(e).__name__}({e})")
