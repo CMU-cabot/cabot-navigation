@@ -126,7 +126,7 @@ def generate_launch_description():
     ])
 
     robot_description = ParameterValue(
-        Command(['xacro ', xacro_for_cabot_model, ' offset:=0.25', ' sim:=', use_sim_time]),
+        Command(['xacro ', xacro_for_cabot_model, ' offset:=0.25', ' sim:=', use_sim_time, ' gps_namespace:=/gazebo/gps']),
         value_type=str
     )
 
@@ -419,14 +419,17 @@ def generate_launch_description():
         Node(
             package='cabot_gazebo',
             executable='gps_converter.py',
-            name='vector3_stamped_to_twist_covariance_stamped',
+            name='gps_converter',
             output=output,
             parameters=[{
                 'use_sim_time': use_sim_time,
             }],
             remappings=[
-                ('/in', '/ublox/velocity'),
-                ('/out', '/ublox/fix_velocity')
+                ('/fix_in', '/gazebo/gps/fix'),
+                ('/velocity_in', '/gazebo/gps/velocity'),
+                ('/fix_out', '/ublox/fix'),
+                ('/fix_velocity_out', '/ublox/fix_velocity'),
+                ('/navsat_out', '/ublox/navsat'),
             ],
             condition=IfCondition(use_gnss)
         )

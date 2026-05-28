@@ -294,6 +294,8 @@ services:
       - ./cabot_sites:/home/developer/ros2_ws/src/cabot_sites
       - ./cabot_ui:/home/developer/ros2_ws/src/cabot_ui
       - ./cabot_ui_plugins:/home/developer/ros2_ws/src/cabot_ui_plugins
+      - ./docker/localization/ublox/ublox_msgs:/home/developer/ros2_ws/src/ublox_msgs
+      - ./docker/localization/ublox/ublox_serialization:/home/developer/ros2_ws/src/ublox_serialization
       - ./mf_localization_msgs:/home/developer/ros2_ws/src/mf_localization_msgs
       - ./mf_localization_rviz:/home/developer/ros2_ws/src/mf_localization_rviz
       - ./pedestrian_plugin:/home/developer/ros2_ws/src/pedestrian_plugin
