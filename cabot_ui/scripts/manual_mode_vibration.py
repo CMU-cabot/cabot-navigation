@@ -230,6 +230,11 @@ class ManualModeVib(Node):
         self.odom_y = 0.0
         self.odom_yaw = 0.0
 
+        self.last_right_vib_pos_x = 0.0
+        self.last_right_vib_pos_y = 0.0
+        self.last_left_vib_pos_x = 0.0
+        self.last_left_vib_pos_y = 0.0
+
         self.is_vibrating = False
 
         # --- 3. Publishers & Subscribers ---
@@ -415,18 +420,34 @@ class ManualModeVib(Node):
         right_vib_msg = std_msgs.msg.UInt8()
         max_vib_intensity = 255
         total_score = 3
-        left_vib_msg.data = max(0, min(255, int((left_score / total_score) * max_vib_intensity)))
-        right_vib_msg.data = max(0, min(255, int((right_score / total_score) * max_vib_intensity)))
+        left_vib_msg.data = max(0, min(255, int((left_score / total_score) * max_vib_intensity)) - 3)
+        right_vib_msg.data = max(0, min(255, int((right_score / total_score) * max_vib_intensity)) - 3)
 
+        # Threshold of 10
         if not self.is_vibrating:
             left_vib_msg.data = 0
             right_vib_msg.data = 0
+            return
 
-        # left_vib_msg.data = 0
-        # right_vib_msg.data = 0
-        self.right_vib_pub.publish(right_vib_msg)
-        #time.sleep(0.01)  # Small delay to ensure the right vib message is sent before the left one
-        self.left_vib_pub.publish(left_vib_msg)
+        # Cap the vibration intensity to avoid overwhelming the user
+        max_allowed_vib_intensity = 20
+        left_vib_msg.data = min(left_vib_msg.data, max_allowed_vib_intensity)
+        right_vib_msg.data = min(right_vib_msg.data, max_allowed_vib_intensity)
+
+        distance_to_previous_right_vib = np.sqrt((self.last_right_vib_pos_x - self.odom_x)**2 + (self.last_right_vib_pos_y - self.odom_y)**2)
+        distance_to_previous_left_vib = np.sqrt((self.last_left_vib_pos_x - self.odom_x)**2 + (self.last_left_vib_pos_y - self.odom_y)**2)
+
+        # Only publish if the robot has moved at least 0.2m from the last vibration position to avoid spamming vibrations when the robot is stuck
+        if distance_to_previous_right_vib > 0.5 and right_vib_msg.data > 0:
+            self.right_vib_pub.publish(right_vib_msg)
+            self.last_right_vib_pos_x = self.odom_x
+            self.last_right_vib_pos_y = self.odom_y
+
+        if distance_to_previous_left_vib > 0.5 and left_vib_msg.data > 0:
+            self.left_vib_pub.publish(left_vib_msg)
+            self.last_left_vib_pos_x = self.odom_x
+            self.last_left_vib_pos_y = self.odom_y
+
 
 
         

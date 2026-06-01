@@ -39,7 +39,7 @@ from cabot_msgs.msg import Log
 from . import test_speak
 from .log_maker import log_image_and_gpt_response
 from .test_semantic import concat_features, extract_image_feature, extract_text_feature
-from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION
+from .prompt import PROMPT_EXPLORE, PROMPT_MIDDLE, PROMPT_NAVIGATION, PROMPT_OVERVIEW
 
 
 """
@@ -161,6 +161,8 @@ class CaBotImageNode(Node):
         self.front_marker_detected = False
         self.left_marker_detected = False
         self.right_marker_detected = False
+
+        self.lod_level = 0
 
         self.odom = None
 
@@ -458,6 +460,18 @@ class CaBotImageNode(Node):
         self.loop_count += 1
         camera_ready = self.realsense_ready
         self.logger.info(f"going into loop with mode {self.mode}, not_explain_mode: {self.no_explain_mode}, ready: {self.ready}, realsense_ready: {self.realsense_ready}, can_speak_explanation: {self.can_speak_explanation}, in_conversation: {self.in_conversation}, explore_main_loop_ready: {self.explore_main_loop_ready}")
+        
+        
+        # Change the mode of speaking
+        if img_id == 4:
+            if self.lod_level == 0:
+                self.lod_level = 1
+                test_speak.speak_text("Changing to overview mode", force=True)
+            else:
+                self.lod_level = 0
+                test_speak.speak_text("Changing to detailed mode", force=True)
+            return
+        
         if not self.no_explain_mode and camera_ready and not self.in_conversation and self.explore_main_loop_ready:
             
 
@@ -490,141 +504,170 @@ class CaBotImageNode(Node):
                 lidar_from = 0.0
                 lidar_to = 0.34
 
-            min_distances = []
-
-            if self.last_scan_data is not None:
-                self.logger.info(f"Lidar data available. Ranges length: {len(self.last_scan_data.ranges)}")
-                lidar_min_index = int(lidar_from * len(self.last_scan_data.ranges))
-                lidar_max_index = int(lidar_to * len(self.last_scan_data.ranges))
-                lidar_min_index = max(0, min(len(self.last_scan_data.ranges) - 1, lidar_min_index))
-                lidar_max_index = max(0, min(len(self.last_scan_data.ranges) - 1, lidar_max_index))
-
-                lidar_ranges = self.last_scan_data.ranges[lidar_min_index:lidar_max_index]
-
-                # cut in 3 subparts and take the minimum of each part
-                if len(lidar_ranges) > 0:
-                    part_size = len(lidar_ranges) // 3
-                    for i in [2,1,0]:
-                        part_ranges = lidar_ranges[i*part_size:(i+1)*part_size] if i < 2 else lidar_ranges[i*part_size:]
-                        min_distance = min(part_ranges) if len(part_ranges) > 0 else float('inf')
-                        min_distances.append(min_distance)
-
-            loading_message = ""
-
-            if len(min_distances) == 3:
-                self.logger.info(f"Minimum distances from LiDAR in each direction: {min_distances}")
-                # Generate message with clocks data and min_distances
-                lidar_message_parts = []
-                for clock, distance in zip(clocks, min_distances):
-                    if distance == float('inf'):
-                        lidar_message_parts.append(f"{clock} unknown distance")
-                    else:
-                        lidar_message_parts.append(f"{clock} {distance:.1f} meters...")
-
-                loading_message = "Detected Objects: " + ", ".join(lidar_message_parts) + ". "
-
-            test_speak.speak_text(loading_message, force=True)
-
-
-            self.latest_ticket += 1
-            my_ticket = self.latest_ticket
-
-            while self.vlm_busy or my_ticket < self.latest_ticket:
-                time.sleep(0.01)
-                if my_ticket < self.latest_ticket:
-                    return
-
-            self.vlm_busy = True
-            try:
-                wait_time, raw_explain = self.gpt_explainer.explain(front_im, left_im, right_im, self.front_depth, self.left_depth, self.right_depth)
-            finally:
-                self.vlm_busy = False
-
-            if my_ticket < self.latest_ticket:
-                return
 
             explain = ""
 
-            invalidOutput = (len(raw_explain) == 0 or len(raw_explain[0]) < 3)
+            if self.lod_level == 1:
+                direction = "front"
+                if img_id == 1:
+                    direction = "left"
+                elif img_id == 3:
+                    direction = "right"
+                test_speak.speak_text(f"{direction.capitalize()} Overview : ", force=True)
 
-            if not invalidOutput and len(min_distances) == 3:
-                #generate output text
-                names = [item[0] for item in raw_explain]
-                pixels_x = [item[1] for item in raw_explain]
-                pixels_y = [item[2] for item in raw_explain]
+                self.latest_ticket += 1
+                my_ticket = self.latest_ticket
 
-                clock_positions = []
-                for pixel_x in pixels_x:
-                    if pixel_x < 320/3:
-                        clock_positions.append(clocks[0])
-                    elif pixel_x > 320/3*2:
-                        clock_positions.append(clocks[2])
-                    else:
-                        clock_positions.append(clocks[1])
+                while self.vlm_busy or my_ticket < self.latest_ticket:
+                    time.sleep(0.01)
+                    if my_ticket < self.latest_ticket:
+                        return
 
-                depths = []
-                for pixel_x, pixel_y in zip(pixels_x, pixels_y):
-                    if depth_image is not None:
-                        # Clamp the pixel coordinates to be within the image bounds
-                        pixel_x = max(0, min(depth_image.shape[1] - 1, pixel_x))
-                        pixel_y = max(0, min(depth_image.shape[0] - 1, pixel_y))
+                self.vlm_busy = True
+                try:
+                    wait_time, raw_explain = self.gpt_explainer.explain(front_im, left_im, right_im, self.front_depth, self.left_depth, self.right_depth, prompt_arg=PROMPT_OVERVIEW)
+                    explain = raw_explain
+                finally:
+                    self.vlm_busy = False
 
-                        depth = (self.gaussian_average_depth(depth_image, pixel_x, pixel_y, r=15, sigma=5.0) // 100) / 10.0
-                        if depth == 0 or depth > 2:
-                            depth = "many"
-                        depths.append(depth)
-                    else:
-                        depths.append("unknown")
+                if my_ticket < self.latest_ticket:
+                    return
+            else:
+                min_distances = []
+
+                if self.last_scan_data is not None:
+                    self.logger.info(f"Lidar data available. Ranges length: {len(self.last_scan_data.ranges)}")
+                    lidar_min_index = int(lidar_from * len(self.last_scan_data.ranges))
+                    lidar_max_index = int(lidar_to * len(self.last_scan_data.ranges))
+                    lidar_min_index = max(0, min(len(self.last_scan_data.ranges) - 1, lidar_min_index))
+                    lidar_max_index = max(0, min(len(self.last_scan_data.ranges) - 1, lidar_max_index))
+
+                    lidar_ranges = self.last_scan_data.ranges[lidar_min_index:lidar_max_index]
+
+                    # cut in 3 subparts and take the minimum of each part
+                    if len(lidar_ranges) > 0:
+                        part_size = len(lidar_ranges) // 3
+                        for i in [2,1,0]:
+                            part_ranges = lidar_ranges[i*part_size:(i+1)*part_size] if i < 2 else lidar_ranges[i*part_size:]
+                            min_distance = min(part_ranges) if len(part_ranges) > 0 else float('inf')
+                            min_distances.append(min_distance)
+
+                loading_message = ""
+
+                if len(min_distances) == 3:
+                    self.logger.info(f"Minimum distances from LiDAR in each direction: {min_distances}")
+                    # Generate message with clocks data and min_distances
+                    lidar_message_parts = []
+                    for clock, distance in zip(clocks, min_distances):
+                        if distance == float('inf'):
+                            lidar_message_parts.append(f"{clock} unknown distance")
+                        else:
+                            lidar_message_parts.append(f"{clock} {distance:.1f} meters...")
+
+                    loading_message = "Detected Objects: " + ", ".join(lidar_message_parts) + ". "
+
+                test_speak.speak_text(loading_message, force=True)
 
 
-            
-                self.logger.info(f"Minimum distances from LiDAR in each direction: {min_distances}")
-    
+                self.latest_ticket += 1
+                my_ticket = self.latest_ticket
 
-                formatted_items = []
-                for name, clock, pixel_x, pixel_y, depth in zip(names, clock_positions, pixels_x, pixels_y, depths):
-                    formatted_items.append(f"{name}")
+                while self.vlm_busy or my_ticket < self.latest_ticket:
+                    time.sleep(0.01)
+                    if my_ticket < self.latest_ticket:
+                        return
 
-                # Sort formatted_items by clock position
-                clock_items_1 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[0]]
-                clock_items_2 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[1]]
-                clock_items_3 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[2]]
+                self.vlm_busy = True
+                try:
+                    wait_time, raw_explain = self.gpt_explainer.explain(front_im, left_im, right_im, self.front_depth, self.left_depth, self.right_depth, prompt_arg=PROMPT_MIDDLE)
+                finally:
+                    self.vlm_busy = False
+
+                if my_ticket < self.latest_ticket:
+                    return
+
+                explain = ""
+
+                invalidOutput = (len(raw_explain) == 0 or len(raw_explain[0]) < 3)
+
+                if not invalidOutput and len(min_distances) == 3:
+                    #generate output text
+                    names = [item[0] for item in raw_explain]
+                    pixels_x = [item[1] for item in raw_explain]
+                    pixels_y = [item[2] for item in raw_explain]
+
+                    clock_positions = []
+                    for pixel_x in pixels_x:
+                        if pixel_x < 320/3:
+                            clock_positions.append(clocks[0])
+                        elif pixel_x > 320/3*2:
+                            clock_positions.append(clocks[2])
+                        else:
+                            clock_positions.append(clocks[1])
+
+                    depths = []
+                    for pixel_x, pixel_y in zip(pixels_x, pixels_y):
+                        if depth_image is not None:
+                            # Clamp the pixel coordinates to be within the image bounds
+                            pixel_x = max(0, min(depth_image.shape[1] - 1, pixel_x))
+                            pixel_y = max(0, min(depth_image.shape[0] - 1, pixel_y))
+
+                            depth = (self.gaussian_average_depth(depth_image, pixel_x, pixel_y, r=15, sigma=5.0) // 100) / 10.0
+                            if depth == 0 or depth > 2:
+                                depth = "many"
+                            depths.append(depth)
+                        else:
+                            depths.append("unknown")
 
 
-                if len(clock_items_1) > 0:
-                    explain += f"{clocks[0]} : "
+                
+                    self.logger.info(f"Minimum distances from LiDAR in each direction: {min_distances}")
+        
 
-                if len(clock_items_1) > 1:
-                    explain += ", ".join(clock_items_1[:-1]) + " and " + clock_items_1[-1] + "."
-                elif len(clock_items_1) == 1:
-                    explain += clock_items_1[0] + "."
+                    formatted_items = []
+                    for name, clock, pixel_x, pixel_y, depth in zip(names, clock_positions, pixels_x, pixels_y, depths):
+                        formatted_items.append(f"{name}")
 
-                #explain += lidar_message_parts[1]
-                if len(clock_items_1) > 0:
-                    explain += f"{clocks[1]} : "
+                    # Sort formatted_items by clock position
+                    clock_items_1 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[0]]
+                    clock_items_2 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[1]]
+                    clock_items_3 = [formatted_items[i] for i in range(len(formatted_items)) if clock_positions[i] == clocks[2]]
 
-                if len(clock_items_2) > 1:
-                    explain += ", ".join(clock_items_2[:-1]) + " and " + clock_items_2[-1] + "."
-                elif len(clock_items_2) == 1:
-                    explain += clock_items_2[0] + "."
 
-                #explain += lidar_message_parts[2]
-                if len(clock_items_1) > 0:
-                    explain += f"{clocks[2]} : "
+                    if len(clock_items_1) > 0:
+                        explain += f"{clocks[0]} : "
 
-                if len(clock_items_3) > 1:
-                    explain += ", ".join(clock_items_3[:-1]) + " and " + clock_items_3[-1] + "."
-                elif len(clock_items_3) == 1:
-                    explain += clock_items_3[0] + "."
+                    if len(clock_items_1) > 1:
+                        explain += ", ".join(clock_items_1[:-1]) + " and " + clock_items_1[-1] + "."
+                    elif len(clock_items_1) == 1:
+                        explain += clock_items_1[0] + "."
 
-                # if self.current_image == 0:
-                #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
-                # elif self.current_image == 1:
-                #     wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
-                # elif self.current_image == 2:
-                #     wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
+                    #explain += lidar_message_parts[1]
+                    if len(clock_items_1) > 0:
+                        explain += f"{clocks[1]} : "
 
-                # self.current_image = (self.current_image + 1) % 3
+                    if len(clock_items_2) > 1:
+                        explain += ", ".join(clock_items_2[:-1]) + " and " + clock_items_2[-1] + "."
+                    elif len(clock_items_2) == 1:
+                        explain += clock_items_2[0] + "."
+
+                    #explain += lidar_message_parts[2]
+                    if len(clock_items_1) > 0:
+                        explain += f"{clocks[2]} : "
+
+                    if len(clock_items_3) > 1:
+                        explain += ", ".join(clock_items_3[:-1]) + " and " + clock_items_3[-1] + "."
+                    elif len(clock_items_3) == 1:
+                        explain += clock_items_3[0] + "."
+
+                    # if self.current_image == 0:
+                    #     wait_time, explain = self.gpt_explainer.explain(self.front_image, None, None)
+                    # elif self.current_image == 1:
+                    #     wait_time, explain = self.gpt_explainer.explain(None, self.left_image, None)
+                    # elif self.current_image == 2:
+                    #     wait_time, explain = self.gpt_explainer.explain(None, None, self.right_image)
+
+                    # self.current_image = (self.current_image + 1) % 3
 
 
             is_in_valid_state = self.cabot_nav_state == self.valid_state
@@ -854,18 +897,19 @@ class GPTExplainer():
 
         return image
 
-    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], front_depth: Optional[np.ndarray], left_depth: Optional[np.ndarray], right_depth: Optional[np.ndarray]) -> float:
+    def explain(self, front_image: Optional[np.ndarray], left_image: Optional[np.ndarray], right_image: Optional[np.ndarray], front_depth: Optional[np.ndarray], left_depth: Optional[np.ndarray], right_depth: Optional[np.ndarray], prompt_arg: str) -> float:
         if self.dummy:
             self.logger.info("This is a dummy explanation.")
             return
-        use_initial_prompt = False
-        if len(self.conversation_history) == 0:
-            prompt = copy(self.prompt)
-            use_initial_prompt = True
+        
+        if prompt_arg != "":
+            prompt = prompt_arg
         else:
-            prompt = copy(self.prompt)
-            use_initial_prompt = True
-            self.conversation_history = []
+            if len(self.conversation_history) == 0:
+                prompt = copy(self.prompt)
+            else:
+                prompt = copy(self.prompt)
+                self.conversation_history = []
 
         total_begin_time = time.time()
 

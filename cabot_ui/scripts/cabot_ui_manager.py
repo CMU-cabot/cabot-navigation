@@ -1137,19 +1137,12 @@ class EventMapper1(object):
     def map_button_to_exploration(self, event, logger, ui_manager):
 
         
+        # log type, holddown and buttons
+        logger.info(f"map_button_to_exploration: event type={event.type}, holddown={getattr(event, 'holddown', None)}, buttons={getattr(event, 'buttons', None)}, count={getattr(event, 'count', None)}")
+
         if event.type == HoldDownEvent.TYPE: 
-            if not self.delegate._allowButtons:
-                return
-
-            #if self.current_mode == ExplorationMode.MANUAL:
-            if event.holddown == cabot_common.button.BUTTON_UP:
-                self.delegate.free_mode_switch_autonomous_mode = True
-                speak_text("ウィザードモード", force=True)
-
-                
-            if event.holddown == cabot_common.button.BUTTON_RIGHT:
-                self.delegate.free_mode_switch_autonomous_mode = False
-                speak_text("自由モード", force=True)
+            if event.holddown == cabot_common.button.BUTTON_DOWN:
+                self.delegate._vlmButtonPub.publish(std_msgs.msg.Int32(data=4)) #Change VLM Mode
 
             return []
 

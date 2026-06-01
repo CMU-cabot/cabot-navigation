@@ -274,6 +274,16 @@ YOU MUST GIVE PIXEL COORDINATES OF EACH OBJECTS
 {"description": [["object description", pixel_x (int), pixel_y (int)], ...]}
 """
 
+
+PROMPT_OVERVIEW = """
+Provide overview description of what you see on the image.
+100 characters MAXIMUM
+AVOID FLOOR/CEILING
+# Response Format
+```json
+{"description": "..."}
+"""
+
 PROMPT_NAVIGATION = """
 # Instructions
 To assist in finding a destination, provide minimal information as briefly as possible.
