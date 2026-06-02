@@ -230,6 +230,7 @@ class FloorManager:
         self.ble_localizer = None
         self.wifi_localizer = None
         self.map_filename = ""
+        self.load_state_filename = None
 
         # publisher
         self.initialpose_pub = None
@@ -854,9 +855,9 @@ class MultiFloorManager:
             pose_stamped_msg.header = pose_with_covariance_stamped_msg.header
             pose_stamped_msg.pose = pose_with_covariance_stamped_msg.pose.pose
 
-            # detect area
-            x_area = [[pose_stamped_msg.pose.position.x, pose_stamped_msg.pose.position.y, float(target_floor)*self.area_floor_const]]  # [x,y,floor]
-            target_area = self.area_localizer.predict(x_area)[0]  # [area] area may change.
+            target_area = self.resolve_area_for_global_pose(pose_stamped_msg.pose, target_floor)
+            if target_area is None:
+                return StatusCode.CANCELLED
 
             if self.verbose:
                 self.logger.info(f"multi_floor_manager.initialize_with_global_pose: mode={target_mode}, floor={target_floor}, area={target_area}")
@@ -923,6 +924,18 @@ class MultiFloorManager:
 
             return status_code  # result of start_trajectory_with_pose
         return StatusCode.CANCELLED
+
+    def resolve_area_for_global_pose(self, pose, target_floor):
+        # fall back for no area_localizer
+        if self.area_localizer is None:
+            area_candidates = list(self.floor_manager_dict.get(target_floor, {}).keys())
+            if len(area_candidates) != 1:
+                self.logger.warn(f"Cannot determine area for floor {target_floor} without samples.")
+                return None
+            return area_candidates[0]
+
+        x_area = [[pose.position.x, pose.position.y, float(target_floor)*self.area_floor_const]]  # [x,y,floor]
+        return self.area_localizer.predict(x_area)[0]  # [area] area may change.
 
     def restart_floor(self, local_pose: Pose, target_floor=None, target_area=None, target_mode=None) -> int:
 
@@ -1011,6 +1024,9 @@ class MultiFloorManager:
             return
 
         if not self.altitude_floor_estimator.enabled():
+            return
+
+        if self.floor_height_mapper is None or self.area_localizer is None:
             return
 
         # get robot pose for floor height mapper
@@ -1139,6 +1155,9 @@ class MultiFloorManager:
             floor_localizer = self.ble_floor_localizer
         elif rss_type == RSSType.WiFi:
             floor_localizer = self.wifi_floor_localizer
+
+        if floor_localizer is None or self.area_localizer is None:
+            return
 
         loc = floor_localizer.predict(beacons)  # [[x,y,z,floor]]
 
@@ -1337,18 +1356,22 @@ class MultiFloorManager:
                 self.logger.warn(F"{e}")
                 return
 
-            # detect area switching
-            x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(self.floor) * self.area_floor_const]]  # [x,y,floor]
+            if self.area_localizer is not None:
+                # detect area switching
+                x_area = [[robot_pose.transform.translation.x, robot_pose.transform.translation.y, float(self.floor) * self.area_floor_const]]  # [x,y,floor]
 
-            # find area candidates
-            neigh_dist, neigh_ind = self.area_localizer.kneighbors(x_area, n_neighbors=10)
-            area_candidates = self.Y_area[neigh_ind]
+                # find area candidates
+                neigh_dist, neigh_ind = self.area_localizer.kneighbors(x_area, n_neighbors=10)
+                area_candidates = self.Y_area[neigh_ind]
 
-            # switch area when the detected area is stable
-            unique_areas = np.unique(area_candidates)
-            if len(unique_areas) == 1:
-                area = unique_areas[0]
+                # switch area when the detected area is stable
+                unique_areas = np.unique(area_candidates)
+                if len(unique_areas) == 1:
+                    area = unique_areas[0]
+                else:
+                    area = self.area
             else:
+                # keep area when area_localizer is not available
                 area = self.area
 
             # if area change detected, switch trajectory
@@ -1956,7 +1979,7 @@ class MultiFloorManager:
 
         if self.floor is None:
             # estimate floor if enabled
-            if self.gnss_params.gnss_use_floor_estimation:
+            if self.gnss_params.gnss_use_floor_estimation and self.floor_height_mapper is not None:
                 near_floor_list = self.floor_height_mapper.get_floor_list([gnss_xy.x, gnss_xy.y],
                                                                           radius=self.gnss_params.gnss_floor_search_radius)
                 if len(near_floor_list) == 0:
@@ -2828,17 +2851,17 @@ if __name__ == "__main__":
                                 lng=map_dict["longitude"],
                                 rotate=map_dict["rotate"]
                                 )
-        load_state_filename = resource_utils.get_filename(map_dict["load_state_filename"])
-        samples_filename = resource_utils.get_filename(map_dict["samples_filename"])
+        load_state_filename = resource_utils.get_filename(map_dict.get("load_state_filename"))
+        samples_filename = resource_utils.get_filename(map_dict.get("samples_filename"))
         # rssi gain config
         rssi_gain = map_dict.get("rssi_gain", 0.0)
         rssi_gain_ble = map_dict.get("ble", {}).get("rssi_gain", rssi_gain)
         rssi_gain_wifi = map_dict.get("wifi", {}).get("rssi_gain", rssi_gain)
         # keep the original string without resource resolving. if not found in map_dict, use "".
-        map_filename = map_dict["map_filename"] if "map_filename" in map_dict else ""
+        map_filename = map_dict.get("map_filename") or ""
         environment = map_dict["environment"] if "environment" in map_dict else "indoor"
         use_gnss_adjust = map_dict["use_gnss_adjust"] if "use_gnss_adjust" in map_dict else False
-        min_hist_count = map_dict["min_hist_count"] if "min_hist_count" in map_dict else 1
+        cartographer_occupancy_grid_resolution = map_dict.get("cartographer_occupancy_grid", {}).get("resolution", 0.1)
 
         # warning
         if use_gnss_adjust:
@@ -2851,8 +2874,10 @@ if __name__ == "__main__":
 
         floor_set.add(floor)
 
-        with open(samples_filename, "rb") as f:
-            samples = orjson.loads(f.read())
+        samples = []
+        if samples_filename:
+            with open(samples_filename, "rb") as f:
+                samples = orjson.loads(f.read())
 
         # append additional information to the samples
         for s in samples:
@@ -2870,20 +2895,20 @@ if __name__ == "__main__":
 
         # BLE beacon localizer
         ble_localizer_floor = None
-        if multi_floor_manager.use_ble:
+        if multi_floor_manager.use_ble and samples_ble:
             # fit localizer for the floor
             ble_localizer_floor = create_wireless_rss_localizer(local_localizer_type, logger, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, rssi_offset=rssi_offset, n_strongest=n_strongest_local)
             ble_localizer_floor.fit(samples_ble)
-        else:
+        elif not multi_floor_manager.use_ble:
             samples_ble = []
 
         # WiFi localizer
         wifi_localizer_floor = None
-        if multi_floor_manager.use_wifi:
+        if multi_floor_manager.use_wifi and samples_wifi:
             # fit wifi localizer for the floor
             wifi_localizer_floor = create_wireless_rss_localizer(local_localizer_type, logger, n_neighbors=n_neighbors_local, min_beacons=min_beacons_local, n_strongest=n_strongest_local)
             wifi_localizer_floor.fit(samples_wifi)
-        else:
+        elif not multi_floor_manager.use_wifi:
             samples_wifi = []
 
         # run ros nodes
@@ -2923,6 +2948,17 @@ if __name__ == "__main__":
             executable1 = "cartographer_node"
 
             # run cartographer node
+            cartographer_arguments = [
+                "-configuration_directory", configuration_directory,
+                "-configuration_basename", tmp_configuration_basename,
+            ]
+            if load_state_filename:
+                cartographer_arguments.extend(["-load_state_filename", load_state_filename])
+            cartographer_arguments.extend([
+                "-start_trajectory_with_default_topics=false",
+                "--collect_metrics"
+            ])
+
             launch_service.include_launch_description(LaunchDescription([
                 LogInfo(msg=F"Launching cartographer node {namespace}"),
                 Node(
@@ -2936,19 +2972,30 @@ if __name__ == "__main__":
                                 ("odom", odom_topic_name),
                                 ("fix", "/"+namespace+fix_topic_name)],
                     output="both",
-                    arguments=[
-                        "-configuration_directory", configuration_directory,
-                        "-configuration_basename", tmp_configuration_basename,
-                        "-load_state_filename", load_state_filename,
-                        "-start_trajectory_with_default_topics=false",
-                        "--collect_metrics"
-                    ],
+                    arguments=cartographer_arguments,
                     parameters=[{
                         'use_sim_time': use_sim_time,
                         'qos_overrides': cartographer_qos_overrides_resolved
                     }]
                 )
             ]))
+
+            if not map_filename and mode == LocalizationMode.TRACK:
+                launch_service.include_launch_description(LaunchDescription([
+                    LogInfo(msg=F"Launching cartographer occupancy grid node {namespace}"),
+                    Node(
+                        package=package1,
+                        executable="cartographer_occupancy_grid_node",
+                        name="cartographer_occupancy_grid_node",
+                        namespace=namespace,
+                        remappings=[("map", "/" + node_id + "/map")],
+                        output="both",
+                        arguments=["-resolution", str(cartographer_occupancy_grid_resolution)],
+                        parameters=[{
+                            'use_sim_time': use_sim_time,
+                        }]
+                    )
+                ]))
 
             # create floor_manager
             floor_manager = FloorManager()
@@ -2966,6 +3013,7 @@ if __name__ == "__main__":
             floor_manager.node_id = node_id
             floor_manager.frame_id = frame_id
             floor_manager.map_filename = map_filename
+            floor_manager.load_state_filename = load_state_filename
             # publishers
             floor_manager.initialpose_pub = node.create_publisher(PoseWithCovarianceStamped, node_id+"/"+str(mode)+initialpose_topic_name, 10, callback_group=MutuallyExclusiveCallbackGroup())
             floor_manager.fix_pub = node.create_publisher(NavSatFix, node_id+"/"+str(mode)+fix_topic_name, 10, callback_group=MutuallyExclusiveCallbackGroup())
@@ -3008,6 +3056,8 @@ if __name__ == "__main__":
         floor = float(map_dict["floor"])
         area = int(map_dict["area"]) if "area" in map_dict else 0
         node_id = map_dict["node_id"]
+        min_hist_count = map_dict.get("min_hist_count", 1)
+        fixed_frame_pose_constraints_min_count = map_dict.get("fixed_frame_pose_constraints_min_count", 2)
 
         if map_dict["skip"]:
             continue
@@ -3019,18 +3069,19 @@ if __name__ == "__main__":
             floor_manager.cartographer_client = CartographerClient(node, logger, node_id, mode,
                                                                    floor_manager.configuration_directory,
                                                                    floor_manager.configuration_basename,
-                                                                   min_hist_count
+                                                                   min_hist_count,
+                                                                   fixed_frame_pose_constraints_min_count
                                                                    )
 
     multi_floor_manager.floor_list = list(floor_set)
 
     # a localizer to estimate floor
     # ble floor localizer
-    if multi_floor_manager.use_ble:
+    if multi_floor_manager.use_ble and samples_ble_global_all:
         multi_floor_manager.ble_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, logger, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, rssi_offset=rssi_offset, n_strongest=n_strongest_floor)
         multi_floor_manager.ble_floor_localizer.fit(samples_ble_global_all)
     # wifi floor localizer
-    if multi_floor_manager.use_wifi:
+    if multi_floor_manager.use_wifi and samples_wifi_global_all:
         multi_floor_manager.wifi_floor_localizer = create_wireless_rss_localizer(floor_localizer_type, logger, n_neighbors=n_neighbors_floor, min_beacons=min_beacons_floor, n_strongest=n_strongest_floor)
         multi_floor_manager.wifi_floor_localizer.fit(samples_wifi_global_all)
 
@@ -3055,11 +3106,12 @@ if __name__ == "__main__":
         height = s["information"]["height"]
         effective_radius = s["information"]["effective_radius"]
         X_height_mapper.append([x_a, y_a, f_a, area, height, effective_radius])
-    if floor_height_mapper_config is None:
-        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger,)
-    else:
-        logger.info(f"floor_height_mapper_config={floor_height_mapper_config}")
-        multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger, **floor_height_mapper_config)
+    if X_height_mapper:
+        if floor_height_mapper_config is None:
+            multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger,)
+        else:
+            logger.info(f"floor_height_mapper_config={floor_height_mapper_config}")
+            multi_floor_manager.floor_height_mapper = FloorHeightMapper(X_height_mapper, logger=logger, **floor_height_mapper_config)
 
     # area localizer
     X_area = []
@@ -3072,12 +3124,13 @@ if __name__ == "__main__":
         X_area.append([x_a, y_a, f_a])
         area = int(s["information"]["area"])
         Y_area.append(area)
-    from sklearn.neighbors import KNeighborsClassifier
-    area_classifier = KNeighborsClassifier(n_neighbors=1)
-    area_classifier.fit(X_area, Y_area)
-    multi_floor_manager.X_area = np.array(X_area)
-    multi_floor_manager.Y_area = np.array(Y_area)
-    multi_floor_manager.area_localizer = area_classifier
+    if X_area:
+        from sklearn.neighbors import KNeighborsClassifier
+        area_classifier = KNeighborsClassifier(n_neighbors=1)
+        area_classifier.fit(X_area, Y_area)
+        multi_floor_manager.X_area = np.array(X_area)
+        multi_floor_manager.Y_area = np.array(Y_area)
+        multi_floor_manager.area_localizer = area_classifier
 
     # define callback group accessing the state variables
     state_update_callback_group = MutuallyExclusiveCallbackGroup()
