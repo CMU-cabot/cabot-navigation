@@ -374,6 +374,28 @@ class Object(object):
         return Object._kdtree.get_nearest_link(node, exclude)
 
     @staticmethod
+    def get_nearest_node(obj, exclude=None):
+        point = obj.local_geometry
+        latlng = obj.geometry
+
+        min_node = None
+        min_dist = 1000
+        for node in Object.get_objects_by_type(Node):
+            if exclude is not None and exclude(node):
+                continue
+            if node.local_geometry:
+                dist = node.local_geometry.distance_to(point)
+            else:
+                dist = node.geometry.distance_to(latlng)
+            if obj.floor is not None and node.floor != obj.floor:
+                dist += 1000
+            if dist < min_dist:
+                min_dist = dist
+                min_node = node
+
+        return (min_node, min_dist)
+
+    @staticmethod
     def update_anchor_all(anchor):
         """update anchor of all object"""
         Object._kdtree.reset()
@@ -545,6 +567,9 @@ class Link(Object):
     def register_poi(self, poi):
         self.pois.append(poi)
 
+    def clear_pois(self):
+        self.pois = []
+
     def update_anchor(self, anchor):
         if isinstance(self.geometry, Point):
             super().update_anchor(anchor)
@@ -627,6 +652,7 @@ class Node(Object):
     def __init__(self, **dic):
         super(Node, self).__init__(**dic)
         self.links = []
+        self.pois = []
         for i in range(1, 100):
             attr = F"link{i}_id"
             if hasattr(self.properties, attr):
@@ -640,6 +666,12 @@ class Node(Object):
 
     def _set_facility(self, facility):
         self.facility = facility
+
+    def register_poi(self, poi):
+        self.pois.append(poi)
+
+    def clear_pois(self):
+        self.pois = []
 
     @property
     def floor(self):
@@ -834,6 +866,8 @@ class POI(Facility, geoutil.TargetPlace):
                     cls = InfoPOI
                 if category == '_cabot_speed_':
                     cls = SpeedPOI
+                if category == '_cabot_intersection_':
+                    cls = IntersectionPOI
                 if category == '_nav_elevator_cab_':
                     cls = ElevatorCabPOI
                 if category == '_nav_queue_wait_':
@@ -966,7 +1000,89 @@ class SpeedPOI(POI):
 
     def __init__(self, **dic):
         super(SpeedPOI, self).__init__(**dic)
-        self.limit = float(self.properties.hulop_content)
+        self.limit = self._parse_limit(self.properties.hulop_content)
+
+    @staticmethod
+    def _parse_limit(content):
+        if isinstance(content, dict):
+            return float(content["limit"])
+        try:
+            return float(content)
+        except (TypeError, ValueError):
+            hulop_content_json = json.loads(content)
+            return float(hulop_content_json["limit"])
+
+    @classmethod
+    def make_virtual(cls, source_poi, link, local_point, rotate, limit, angle_margin):
+        virtual_poi = cls.__new__(cls)
+        virtual_poi.__dict__ = copy.deepcopy(source_poi.__dict__)
+        virtual_poi._id = f"{source_poi._id}__virtual_speed__{link._id}"
+        virtual_poi.limit = float(limit)
+        virtual_poi.sub_category = "_cabot_speed_"
+        virtual_poi.minor_category = source_poi.minor_category
+        virtual_poi._angle = float(angle_margin)
+        virtual_poi.local_geometry = geoutil.Point(x=local_point.x, y=local_point.y)
+        virtual_poi.geometry = geoutil.local2global(virtual_poi.local_geometry, virtual_poi.anchor)
+        virtual_poi.update_pose(virtual_poi.local_geometry, rotate)
+        virtual_poi.local_pose = virtual_poi
+        virtual_poi.reset_target()
+        return virtual_poi
+
+
+class IntersectionPOI(POI):
+    """Cabot Intersection POI class"""
+
+    DEFAULT_LIMIT = 0.5
+    DEFAULT_SET_BACK = 1.5
+    DEFAULT_ANGLE_MARGIN = 60.0
+
+    @classmethod
+    def marshal(cls, dic):
+        """marshal Intersection POI object"""
+        return cls(**dic)
+
+    def __init__(self, **dic):
+        super(IntersectionPOI, self).__init__(**dic)
+        self.limit = IntersectionPOI.DEFAULT_LIMIT
+        self.set_back = IntersectionPOI.DEFAULT_SET_BACK
+        self.angle_margin = IntersectionPOI.DEFAULT_ANGLE_MARGIN
+
+        hulop_content_json = {}
+        hulop_content = self.properties.hulop_content
+        if isinstance(hulop_content, dict):
+            hulop_content_json = hulop_content
+        elif hulop_content:
+            try:
+                hulop_content_json = json.loads(hulop_content)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                CaBotRclpyUtil.error(f"Invalid hulop_content for IntersectionPOI: {self._id}")
+
+        if "limit" in hulop_content_json:
+            self.limit = float(hulop_content_json["limit"])
+        if "set_back" in hulop_content_json:
+            self.set_back = float(hulop_content_json["set_back"])
+        if "angle_margin" in hulop_content_json:
+            self.angle_margin = float(hulop_content_json["angle_margin"])
+
+    def make_virtual_speed_poi(self, link):
+        if link.source_node is None or link.target_node is None:
+            return None
+        if link.source_node.local_geometry is None or link.target_node.local_geometry is None:
+            return None
+
+        source = link.source_node.local_geometry
+        target = link.target_node.local_geometry
+        dx = target.x - source.x
+        dy = target.y - source.y
+        length = math.sqrt(dx * dx + dy * dy)
+        if length <= 0.0:
+            return None
+
+        distance_from_source = max(0.0, length - self.set_back)
+        ratio = distance_from_source / length
+        local_point = geoutil.Point(x=source.x + dx * ratio, y=source.y + dy * ratio)
+        rotate = geoutil.normalize_angle(link.pose.r + math.pi)
+        return SpeedPOI.make_virtual(self, link, local_point, rotate, self.limit, self.angle_margin)
 
 
 class ElevatorCabPOI(POI):

@@ -234,11 +234,17 @@ class DataUtil(object):
         if self.is_analyzed:
             return
         CaBotRclpyUtil.info("analyzing features")
+        for link in geojson.Object.get_objects_by_type(geojson.Link):
+            link.clear_pois()
+        for node in geojson.Object.get_objects_by_type(geojson.Node):
+            node.clear_pois()
+
         # links = geojson.Object.get_objects_by_type(geojson.Link)
         doors = geojson.Object.get_objects_by_type(geojson.DoorPOI)
         infos = geojson.Object.get_objects_by_type(geojson.InfoPOI)
         speeds = geojson.Object.get_objects_by_type(geojson.SpeedPOI)
         signals = geojson.Object.get_objects_by_type(geojson.SignalPOI)
+        intersections = geojson.Object.get_objects_by_type(geojson.IntersectionPOI)
 
         for poi in doors+infos+speeds+signals:
             min_link, min_dist = geojson.Object.get_nearest_link(poi)
@@ -252,6 +258,19 @@ class DataUtil(object):
                 CaBotRclpyUtil.debug(
                     F"poi {poi._id} ({poi.floor}) is not registered. "
                     F"min_link._id = {min_link._id}, min_link.floor = {min_link.floor}, min_dist={min_dist}")
+
+        for poi in intersections:
+            min_node, min_dist = geojson.Object.get_nearest_node(poi)
+            if min_node is None:
+                CaBotRclpyUtil.debug(F"intersection poi {poi._id} ({poi.floor}) is not registered.")
+                continue
+
+            if min_dist < 5:
+                min_node.register_poi(poi)
+            else:
+                CaBotRclpyUtil.debug(
+                    F"intersection poi {poi._id} ({poi.floor}) is not registered. "
+                    F"min_node._id = {min_node._id}, min_node.floor = {min_node.floor}, min_dist={min_dist}")
 
         elevator_cabs = geojson.Object.get_objects_by_type(geojson.ElevatorCabPOI)
         for poi in elevator_cabs:

@@ -893,12 +893,31 @@ class NavGoal(Goal):
     def _extract_pois(self):
         """extract pois along the route"""
         temp = []
+        registered_virtual_pois = set()
         for (_, item) in enumerate(self.navcog_route):
             if isinstance(item, geojson.RouteLink):
                 CaBotRclpyUtil.debug(item._id)
                 for poi in item.pois:
                     CaBotRclpyUtil.debug(f"{['  ', type(poi), poi._id]}")
                 temp.extend(item.pois)
+
+                if item.target_node is None:
+                    continue
+
+                for poi in item.target_node.pois:
+                    if not isinstance(poi, geojson.IntersectionPOI):
+                        continue
+
+                    virtual_poi = poi.make_virtual_speed_poi(item)
+                    if virtual_poi is None:
+                        continue
+
+                    if virtual_poi._id in registered_virtual_pois:
+                        continue
+
+                    registered_virtual_pois.add(virtual_poi._id)
+                    CaBotRclpyUtil.debug(f"{['  ', type(virtual_poi), virtual_poi._id]}")
+                    temp.append(virtual_poi)
         return temp
 
     def _extract_gradient(self):
