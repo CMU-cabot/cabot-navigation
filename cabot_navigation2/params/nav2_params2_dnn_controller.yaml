@@ -35,7 +35,7 @@ controller_server:
       base_link_frame: "base_footprint"
       map_frame: "map"
       scan_frame: "lidar_base_link"
-      odom_topic: "/odom"
+      odom_topic: "/cabot/odometry/filtered"
       scan_topic: "/scan"
       debug_image_topic: "debug/dnn_controller_image"
       #critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
