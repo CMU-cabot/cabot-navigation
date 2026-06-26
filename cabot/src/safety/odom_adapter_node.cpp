@@ -33,6 +33,7 @@
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <rclcpp/create_timer.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/bool.hpp>
@@ -101,8 +102,11 @@ public:
     targetRate_ = declare_parameter("target_rate", targetRate_);
 
     tf_callback_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    tfTimer = create_wall_timer(
-      std::chrono::duration<double>(1.0 / targetRate_),
+    tfTimer = rclcpp::create_timer(
+      get_node_base_interface(),
+      get_node_timers_interface(),
+      get_clock(),
+      rclcpp::Duration::from_seconds(1.0 / targetRate_),
       std::bind(&OdomAdapterNode::tfLoop, this),
       tf_callback_group);
 
