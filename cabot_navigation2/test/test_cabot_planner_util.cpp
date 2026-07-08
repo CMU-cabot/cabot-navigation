@@ -19,9 +19,12 @@
 // SOFTWARE.
 
 #include <gtest/gtest.h>
+#include <math.h>
 #include <stdlib.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 #include <cabot_navigation2/cabot_planner_util.hpp>
+#include <cabot_navigation2/navcog_path_util.hpp>
 
 namespace cabot_navigation2_test
 {
@@ -44,6 +47,22 @@ public:
 protected:
 };
 
+geometry_msgs::msg::PoseStamped makePose(double x, double y, double yaw)
+{
+  tf2::Quaternion q;
+  q.setRPY(0, 0, yaw);
+
+  geometry_msgs::msg::PoseStamped pose;
+  pose.header.frame_id = "map";
+  pose.pose.position.x = x;
+  pose.pose.position.y = y;
+  pose.pose.orientation.x = q.x();
+  pose.pose.orientation.y = q.y();
+  pose.pose.orientation.z = q.z();
+  pose.pose.orientation.w = q.w();
+  return pose;
+}
+
 TEST_F(CabotPlannerUtilTest, ObstacleDistanceTest) {
   cabot_navigation2::Obstacle o1(0, 0, 254, 0, 0, false);
   cabot_navigation2::Obstacle o2(10, 10, 253, 0, 0, false);
@@ -62,6 +81,22 @@ TEST_F(CabotPlannerUtilTest, ObstacleDistanceTest) {
   printf("####%.2f\n", o2.distance(p2));
   printf("####%.2f\n", o2.distance(p3));
   printf("####%.2f\n", o2.distance(p4));
+}
+
+TEST_F(CabotPlannerUtilTest, SmoothStartKeepsShortPathGoal) {
+  nav_msgs::msg::Path navcog_path;
+  navcog_path.header.frame_id = "map";
+
+  auto path_yaw = atan2(-0.140, -2.715);
+  navcog_path.poses.push_back(makePose(26.329, -26.238, path_yaw));
+  navcog_path.poses.push_back(makePose(23.614, -26.378, path_yaw));
+
+  auto path = cabot_navigation2::normalizedPath(navcog_path, 0.05);
+  auto start = makePose(32.783, -29.231, path_yaw);
+
+  auto adjusted = cabot_navigation2::adjustedPathByStart(path, start, true);
+
+  EXPECT_LT(cabot_navigation2::distance(adjusted.poses.back(), path.poses.back()), 0.001);
 }
 
 }  // namespace cabot_navigation2_test
