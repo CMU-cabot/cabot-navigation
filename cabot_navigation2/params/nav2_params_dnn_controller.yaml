@@ -37,6 +37,7 @@ controller_server:
       scan_frame: "lidar_base_link"
       odom_topic: "/cabot/odometry/filtered"
       scan_topic: "/scan"
+      people_topic: "/people"
       debug_image_topic: "debug/dnn_controller_image"
       #critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
       critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
@@ -85,6 +86,7 @@ controller_server:
       scan_frame: "lidar_base_link"
       odom_topic: "/cabot/odometry/filtered"
       scan_topic: "/scan"
+      people_topic: "/people"
       debug_image_topic: "debug/dnn_controller_image"
       #critics: ["Oscillation", "PathForwardPrefer", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]
       critics: ["Oscillation", "VelocityBaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "PoseAlign"]

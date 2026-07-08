@@ -1,7 +1,9 @@
 #ifndef CABOT_DNN_CONTROLLER__DNN_CONTROLLER_HPP_
 #define CABOT_DNN_CONTROLLER__DNN_CONTROLLER_HPP_
 
+#include <array>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -16,6 +18,7 @@
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "people_msgs/msg/people.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
@@ -107,6 +110,8 @@ public:
 private:
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
+  void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
+  std::vector<float> buildPeopleInput();
   std::vector<std::array<float, 2>> transformPoints2D(
     const std::vector<std::array<float, 2>> & points,
     const geometry_msgs::msg::TransformStamped & tf) const;
@@ -123,6 +128,8 @@ private:
   std::vector<std::array<float, 2>> odom_history_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   sensor_msgs::msg::LaserScan::SharedPtr last_scan_;
+  rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
+  people_msgs::msg::People::SharedPtr last_people_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
 
   std::string trt_model_;
@@ -134,6 +141,7 @@ private:
   std::string scan_frame_;
   std::string odom_topic_;
   std::string scan_topic_;
+  std::string people_topic_;
   std::string debug_image_topic_;
   std::unique_ptr<TrtLogger> trt_logger_;
   std::unique_ptr<nvinfer1::IRuntime, TrtDeleter> trt_runtime_;
@@ -144,15 +152,22 @@ private:
   void* d_odom_{nullptr};
   void* d_plan_{nullptr};
   void* d_scan_{nullptr};
+  void* d_people_{nullptr};
   void* d_cmd_{nullptr};
   void* d_v_logits_{nullptr};
   void* d_w_logits_{nullptr};
   dnn_controller_constants::ActionMode action_mode_;
   int odom_length_;
   int plan_length_;
+  bool people_encoder_enabled_{false};
+  int num_people_{0};
   int v_num_bins_;
   int w_num_bins_;
   std::mutex trt_mutex_;
+  std::mutex plan_mutex_;
+  std::mutex odom_mutex_;
+  std::mutex scan_mutex_;
+  std::mutex people_mutex_;
 };
 
 }  // namespace cabot_dnn_controller

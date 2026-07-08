@@ -3,11 +3,14 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <mutex>
+#include <numeric>
 #include <stdexcept>
+#include <utility>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
@@ -36,6 +39,7 @@ using cabot_dnn_controller::dnn_controller_constants::ActionMode;
 
 using cabot_dnn_controller::dnn_controller_constants::kScanLength;
 using cabot_dnn_controller::dnn_controller_constants::kScanRangeMax;
+using cabot_dnn_controller::dnn_controller_constants::kPeopleDim;
 
 using cabot_dnn_controller::dnn_controller_constants::kVMin;
 using cabot_dnn_controller::dnn_controller_constants::kVMax;
@@ -45,6 +49,7 @@ using cabot_dnn_controller::dnn_controller_constants::kWMax;
 using cabot_dnn_controller::dnn_controller_constants::kInputOdomName;
 using cabot_dnn_controller::dnn_controller_constants::kInputPlanName;
 using cabot_dnn_controller::dnn_controller_constants::kInputScanName;
+using cabot_dnn_controller::dnn_controller_constants::kInputPeopleName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputWLogitsName;
@@ -101,6 +106,8 @@ void DnnController::configure(
   node_->get_parameter(prefix + "odom_topic", odom_topic_);
   node_->declare_parameter<std::string>(prefix + "scan_topic", "");
   node_->get_parameter(prefix + "scan_topic", scan_topic_);
+  node_->declare_parameter<std::string>(prefix + "people_topic", "people");
+  node_->get_parameter(prefix + "people_topic", people_topic_);
   node_->declare_parameter<std::string>(prefix + "debug_image_topic", "");
   node_->get_parameter(prefix + "debug_image_topic", debug_image_topic_);
 
@@ -117,6 +124,21 @@ void DnnController::configure(
     const YAML::Node config = YAML::LoadFile(config_path.string());
     odom_length_ = config["odom_encoder"]["odom_length"].as<int>();
     plan_length_ = config["plan_encoder"]["plan_length"].as<int>();
+    people_encoder_enabled_ = false;
+    num_people_ = 0;
+    const YAML::Node people_config = config["people_encoder"];
+    if (people_config && people_config["enabled"]) {
+      people_encoder_enabled_ = people_config["enabled"].as<bool>();
+    }
+    if (people_encoder_enabled_) {
+      if (!people_config["num_people"]) {
+        throw std::runtime_error("people_encoder.num_people is required when people_encoder is enabled");
+      }
+      num_people_ = people_config["num_people"].as<int>();
+      if (num_people_ <= 0) {
+        throw std::runtime_error("people_encoder.num_people must be > 0");
+      }
+    }
     std::string action_mode_str = config["action"]["mode"].as<std::string>();
     if (action_mode_str == "reg") {
       action_mode_ = ActionMode::kReg;
@@ -163,9 +185,17 @@ void DnnController::configure(
 
     CUDA_CHECK(cudaStreamCreate(&trt_stream_));
 
-    trt_context_->setInputShape(kInputOdomName, nvinfer1::Dims3{1, odom_length_, 2});
-    trt_context_->setInputShape(kInputPlanName, nvinfer1::Dims3{1, plan_length_, 2});
-    trt_context_->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength});
+    bool input_shapes_set =
+      trt_context_->setInputShape(kInputOdomName, nvinfer1::Dims3{1, odom_length_, 2}) &&
+      trt_context_->setInputShape(kInputPlanName, nvinfer1::Dims3{1, plan_length_, 2}) &&
+      trt_context_->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength});
+    if (people_encoder_enabled_) {
+      input_shapes_set = input_shapes_set &&
+        trt_context_->setInputShape(kInputPeopleName, nvinfer1::Dims3{1, num_people_, kPeopleDim});
+    }
+    if (!input_shapes_set) {
+      throw std::runtime_error("Failed to set TensorRT input shapes");
+    }
 
     auto allocTensor = [&](const char * name) -> void * {
       const nvinfer1::Dims dims = trt_context_->getTensorShape(name);
@@ -187,17 +217,25 @@ void DnnController::configure(
     d_odom_ = allocTensor(kInputOdomName);
     d_plan_ = allocTensor(kInputPlanName);
     d_scan_ = allocTensor(kInputScanName);
+    if (people_encoder_enabled_) {
+      d_people_ = allocTensor(kInputPeopleName);
+    }
     d_cmd_  = allocTensor(kOutputCmdName);
     d_v_logits_  = allocTensor(kOutputVLogitsName);
     d_w_logits_  = allocTensor(kOutputWLogitsName);
 
-    if (!trt_context_->setTensorAddress(kInputOdomName, d_odom_) ||
-        !trt_context_->setTensorAddress(kInputPlanName, d_plan_) ||
-        !trt_context_->setTensorAddress(kInputScanName, d_scan_) ||
-        !trt_context_->setTensorAddress(kOutputCmdName, d_cmd_) ||
-        !trt_context_->setTensorAddress(kOutputVLogitsName, d_v_logits_) ||
-        !trt_context_->setTensorAddress(kOutputWLogitsName, d_w_logits_))
-    {
+    bool tensor_addresses_set =
+      trt_context_->setTensorAddress(kInputOdomName, d_odom_) &&
+      trt_context_->setTensorAddress(kInputPlanName, d_plan_) &&
+      trt_context_->setTensorAddress(kInputScanName, d_scan_) &&
+      trt_context_->setTensorAddress(kOutputCmdName, d_cmd_) &&
+      trt_context_->setTensorAddress(kOutputVLogitsName, d_v_logits_) &&
+      trt_context_->setTensorAddress(kOutputWLogitsName, d_w_logits_);
+    if (people_encoder_enabled_) {
+      tensor_addresses_set = tensor_addresses_set &&
+        trt_context_->setTensorAddress(kInputPeopleName, d_people_);
+    }
+    if (!tensor_addresses_set) {
       throw std::runtime_error("Failed to set TensorRT tensor addresses");
     }
 
@@ -212,21 +250,41 @@ void DnnController::configure(
     std::bind(&DnnController::scanCallback, this, std::placeholders::_1));
   odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(odom_topic_, rclcpp::SensorDataQoS(),
     std::bind(&DnnController::odomCallback, this, std::placeholders::_1));
+  if (people_encoder_enabled_) {
+    people_sub_ = node_->create_subscription<people_msgs::msg::People>(
+      people_topic_, rclcpp::SensorDataQoS(),
+      std::bind(&DnnController::peopleCallback, this, std::placeholders::_1));
+  }
   debug_image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>(debug_image_topic_, rclcpp::SystemDefaultsQoS());
 }
 
 void DnnController::cleanup()
 {
-  global_plan_.poses.clear();
+  {
+    std::lock_guard<std::mutex> plan_lock(plan_mutex_);
+    global_plan_.poses.clear();
+  }
   odom_sub_.reset();
-  odom_history_.clear();
+  {
+    std::lock_guard<std::mutex> odom_lock(odom_mutex_);
+    odom_history_.clear();
+  }
   scan_sub_.reset();
-  last_scan_.reset();
+  {
+    std::lock_guard<std::mutex> scan_lock(scan_mutex_);
+    last_scan_.reset();
+  }
+  people_sub_.reset();
+  {
+    std::lock_guard<std::mutex> people_lock(people_mutex_);
+    last_people_.reset();
+  }
 
   trt_ready_ = false;
   if (d_odom_) { CUDA_CHECK(cudaFree(d_odom_)); d_odom_ = nullptr; }
   if (d_plan_) { CUDA_CHECK(cudaFree(d_plan_)); d_plan_ = nullptr; }
   if (d_scan_) { CUDA_CHECK(cudaFree(d_scan_)); d_scan_ = nullptr; }
+  if (d_people_) { CUDA_CHECK(cudaFree(d_people_)); d_people_ = nullptr; }
   if (d_cmd_)  { CUDA_CHECK(cudaFree(d_cmd_));  d_cmd_  = nullptr; }
   if (d_w_logits_)  { CUDA_CHECK(cudaFree(d_w_logits_));  d_w_logits_  = nullptr; }
   if (d_v_logits_)  { CUDA_CHECK(cudaFree(d_v_logits_));  d_v_logits_  = nullptr; }
@@ -240,6 +298,8 @@ void DnnController::cleanup()
   tf_.reset();
   clock_.reset();
   node_.reset();
+  people_encoder_enabled_ = false;
+  num_people_ = 0;
 }
 
 void DnnController::activate()
@@ -273,6 +333,89 @@ std::vector<std::array<float, 2>> DnnController::transformPoints2D(
   return output_points;
 }
 
+std::vector<float> DnnController::buildPeopleInput()
+{
+  std::vector<float> h_people(static_cast<size_t>(num_people_) * kPeopleDim, 0.0f);
+  if (!people_encoder_enabled_ || num_people_ <= 0) {
+    return h_people;
+  }
+
+  people_msgs::msg::People::SharedPtr people_msg;
+  {
+    std::lock_guard<std::mutex> people_lock(people_mutex_);
+    people_msg = last_people_;
+  }
+  if (!people_msg || people_msg->people.empty()) {
+    return h_people;
+  }
+
+  std::string source_frame = people_msg->header.frame_id;
+  if (source_frame.empty()) {
+    source_frame = map_frame_;
+  }
+  if (source_frame.empty()) {
+    RCLCPP_WARN_THROTTLE(
+      logger_, *clock_, 5000,
+      "Ignoring people message because header.frame_id is empty and map_frame is not set");
+    return h_people;
+  }
+
+  std::vector<std::array<float, 2>> source_people;
+  source_people.reserve(people_msg->people.size());
+  for (const auto & person : people_msg->people) {
+    const float x = static_cast<float>(person.position.x);
+    const float y = static_cast<float>(person.position.y);
+    if (std::isfinite(x) && std::isfinite(y)) {
+      source_people.push_back({x, y});
+    }
+  }
+  if (source_people.empty()) {
+    return h_people;
+  }
+
+  std::vector<std::array<float, 2>> base_people;
+  if (source_frame == base_link_frame_) {
+    base_people = std::move(source_people);
+  } else {
+    geometry_msgs::msg::TransformStamped tf_base_link_people;
+    try {
+      const rclcpp::Duration tf_timeout = rclcpp::Duration::from_seconds(transform_tolerance_);
+      const bool has_stamp =
+        people_msg->header.stamp.sec != 0 || people_msg->header.stamp.nanosec != 0;
+      const rclcpp::Time lookup_time = has_stamp ?
+        rclcpp::Time(people_msg->header.stamp) :
+        rclcpp::Time(0, 0, clock_->get_clock_type());
+      tf_base_link_people = tf_->lookupTransform(
+        base_link_frame_, source_frame, lookup_time, tf_timeout);
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN_THROTTLE(
+        logger_, *clock_, 5000,
+        "Ignoring people message because transform from '%s' to '%s' is unavailable: %s",
+        source_frame.c_str(), base_link_frame_.c_str(), ex.what());
+      return h_people;
+    }
+    base_people = transformPoints2D(source_people, tf_base_link_people);
+  }
+
+  std::vector<size_t> order(base_people.size());
+  std::iota(order.begin(), order.end(), 0);
+  std::sort(order.begin(), order.end(), [&](size_t lhs, size_t rhs) {
+    const auto & l = base_people[lhs];
+    const auto & r = base_people[rhs];
+    return (l[0] * l[0] + l[1] * l[1]) < (r[0] * r[0] + r[1] * r[1]);
+  });
+
+  const size_t output_count = std::min(order.size(), static_cast<size_t>(num_people_));
+  for (size_t i = 0; i < output_count; ++i) {
+    const auto & person = base_people[order[i]];
+    h_people[i * kPeopleDim + 0] = person[0];
+    h_people[i * kPeopleDim + 1] = person[1];
+    h_people[i * kPeopleDim + 2] = 1.0f;
+  }
+
+  return h_people;
+}
+
 geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped &,
   const geometry_msgs::msg::Twist &,
@@ -289,33 +432,51 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     return cmd;
   }
 
-  if (odom_history_.empty() || !last_scan_) {
+  std::vector<std::array<float, 2>> odom_history;
+  {
+    std::lock_guard<std::mutex> odom_lock(odom_mutex_);
+    odom_history = odom_history_;
+  }
+
+  sensor_msgs::msg::LaserScan::SharedPtr scan_msg;
+  {
+    std::lock_guard<std::mutex> scan_lock(scan_mutex_);
+    scan_msg = last_scan_;
+  }
+
+  if (odom_history.empty() || !scan_msg) {
     RCLCPP_INFO(logger_, "odom or scan is not ready, return 0 velocity command");
     return cmd;
   }
 
-  if (odom_history_.size() != odom_length_) {
+  if (odom_history.size() != odom_length_) {
     RCLCPP_ERROR(logger_, "odom size is not correct, return 0 velocity command, input size=%ld, expected size=%ld",
-      odom_history_.size(), odom_length_);
+      odom_history.size(), odom_length_);
     return cmd;
   }
-  if (last_scan_->ranges.size() != kScanLength) {
+  if (scan_msg->ranges.size() != kScanLength) {
     RCLCPP_ERROR(logger_, "scan size is not correct, return 0 velocity command, input size=%ld, expected size=%ld",
-      last_scan_->ranges.size(), kScanLength);
+      scan_msg->ranges.size(), kScanLength);
     return cmd;
   }
 
   std::vector<float> h_odom(1 * odom_length_ * 2, 0.0f);
   for (size_t i = 0; i < odom_length_; i++) {
-    h_odom[i * 2 + 0] = odom_history_[i][0] / static_cast<float>(max_linear_vel_);
-    h_odom[i * 2 + 1] = odom_history_[i][1] / static_cast<float>(max_angular_vel_);
+    h_odom[i * 2 + 0] = odom_history[i][0] / static_cast<float>(max_linear_vel_);
+    h_odom[i * 2 + 1] = odom_history[i][1] / static_cast<float>(max_angular_vel_);
   }
 
   if (!tf_) {
     RCLCPP_ERROR(logger_, "tf buffer is not available, return 0 velocity command");
     return cmd;
   }
-  if (global_plan_.poses.empty()) {
+
+  nav_msgs::msg::Path global_plan;
+  {
+    std::lock_guard<std::mutex> plan_lock(plan_mutex_);
+    global_plan = global_plan_;
+  }
+  if (global_plan.poses.empty()) {
     RCLCPP_WARN(logger_, "global plan is empty, return 0 velocity command");
     return cmd;
   }
@@ -331,10 +492,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     return cmd;
   }
 
-  std::vector<std::array<float, 2>> map_plan_poses(global_plan_.poses.size());
-  for (size_t i = 0; i < global_plan_.poses.size(); i++) {
-    map_plan_poses[i][0] = static_cast<float>(global_plan_.poses[i].pose.position.x);
-    map_plan_poses[i][1] = static_cast<float>(global_plan_.poses[i].pose.position.y);
+  std::vector<std::array<float, 2>> map_plan_poses(global_plan.poses.size());
+  for (size_t i = 0; i < global_plan.poses.size(); i++) {
+    map_plan_poses[i][0] = static_cast<float>(global_plan.poses[i].pose.position.x);
+    map_plan_poses[i][1] = static_cast<float>(global_plan.poses[i].pose.position.y);
   }
 
   const std::vector<std::array<float, 2>> base_plan_poses = transformPoints2D(map_plan_poses, tf_base_link_map);
@@ -364,11 +525,16 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_scan(1 * kScanLength, 0.0f);
   for (size_t i = 0; i < kScanLength; i++) {
-    float r = last_scan_->ranges[i];
+    float r = scan_msg->ranges[i];
     if (!std::isfinite(r)) {
       r = kScanRangeMax;
     }
     h_scan[i] = r;
+  }
+
+  std::vector<float> h_people;
+  if (people_encoder_enabled_) {
+    h_people = buildPeopleInput();
   }
 
   float v_pred = 0.0;
@@ -385,6 +551,11 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
       d_scan_, h_scan.data(), h_scan.size(),
       trt_engine_->getTensorDataType(kInputScanName), trt_stream_);
+    if (people_encoder_enabled_) {
+      cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
+        d_people_, h_people.data(), h_people.size(),
+        trt_engine_->getTensorDataType(kInputPeopleName), trt_stream_);
+    }
 
     if (!trt_context_->enqueueV3(trt_stream_)) {
       RCLCPP_ERROR(logger_, "TensorRT enqueueV3 failed");
@@ -513,6 +684,19 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       }
     }
 
+    if (people_encoder_enabled_) {
+      for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
+        const size_t offset = i * kPeopleDim;
+        if (h_people[offset + 2] <= 0.0f) {
+          continue;
+        }
+        const cv::Point px = toPixel(h_people[offset + 0], h_people[offset + 1]);
+        if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
+          cv::circle(image, px, 4, cv::Scalar(255, 80, 80), -1, cv::LINE_AA);
+        }
+      }
+    }
+
     const auto & t_scan = tf_base_link_scan.transform.translation;
     const auto & r_scan = tf_base_link_scan.transform.rotation;
     const double scan_yaw = std::atan2(2.0 * (r_scan.w * r_scan.z + r_scan.x * r_scan.y), 1.0 - 2.0 * (r_scan.y * r_scan.y + r_scan.z * r_scan.z));
@@ -520,7 +704,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     base_scan_points.reserve(kScanLength);
     for (size_t i = 0; i < kScanLength; i++) {
       const float r = h_scan[i];
-      const float angle = last_scan_->angle_min + i * last_scan_->angle_increment;
+      const float angle = scan_msg->angle_min + i * scan_msg->angle_increment;
 
       const float local_x = r * std::cos(angle);
       const float local_y = r * std::sin(angle);
@@ -552,6 +736,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
 void DnnController::setPlan(const nav_msgs::msg::Path & path)
 {
+  std::lock_guard<std::mutex> plan_lock(plan_mutex_);
   global_plan_ = path;
 }
 
@@ -567,6 +752,7 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
     return;
   }
 
+  std::lock_guard<std::mutex> odom_lock(odom_mutex_);
   odom_history_.push_back({
     static_cast<float>(msg->twist.twist.linear.x),
     static_cast<float>(msg->twist.twist.angular.z),
@@ -584,7 +770,14 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 
 void DnnController::scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
 {
+  std::lock_guard<std::mutex> scan_lock(scan_mutex_);
   last_scan_ = msg;
+}
+
+void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> people_lock(people_mutex_);
+  last_people_ = msg;
 }
 
 }  // namespace cabot_dnn_controller
