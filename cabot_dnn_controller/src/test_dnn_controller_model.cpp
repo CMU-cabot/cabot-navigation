@@ -1,4 +1,5 @@
 #include <NvInfer.h>
+#include <NvInferPlugin.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
@@ -10,7 +11,9 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -49,6 +52,30 @@ public:
   }
 };
 
+static bool hasIOTensor(const nvinfer1::ICudaEngine & engine, const char * tensor_name)
+{
+  for (int i = 0; i < engine.getNbIOTensors(); ++i) {
+    if (std::string(engine.getIOTensorName(i)) == tensor_name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static std::string dimsToString(const nvinfer1::Dims & dims)
+{
+  std::ostringstream oss;
+  oss << "(";
+  for (int i = 0; i < dims.nbDims; ++i) {
+    if (i > 0) {
+      oss << ", ";
+    }
+    oss << dims.d[i];
+  }
+  oss << ")";
+  return oss.str();
+}
+
 static std::vector<float> readFloatBin(const std::filesystem::path & path, size_t expected_count)
 {
   std::ifstream ifs(path, std::ios::binary);
@@ -69,7 +96,8 @@ static std::vector<float> readFloatBin(const std::filesystem::path & path, size_
   ifs.read(reinterpret_cast<char *>(data.data()), static_cast<std::streamsize>(size));
   if (expected_count != 0 && count != expected_count) {
     throw std::runtime_error(
-      "Unexpected element count in " + path.string() + ": " + std::to_string(count));
+      "Unexpected element count in " + path.string() + ": got " + std::to_string(count) +
+      ", expected " + std::to_string(expected_count));
   }
   return data;
 }
@@ -168,6 +196,11 @@ int main(int argc, char ** argv)
     const std::vector<float> h_out_gt = readFloatBin(out_path, 2);
 
     TrtLogger logger;
+    if (!initLibNvInferPlugins(&logger, "")) {
+      std::cerr << "Failed to initialize TensorRT plugins" << std::endl;
+      return 1;
+    }
+
     std::unique_ptr<nvinfer1::IRuntime, void(*)(nvinfer1::IRuntime*)> runtime(
       nvinfer1::createInferRuntime(logger),
       [](nvinfer1::IRuntime * p){ if (p) { delete p; } });
@@ -194,6 +227,17 @@ int main(int argc, char ** argv)
       std::cerr << "Failed to deserialize TensorRT engine: " << model_path << std::endl;
       return 1;
     }
+    const bool has_people_tensor = hasIOTensor(*engine, kInputPeopleName);
+    if (people_encoder_enabled && !has_people_tensor) {
+      std::cerr << "people_encoder is enabled, but TensorRT engine has no '" << kInputPeopleName <<
+        "' input tensor" << std::endl;
+      return 1;
+    }
+    if (!people_encoder_enabled && has_people_tensor) {
+      std::cerr << "TensorRT engine has a '" << kInputPeopleName <<
+        "' input tensor, but people_encoder is disabled in config.yaml" << std::endl;
+      return 1;
+    }
 
     std::unique_ptr<nvinfer1::IExecutionContext, void(*)(nvinfer1::IExecutionContext*)> context(
       engine->createExecutionContext(),
@@ -214,6 +258,16 @@ int main(int argc, char ** argv)
     if (!input_shapes_set) {
       std::cerr << "Failed to set input shapes" << std::endl;
       return 1;
+    }
+    if (people_encoder_enabled) {
+      const nvinfer1::Dims people_dims = context->getTensorShape(kInputPeopleName);
+      if (people_dims.nbDims != 3 || people_dims.d[0] != 1 ||
+        people_dims.d[1] != num_people || people_dims.d[2] != kPeopleDim)
+      {
+        std::cerr << "Unexpected people input shape: got " << dimsToString(people_dims) <<
+          ", expected (1, " << num_people << ", " << kPeopleDim << ")" << std::endl;
+        return 1;
+      }
     }
 
     cudaStream_t stream = nullptr;

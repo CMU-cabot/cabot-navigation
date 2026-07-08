@@ -333,7 +333,27 @@ std::vector<std::array<float, 2>> DnnController::transformPoints2D(
   return output_points;
 }
 
-std::vector<float> DnnController::buildPeopleInput()
+std::vector<std::array<float, 2>> DnnController::transformVectors2D(
+  const std::vector<std::array<float, 2>> & vectors,
+  const geometry_msgs::msg::TransformStamped & tf) const
+{
+  const auto & r = tf.transform.rotation;
+  const double yaw = std::atan2(2.0 * (r.w * r.z + r.x * r.y), 1.0 - 2.0 * (r.y * r.y + r.z * r.z));
+  const double cy = std::cos(yaw);
+  const double sy = std::sin(yaw);
+
+  std::vector<std::array<float, 2>> output_vectors;
+  output_vectors.reserve(vectors.size());
+  for (const auto & vector : vectors) {
+    output_vectors.push_back({
+      static_cast<float>(cy * vector[0] - sy * vector[1]),
+      static_cast<float>(sy * vector[0] + cy * vector[1]),
+    });
+  }
+  return output_vectors;
+}
+
+std::vector<float> DnnController::buildPeopleInput(const DnnController::PlanarVelocity & current_odom)
 {
   std::vector<float> h_people(static_cast<size_t>(num_people_) * kPeopleDim, 0.0f);
   if (!people_encoder_enabled_ || num_people_ <= 0) {
@@ -360,22 +380,29 @@ std::vector<float> DnnController::buildPeopleInput()
     return h_people;
   }
 
-  std::vector<std::array<float, 2>> source_people;
-  source_people.reserve(people_msg->people.size());
+  std::vector<std::array<float, 2>> source_positions;
+  std::vector<std::array<float, 2>> source_velocities;
+  source_positions.reserve(people_msg->people.size());
+  source_velocities.reserve(people_msg->people.size());
   for (const auto & person : people_msg->people) {
     const float x = static_cast<float>(person.position.x);
     const float y = static_cast<float>(person.position.y);
-    if (std::isfinite(x) && std::isfinite(y)) {
-      source_people.push_back({x, y});
+    const float vx = static_cast<float>(person.velocity.x);
+    const float vy = static_cast<float>(person.velocity.y);
+    if (std::isfinite(x) && std::isfinite(y) && std::isfinite(vx) && std::isfinite(vy)) {
+      source_positions.push_back({x, y});
+      source_velocities.push_back({vx, vy});
     }
   }
-  if (source_people.empty()) {
+  if (source_positions.empty()) {
     return h_people;
   }
 
-  std::vector<std::array<float, 2>> base_people;
+  std::vector<std::array<float, 2>> base_positions;
+  std::vector<std::array<float, 2>> base_velocities;
   if (source_frame == base_link_frame_) {
-    base_people = std::move(source_people);
+    base_positions = std::move(source_positions);
+    base_velocities = std::move(source_velocities);
   } else {
     geometry_msgs::msg::TransformStamped tf_base_link_people;
     try {
@@ -394,23 +421,37 @@ std::vector<float> DnnController::buildPeopleInput()
         source_frame.c_str(), base_link_frame_.c_str(), ex.what());
       return h_people;
     }
-    base_people = transformPoints2D(source_people, tf_base_link_people);
+    base_positions = transformPoints2D(source_positions, tf_base_link_people);
+    base_velocities = transformVectors2D(source_velocities, tf_base_link_people);
   }
 
-  std::vector<size_t> order(base_people.size());
+  const float robot_vx = current_odom.vx;
+  const float robot_vy = current_odom.vy;
+  const float robot_wz = current_odom.wz;
+  for (size_t i = 0; i < base_positions.size(); ++i) {
+    const auto & position = base_positions[i];
+    auto & velocity = base_velocities[i];
+    velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
+    velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
+  }
+
+  std::vector<size_t> order(base_positions.size());
   std::iota(order.begin(), order.end(), 0);
   std::sort(order.begin(), order.end(), [&](size_t lhs, size_t rhs) {
-    const auto & l = base_people[lhs];
-    const auto & r = base_people[rhs];
+    const auto & l = base_positions[lhs];
+    const auto & r = base_positions[rhs];
     return (l[0] * l[0] + l[1] * l[1]) < (r[0] * r[0] + r[1] * r[1]);
   });
 
   const size_t output_count = std::min(order.size(), static_cast<size_t>(num_people_));
   for (size_t i = 0; i < output_count; ++i) {
-    const auto & person = base_people[order[i]];
-    h_people[i * kPeopleDim + 0] = person[0];
-    h_people[i * kPeopleDim + 1] = person[1];
-    h_people[i * kPeopleDim + 2] = 1.0f;
+    const auto & position = base_positions[order[i]];
+    const auto & velocity = base_velocities[order[i]];
+    h_people[i * kPeopleDim + 0] = position[0];
+    h_people[i * kPeopleDim + 1] = position[1];
+    h_people[i * kPeopleDim + 2] = velocity[0];
+    h_people[i * kPeopleDim + 3] = velocity[1];
+    h_people[i * kPeopleDim + 4] = 1.0f;
   }
 
   return h_people;
@@ -432,7 +473,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     return cmd;
   }
 
-  std::vector<std::array<float, 2>> odom_history;
+  std::vector<PlanarVelocity> odom_history;
   {
     std::lock_guard<std::mutex> odom_lock(odom_mutex_);
     odom_history = odom_history_;
@@ -462,8 +503,8 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_odom(1 * odom_length_ * 2, 0.0f);
   for (size_t i = 0; i < odom_length_; i++) {
-    h_odom[i * 2 + 0] = odom_history[i][0] / static_cast<float>(max_linear_vel_);
-    h_odom[i * 2 + 1] = odom_history[i][1] / static_cast<float>(max_angular_vel_);
+    h_odom[i * 2 + 0] = odom_history[i].vx / static_cast<float>(max_linear_vel_);
+    h_odom[i * 2 + 1] = odom_history[i].wz / static_cast<float>(max_angular_vel_);
   }
 
   if (!tf_) {
@@ -534,7 +575,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput();
+    h_people = buildPeopleInput(odom_history.back());
   }
 
   float v_pred = 0.0;
@@ -687,7 +728,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     if (people_encoder_enabled_) {
       for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
         const size_t offset = i * kPeopleDim;
-        if (h_people[offset + 2] <= 0.0f) {
+        if (h_people[offset + 4] <= 0.0f) {
           continue;
         }
         const cv::Point px = toPixel(h_people[offset + 0], h_people[offset + 1]);
@@ -755,6 +796,7 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   std::lock_guard<std::mutex> odom_lock(odom_mutex_);
   odom_history_.push_back({
     static_cast<float>(msg->twist.twist.linear.x),
+    static_cast<float>(msg->twist.twist.linear.y),
     static_cast<float>(msg->twist.twist.angular.z),
   });
   if (odom_history_.size() > static_cast<size_t>(odom_length_)) {
