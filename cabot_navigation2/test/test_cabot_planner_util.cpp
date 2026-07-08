@@ -18,10 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include <cmath>
-#include <stdlib.h>
-
 #include <gtest/gtest.h>
+#include <math.h>
+#include <stdlib.h>
 #include <tf2/LinearMath/Quaternion.h>
 
 #include <cabot_navigation2/cabot_planner_util.hpp>
@@ -88,7 +87,7 @@ TEST_F(CabotPlannerUtilTest, SmoothStartKeepsShortPathGoal) {
   nav_msgs::msg::Path navcog_path;
   navcog_path.header.frame_id = "map";
 
-  auto path_yaw = std::atan2(-0.140, -2.715);
+  auto path_yaw = atan2(-0.140, -2.715);
   navcog_path.poses.push_back(makePose(26.329, -26.238, path_yaw));
   navcog_path.poses.push_back(makePose(23.614, -26.378, path_yaw));
 
