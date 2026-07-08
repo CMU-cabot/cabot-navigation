@@ -7,6 +7,7 @@
 #include "cabot_dnn_controller/tensorrt_utils.hpp"
 
 #include <filesystem>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -21,6 +22,7 @@ namespace
 using cabot_dnn_controller::dnn_controller_constants::ActionMode;
 
 using cabot_dnn_controller::dnn_controller_constants::kScanLength;
+using cabot_dnn_controller::dnn_controller_constants::kPeopleDim;
 
 using cabot_dnn_controller::dnn_controller_constants::kVMin;
 using cabot_dnn_controller::dnn_controller_constants::kVMax;
@@ -30,6 +32,7 @@ using cabot_dnn_controller::dnn_controller_constants::kWMax;
 using cabot_dnn_controller::dnn_controller_constants::kInputOdomName;
 using cabot_dnn_controller::dnn_controller_constants::kInputPlanName;
 using cabot_dnn_controller::dnn_controller_constants::kInputScanName;
+using cabot_dnn_controller::dnn_controller_constants::kInputPeopleName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputWLogitsName;
@@ -105,6 +108,23 @@ int main(int argc, char ** argv)
     const YAML::Node config = YAML::LoadFile(config_path.string());
     int odom_length = config["odom_encoder"]["odom_length"].as<int>();
     int plan_length = config["plan_encoder"]["plan_length"].as<int>();
+    bool people_encoder_enabled = false;
+    int num_people = 0;
+    const YAML::Node people_config = config["people_encoder"];
+    if (people_config && people_config["enabled"]) {
+      people_encoder_enabled = people_config["enabled"].as<bool>();
+    }
+    if (people_encoder_enabled) {
+      if (!people_config["num_people"]) {
+        std::cerr << "people_encoder.num_people is required when people_encoder is enabled" << std::endl;
+        return 1;
+      }
+      num_people = people_config["num_people"].as<int>();
+      if (num_people <= 0) {
+        std::cerr << "people_encoder.num_people must be > 0" << std::endl;
+        return 1;
+      }
+    }
     std::string action_mode_str = config["action"]["mode"].as<std::string>();
     ActionMode action_mode;
     if (action_mode_str == "reg") {
@@ -130,15 +150,21 @@ int main(int argc, char ** argv)
     const std::filesystem::path odom_path = data_path / "odom.bin";
     const std::filesystem::path plan_path = data_path / "plan.bin";
     const std::filesystem::path scan_path = data_path / "scan.bin";
+    const std::filesystem::path people_path = data_path / "people.bin";
     const std::filesystem::path out_path = data_path / "out.bin";
 
     const size_t odom_count = static_cast<size_t>(odom_length) * 2;
     const size_t plan_count = static_cast<size_t>(plan_length) * 2;
     const size_t scan_count = static_cast<size_t>(kScanLength);
+    const size_t people_count = static_cast<size_t>(num_people) * kPeopleDim;
 
     const std::vector<float> h_odom = readFloatBin(odom_path, odom_count);
     const std::vector<float> h_plan = readFloatBin(plan_path, plan_count);
     const std::vector<float> h_scan = readFloatBin(scan_path, scan_count);
+    std::vector<float> h_people;
+    if (people_encoder_enabled) {
+      h_people = readFloatBin(people_path, people_count);
+    }
     const std::vector<float> h_out_gt = readFloatBin(out_path, 2);
 
     TrtLogger logger;
@@ -177,9 +203,15 @@ int main(int argc, char ** argv)
       return 1;
     }
 
-    if (!context->setInputShape(kInputOdomName, nvinfer1::Dims3{1, odom_length, 2}) ||
-        !context->setInputShape(kInputPlanName, nvinfer1::Dims3{1, plan_length, 2}) ||
-        !context->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength})) {
+    bool input_shapes_set =
+      context->setInputShape(kInputOdomName, nvinfer1::Dims3{1, odom_length, 2}) &&
+      context->setInputShape(kInputPlanName, nvinfer1::Dims3{1, plan_length, 2}) &&
+      context->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength});
+    if (people_encoder_enabled) {
+      input_shapes_set = input_shapes_set &&
+        context->setInputShape(kInputPeopleName, nvinfer1::Dims3{1, num_people, kPeopleDim});
+    }
+    if (!input_shapes_set) {
       std::cerr << "Failed to set input shapes" << std::endl;
       return 1;
     }
@@ -212,6 +244,11 @@ int main(int argc, char ** argv)
     cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
       device_buffers.at(kInputScanName), h_scan.data(), h_scan.size(),
       engine->getTensorDataType(kInputScanName), stream);
+    if (people_encoder_enabled) {
+      cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
+        device_buffers.at(kInputPeopleName), h_people.data(), h_people.size(),
+        engine->getTensorDataType(kInputPeopleName), stream);
+    }
 
     if (!context->enqueueV3(stream)) {
       std::cerr << "TensorRT enqueueV3 failed" << std::endl;
