@@ -105,9 +105,10 @@ void DaggerController::setPlan(const nav_msgs::msg::Path & path)
   if (policy_) policy_->setPlan(path);
 }
 
-void DaggerController::setSpeedLimit(const double &, const bool &)
+void DaggerController::setSpeedLimit(const double & speed_limit, const bool & percentage)
 {
-  // TODO: implement speed limiting for DaggerController.
+  if (oracle_) oracle_->setSpeedLimit(speed_limit, percentage);
+  if (policy_) policy_->setSpeedLimit(speed_limit, percentage);
 }
 
 geometry_msgs::msg::TwistStamped DaggerController::computeVelocityCommands(
