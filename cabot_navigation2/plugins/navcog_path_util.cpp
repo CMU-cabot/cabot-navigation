@@ -157,6 +157,12 @@ nav_msgs::msg::Path adjustedPathByStart(
 
       last_pose = next_pose;
     }
+    if (next == path.poses.end()) {
+      ret.poses.clear();
+      ret.poses.push_back(start);
+      ret.poses.push_back(minpose);
+      next = minit + 1;
+    }
     for (; next < path.poses.end(); next++) {
       ret.poses.push_back(*next);
     }
