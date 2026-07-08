@@ -2,9 +2,12 @@
 #define CABOT_DNN_CONTROLLER__DNN_CONTROLLER_HPP_
 
 #include <array>
+#include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <NvInfer.h>
@@ -115,10 +118,21 @@ private:
     float wz{0.0f};
   };
 
+  struct PeopleHistoryRecord
+  {
+    std::int64_t stamp_ns{0};
+    std::string frame_id;
+    std::array<float, 2> position{0.0f, 0.0f};
+    std::array<float, 2> velocity{0.0f, 0.0f};
+    float presence{0.0f};
+  };
+
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
-  std::vector<float> buildPeopleInput(const PlanarVelocity & current_odom);
+  std::vector<float> buildPeopleInput(
+    const PlanarVelocity & current_odom,
+    const rclcpp::Time & current_time);
   std::vector<std::array<float, 2>> transformPoints2D(
     const std::vector<std::array<float, 2>> & points,
     const geometry_msgs::msg::TransformStamped & tf) const;
@@ -140,6 +154,7 @@ private:
   sensor_msgs::msg::LaserScan::SharedPtr last_scan_;
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
   people_msgs::msg::People::SharedPtr last_people_;
+  std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
 
   std::string trt_model_;
@@ -171,6 +186,7 @@ private:
   int plan_length_;
   bool people_encoder_enabled_{false};
   int num_people_{0};
+  int people_history_length_{0};
   int v_num_bins_;
   int w_num_bins_;
   std::mutex trt_mutex_;

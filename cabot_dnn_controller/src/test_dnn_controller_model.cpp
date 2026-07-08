@@ -138,6 +138,7 @@ int main(int argc, char ** argv)
     int plan_length = config["plan_encoder"]["plan_length"].as<int>();
     bool people_encoder_enabled = false;
     int num_people = 0;
+    int people_history_length = 0;
     const YAML::Node people_config = config["people_encoder"];
     if (people_config && people_config["enabled"]) {
       people_encoder_enabled = people_config["enabled"].as<bool>();
@@ -150,6 +151,15 @@ int main(int argc, char ** argv)
       num_people = people_config["num_people"].as<int>();
       if (num_people <= 0) {
         std::cerr << "people_encoder.num_people must be > 0" << std::endl;
+        return 1;
+      }
+      if (!people_config["history_length"]) {
+        std::cerr << "people_encoder.history_length is required when people_encoder is enabled" << std::endl;
+        return 1;
+      }
+      people_history_length = people_config["history_length"].as<int>();
+      if (people_history_length <= 0) {
+        std::cerr << "people_encoder.history_length must be > 0" << std::endl;
         return 1;
       }
     }
@@ -184,7 +194,8 @@ int main(int argc, char ** argv)
     const size_t odom_count = static_cast<size_t>(odom_length) * 2;
     const size_t plan_count = static_cast<size_t>(plan_length) * 2;
     const size_t scan_count = static_cast<size_t>(kScanLength);
-    const size_t people_count = static_cast<size_t>(num_people) * kPeopleDim;
+    const size_t people_count =
+      static_cast<size_t>(num_people) * static_cast<size_t>(people_history_length) * kPeopleDim;
 
     const std::vector<float> h_odom = readFloatBin(odom_path, odom_count);
     const std::vector<float> h_plan = readFloatBin(plan_path, plan_count);
@@ -253,7 +264,9 @@ int main(int argc, char ** argv)
       context->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength});
     if (people_encoder_enabled) {
       input_shapes_set = input_shapes_set &&
-        context->setInputShape(kInputPeopleName, nvinfer1::Dims3{1, num_people, kPeopleDim});
+        context->setInputShape(
+          kInputPeopleName,
+          nvinfer1::Dims4{1, num_people, people_history_length, kPeopleDim});
     }
     if (!input_shapes_set) {
       std::cerr << "Failed to set input shapes" << std::endl;
@@ -261,11 +274,13 @@ int main(int argc, char ** argv)
     }
     if (people_encoder_enabled) {
       const nvinfer1::Dims people_dims = context->getTensorShape(kInputPeopleName);
-      if (people_dims.nbDims != 3 || people_dims.d[0] != 1 ||
-        people_dims.d[1] != num_people || people_dims.d[2] != kPeopleDim)
+      if (people_dims.nbDims != 4 || people_dims.d[0] != 1 ||
+        people_dims.d[1] != num_people || people_dims.d[2] != people_history_length ||
+        people_dims.d[3] != kPeopleDim)
       {
         std::cerr << "Unexpected people input shape: got " << dimsToString(people_dims) <<
-          ", expected (1, " << num_people << ", " << kPeopleDim << ")" << std::endl;
+          ", expected (1, " << num_people << ", " << people_history_length << ", " <<
+          kPeopleDim << ")" << std::endl;
         return 1;
       }
     }

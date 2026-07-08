@@ -6,12 +6,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <mutex>
-#include <numeric>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
+#include <builtin_interfaces/msg/time.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
 #if __has_include(<cv_bridge/cv_bridge.hpp>)
@@ -67,6 +70,52 @@ void initTensorRTPluginsOnce(nvinfer1::ILogger & logger)
   if (!initialized) {
     throw std::runtime_error("Failed to initialize TensorRT plugins");
   }
+}
+
+bool hasStamp(const builtin_interfaces::msg::Time & stamp)
+{
+  return stamp.sec != 0 || stamp.nanosec != 0;
+}
+
+double yawFromTransform(const geometry_msgs::msg::TransformStamped & tf)
+{
+  const auto & r = tf.transform.rotation;
+  return std::atan2(2.0 * (r.w * r.z + r.x * r.y), 1.0 - 2.0 * (r.y * r.y + r.z * r.z));
+}
+
+std::array<float, 2> transformPoint2D(
+  const std::array<float, 2> & point,
+  const geometry_msgs::msg::TransformStamped & tf)
+{
+  const auto & t = tf.transform.translation;
+  const double yaw = yawFromTransform(tf);
+  const double cy = std::cos(yaw);
+  const double sy = std::sin(yaw);
+  return {
+    static_cast<float>(t.x + cy * point[0] - sy * point[1]),
+    static_cast<float>(t.y + sy * point[0] + cy * point[1]),
+  };
+}
+
+std::array<float, 2> transformVector2D(
+  const std::array<float, 2> & vector,
+  const geometry_msgs::msg::TransformStamped & tf)
+{
+  const double yaw = yawFromTransform(tf);
+  const double cy = std::cos(yaw);
+  const double sy = std::sin(yaw);
+  return {
+    static_cast<float>(cy * vector[0] - sy * vector[1]),
+    static_cast<float>(sy * vector[0] + cy * vector[1]),
+  };
+}
+
+std::string personHistoryKey(const people_msgs::msg::Person & person, size_t index)
+{
+  if (!person.name.empty()) {
+    return person.name;
+  }
+  return "__index_" + std::to_string(index);
 }
 
 }  // namespace
@@ -126,6 +175,7 @@ void DnnController::configure(
     plan_length_ = config["plan_encoder"]["plan_length"].as<int>();
     people_encoder_enabled_ = false;
     num_people_ = 0;
+    people_history_length_ = 0;
     const YAML::Node people_config = config["people_encoder"];
     if (people_config && people_config["enabled"]) {
       people_encoder_enabled_ = people_config["enabled"].as<bool>();
@@ -137,6 +187,13 @@ void DnnController::configure(
       num_people_ = people_config["num_people"].as<int>();
       if (num_people_ <= 0) {
         throw std::runtime_error("people_encoder.num_people must be > 0");
+      }
+      if (!people_config["history_length"]) {
+        throw std::runtime_error("people_encoder.history_length is required when people_encoder is enabled");
+      }
+      people_history_length_ = people_config["history_length"].as<int>();
+      if (people_history_length_ <= 0) {
+        throw std::runtime_error("people_encoder.history_length must be > 0");
       }
     }
     std::string action_mode_str = config["action"]["mode"].as<std::string>();
@@ -191,7 +248,9 @@ void DnnController::configure(
       trt_context_->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength});
     if (people_encoder_enabled_) {
       input_shapes_set = input_shapes_set &&
-        trt_context_->setInputShape(kInputPeopleName, nvinfer1::Dims3{1, num_people_, kPeopleDim});
+        trt_context_->setInputShape(
+          kInputPeopleName,
+          nvinfer1::Dims4{1, num_people_, people_history_length_, kPeopleDim});
     }
     if (!input_shapes_set) {
       throw std::runtime_error("Failed to set TensorRT input shapes");
@@ -278,6 +337,7 @@ void DnnController::cleanup()
   {
     std::lock_guard<std::mutex> people_lock(people_mutex_);
     last_people_.reset();
+    people_history_.clear();
   }
 
   trt_ready_ = false;
@@ -300,6 +360,7 @@ void DnnController::cleanup()
   node_.reset();
   people_encoder_enabled_ = false;
   num_people_ = 0;
+  people_history_length_ = 0;
 }
 
 void DnnController::activate()
@@ -353,105 +414,181 @@ std::vector<std::array<float, 2>> DnnController::transformVectors2D(
   return output_vectors;
 }
 
-std::vector<float> DnnController::buildPeopleInput(const DnnController::PlanarVelocity & current_odom)
+std::vector<float> DnnController::buildPeopleInput(
+  const DnnController::PlanarVelocity & current_odom,
+  const rclcpp::Time & current_time)
 {
-  std::vector<float> h_people(static_cast<size_t>(num_people_) * kPeopleDim, 0.0f);
-  if (!people_encoder_enabled_ || num_people_ <= 0) {
+  const size_t people_count = static_cast<size_t>(num_people_);
+  const size_t history_count = static_cast<size_t>(people_history_length_);
+  std::vector<float> h_people(people_count * history_count * kPeopleDim, 0.0f);
+  if (!people_encoder_enabled_ || num_people_ <= 0 || people_history_length_ <= 0) {
     return h_people;
   }
 
-  people_msgs::msg::People::SharedPtr people_msg;
+  std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history;
   {
     std::lock_guard<std::mutex> people_lock(people_mutex_);
-    people_msg = last_people_;
+    people_history = people_history_;
   }
-  if (!people_msg || people_msg->people.empty()) {
+  if (people_history.empty()) {
     return h_people;
   }
 
-  std::string source_frame = people_msg->header.frame_id;
-  if (source_frame.empty()) {
-    source_frame = map_frame_;
-  }
-  if (source_frame.empty()) {
-    RCLCPP_WARN_THROTTLE(
-      logger_, *clock_, 5000,
-      "Ignoring people message because header.frame_id is empty and map_frame is not set");
-    return h_people;
-  }
+  struct PeopleCandidate
+  {
+    float distance_sq{0.0f};
+    std::int64_t latest_age_ns{0};
+    std::vector<PeopleHistoryRecord> records;
+  };
 
-  std::vector<std::array<float, 2>> source_positions;
-  std::vector<std::array<float, 2>> source_velocities;
-  source_positions.reserve(people_msg->people.size());
-  source_velocities.reserve(people_msg->people.size());
-  for (const auto & person : people_msg->people) {
-    const float x = static_cast<float>(person.position.x);
-    const float y = static_cast<float>(person.position.y);
-    const float vx = static_cast<float>(person.velocity.x);
-    const float vy = static_cast<float>(person.velocity.y);
-    if (std::isfinite(x) && std::isfinite(y) && std::isfinite(vx) && std::isfinite(vy)) {
-      source_positions.push_back({x, y});
-      source_velocities.push_back({vx, vy});
+  std::unordered_map<std::string, geometry_msgs::msg::TransformStamped> transform_cache;
+  std::unordered_set<std::string> failed_frames;
+  const rclcpp::Duration tf_timeout = rclcpp::Duration::from_seconds(transform_tolerance_);
+  const auto getBaseTransform =
+    [&](const std::string & source_frame, geometry_msgs::msg::TransformStamped & transform) -> bool {
+      if (source_frame == base_link_frame_) {
+        return true;
+      }
+      if (failed_frames.count(source_frame) > 0) {
+        return false;
+      }
+      const auto cached = transform_cache.find(source_frame);
+      if (cached != transform_cache.end()) {
+        transform = cached->second;
+        return true;
+      }
+      try {
+        transform = tf_->lookupTransform(base_link_frame_, source_frame, current_time, tf_timeout);
+        transform_cache.emplace(source_frame, transform);
+        return true;
+      } catch (const tf2::TransformException & ex) {
+        failed_frames.insert(source_frame);
+        RCLCPP_WARN_THROTTLE(
+          logger_, *clock_, 5000,
+          "Ignoring people history because transform from '%s' to '%s' is unavailable: %s",
+          source_frame.c_str(), base_link_frame_.c_str(), ex.what());
+        return false;
+      }
+    };
+
+  const auto toBasePoint =
+    [&](const PeopleHistoryRecord & record, std::array<float, 2> & point) -> bool {
+      if (record.frame_id == base_link_frame_) {
+        point = record.position;
+        return true;
+      }
+      geometry_msgs::msg::TransformStamped transform;
+      if (!getBaseTransform(record.frame_id, transform)) {
+        return false;
+      }
+      point = transformPoint2D(record.position, transform);
+      return true;
+    };
+
+  const auto toBaseVector =
+    [&](const PeopleHistoryRecord & record, std::array<float, 2> & vector) -> bool {
+      if (record.frame_id == base_link_frame_) {
+        vector = record.velocity;
+        return true;
+      }
+      geometry_msgs::msg::TransformStamped transform;
+      if (!getBaseTransform(record.frame_id, transform)) {
+        return false;
+      }
+      vector = transformVector2D(record.velocity, transform);
+      return true;
+    };
+
+  const std::int64_t current_time_ns = current_time.nanoseconds();
+  std::vector<PeopleCandidate> candidates;
+  candidates.reserve(people_history.size());
+  for (const auto & entry : people_history) {
+    const auto & records = entry.second;
+    std::vector<PeopleHistoryRecord> valid_records;
+    valid_records.reserve(records.size());
+    for (const auto & record : records) {
+      if (record.stamp_ns <= current_time_ns) {
+        valid_records.push_back(record);
+      }
     }
+    if (valid_records.empty()) {
+      continue;
+    }
+
+    const size_t start_index =
+      valid_records.size() > history_count ? valid_records.size() - history_count : 0;
+    std::vector<PeopleHistoryRecord> history_records(valid_records.begin() + start_index, valid_records.end());
+    if (history_records.empty() || history_records.back().presence <= 0.0f) {
+      continue;
+    }
+
+    const PeopleHistoryRecord * latest_observed = nullptr;
+    for (auto it = history_records.rbegin(); it != history_records.rend(); ++it) {
+      if (it->presence > 0.0f) {
+        latest_observed = &(*it);
+        break;
+      }
+    }
+    if (!latest_observed) {
+      continue;
+    }
+
+    std::array<float, 2> latest_position;
+    if (!toBasePoint(*latest_observed, latest_position)) {
+      continue;
+    }
+
+    PeopleCandidate candidate;
+    candidate.distance_sq =
+      latest_position[0] * latest_position[0] + latest_position[1] * latest_position[1];
+    candidate.latest_age_ns = current_time_ns - latest_observed->stamp_ns;
+    candidate.records = std::move(history_records);
+    candidates.push_back(std::move(candidate));
   }
-  if (source_positions.empty()) {
+
+  if (candidates.empty()) {
     return h_people;
   }
 
-  std::vector<std::array<float, 2>> base_positions;
-  std::vector<std::array<float, 2>> base_velocities;
-  if (source_frame == base_link_frame_) {
-    base_positions = std::move(source_positions);
-    base_velocities = std::move(source_velocities);
-  } else {
-    geometry_msgs::msg::TransformStamped tf_base_link_people;
-    try {
-      const rclcpp::Duration tf_timeout = rclcpp::Duration::from_seconds(transform_tolerance_);
-      const bool has_stamp =
-        people_msg->header.stamp.sec != 0 || people_msg->header.stamp.nanosec != 0;
-      const rclcpp::Time lookup_time = has_stamp ?
-        rclcpp::Time(people_msg->header.stamp) :
-        rclcpp::Time(0, 0, clock_->get_clock_type());
-      tf_base_link_people = tf_->lookupTransform(
-        base_link_frame_, source_frame, lookup_time, tf_timeout);
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_WARN_THROTTLE(
-        logger_, *clock_, 5000,
-        "Ignoring people message because transform from '%s' to '%s' is unavailable: %s",
-        source_frame.c_str(), base_link_frame_.c_str(), ex.what());
-      return h_people;
+  std::sort(candidates.begin(), candidates.end(), [](const PeopleCandidate & lhs, const PeopleCandidate & rhs) {
+    if (lhs.distance_sq != rhs.distance_sq) {
+      return lhs.distance_sq < rhs.distance_sq;
     }
-    base_positions = transformPoints2D(source_positions, tf_base_link_people);
-    base_velocities = transformVectors2D(source_velocities, tf_base_link_people);
-  }
+    return lhs.latest_age_ns < rhs.latest_age_ns;
+  });
 
   const float robot_vx = current_odom.vx;
   const float robot_vy = current_odom.vy;
   const float robot_wz = current_odom.wz;
-  for (size_t i = 0; i < base_positions.size(); ++i) {
-    const auto & position = base_positions[i];
-    auto & velocity = base_velocities[i];
-    velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
-    velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
-  }
+  const size_t output_count = std::min(candidates.size(), people_count);
+  for (size_t person_index = 0; person_index < output_count; ++person_index) {
+    const auto & records = candidates[person_index].records;
+    const size_t history_offset = history_count - records.size();
+    for (size_t record_index = 0; record_index < records.size(); ++record_index) {
+      const auto & record = records[record_index];
+      const size_t output_history_index = history_offset + record_index;
+      const size_t output_offset =
+        (person_index * history_count + output_history_index) * kPeopleDim;
 
-  std::vector<size_t> order(base_positions.size());
-  std::iota(order.begin(), order.end(), 0);
-  std::sort(order.begin(), order.end(), [&](size_t lhs, size_t rhs) {
-    const auto & l = base_positions[lhs];
-    const auto & r = base_positions[rhs];
-    return (l[0] * l[0] + l[1] * l[1]) < (r[0] * r[0] + r[1] * r[1]);
-  });
+      if (record.presence <= 0.0f) {
+        continue;
+      }
 
-  const size_t output_count = std::min(order.size(), static_cast<size_t>(num_people_));
-  for (size_t i = 0; i < output_count; ++i) {
-    const auto & position = base_positions[order[i]];
-    const auto & velocity = base_velocities[order[i]];
-    h_people[i * kPeopleDim + 0] = position[0];
-    h_people[i * kPeopleDim + 1] = position[1];
-    h_people[i * kPeopleDim + 2] = velocity[0];
-    h_people[i * kPeopleDim + 3] = velocity[1];
-    h_people[i * kPeopleDim + 4] = 1.0f;
+      std::array<float, 2> position;
+      std::array<float, 2> velocity;
+      if (!toBasePoint(record, position) || !toBaseVector(record, velocity)) {
+        continue;
+      }
+
+      velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
+      velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
+
+      h_people[output_offset + 0] = position[0];
+      h_people[output_offset + 1] = position[1];
+      h_people[output_offset + 2] = velocity[0];
+      h_people[output_offset + 3] = velocity[1];
+      h_people[output_offset + 4] = 1.0f;
+    }
   }
 
   return h_people;
@@ -491,8 +628,8 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   }
 
   if (odom_history.size() != odom_length_) {
-    RCLCPP_ERROR(logger_, "odom size is not correct, return 0 velocity command, input size=%ld, expected size=%ld",
-      odom_history.size(), odom_length_);
+    RCLCPP_ERROR(logger_, "odom size is not correct, return 0 velocity command, input size=%zu, expected size=%zu",
+      odom_history.size(), static_cast<size_t>(odom_length_));
     return cmd;
   }
   if (scan_msg->ranges.size() != kScanLength) {
@@ -575,7 +712,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput(odom_history.back());
+    h_people = buildPeopleInput(odom_history.back(), cmd.header.stamp);
   }
 
   float v_pred = 0.0;
@@ -727,8 +864,18 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
     if (people_encoder_enabled_) {
       for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
-        const size_t offset = i * kPeopleDim;
-        if (h_people[offset + 4] <= 0.0f) {
+        size_t offset = 0;
+        bool found_person = false;
+        for (size_t h = static_cast<size_t>(people_history_length_); h > 0; --h) {
+          const size_t candidate_offset =
+            (i * static_cast<size_t>(people_history_length_) + (h - 1)) * kPeopleDim;
+          if (h_people[candidate_offset + 4] > 0.0f) {
+            offset = candidate_offset;
+            found_person = true;
+            break;
+          }
+        }
+        if (!found_person) {
           continue;
         }
         const cv::Point px = toPixel(h_people[offset + 0], h_people[offset + 1]);
@@ -818,8 +965,84 @@ void DnnController::scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr ms
 
 void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg)
 {
+  if (!people_encoder_enabled_ || people_history_length_ <= 0) {
+    return;
+  }
+
+  std::string source_frame = msg->header.frame_id;
+  if (source_frame.empty()) {
+    source_frame = map_frame_;
+  }
+  if (source_frame.empty()) {
+    RCLCPP_WARN_THROTTLE(
+      logger_, *clock_, 5000,
+      "Ignoring people message because header.frame_id is empty and map_frame is not set");
+    return;
+  }
+
+  const rclcpp::Time stamp =
+    hasStamp(msg->header.stamp) ? rclcpp::Time(msg->header.stamp) : clock_->now();
+  const std::int64_t stamp_ns = stamp.nanoseconds();
+
+  std::unordered_map<std::string, PeopleHistoryRecord> observed_people;
+  observed_people.reserve(msg->people.size());
+  for (size_t i = 0; i < msg->people.size(); ++i) {
+    const auto & person = msg->people[i];
+    const float x = static_cast<float>(person.position.x);
+    const float y = static_cast<float>(person.position.y);
+    const float vx = static_cast<float>(person.velocity.x);
+    const float vy = static_cast<float>(person.velocity.y);
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(vx) || !std::isfinite(vy)) {
+      continue;
+    }
+
+    PeopleHistoryRecord record;
+    record.stamp_ns = stamp_ns;
+    record.frame_id = source_frame;
+    record.position = {x, y};
+    record.velocity = {vx, vy};
+    record.presence = 1.0f;
+    observed_people[personHistoryKey(person, i)] = record;
+  }
+
   std::lock_guard<std::mutex> people_lock(people_mutex_);
   last_people_ = msg;
+  const size_t max_history_size = static_cast<size_t>(people_history_length_);
+
+  std::vector<std::string> erase_keys;
+  for (auto & [key, records] : people_history_) {
+    if (observed_people.count(key) > 0) {
+      continue;
+    }
+
+    PeopleHistoryRecord absent_record;
+    absent_record.stamp_ns = stamp_ns;
+    absent_record.frame_id = source_frame;
+    absent_record.presence = 0.0f;
+    records.push_back(absent_record);
+    while (records.size() > max_history_size) {
+      records.pop_front();
+    }
+
+    const bool has_observed_record = std::any_of(records.begin(), records.end(), [](const auto & record) {
+      return record.presence > 0.0f;
+    });
+    if (!has_observed_record) {
+      erase_keys.push_back(key);
+    }
+  }
+
+  for (const auto & key : erase_keys) {
+    people_history_.erase(key);
+  }
+
+  for (const auto & [key, record] : observed_people) {
+    auto & records = people_history_[key];
+    records.push_back(record);
+    while (records.size() > max_history_size) {
+      records.pop_front();
+    }
+  }
 }
 
 }  // namespace cabot_dnn_controller
