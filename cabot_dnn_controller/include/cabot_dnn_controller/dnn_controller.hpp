@@ -108,12 +108,22 @@ public:
   void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
 private:
+  struct PlanarVelocity
+  {
+    float vx{0.0f};
+    float vy{0.0f};
+    float wz{0.0f};
+  };
+
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
-  std::vector<float> buildPeopleInput();
+  std::vector<float> buildPeopleInput(const PlanarVelocity & current_odom);
   std::vector<std::array<float, 2>> transformPoints2D(
     const std::vector<std::array<float, 2>> & points,
+    const geometry_msgs::msg::TransformStamped & tf) const;
+  std::vector<std::array<float, 2>> transformVectors2D(
+    const std::vector<std::array<float, 2>> & vectors,
     const geometry_msgs::msg::TransformStamped & tf) const;
 
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
@@ -125,7 +135,7 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-  std::vector<std::array<float, 2>> odom_history_;
+  std::vector<PlanarVelocity> odom_history_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   sensor_msgs::msg::LaserScan::SharedPtr last_scan_;
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
