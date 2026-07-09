@@ -11,7 +11,6 @@
 #include <mutex>
 #include <stdexcept>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 #include <builtin_interfaces/msg/time.hpp>
@@ -416,6 +415,7 @@ std::vector<std::array<float, 2>> DnnController::transformVectors2D(
 
 std::vector<float> DnnController::buildPeopleInput(
   const DnnController::PlanarVelocity & current_odom,
+  const geometry_msgs::msg::TransformStamped & tf_base_link_map,
   const rclcpp::Time & current_time)
 {
   const size_t people_count = static_cast<size_t>(num_people_);
@@ -439,64 +439,6 @@ std::vector<float> DnnController::buildPeopleInput(
     float distance_sq{0.0f};
     std::vector<PeopleHistoryRecord> records;
   };
-
-  std::unordered_map<std::string, geometry_msgs::msg::TransformStamped> transform_cache;
-  std::unordered_set<std::string> failed_frames;
-  const rclcpp::Duration tf_timeout = rclcpp::Duration::from_seconds(transform_tolerance_);
-  const auto getBaseTransform =
-    [&](const std::string & source_frame, geometry_msgs::msg::TransformStamped & transform) -> bool {
-      if (source_frame == base_link_frame_) {
-        return true;
-      }
-      if (failed_frames.count(source_frame) > 0) {
-        return false;
-      }
-      const auto cached = transform_cache.find(source_frame);
-      if (cached != transform_cache.end()) {
-        transform = cached->second;
-        return true;
-      }
-      try {
-        transform = tf_->lookupTransform(base_link_frame_, source_frame, current_time, tf_timeout);
-        transform_cache.emplace(source_frame, transform);
-        return true;
-      } catch (const tf2::TransformException & ex) {
-        failed_frames.insert(source_frame);
-        RCLCPP_WARN_THROTTLE(
-          logger_, *clock_, 5000,
-          "Ignoring people history because transform from '%s' to '%s' is unavailable: %s",
-          source_frame.c_str(), base_link_frame_.c_str(), ex.what());
-        return false;
-      }
-    };
-
-  const auto toBasePoint =
-    [&](const PeopleHistoryRecord & record, std::array<float, 2> & point) -> bool {
-      if (record.frame_id == base_link_frame_) {
-        point = record.position;
-        return true;
-      }
-      geometry_msgs::msg::TransformStamped transform;
-      if (!getBaseTransform(record.frame_id, transform)) {
-        return false;
-      }
-      point = transformPoint2D(record.position, transform);
-      return true;
-    };
-
-  const auto toBaseVector =
-    [&](const PeopleHistoryRecord & record, std::array<float, 2> & vector) -> bool {
-      if (record.frame_id == base_link_frame_) {
-        vector = record.velocity;
-        return true;
-      }
-      geometry_msgs::msg::TransformStamped transform;
-      if (!getBaseTransform(record.frame_id, transform)) {
-        return false;
-      }
-      vector = transformVector2D(record.velocity, transform);
-      return true;
-    };
 
   const std::int64_t current_time_ns = current_time.nanoseconds();
   std::vector<PeopleCandidate> candidates;
@@ -532,10 +474,8 @@ std::vector<float> DnnController::buildPeopleInput(
       continue;
     }
 
-    std::array<float, 2> latest_position;
-    if (!toBasePoint(*latest_observed, latest_position)) {
-      continue;
-    }
+    const std::array<float, 2> latest_position =
+      transformPoint2D(latest_observed->position, tf_base_link_map);
 
     PeopleCandidate candidate;
     candidate.distance_sq =
@@ -569,11 +509,8 @@ std::vector<float> DnnController::buildPeopleInput(
         continue;
       }
 
-      std::array<float, 2> position;
-      std::array<float, 2> velocity;
-      if (!toBasePoint(record, position) || !toBaseVector(record, velocity)) {
-        continue;
-      }
+      const std::array<float, 2> position = transformPoint2D(record.position, tf_base_link_map);
+      std::array<float, 2> velocity = transformVector2D(record.velocity, tf_base_link_map);
 
       velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
       velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
@@ -707,7 +644,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput(odom_history.back(), cmd.header.stamp);
+    h_people = buildPeopleInput(odom_history.back(), tf_base_link_map, cmd.header.stamp);
   }
 
   float v_pred = 0.0;
@@ -964,14 +901,19 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
     return;
   }
 
-  std::string source_frame = msg->header.frame_id;
-  if (source_frame.empty()) {
-    source_frame = map_frame_;
-  }
-  if (source_frame.empty()) {
-    RCLCPP_WARN_THROTTLE(
+  if (map_frame_.empty()) {
+    RCLCPP_ERROR_THROTTLE(
       logger_, *clock_, 5000,
-      "Ignoring people message because header.frame_id is empty and map_frame is not set");
+      "Ignoring people message because map_frame is not set");
+    return;
+  }
+
+  const std::string & source_frame = msg->header.frame_id;
+  if (source_frame != map_frame_) {
+    RCLCPP_ERROR_THROTTLE(
+      logger_, *clock_, 5000,
+      "Ignoring people message because header.frame_id must be '%s', got '%s'",
+      map_frame_.c_str(), source_frame.c_str());
     return;
   }
 
@@ -993,7 +935,6 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
 
     PeopleHistoryRecord record;
     record.stamp_ns = stamp_ns;
-    record.frame_id = source_frame;
     record.position = {x, y};
     record.velocity = {vx, vy};
     record.presence = 1.0f;
@@ -1012,7 +953,6 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
 
     PeopleHistoryRecord absent_record;
     absent_record.stamp_ns = stamp_ns;
-    absent_record.frame_id = source_frame;
     absent_record.presence = 0.0f;
     records.push_back(absent_record);
     while (records.size() > max_history_size) {

@@ -121,7 +121,6 @@ private:
   struct PeopleHistoryRecord
   {
     std::int64_t stamp_ns{0};
-    std::string frame_id;
     std::array<float, 2> position{0.0f, 0.0f};
     std::array<float, 2> velocity{0.0f, 0.0f};
     float presence{0.0f};
@@ -132,6 +131,7 @@ private:
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
   std::vector<float> buildPeopleInput(
     const PlanarVelocity & current_odom,
+    const geometry_msgs::msg::TransformStamped & tf_base_link_map,
     const rclcpp::Time & current_time);
   std::vector<std::array<float, 2>> transformPoints2D(
     const std::vector<std::array<float, 2>> & points,
