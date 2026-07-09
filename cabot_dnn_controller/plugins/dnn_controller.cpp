@@ -437,7 +437,6 @@ std::vector<float> DnnController::buildPeopleInput(
   struct PeopleCandidate
   {
     float distance_sq{0.0f};
-    std::int64_t latest_age_ns{0};
     std::vector<PeopleHistoryRecord> records;
   };
 
@@ -541,7 +540,6 @@ std::vector<float> DnnController::buildPeopleInput(
     PeopleCandidate candidate;
     candidate.distance_sq =
       latest_position[0] * latest_position[0] + latest_position[1] * latest_position[1];
-    candidate.latest_age_ns = current_time_ns - latest_observed->stamp_ns;
     candidate.records = std::move(history_records);
     candidates.push_back(std::move(candidate));
   }
@@ -551,10 +549,7 @@ std::vector<float> DnnController::buildPeopleInput(
   }
 
   std::sort(candidates.begin(), candidates.end(), [](const PeopleCandidate & lhs, const PeopleCandidate & rhs) {
-    if (lhs.distance_sq != rhs.distance_sq) {
-      return lhs.distance_sq < rhs.distance_sq;
-    }
-    return lhs.latest_age_ns < rhs.latest_age_ns;
+    return lhs.distance_sq < rhs.distance_sq;
   });
 
   const float robot_vx = current_odom.vx;
