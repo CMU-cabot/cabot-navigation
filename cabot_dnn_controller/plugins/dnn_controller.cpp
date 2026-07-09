@@ -795,24 +795,43 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     }
 
     if (people_encoder_enabled_) {
+      const size_t history_count = static_cast<size_t>(people_history_length_);
+      constexpr float kVelocityLineScale = 1.0f;
       for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
-        size_t offset = 0;
-        bool found_person = false;
-        for (size_t h = static_cast<size_t>(people_history_length_); h > 0; --h) {
-          const size_t candidate_offset =
-            (i * static_cast<size_t>(people_history_length_) + (h - 1)) * kPeopleDim;
-          if (h_people[candidate_offset + 4] > 0.0f) {
-            offset = candidate_offset;
-            found_person = true;
-            break;
+        for (size_t h = 0; h < history_count; ++h) {
+          const size_t offset = (i * history_count + h) * kPeopleDim;
+          if (h_people[offset + 4] <= 0.0f) {
+            continue;
           }
-        }
-        if (!found_person) {
-          continue;
-        }
-        const cv::Point px = toPixel(h_people[offset + 0], h_people[offset + 1]);
-        if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
-          cv::circle(image, px, 4, cv::Scalar(255, 80, 80), -1, cv::LINE_AA);
+
+          const float age_ratio = history_count > 1 ?
+            static_cast<float>(h) / static_cast<float>(history_count - 1) : 1.0f;
+          const int red = static_cast<int>(120.0f + 135.0f * age_ratio);
+          const int green = static_cast<int>(40.0f + 40.0f * age_ratio);
+          const int blue = static_cast<int>(40.0f + 40.0f * age_ratio);
+          const cv::Scalar color(blue, green, red);
+
+          const float x = h_people[offset + 0];
+          const float y = h_people[offset + 1];
+          const float vx = h_people[offset + 2];
+          const float vy = h_people[offset + 3];
+          const cv::Point px = toPixel(x, y);
+          const cv::Point velocity_px = toPixel(
+            x + kVelocityLineScale * vx,
+            y + kVelocityLineScale * vy);
+
+          const bool point_visible =
+            px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize;
+          const bool velocity_visible =
+            velocity_px.x >= 0 && velocity_px.x < kImageSize &&
+            velocity_px.y >= 0 && velocity_px.y < kImageSize;
+          if (point_visible || velocity_visible) {
+            cv::line(image, px, velocity_px, color, 1, cv::LINE_AA);
+          }
+          if (point_visible) {
+            const int radius = (h + 1 == history_count) ? 4 : 2;
+            cv::circle(image, px, radius, color, -1, cv::LINE_AA);
+          }
         }
       }
     }
