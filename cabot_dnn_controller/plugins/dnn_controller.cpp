@@ -96,19 +96,6 @@ std::array<float, 2> transformPoint2D(
   };
 }
 
-std::array<float, 2> transformVector2D(
-  const std::array<float, 2> & vector,
-  const geometry_msgs::msg::TransformStamped & tf)
-{
-  const double yaw = yawFromTransform(tf);
-  const double cy = std::cos(yaw);
-  const double sy = std::sin(yaw);
-  return {
-    static_cast<float>(cy * vector[0] - sy * vector[1]),
-    static_cast<float>(sy * vector[0] + cy * vector[1]),
-  };
-}
-
 std::string personHistoryKey(const people_msgs::msg::Person & person, size_t index)
 {
   if (!person.name.empty()) {
@@ -414,7 +401,6 @@ std::vector<std::array<float, 2>> DnnController::transformVectors2D(
 }
 
 std::vector<float> DnnController::buildPeopleInput(
-  const DnnController::PlanarVelocity & current_odom,
   const geometry_msgs::msg::TransformStamped & tf_base_link_map,
   const rclcpp::Time & current_time)
 {
@@ -492,9 +478,6 @@ std::vector<float> DnnController::buildPeopleInput(
     return lhs.distance_sq < rhs.distance_sq;
   });
 
-  const float robot_vx = current_odom.vx;
-  const float robot_vy = current_odom.vy;
-  const float robot_wz = current_odom.wz;
   const size_t output_count = std::min(candidates.size(), people_count);
   for (size_t person_index = 0; person_index < output_count; ++person_index) {
     const auto & records = candidates[person_index].records;
@@ -510,16 +493,10 @@ std::vector<float> DnnController::buildPeopleInput(
       }
 
       const std::array<float, 2> position = transformPoint2D(record.position, tf_base_link_map);
-      std::array<float, 2> velocity = transformVector2D(record.velocity, tf_base_link_map);
-
-      velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
-      velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
 
       h_people[output_offset + 0] = position[0];
       h_people[output_offset + 1] = position[1];
-      h_people[output_offset + 2] = velocity[0];
-      h_people[output_offset + 3] = velocity[1];
-      h_people[output_offset + 4] = 1.0f;
+      h_people[output_offset + 2] = 1.0f;
     }
   }
 
@@ -644,7 +621,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput(odom_history.back(), tf_base_link_map, cmd.header.stamp);
+    h_people = buildPeopleInput(tf_base_link_map, cmd.header.stamp);
   }
 
   float v_pred = 0.0;
@@ -796,11 +773,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
     if (people_encoder_enabled_) {
       const size_t history_count = static_cast<size_t>(people_history_length_);
-      constexpr float kVelocityLineScale = 1.0f;
       for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
         for (size_t h = 0; h < history_count; ++h) {
           const size_t offset = (i * history_count + h) * kPeopleDim;
-          if (h_people[offset + 4] <= 0.0f) {
+          if (h_people[offset + 2] <= 0.0f) {
             continue;
           }
 
@@ -813,21 +789,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
           const float x = h_people[offset + 0];
           const float y = h_people[offset + 1];
-          const float vx = h_people[offset + 2];
-          const float vy = h_people[offset + 3];
           const cv::Point px = toPixel(x, y);
-          const cv::Point velocity_px = toPixel(
-            x + kVelocityLineScale * vx,
-            y + kVelocityLineScale * vy);
 
           const bool point_visible =
             px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize;
-          const bool velocity_visible =
-            velocity_px.x >= 0 && velocity_px.x < kImageSize &&
-            velocity_px.y >= 0 && velocity_px.y < kImageSize;
-          if (point_visible || velocity_visible) {
-            cv::line(image, px, velocity_px, color, 1, cv::LINE_AA);
-          }
           if (point_visible) {
             const int radius = (h + 1 == history_count) ? 4 : 2;
             cv::circle(image, px, radius, color, -1, cv::LINE_AA);
@@ -946,16 +911,13 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
     const auto & person = msg->people[i];
     const float x = static_cast<float>(person.position.x);
     const float y = static_cast<float>(person.position.y);
-    const float vx = static_cast<float>(person.velocity.x);
-    const float vy = static_cast<float>(person.velocity.y);
-    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(vx) || !std::isfinite(vy)) {
+    if (!std::isfinite(x) || !std::isfinite(y)) {
       continue;
     }
 
     PeopleHistoryRecord record;
     record.stamp_ns = stamp_ns;
     record.position = {x, y};
-    record.velocity = {vx, vy};
     record.presence = 1.0f;
     observed_people[personHistoryKey(person, i)] = record;
   }
