@@ -18,7 +18,7 @@ enum class ActionMode {
 // TODO: set from navigation parameter
 static constexpr std::size_t kScanLength = 1200;
 static constexpr float kScanRangeMax = 50.0;
-static constexpr int kPeopleDim = 5;  // x, y, relative vx, relative vy, presence
+static constexpr int kPeopleDim = 3;  // x, y, presence
 
 static constexpr float kVMin = 0.0;
 static constexpr float kVMax = 1.0;
