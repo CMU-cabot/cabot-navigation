@@ -32,6 +32,8 @@ static constexpr const char * kInputPeopleName = "people";
 static constexpr const char * kOutputCmdName = "cmd_vel";
 static constexpr const char * kOutputVLogitsName = "v_logits";
 static constexpr const char * kOutputWLogitsName = "w_logits";
+static constexpr const char * kOutputPeopleAttentionName = "people_attention";
+static constexpr const char * kOutputRobotPeopleAttentionName = "robot_people_attention";
 
 }  // namespace dnn_controller_constants
 }  // namespace cabot_dnn_controller

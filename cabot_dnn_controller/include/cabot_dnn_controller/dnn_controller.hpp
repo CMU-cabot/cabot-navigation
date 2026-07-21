@@ -13,6 +13,7 @@
 #include <NvInfer.h>
 
 #include "cabot_dnn_controller/dnn_controller_constants.hpp"
+#include "cabot_dnn_controller/msg/attention_weights.hpp"
 #include "cabot_dnn_controller/tensorrt_utils.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
@@ -24,6 +25,7 @@
 #include "people_msgs/msg/people.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "std_msgs/msg/header.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "tf2_ros/buffer.h"
 
@@ -137,6 +139,10 @@ private:
   std::vector<std::array<float, 2>> transformVectors2D(
     const std::vector<std::array<float, 2>> & vectors,
     const geometry_msgs::msg::TransformStamped & tf) const;
+  void publishAttention(
+    const std::vector<float> & people_attention,
+    const std::vector<float> & robot_people_attention,
+    const std_msgs::msg::Header & header) const;
 
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   rclcpp::Logger logger_{rclcpp::get_logger("dnn_controller")};
@@ -154,6 +160,9 @@ private:
   people_msgs::msg::People::SharedPtr last_people_;
   std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
+  rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr people_attention_pub_;
+  rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr
+    robot_people_attention_pub_;
 
   std::string trt_model_;
   double max_linear_vel_;
@@ -166,6 +175,8 @@ private:
   std::string scan_topic_;
   std::string people_topic_;
   std::string debug_image_topic_;
+  std::string people_attention_topic_;
+  std::string robot_people_attention_topic_;
   std::unique_ptr<TrtLogger> trt_logger_;
   std::unique_ptr<nvinfer1::IRuntime, TrtDeleter> trt_runtime_;
   std::unique_ptr<nvinfer1::ICudaEngine, TrtDeleter> trt_engine_;
@@ -179,12 +190,15 @@ private:
   void* d_cmd_{nullptr};
   void* d_v_logits_{nullptr};
   void* d_w_logits_{nullptr};
+  void* d_people_attention_{nullptr};
+  void* d_robot_people_attention_{nullptr};
   dnn_controller_constants::ActionMode action_mode_;
   int odom_length_;
   int plan_length_;
   bool people_encoder_enabled_{false};
   int num_people_{0};
   int people_history_length_{0};
+  int num_attention_heads_{0};
   int v_num_bins_;
   int w_num_bins_;
   std::mutex trt_mutex_;

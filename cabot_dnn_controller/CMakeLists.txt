@@ -14,7 +14,9 @@ find_package(people_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -23,6 +25,11 @@ find_package(CUDAToolkit REQUIRED)
 find_library(NVINFER_LIB nvinfer)
 find_library(NVINFER_PLUGIN_LIB nvinfer_plugin)
 find_package(yaml-cpp REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/AttentionWeights.msg"
+  DEPENDENCIES std_msgs
+)
 
 add_library(dnn_controllers SHARED
   plugins/dagger_controller.cpp
@@ -44,6 +51,7 @@ ament_target_dependencies(dnn_controllers
   rclcpp
   rclcpp_lifecycle
   sensor_msgs
+  std_msgs
   tf2_ros
   tf2_geometry_msgs
   cv_bridge
@@ -56,6 +64,10 @@ target_link_libraries(dnn_controllers
   ${OpenCV_LIBS}
   yaml-cpp
 )
+
+rosidl_get_typesupport_target(cpp_typesupport_target
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(dnn_controllers "${cpp_typesupport_target}")
 
 add_executable(test_dnn_controller_model
   src/test_dnn_controller_model.cpp
@@ -90,5 +102,6 @@ install(FILES controllers_plugin.xml
 
 ament_export_include_directories(include)
 ament_export_libraries(dnn_controllers)
+ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()
