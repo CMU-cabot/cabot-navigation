@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -39,6 +40,8 @@ using cabot_dnn_controller::dnn_controller_constants::kInputPeopleName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputWLogitsName;
+using cabot_dnn_controller::dnn_controller_constants::kOutputPeopleAttentionName;
+using cabot_dnn_controller::dnn_controller_constants::kOutputRobotPeopleAttentionName;
 
 class TrtLogger : public nvinfer1::ILogger
 {
@@ -102,6 +105,18 @@ static std::vector<float> readFloatBin(const std::filesystem::path & path, size_
   return data;
 }
 
+static void printFloatVector(const std::string & label, const std::vector<float> & values)
+{
+  std::cout << label << ": [";
+  for (size_t i = 0; i < values.size(); ++i) {
+    if (i > 0) {
+      std::cout << ", ";
+    }
+    std::cout << std::setprecision(8) << values[i];
+  }
+  std::cout << "]" << std::endl;
+}
+
 }  // namespace
 
 int main(int argc, char ** argv)
@@ -139,6 +154,7 @@ int main(int argc, char ** argv)
     bool people_encoder_enabled = false;
     int num_people = 0;
     int people_history_length = 0;
+    int num_attention_heads = 0;
     const YAML::Node people_config = config["people_encoder"];
     if (people_config && people_config["enabled"]) {
       people_encoder_enabled = people_config["enabled"].as<bool>();
@@ -160,6 +176,11 @@ int main(int argc, char ** argv)
       people_history_length = people_config["history_length"].as<int>();
       if (people_history_length <= 0) {
         std::cerr << "people_encoder.history_length must be > 0" << std::endl;
+        return 1;
+      }
+      num_attention_heads = people_config["num_attention_heads"].as<int>();
+      if (num_attention_heads <= 0) {
+        std::cerr << "people_encoder.num_attention_heads must be > 0" << std::endl;
         return 1;
       }
     }
@@ -190,6 +211,9 @@ int main(int argc, char ** argv)
     const std::filesystem::path scan_path = data_path / "scan.bin";
     const std::filesystem::path people_path = data_path / "people.bin";
     const std::filesystem::path out_path = data_path / "out.bin";
+    const std::filesystem::path people_attention_path = data_path / "people_attention.bin";
+    const std::filesystem::path robot_people_attention_path =
+      data_path / "robot_people_attention.bin";
 
     const size_t odom_count = static_cast<size_t>(odom_length) * 2;
     const size_t plan_count = static_cast<size_t>(plan_length) * 2;
@@ -201,8 +225,17 @@ int main(int argc, char ** argv)
     const std::vector<float> h_plan = readFloatBin(plan_path, plan_count);
     const std::vector<float> h_scan = readFloatBin(scan_path, scan_count);
     std::vector<float> h_people;
+    std::vector<float> h_people_attention_gt;
+    std::vector<float> h_robot_people_attention_gt;
     if (people_encoder_enabled) {
       h_people = readFloatBin(people_path, people_count);
+      const size_t attention_head_count = static_cast<size_t>(num_attention_heads);
+      const size_t attention_person_count = static_cast<size_t>(num_people);
+      h_people_attention_gt = readFloatBin(
+        people_attention_path,
+        attention_head_count * attention_person_count * attention_person_count);
+      h_robot_people_attention_gt = readFloatBin(
+        robot_people_attention_path, attention_head_count * attention_person_count);
     }
     const std::vector<float> h_out_gt = readFloatBin(out_path, 2);
 
@@ -242,6 +275,14 @@ int main(int argc, char ** argv)
     if (people_encoder_enabled && !has_people_tensor) {
       std::cerr << "people_encoder is enabled, but TensorRT engine has no '" << kInputPeopleName <<
         "' input tensor" << std::endl;
+      return 1;
+    }
+    if (people_encoder_enabled &&
+      (!hasIOTensor(*engine, kOutputPeopleAttentionName) ||
+      !hasIOTensor(*engine, kOutputRobotPeopleAttentionName)))
+    {
+      std::cerr << "people_encoder is enabled, but TensorRT engine has no attention outputs; "
+                << "re-export the engine" << std::endl;
       return 1;
     }
     if (!people_encoder_enabled && has_people_tensor) {
@@ -324,6 +365,22 @@ int main(int argc, char ** argv)
       return 1;
     }
 
+    std::vector<float> h_people_attention;
+    std::vector<float> h_robot_people_attention;
+    if (people_encoder_enabled) {
+      const size_t head_count = static_cast<size_t>(num_attention_heads);
+      const size_t person_count = static_cast<size_t>(num_people);
+      h_people_attention.resize(head_count * person_count * person_count);
+      h_robot_people_attention.resize(head_count * person_count);
+      cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
+        h_people_attention.data(), device_buffers.at(kOutputPeopleAttentionName),
+        h_people_attention.size(), engine->getTensorDataType(kOutputPeopleAttentionName), stream);
+      cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
+        h_robot_people_attention.data(), device_buffers.at(kOutputRobotPeopleAttentionName),
+        h_robot_people_attention.size(),
+        engine->getTensorDataType(kOutputRobotPeopleAttentionName), stream);
+    }
+
     float v_pred = 0.0;
     float w_pred = 0.0;
     if ((action_mode == ActionMode::kReg) || (action_mode == ActionMode::kMdnReg)) {
@@ -380,6 +437,13 @@ int main(int argc, char ** argv)
     std::cout << "cmd_vel (C++): [" << v_pred << ", " << w_pred << "]" << std::endl;
     std::cout << "cmd_vel (Python): [" << h_out_gt[0] << ", " << h_out_gt[1] << "]" << std::endl;
     std::cout << "cmd_vel (diff): [" << (v_pred - h_out_gt[0]) << ", " << (w_pred - h_out_gt[1]) << "]" << std::endl;
+
+    if (people_encoder_enabled) {
+      printFloatVector("people_attention (C++)", h_people_attention);
+      printFloatVector("people_attention (Python)", h_people_attention_gt);
+      printFloatVector("robot_people_attention (C++)", h_robot_people_attention);
+      printFloatVector("robot_people_attention (Python)", h_robot_people_attention_gt);
+    }
 
     for (auto & kv : device_buffers) {
       if (kv.second) {

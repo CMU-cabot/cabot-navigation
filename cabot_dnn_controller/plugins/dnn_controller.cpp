@@ -55,6 +55,8 @@ using cabot_dnn_controller::dnn_controller_constants::kInputPeopleName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputWLogitsName;
+using cabot_dnn_controller::dnn_controller_constants::kOutputPeopleAttentionName;
+using cabot_dnn_controller::dnn_controller_constants::kOutputRobotPeopleAttentionName;
 
 void initTensorRTPluginsOnce(nvinfer1::ILogger & logger)
 {
@@ -69,6 +71,16 @@ void initTensorRTPluginsOnce(nvinfer1::ILogger & logger)
   if (!initialized) {
     throw std::runtime_error("Failed to initialize TensorRT plugins");
   }
+}
+
+bool hasIOTensor(const nvinfer1::ICudaEngine & engine, const char * tensor_name)
+{
+  for (int i = 0; i < engine.getNbIOTensors(); ++i) {
+    if (std::string(engine.getIOTensorName(i)) == tensor_name) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool hasStamp(const builtin_interfaces::msg::Time & stamp)
@@ -145,6 +157,12 @@ void DnnController::configure(
   node_->get_parameter(prefix + "people_topic", people_topic_);
   node_->declare_parameter<std::string>(prefix + "debug_image_topic", "");
   node_->get_parameter(prefix + "debug_image_topic", debug_image_topic_);
+  node_->declare_parameter<std::string>(
+    prefix + "people_attention_topic", "debug/people_attention");
+  node_->get_parameter(prefix + "people_attention_topic", people_attention_topic_);
+  node_->declare_parameter<std::string>(
+    prefix + "robot_people_attention_topic", "debug/robot_people_attention");
+  node_->get_parameter(prefix + "robot_people_attention_topic", robot_people_attention_topic_);
 
   if (!trt_model_.empty()) {
     const std::filesystem::path model_path(trt_model_);
@@ -162,6 +180,7 @@ void DnnController::configure(
     people_encoder_enabled_ = false;
     num_people_ = 0;
     people_history_length_ = 0;
+    num_attention_heads_ = 0;
     const YAML::Node people_config = config["people_encoder"];
     if (people_config && people_config["enabled"]) {
       people_encoder_enabled_ = people_config["enabled"].as<bool>();
@@ -180,6 +199,10 @@ void DnnController::configure(
       people_history_length_ = people_config["history_length"].as<int>();
       if (people_history_length_ <= 0) {
         throw std::runtime_error("people_encoder.history_length must be > 0");
+      }
+      num_attention_heads_ = people_config["num_attention_heads"].as<int>();
+      if (num_attention_heads_ <= 0) {
+        throw std::runtime_error("people_encoder.num_attention_heads must be > 0");
       }
     }
     std::string action_mode_str = config["action"]["mode"].as<std::string>();
@@ -220,6 +243,13 @@ void DnnController::configure(
     }
     RCLCPP_INFO(logger_, "Loaded TensorRT engine: %s (%zu bytes, %d io tensors)",
       trt_model_.c_str(), trt_engine_data.size(), trt_engine_->getNbIOTensors());
+    if (people_encoder_enabled_ &&
+      (!hasIOTensor(*trt_engine_, kOutputPeopleAttentionName) ||
+      !hasIOTensor(*trt_engine_, kOutputRobotPeopleAttentionName)))
+    {
+      throw std::runtime_error(
+              "TensorRT engine has no attention outputs; re-export it with export_tensorrt.py");
+    }
 
     trt_context_.reset(trt_engine_->createExecutionContext());
     if (!trt_context_) {
@@ -268,6 +298,10 @@ void DnnController::configure(
     d_cmd_  = allocTensor(kOutputCmdName);
     d_v_logits_  = allocTensor(kOutputVLogitsName);
     d_w_logits_  = allocTensor(kOutputWLogitsName);
+    if (people_encoder_enabled_) {
+      d_people_attention_ = allocTensor(kOutputPeopleAttentionName);
+      d_robot_people_attention_ = allocTensor(kOutputRobotPeopleAttentionName);
+    }
 
     bool tensor_addresses_set =
       trt_context_->setTensorAddress(kInputOdomName, d_odom_) &&
@@ -278,7 +312,9 @@ void DnnController::configure(
       trt_context_->setTensorAddress(kOutputWLogitsName, d_w_logits_);
     if (people_encoder_enabled_) {
       tensor_addresses_set = tensor_addresses_set &&
-        trt_context_->setTensorAddress(kInputPeopleName, d_people_);
+        trt_context_->setTensorAddress(kInputPeopleName, d_people_) &&
+        trt_context_->setTensorAddress(kOutputPeopleAttentionName, d_people_attention_) &&
+        trt_context_->setTensorAddress(kOutputRobotPeopleAttentionName, d_robot_people_attention_);
     }
     if (!tensor_addresses_set) {
       throw std::runtime_error("Failed to set TensorRT tensor addresses");
@@ -301,6 +337,12 @@ void DnnController::configure(
       std::bind(&DnnController::peopleCallback, this, std::placeholders::_1));
   }
   debug_image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>(debug_image_topic_, rclcpp::SystemDefaultsQoS());
+  if (people_encoder_enabled_) {
+    people_attention_pub_ = node_->create_publisher<cabot_dnn_controller::msg::AttentionWeights>(
+      people_attention_topic_, rclcpp::SystemDefaultsQoS());
+    robot_people_attention_pub_ = node_->create_publisher<cabot_dnn_controller::msg::AttentionWeights>(
+      robot_people_attention_topic_, rclcpp::SystemDefaultsQoS());
+  }
 }
 
 void DnnController::cleanup()
@@ -320,6 +362,8 @@ void DnnController::cleanup()
     last_scan_.reset();
   }
   people_sub_.reset();
+  people_attention_pub_.reset();
+  robot_people_attention_pub_.reset();
   {
     std::lock_guard<std::mutex> people_lock(people_mutex_);
     last_people_.reset();
@@ -334,6 +378,8 @@ void DnnController::cleanup()
   if (d_cmd_)  { CUDA_CHECK(cudaFree(d_cmd_));  d_cmd_  = nullptr; }
   if (d_w_logits_)  { CUDA_CHECK(cudaFree(d_w_logits_));  d_w_logits_  = nullptr; }
   if (d_v_logits_)  { CUDA_CHECK(cudaFree(d_v_logits_));  d_v_logits_  = nullptr; }
+  if (d_people_attention_) { CUDA_CHECK(cudaFree(d_people_attention_)); d_people_attention_ = nullptr; }
+  if (d_robot_people_attention_) { CUDA_CHECK(cudaFree(d_robot_people_attention_)); d_robot_people_attention_ = nullptr; }
   if (trt_stream_) { CUDA_CHECK(cudaStreamDestroy(trt_stream_)); trt_stream_ = nullptr; }
   trt_context_.reset();
   trt_engine_.reset();
@@ -347,6 +393,7 @@ void DnnController::cleanup()
   people_encoder_enabled_ = false;
   num_people_ = 0;
   people_history_length_ = 0;
+  num_attention_heads_ = 0;
 }
 
 void DnnController::activate()
@@ -503,6 +550,42 @@ std::vector<float> DnnController::buildPeopleInput(
   return h_people;
 }
 
+void DnnController::publishAttention(
+  const std::vector<float> & people_attention,
+  const std::vector<float> & robot_people_attention,
+  const std_msgs::msg::Header & header) const
+{
+  const int people_rows = num_attention_heads_ * num_people_;
+  const size_t expected_people =
+    static_cast<size_t>(people_rows) * static_cast<size_t>(num_people_);
+  const size_t expected_robot =
+    static_cast<size_t>(num_attention_heads_) * static_cast<size_t>(num_people_);
+  if (people_attention.size() != expected_people ||
+    robot_people_attention.size() != expected_robot)
+  {
+    RCLCPP_ERROR(
+      logger_, "Unexpected attention sizes: people=%zu (expected %zu), robot=%zu (expected %zu)",
+      people_attention.size(), expected_people, robot_people_attention.size(), expected_robot);
+    return;
+  }
+
+  cabot_dnn_controller::msg::AttentionWeights people_msg;
+  people_msg.header = header;
+  people_msg.num_heads = static_cast<uint32_t>(num_attention_heads_);
+  people_msg.num_queries = static_cast<uint32_t>(num_people_);
+  people_msg.num_keys = static_cast<uint32_t>(num_people_);
+  people_msg.weights = people_attention;
+  people_attention_pub_->publish(people_msg);
+
+  cabot_dnn_controller::msg::AttentionWeights robot_msg;
+  robot_msg.header = header;
+  robot_msg.num_heads = static_cast<uint32_t>(num_attention_heads_);
+  robot_msg.num_queries = 1;
+  robot_msg.num_keys = static_cast<uint32_t>(num_people_);
+  robot_msg.weights = robot_people_attention;
+  robot_people_attention_pub_->publish(robot_msg);
+}
+
 geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped &,
   const geometry_msgs::msg::Twist &,
@@ -626,6 +709,8 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   float v_pred = 0.0;
   float w_pred = 0.0;
+  std::vector<float> people_attention;
+  std::vector<float> robot_people_attention;
   {
     std::lock_guard<std::mutex> lk(trt_mutex_);
 
@@ -648,6 +733,19 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       RCLCPP_ERROR(logger_, "TensorRT enqueueV3 failed");
       CUDA_CHECK(cudaStreamSynchronize(trt_stream_));
       return cmd;
+    }
+
+    if (people_encoder_enabled_) {
+      const size_t head_count = static_cast<size_t>(num_attention_heads_);
+      const size_t person_count = static_cast<size_t>(num_people_);
+      people_attention.resize(head_count * person_count * person_count);
+      robot_people_attention.resize(head_count * person_count);
+      cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
+        people_attention.data(), d_people_attention_, people_attention.size(),
+        trt_engine_->getTensorDataType(kOutputPeopleAttentionName), trt_stream_);
+      cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
+        robot_people_attention.data(), d_robot_people_attention_, robot_people_attention.size(),
+        trt_engine_->getTensorDataType(kOutputRobotPeopleAttentionName), trt_stream_);
     }
 
     if ((action_mode_ == ActionMode::kReg) || (action_mode_ == ActionMode::kMdnReg)) {
@@ -705,6 +803,13 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   cmd.twist.linear.x  = v_pred * max_linear_vel_;
   cmd.twist.angular.z = w_pred * max_angular_vel_;
+
+  if (people_encoder_enabled_) {
+    std_msgs::msg::Header attention_header;
+    attention_header.stamp = cmd.header.stamp;
+    attention_header.frame_id = base_link_frame_;
+    publishAttention(people_attention, robot_people_attention, attention_header);
+  }
 
   if (debug_image_pub_ && debug_image_pub_->get_subscription_count() > 0) {
     constexpr int kImageSize = 400;
@@ -825,6 +930,93 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
         image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(0, 255, 0);
       }
+    }
+
+    if (people_encoder_enabled_ && !people_attention.empty()) {
+      cv::Mat people_matrix(
+        num_attention_heads_ * num_people_, num_people_, CV_32FC1,
+        people_attention.data());
+      cv::Mat robot_matrix(
+        num_attention_heads_, num_people_, CV_32FC1,
+        robot_people_attention.data());
+      cv::Mat people_mean = cv::Mat::zeros(num_people_, num_people_, CV_32FC1);
+      cv::Mat robot_mean = cv::Mat::zeros(1, num_people_, CV_32FC1);
+      for (int head = 0; head < num_attention_heads_; ++head) {
+        people_mean += people_matrix.rowRange(head * num_people_, (head + 1) * num_people_);
+        robot_mean += robot_matrix.row(head);
+      }
+      people_mean /= static_cast<float>(num_attention_heads_);
+      robot_mean /= static_cast<float>(num_attention_heads_);
+
+      const size_t history_count = static_cast<size_t>(people_history_length_);
+      std::vector<cv::Point> person_pixels(static_cast<size_t>(num_people_));
+      std::vector<bool> person_present(static_cast<size_t>(num_people_), false);
+      for (int person = 0; person < num_people_; ++person) {
+        const size_t offset =
+          (static_cast<size_t>(person) * history_count + history_count - 1) * kPeopleDim;
+        person_present[person] = h_people[offset + 2] > 0.0f;
+        person_pixels[person] = toPixel(h_people[offset], h_people[offset + 1]);
+      }
+
+      const auto thicknessForWeight = [](float weight) {
+          return std::max(1, static_cast<int>(std::lround(weight * 10.0f)));
+        };
+      constexpr float kMinVisibleWeight = 0.01f;
+      const cv::Scalar people_attention_color(0, 180, 255);
+      const cv::Scalar robot_attention_color(255, 220, 0);
+
+      // Draw directed person-person attention as slightly offset parallel
+      // arrows. Line width is the only encoding of the attention magnitude.
+      for (int query = 0; query < num_people_; ++query) {
+        if (!person_present[query]) {
+          continue;
+        }
+        for (int key = 0; key < num_people_; ++key) {
+          if (!person_present[key]) {
+            continue;
+          }
+          const float weight = people_mean.at<float>(query, key);
+          if (weight < kMinVisibleWeight) {
+            continue;
+          }
+          if (query == key) {
+            cv::circle(image, person_pixels[query], 8, people_attention_color,
+              thicknessForWeight(weight), cv::LINE_AA);
+            continue;
+          }
+          const cv::Point delta = person_pixels[key] - person_pixels[query];
+          const double length = std::hypot(delta.x, delta.y);
+          if (length < 1.0) {
+            continue;
+          }
+          const cv::Point offset(
+            static_cast<int>(std::lround(-delta.y * 3.0 / length)),
+            static_cast<int>(std::lround(delta.x * 3.0 / length)));
+          cv::arrowedLine(image, person_pixels[query] + offset, person_pixels[key] + offset,
+            people_attention_color, thicknessForWeight(weight), cv::LINE_AA, 0, 0.08);
+        }
+      }
+
+      // Robot-person attention originates at the robot center.
+      const cv::Point robot_pixel = toPixel(0.0f, 0.0f);
+      for (int key = 0; key < num_people_; ++key) {
+        if (!person_present[key]) {
+          continue;
+        }
+        const float weight = robot_mean.at<float>(0, key);
+        if (weight >= kMinVisibleWeight) {
+          cv::line(image, robot_pixel, person_pixels[key], robot_attention_color,
+            thicknessForWeight(weight), cv::LINE_AA);
+        }
+      }
+
+      // Keep people and robot positions visible above the attention lines.
+      for (int person = 0; person < num_people_; ++person) {
+        if (person_present[person]) {
+          cv::circle(image, person_pixels[person], 4, cv::Scalar(80, 80, 255), -1, cv::LINE_AA);
+        }
+      }
+      cv::circle(image, robot_pixel, 5, cv::Scalar(255, 255, 255), -1, cv::LINE_AA);
     }
 
     cv_bridge::CvImage cv_img;
