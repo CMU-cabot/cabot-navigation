@@ -4,7 +4,7 @@ ARG TARGETARCH
 FROM --platform=linux/amd64 pytorch/pytorch:2.2.0-cuda11.8-cudnn8-runtime as base_amd64
 
 # ARM64
-FROM --platform=linux/arm64 dustynv/l4t-pytorch:r36.3.0-cu124 as base_arm64
+FROM --platform=linux/arm64 dustynv/l4t-pytorch:r36.4.0 as base_arm64
 
 # update pip url
 ENV INDEX_HOST=jetson-ai-lab.io
