@@ -124,6 +124,7 @@ private:
   {
     std::int64_t stamp_ns{0};
     std::array<float, 2> position{0.0f, 0.0f};
+    std::array<float, 2> velocity{0.0f, 0.0f};
     float presence{0.0f};
   };
 
@@ -131,13 +132,11 @@ private:
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
   std::vector<float> buildPeopleInput(
+    const PlanarVelocity & current_odom,
     const geometry_msgs::msg::TransformStamped & tf_base_link_map,
     const rclcpp::Time & current_time);
   std::vector<std::array<float, 2>> transformPoints2D(
     const std::vector<std::array<float, 2>> & points,
-    const geometry_msgs::msg::TransformStamped & tf) const;
-  std::vector<std::array<float, 2>> transformVectors2D(
-    const std::vector<std::array<float, 2>> & vectors,
     const geometry_msgs::msg::TransformStamped & tf) const;
   void publishAttention(
     const std::vector<float> & people_attention,
@@ -157,7 +156,6 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   sensor_msgs::msg::LaserScan::SharedPtr last_scan_;
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
-  people_msgs::msg::People::SharedPtr last_people_;
   std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr people_attention_pub_;
@@ -196,8 +194,11 @@ private:
   int odom_length_;
   int plan_length_;
   bool people_encoder_enabled_{false};
+  bool input_velocity_{false};
   int num_people_{0};
   int people_history_length_{0};
+  int people_dim_{dnn_controller_constants::kPeopleDim};
+  int presence_index_{dnn_controller_constants::kPeopleDim - 1};
   int num_attention_heads_{0};
   int v_num_bins_;
   int w_num_bins_;

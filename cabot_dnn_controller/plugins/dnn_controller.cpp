@@ -42,6 +42,7 @@ using cabot_dnn_controller::dnn_controller_constants::ActionMode;
 using cabot_dnn_controller::dnn_controller_constants::kScanLength;
 using cabot_dnn_controller::dnn_controller_constants::kScanRangeMax;
 using cabot_dnn_controller::dnn_controller_constants::kPeopleDim;
+using cabot_dnn_controller::dnn_controller_constants::kPeopleDimWithVelocity;
 
 using cabot_dnn_controller::dnn_controller_constants::kVMin;
 using cabot_dnn_controller::dnn_controller_constants::kVMax;
@@ -105,6 +106,19 @@ std::array<float, 2> transformPoint2D(
   return {
     static_cast<float>(t.x + cy * point[0] - sy * point[1]),
     static_cast<float>(t.y + sy * point[0] + cy * point[1]),
+  };
+}
+
+std::array<float, 2> transformVector2D(
+  const std::array<float, 2> & vector,
+  const geometry_msgs::msg::TransformStamped & tf)
+{
+  const double yaw = yawFromTransform(tf);
+  const double cy = std::cos(yaw);
+  const double sy = std::sin(yaw);
+  return {
+    static_cast<float>(cy * vector[0] - sy * vector[1]),
+    static_cast<float>(sy * vector[0] + cy * vector[1]),
   };
 }
 
@@ -178,14 +192,23 @@ void DnnController::configure(
     odom_length_ = config["odom_encoder"]["odom_length"].as<int>();
     plan_length_ = config["plan_encoder"]["plan_length"].as<int>();
     people_encoder_enabled_ = false;
+    input_velocity_ = false;
     num_people_ = 0;
     people_history_length_ = 0;
+    people_dim_ = kPeopleDim;
+    presence_index_ = kPeopleDim - 1;
     num_attention_heads_ = 0;
     const YAML::Node people_config = config["people_encoder"];
     if (people_config && people_config["enabled"]) {
       people_encoder_enabled_ = people_config["enabled"].as<bool>();
     }
     if (people_encoder_enabled_) {
+      if (people_config["input_velocity"]) {
+        input_velocity_ = people_config["input_velocity"].as<bool>();
+      }
+      people_dim_ = input_velocity_ ?
+        kPeopleDimWithVelocity : kPeopleDim;
+      presence_index_ = people_dim_ - 1;
       if (!people_config["num_people"]) {
         throw std::runtime_error("people_encoder.num_people is required when people_encoder is enabled");
       }
@@ -243,6 +266,13 @@ void DnnController::configure(
     }
     RCLCPP_INFO(logger_, "Loaded TensorRT engine: %s (%zu bytes, %d io tensors)",
       trt_model_.c_str(), trt_engine_data.size(), trt_engine_->getNbIOTensors());
+    const bool engine_has_people = hasIOTensor(*trt_engine_, kInputPeopleName);
+    if (people_encoder_enabled_ != engine_has_people) {
+      throw std::runtime_error(
+              people_encoder_enabled_ ?
+              "people_encoder is enabled, but TensorRT engine has no people input" :
+              "TensorRT engine has a people input, but people_encoder is disabled");
+    }
     if (people_encoder_enabled_ &&
       (!hasIOTensor(*trt_engine_, kOutputPeopleAttentionName) ||
       !hasIOTensor(*trt_engine_, kOutputRobotPeopleAttentionName)))
@@ -266,10 +296,22 @@ void DnnController::configure(
       input_shapes_set = input_shapes_set &&
         trt_context_->setInputShape(
           kInputPeopleName,
-          nvinfer1::Dims4{1, num_people_, people_history_length_, kPeopleDim});
+          nvinfer1::Dims4{1, num_people_, people_history_length_, people_dim_});
     }
     if (!input_shapes_set) {
       throw std::runtime_error("Failed to set TensorRT input shapes");
+    }
+    if (people_encoder_enabled_) {
+      const nvinfer1::Dims people_dims =
+        trt_context_->getTensorShape(kInputPeopleName);
+      if (people_dims.nbDims != 4 || people_dims.d[0] != 1 ||
+        people_dims.d[1] != num_people_ ||
+        people_dims.d[2] != people_history_length_ ||
+        people_dims.d[3] != people_dim_)
+      {
+        throw std::runtime_error(
+                "TensorRT people input shape does not match model config");
+      }
     }
 
     auto allocTensor = [&](const char * name) -> void * {
@@ -366,7 +408,6 @@ void DnnController::cleanup()
   robot_people_attention_pub_.reset();
   {
     std::lock_guard<std::mutex> people_lock(people_mutex_);
-    last_people_.reset();
     people_history_.clear();
   }
 
@@ -391,8 +432,11 @@ void DnnController::cleanup()
   clock_.reset();
   node_.reset();
   people_encoder_enabled_ = false;
+  input_velocity_ = false;
   num_people_ = 0;
   people_history_length_ = 0;
+  people_dim_ = kPeopleDim;
+  presence_index_ = kPeopleDim - 1;
   num_attention_heads_ = 0;
 }
 
@@ -427,33 +471,15 @@ std::vector<std::array<float, 2>> DnnController::transformPoints2D(
   return output_points;
 }
 
-std::vector<std::array<float, 2>> DnnController::transformVectors2D(
-  const std::vector<std::array<float, 2>> & vectors,
-  const geometry_msgs::msg::TransformStamped & tf) const
-{
-  const auto & r = tf.transform.rotation;
-  const double yaw = std::atan2(2.0 * (r.w * r.z + r.x * r.y), 1.0 - 2.0 * (r.y * r.y + r.z * r.z));
-  const double cy = std::cos(yaw);
-  const double sy = std::sin(yaw);
-
-  std::vector<std::array<float, 2>> output_vectors;
-  output_vectors.reserve(vectors.size());
-  for (const auto & vector : vectors) {
-    output_vectors.push_back({
-      static_cast<float>(cy * vector[0] - sy * vector[1]),
-      static_cast<float>(sy * vector[0] + cy * vector[1]),
-    });
-  }
-  return output_vectors;
-}
-
 std::vector<float> DnnController::buildPeopleInput(
+  const DnnController::PlanarVelocity & current_odom,
   const geometry_msgs::msg::TransformStamped & tf_base_link_map,
   const rclcpp::Time & current_time)
 {
   const size_t people_count = static_cast<size_t>(num_people_);
   const size_t history_count = static_cast<size_t>(people_history_length_);
-  std::vector<float> h_people(people_count * history_count * kPeopleDim, 0.0f);
+  std::vector<float> h_people(
+    people_count * history_count * static_cast<size_t>(people_dim_), 0.0f);
   if (!people_encoder_enabled_ || num_people_ <= 0 || people_history_length_ <= 0) {
     return h_people;
   }
@@ -496,19 +522,11 @@ std::vector<float> DnnController::buildPeopleInput(
       continue;
     }
 
-    const PeopleHistoryRecord * latest_observed = nullptr;
-    for (auto it = history_records.rbegin(); it != history_records.rend(); ++it) {
-      if (it->presence > 0.0f) {
-        latest_observed = &(*it);
-        break;
-      }
-    }
-    if (!latest_observed) {
+    const std::array<float, 2> latest_position =
+      transformPoint2D(history_records.back().position, tf_base_link_map);
+    if (!std::isfinite(latest_position[0]) || !std::isfinite(latest_position[1])) {
       continue;
     }
-
-    const std::array<float, 2> latest_position =
-      transformPoint2D(latest_observed->position, tf_base_link_map);
 
     PeopleCandidate candidate;
     candidate.distance_sq =
@@ -525,6 +543,9 @@ std::vector<float> DnnController::buildPeopleInput(
     return lhs.distance_sq < rhs.distance_sq;
   });
 
+  const float robot_vx = current_odom.vx;
+  const float robot_vy = current_odom.vy;
+  const float robot_wz = current_odom.wz;
   const size_t output_count = std::min(candidates.size(), people_count);
   for (size_t person_index = 0; person_index < output_count; ++person_index) {
     const auto & records = candidates[person_index].records;
@@ -533,17 +554,36 @@ std::vector<float> DnnController::buildPeopleInput(
       const auto & record = records[record_index];
       const size_t output_history_index = history_offset + record_index;
       const size_t output_offset =
-        (person_index * history_count + output_history_index) * kPeopleDim;
+        (person_index * history_count + output_history_index) *
+        static_cast<size_t>(people_dim_);
 
       if (record.presence <= 0.0f) {
         continue;
       }
 
       const std::array<float, 2> position = transformPoint2D(record.position, tf_base_link_map);
+      if (!std::isfinite(position[0]) || !std::isfinite(position[1])) {
+        continue;
+      }
+
+      std::array<float, 2> velocity{0.0f, 0.0f};
+      if (input_velocity_) {
+        velocity = transformVector2D(record.velocity, tf_base_link_map);
+        // Differentiate the map-to-current-base position transform.
+        velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
+        velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
+        if (!std::isfinite(velocity[0]) || !std::isfinite(velocity[1])) {
+          continue;
+        }
+      }
 
       h_people[output_offset + 0] = position[0];
       h_people[output_offset + 1] = position[1];
-      h_people[output_offset + 2] = 1.0f;
+      if (input_velocity_) {
+        h_people[output_offset + 2] = velocity[0];
+        h_people[output_offset + 3] = velocity[1];
+      }
+      h_people[output_offset + static_cast<size_t>(presence_index_)] = 1.0f;
     }
   }
 
@@ -632,8 +672,18 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_odom(1 * odom_length_ * 2, 0.0f);
   for (size_t i = 0; i < odom_length_; i++) {
+    if (!std::isfinite(odom_history[i].vx) || !std::isfinite(odom_history[i].wz)) {
+      RCLCPP_ERROR(logger_, "Non-finite odometry input, return 0 velocity command");
+      return cmd;
+    }
     h_odom[i * 2 + 0] = odom_history[i].vx / static_cast<float>(max_linear_vel_);
     h_odom[i * 2 + 1] = odom_history[i].wz / static_cast<float>(max_angular_vel_);
+  }
+  if (input_velocity_ && !std::isfinite(odom_history.back().vy)) {
+    RCLCPP_ERROR(
+      logger_, "Non-finite lateral odometry input for people velocity, "
+      "return 0 velocity command");
+    return cmd;
   }
 
   if (!tf_) {
@@ -704,7 +754,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput(tf_base_link_map, cmd.header.stamp);
+    h_people = buildPeopleInput(odom_history.back(), tf_base_link_map, cmd.header.stamp);
   }
 
   float v_pred = 0.0;
@@ -814,13 +864,54 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   if (debug_image_pub_ && debug_image_pub_->get_subscription_count() > 0) {
     constexpr int kImageSize = 400;
     constexpr float kMetersPerPixel = 0.1f;
+    constexpr float kPeopleVelocityArrowSeconds = 1.0f;
+    constexpr int kSubpixelShift = 4;
+    constexpr int kSubpixelScale = 1 << kSubpixelShift;
+    constexpr int kMaxSafePixelCoordinate = 1 << 20;
+    constexpr double kMaxImageCoordinateMeters =
+      static_cast<double>(kImageSize / 2 - 1) * kMetersPerPixel;
+    const cv::Scalar people_velocity_color(255, 0, 0);
     cv::Mat image(kImageSize, kImageSize, CV_8UC3, cv::Scalar(20, 20, 20));
     const int cx = kImageSize / 2;
     const int cy = kImageSize / 2;
-    const auto toPixel = [&](float x, float y) -> cv::Point {
-      const int px = cx + static_cast<int>(x / kMetersPerPixel);
-      const int py = cy - static_cast<int>(y / kMetersPerPixel);
-      return cv::Point(px, py);
+    const auto safePixelCoordinate = [&](double value) {
+        if (!std::isfinite(value)) {
+          return -kMaxSafePixelCoordinate;
+        }
+        return static_cast<int>(std::clamp(
+            value,
+            -static_cast<double>(kMaxSafePixelCoordinate),
+            static_cast<double>(kMaxSafePixelCoordinate)));
+      };
+    const auto toPixel = [&](double x, double y) -> cv::Point {
+        return cv::Point(
+          safePixelCoordinate(cx + x / kMetersPerPixel),
+          safePixelCoordinate(cy - y / kMetersPerPixel));
+      };
+    const auto toSubpixel = [&](double x, double y) -> cv::Point {
+        return cv::Point(
+          safePixelCoordinate((cx + x / kMetersPerPixel) * kSubpixelScale),
+          safePixelCoordinate((cy - y / kMetersPerPixel) * kSubpixelScale));
+      };
+    const auto pointIsVisible = [&](double x, double y) {
+        return std::isfinite(x) && std::isfinite(y) &&
+               std::abs(x) <= kMaxImageCoordinateMeters &&
+               std::abs(y) <= kMaxImageCoordinateMeters;
+      };
+    const auto clipEndpointToImage = [&](double x, double y, double dx, double dy) {
+        double scale = 1.0;
+        if (dx > 0.0) {
+          scale = std::min(scale, (kMaxImageCoordinateMeters - x) / dx);
+        } else if (dx < 0.0) {
+          scale = std::min(scale, (-kMaxImageCoordinateMeters - x) / dx);
+        }
+        if (dy > 0.0) {
+          scale = std::min(scale, (kMaxImageCoordinateMeters - y) / dy);
+        } else if (dy < 0.0) {
+          scale = std::min(scale, (-kMaxImageCoordinateMeters - y) / dy);
+        }
+        scale = std::clamp(scale, 0.0, 1.0);
+        return std::array<double, 2>{x + scale * dx, y + scale * dy};
     };
 
     {
@@ -876,12 +967,14 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       }
     }
 
+    std::vector<std::pair<cv::Point, cv::Point>> people_velocity_arrows;
     if (people_encoder_enabled_) {
       const size_t history_count = static_cast<size_t>(people_history_length_);
       for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
         for (size_t h = 0; h < history_count; ++h) {
-          const size_t offset = (i * history_count + h) * kPeopleDim;
-          if (h_people[offset + 2] <= 0.0f) {
+          const size_t offset =
+            (i * history_count + h) * static_cast<size_t>(people_dim_);
+          if (h_people[offset + static_cast<size_t>(presence_index_)] <= 0.0f) {
             continue;
           }
 
@@ -894,13 +987,29 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
           const float x = h_people[offset + 0];
           const float y = h_people[offset + 1];
+          if (!pointIsVisible(x, y)) {
+            continue;
+          }
           const cv::Point px = toPixel(x, y);
 
-          const bool point_visible =
-            px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize;
-          if (point_visible) {
-            const int radius = (h + 1 == history_count) ? 4 : 2;
-            cv::circle(image, px, radius, color, -1, cv::LINE_AA);
+          const int radius = (h + 1 == history_count) ? 4 : 2;
+          cv::circle(image, px, radius, color, -1, cv::LINE_AA);
+          if (input_velocity_) {
+            const float velocity_x = h_people[offset + 2];
+            const float velocity_y = h_people[offset + 3];
+            if (std::isfinite(velocity_x) && std::isfinite(velocity_y) &&
+              (velocity_x != 0.0f || velocity_y != 0.0f))
+            {
+              const double velocity_dx =
+                kPeopleVelocityArrowSeconds * static_cast<double>(velocity_x);
+              const double velocity_dy =
+                kPeopleVelocityArrowSeconds * static_cast<double>(velocity_y);
+              const auto velocity_end = clipEndpointToImage(
+                x, y, velocity_dx, velocity_dy);
+              people_velocity_arrows.emplace_back(
+                toSubpixel(x, y),
+                toSubpixel(velocity_end[0], velocity_end[1]));
+            }
           }
         }
       }
@@ -953,9 +1062,16 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       std::vector<bool> person_present(static_cast<size_t>(num_people_), false);
       for (int person = 0; person < num_people_; ++person) {
         const size_t offset =
-          (static_cast<size_t>(person) * history_count + history_count - 1) * kPeopleDim;
-        person_present[person] = h_people[offset + 2] > 0.0f;
-        person_pixels[person] = toPixel(h_people[offset], h_people[offset + 1]);
+          (static_cast<size_t>(person) * history_count + history_count - 1) *
+          static_cast<size_t>(people_dim_);
+        const float person_x = h_people[offset];
+        const float person_y = h_people[offset + 1];
+        person_present[person] =
+          h_people[offset + static_cast<size_t>(presence_index_)] > 0.0f &&
+          pointIsVisible(person_x, person_y);
+        if (person_present[person]) {
+          person_pixels[person] = toPixel(person_x, person_y);
+        }
       }
 
       const auto thicknessForWeight = [](float weight) {
@@ -1017,6 +1133,22 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         }
       }
       cv::circle(image, robot_pixel, 5, cv::Scalar(255, 255, 255), -1, cv::LINE_AA);
+    }
+
+    for (const auto & [start, end] : people_velocity_arrows) {
+      if (start == end) {
+        continue;
+      }
+      cv::arrowedLine(
+        image, start, end, people_velocity_color, 1,
+        cv::LINE_AA, kSubpixelShift, 0.2);
+    }
+
+    if (input_velocity_) {
+      cv::putText(
+        image, "blue: model-input people velocity (1 s, edge-clipped)",
+        cv::Point(8, 18), cv::FONT_HERSHEY_SIMPLEX, 0.35,
+        people_velocity_color, 1, cv::LINE_AA);
     }
 
     cv_bridge::CvImage cv_img;
@@ -1106,16 +1238,26 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
     if (!std::isfinite(x) || !std::isfinite(y)) {
       continue;
     }
+    const float vx = static_cast<float>(person.velocity.x);
+    const float vy = static_cast<float>(person.velocity.y);
+    const bool velocity_is_finite = std::isfinite(vx) && std::isfinite(vy);
+    // Position-only models do not depend on velocity, so keep detections whose
+    // positions are valid even when the message has no usable velocity.
+    if (input_velocity_ && !velocity_is_finite) {
+      continue;
+    }
 
     PeopleHistoryRecord record;
     record.stamp_ns = stamp_ns;
     record.position = {x, y};
+    if (velocity_is_finite) {
+      record.velocity = {vx, vy};
+    }
     record.presence = 1.0f;
     observed_people[personHistoryKey(person, i)] = record;
   }
 
   std::lock_guard<std::mutex> people_lock(people_mutex_);
-  last_people_ = msg;
   const size_t max_history_size = static_cast<size_t>(people_history_length_);
 
   std::vector<std::string> erase_keys;
