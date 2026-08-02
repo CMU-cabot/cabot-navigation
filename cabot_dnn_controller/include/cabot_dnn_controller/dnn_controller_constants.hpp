@@ -19,6 +19,7 @@ enum class ActionMode {
 static constexpr std::size_t kScanLength = 1200;
 static constexpr float kScanRangeMax = 50.0;
 static constexpr int kPeopleDim = 3;  // x, y, presence
+static constexpr int kPeopleDimWithVelocity = 5;  // x, y, relative vx, relative vy, presence
 
 static constexpr float kVMin = 0.0;
 static constexpr float kVMax = 1.0;
