@@ -154,6 +154,8 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   sensor_msgs::msg::LaserScan::SharedPtr last_scan_;
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
+  std::unordered_map<std::string, PeopleHistoryRecord> latest_people_;
+  bool has_people_observation_{false};
   std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr people_attention_pub_;

@@ -408,6 +408,8 @@ void DnnController::cleanup()
   robot_people_attention_pub_.reset();
   {
     std::lock_guard<std::mutex> people_lock(people_mutex_);
+    latest_people_.clear();
+    has_people_observation_ = false;
     people_history_.clear();
   }
 
@@ -486,6 +488,43 @@ std::vector<float> DnnController::buildPeopleInput(
   std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history;
   {
     std::lock_guard<std::mutex> people_lock(people_mutex_);
+    // A history step is an input to one controller invocation, rather than one
+    // /people callback. This keeps history_length tied to controller_frequency.
+    if (has_people_observation_) {
+      const size_t max_history_size = static_cast<size_t>(people_history_length_);
+      std::vector<std::string> erase_keys;
+      for (auto & [key, records] : people_history_) {
+        const auto observed = latest_people_.find(key);
+        if (observed != latest_people_.end()) {
+          records.push_back(observed->second);
+        } else {
+          PeopleHistoryRecord absent_record;
+          absent_record.stamp_ns = current_time.nanoseconds();
+          absent_record.presence = 0.0f;
+          records.push_back(absent_record);
+        }
+        while (records.size() > max_history_size) {
+          records.pop_front();
+        }
+        const bool has_observed_record = std::any_of(
+          records.begin(), records.end(), [](const auto & record) {
+            return record.presence > 0.0f;
+          });
+        if (!has_observed_record) {
+          erase_keys.push_back(key);
+        }
+      }
+      for (const auto & key : erase_keys) {
+        people_history_.erase(key);
+      }
+      for (const auto & [key, record] : latest_people_) {
+        if (people_history_.count(key) > 0) {
+          continue;
+        }
+        auto & records = people_history_[key];
+        records.push_back(record);
+      }
+    }
     people_history = people_history_;
   }
   if (people_history.empty()) {
@@ -1236,41 +1275,8 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
   }
 
   std::lock_guard<std::mutex> people_lock(people_mutex_);
-  const size_t max_history_size = static_cast<size_t>(people_history_length_);
-
-  std::vector<std::string> erase_keys;
-  for (auto & [key, records] : people_history_) {
-    if (observed_people.count(key) > 0) {
-      continue;
-    }
-
-    PeopleHistoryRecord absent_record;
-    absent_record.stamp_ns = stamp_ns;
-    absent_record.presence = 0.0f;
-    records.push_back(absent_record);
-    while (records.size() > max_history_size) {
-      records.pop_front();
-    }
-
-    const bool has_observed_record = std::any_of(records.begin(), records.end(), [](const auto & record) {
-      return record.presence > 0.0f;
-    });
-    if (!has_observed_record) {
-      erase_keys.push_back(key);
-    }
-  }
-
-  for (const auto & key : erase_keys) {
-    people_history_.erase(key);
-  }
-
-  for (const auto & [key, record] : observed_people) {
-    auto & records = people_history_[key];
-    records.push_back(record);
-    while (records.size() > max_history_size) {
-      records.pop_front();
-    }
-  }
+  latest_people_ = std::move(observed_people);
+  has_people_observation_ = true;
 }
 
 }  // namespace cabot_dnn_controller
