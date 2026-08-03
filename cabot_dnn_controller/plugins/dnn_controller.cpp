@@ -472,7 +472,6 @@ std::vector<std::array<float, 2>> DnnController::transformPoints2D(
 }
 
 std::vector<float> DnnController::buildPeopleInput(
-  const DnnController::PlanarVelocity & current_odom,
   const geometry_msgs::msg::TransformStamped & tf_base_link_map,
   const rclcpp::Time & current_time)
 {
@@ -543,9 +542,6 @@ std::vector<float> DnnController::buildPeopleInput(
     return lhs.distance_sq < rhs.distance_sq;
   });
 
-  const float robot_vx = current_odom.vx;
-  const float robot_vy = current_odom.vy;
-  const float robot_wz = current_odom.wz;
   const size_t output_count = std::min(candidates.size(), people_count);
   for (size_t person_index = 0; person_index < output_count; ++person_index) {
     const auto & records = candidates[person_index].records;
@@ -569,9 +565,6 @@ std::vector<float> DnnController::buildPeopleInput(
       std::array<float, 2> velocity{0.0f, 0.0f};
       if (input_velocity_) {
         velocity = transformVector2D(record.velocity, tf_base_link_map);
-        // Differentiate the map-to-current-base position transform.
-        velocity[0] = velocity[0] - robot_vx + robot_wz * position[1];
-        velocity[1] = velocity[1] - robot_vy - robot_wz * position[0];
         if (!std::isfinite(velocity[0]) || !std::isfinite(velocity[1])) {
           continue;
         }
@@ -679,13 +672,6 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     h_odom[i * 2 + 0] = odom_history[i].vx / static_cast<float>(max_linear_vel_);
     h_odom[i * 2 + 1] = odom_history[i].wz / static_cast<float>(max_angular_vel_);
   }
-  if (input_velocity_ && !std::isfinite(odom_history.back().vy)) {
-    RCLCPP_ERROR(
-      logger_, "Non-finite lateral odometry input for people velocity, "
-      "return 0 velocity command");
-    return cmd;
-  }
-
   if (!tf_) {
     RCLCPP_ERROR(logger_, "tf buffer is not available, return 0 velocity command");
     return cmd;
@@ -754,7 +740,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput(odom_history.back(), tf_base_link_map, cmd.header.stamp);
+    h_people = buildPeopleInput(tf_base_link_map, cmd.header.stamp);
   }
 
   float v_pred = 0.0;
@@ -1183,7 +1169,6 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   std::lock_guard<std::mutex> odom_lock(odom_mutex_);
   odom_history_.push_back({
     static_cast<float>(msg->twist.twist.linear.x),
-    static_cast<float>(msg->twist.twist.linear.y),
     static_cast<float>(msg->twist.twist.angular.z),
   });
   if (odom_history_.size() > static_cast<size_t>(odom_length_)) {

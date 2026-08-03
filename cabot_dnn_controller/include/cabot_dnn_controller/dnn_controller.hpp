@@ -116,7 +116,6 @@ private:
   struct PlanarVelocity
   {
     float vx{0.0f};
-    float vy{0.0f};
     float wz{0.0f};
   };
 
@@ -132,7 +131,6 @@ private:
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
   std::vector<float> buildPeopleInput(
-    const PlanarVelocity & current_odom,
     const geometry_msgs::msg::TransformStamped & tf_base_link_map,
     const rclcpp::Time & current_time);
   std::vector<std::array<float, 2>> transformPoints2D(
