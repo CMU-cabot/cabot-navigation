@@ -1130,13 +1130,6 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         cv::LINE_AA, kSubpixelShift, 0.2);
     }
 
-    if (input_velocity_) {
-      cv::putText(
-        image, "blue: model-input people velocity (1 s, edge-clipped)",
-        cv::Point(8, 18), cv::FONT_HERSHEY_SIMPLEX, 0.35,
-        people_velocity_color, 1, cv::LINE_AA);
-    }
-
     cv_bridge::CvImage cv_img;
     cv_img.header.stamp = cmd.header.stamp;
     cv_img.header.frame_id = base_link_frame_;
