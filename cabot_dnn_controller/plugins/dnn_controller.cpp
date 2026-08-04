@@ -13,7 +13,6 @@
 #include <unordered_map>
 #include <utility>
 
-#include <builtin_interfaces/msg/time.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
 #if __has_include(<cv_bridge/cv_bridge.hpp>)
@@ -82,11 +81,6 @@ bool hasIOTensor(const nvinfer1::ICudaEngine & engine, const char * tensor_name)
     }
   }
   return false;
-}
-
-bool hasStamp(const builtin_interfaces::msg::Time & stamp)
-{
-  return stamp.sec != 0 || stamp.nanosec != 0;
 }
 
 double yawFromTransform(const geometry_msgs::msg::TransformStamped & tf)
@@ -475,7 +469,9 @@ std::vector<std::array<float, 2>> DnnController::transformPoints2D(
 
 std::vector<float> DnnController::buildPeopleInput(
   const geometry_msgs::msg::TransformStamped & tf_base_link_map,
-  const rclcpp::Time & current_time)
+  const rclcpp::Time & current_time,
+  const std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> &
+  people_history)
 {
   const size_t people_count = static_cast<size_t>(num_people_);
   const size_t history_count = static_cast<size_t>(people_history_length_);
@@ -485,48 +481,6 @@ std::vector<float> DnnController::buildPeopleInput(
     return h_people;
   }
 
-  std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history;
-  {
-    std::lock_guard<std::mutex> people_lock(people_mutex_);
-    // A history step is an input to one controller invocation, rather than one
-    // /people callback. This keeps history_length tied to controller_frequency.
-    if (has_people_observation_) {
-      const size_t max_history_size = static_cast<size_t>(people_history_length_);
-      std::vector<std::string> erase_keys;
-      for (auto & [key, records] : people_history_) {
-        const auto observed = latest_people_.find(key);
-        if (observed != latest_people_.end()) {
-          records.push_back(observed->second);
-        } else {
-          PeopleHistoryRecord absent_record;
-          absent_record.stamp_ns = current_time.nanoseconds();
-          absent_record.presence = 0.0f;
-          records.push_back(absent_record);
-        }
-        while (records.size() > max_history_size) {
-          records.pop_front();
-        }
-        const bool has_observed_record = std::any_of(
-          records.begin(), records.end(), [](const auto & record) {
-            return record.presence > 0.0f;
-          });
-        if (!has_observed_record) {
-          erase_keys.push_back(key);
-        }
-      }
-      for (const auto & key : erase_keys) {
-        people_history_.erase(key);
-      }
-      for (const auto & [key, record] : latest_people_) {
-        if (people_history_.count(key) > 0) {
-          continue;
-        }
-        auto & records = people_history_[key];
-        records.push_back(record);
-      }
-    }
-    people_history = people_history_;
-  }
   if (people_history.empty()) {
     return h_people;
   }
@@ -681,10 +635,14 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   }
 
   sensor_msgs::msg::LaserScan::SharedPtr scan_msg;
+  std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history;
   {
-    std::lock_guard<std::mutex> scan_lock(scan_mutex_);
+    std::scoped_lock state_lock(scan_mutex_, people_mutex_);
     scan_msg = last_scan_;
+    people_history = people_history_;
   }
+  // Keep the inference time at or after every scan-aligned history record in the snapshot.
+  cmd.header.stamp = clock_->now();
 
   if (odom_history.empty() || !scan_msg) {
     RCLCPP_INFO(logger_, "odom or scan is not ready, return 0 velocity command");
@@ -779,7 +737,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   std::vector<float> h_people;
   if (people_encoder_enabled_) {
-    h_people = buildPeopleInput(tf_base_link_map, cmd.header.stamp);
+    h_people = buildPeopleInput(tf_base_link_map, cmd.header.stamp, people_history);
   }
 
   float v_pred = 0.0;
@@ -1216,8 +1174,55 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 
 void DnnController::scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
 {
-  std::lock_guard<std::mutex> scan_lock(scan_mutex_);
+  const rclcpp::Time stamp = clock_->now();
+  std::scoped_lock state_lock(scan_mutex_, people_mutex_);
   last_scan_ = msg;
+  // Advance people history on each /scan update using the latest /people observation.
+  updatePeopleHistoryLocked(stamp.nanoseconds());
+}
+
+void DnnController::updatePeopleHistoryLocked(const std::int64_t stamp_ns)
+{
+  if (!people_encoder_enabled_ || people_history_length_ <= 0 || !has_people_observation_) {
+    return;
+  }
+
+  const size_t max_history_size = static_cast<size_t>(people_history_length_);
+  std::vector<std::string> erase_keys;
+  for (auto & [key, records] : people_history_) {
+    const auto observed = latest_people_.find(key);
+    if (observed != latest_people_.end()) {
+      PeopleHistoryRecord record = observed->second;
+      record.stamp_ns = stamp_ns;
+      records.push_back(record);
+    } else {
+      PeopleHistoryRecord absent_record;
+      absent_record.stamp_ns = stamp_ns;
+      absent_record.presence = 0.0f;
+      records.push_back(absent_record);
+    }
+    while (records.size() > max_history_size) {
+      records.pop_front();
+    }
+    const bool has_observed_record = std::any_of(
+      records.begin(), records.end(), [](const auto & record) {
+        return record.presence > 0.0f;
+      });
+    if (!has_observed_record) {
+      erase_keys.push_back(key);
+    }
+  }
+  for (const auto & key : erase_keys) {
+    people_history_.erase(key);
+  }
+  for (const auto & [key, latest_record] : latest_people_) {
+    if (people_history_.count(key) > 0) {
+      continue;
+    }
+    PeopleHistoryRecord record = latest_record;
+    record.stamp_ns = stamp_ns;
+    people_history_[key].push_back(record);
+  }
 }
 
 void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg)
@@ -1242,10 +1247,6 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
     return;
   }
 
-  const rclcpp::Time stamp =
-    hasStamp(msg->header.stamp) ? rclcpp::Time(msg->header.stamp) : clock_->now();
-  const std::int64_t stamp_ns = stamp.nanoseconds();
-
   std::unordered_map<std::string, PeopleHistoryRecord> observed_people;
   observed_people.reserve(msg->people.size());
   for (size_t i = 0; i < msg->people.size(); ++i) {
@@ -1265,7 +1266,6 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
     }
 
     PeopleHistoryRecord record;
-    record.stamp_ns = stamp_ns;
     record.position = {x, y};
     if (velocity_is_finite) {
       record.velocity = {vx, vy};

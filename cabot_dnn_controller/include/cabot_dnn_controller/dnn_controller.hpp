@@ -130,9 +130,12 @@ private:
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
+  void updatePeopleHistoryLocked(std::int64_t stamp_ns);
   std::vector<float> buildPeopleInput(
     const geometry_msgs::msg::TransformStamped & tf_base_link_map,
-    const rclcpp::Time & current_time);
+    const rclcpp::Time & current_time,
+    const std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> &
+    people_history);
   std::vector<std::array<float, 2>> transformPoints2D(
     const std::vector<std::array<float, 2>> & points,
     const geometry_msgs::msg::TransformStamped & tf) const;
