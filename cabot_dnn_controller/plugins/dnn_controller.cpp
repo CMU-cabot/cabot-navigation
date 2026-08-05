@@ -116,14 +116,6 @@ std::array<float, 2> transformVector2D(
   };
 }
 
-std::string personHistoryKey(const people_msgs::msg::Person & person, size_t index)
-{
-  if (!person.name.empty()) {
-    return person.name;
-  }
-  return "__index_" + std::to_string(index);
-}
-
 }  // namespace
 
 void DnnController::configure(
@@ -1247,10 +1239,29 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
     return;
   }
 
+  std::unordered_map<std::string, size_t> name_counts;
+  name_counts.reserve(msg->people.size());
+  for (const auto & person : msg->people) {
+    if (!person.name.empty()) {
+      ++name_counts[person.name];
+    }
+  }
   std::unordered_map<std::string, PeopleHistoryRecord> observed_people;
   observed_people.reserve(msg->people.size());
   for (size_t i = 0; i < msg->people.size(); ++i) {
     const auto & person = msg->people[i];
+    if (person.name.empty()) {
+      RCLCPP_WARN_THROTTLE(
+        logger_, *clock_, 5000,
+        "Ignoring person at index %zu because name is empty", i);
+      continue;
+    }
+    if (name_counts.at(person.name) > 1) {
+      RCLCPP_WARN_THROTTLE(
+        logger_, *clock_, 5000,
+        "Ignoring person because name '%s' is duplicated", person.name.c_str());
+      continue;
+    }
     const float x = static_cast<float>(person.position.x);
     const float y = static_cast<float>(person.position.y);
     if (!std::isfinite(x) || !std::isfinite(y)) {
@@ -1271,7 +1282,7 @@ void DnnController::peopleCallback(const people_msgs::msg::People::SharedPtr msg
       record.velocity = {vx, vy};
     }
     record.presence = 1.0f;
-    observed_people[personHistoryKey(person, i)] = record;
+    observed_people.emplace(person.name, record);
   }
 
   std::lock_guard<std::mutex> people_lock(people_mutex_);
