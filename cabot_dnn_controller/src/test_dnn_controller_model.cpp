@@ -37,6 +37,7 @@ using cabot_dnn_controller::dnn_controller_constants::kWMax;
 using cabot_dnn_controller::dnn_controller_constants::kInputOdomName;
 using cabot_dnn_controller::dnn_controller_constants::kInputPlanName;
 using cabot_dnn_controller::dnn_controller_constants::kInputScanName;
+using cabot_dnn_controller::dnn_controller_constants::kInputOffsetSignName;
 using cabot_dnn_controller::dnn_controller_constants::kInputPeopleName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
@@ -217,6 +218,7 @@ int main(int argc, char ** argv)
     const std::filesystem::path odom_path = data_path / "odom.bin";
     const std::filesystem::path plan_path = data_path / "plan.bin";
     const std::filesystem::path scan_path = data_path / "scan.bin";
+    const std::filesystem::path offset_sign_path = data_path / "offset_sign.bin";
     const std::filesystem::path people_path = data_path / "people.bin";
     const std::filesystem::path out_path = data_path / "out.bin";
     const std::filesystem::path people_attention_path = data_path / "people_attention.bin";
@@ -233,6 +235,7 @@ int main(int argc, char ** argv)
     const std::vector<float> h_odom = readFloatBin(odom_path, odom_count);
     const std::vector<float> h_plan = readFloatBin(plan_path, plan_count);
     const std::vector<float> h_scan = readFloatBin(scan_path, scan_count);
+    const std::vector<float> h_offset_sign = readFloatBin(offset_sign_path, 1);
     std::vector<float> h_people;
     std::vector<float> h_people_attention_gt;
     std::vector<float> h_robot_people_attention_gt;
@@ -311,7 +314,8 @@ int main(int argc, char ** argv)
     bool input_shapes_set =
       context->setInputShape(kInputOdomName, nvinfer1::Dims3{1, odom_length, 2}) &&
       context->setInputShape(kInputPlanName, nvinfer1::Dims3{1, plan_length, 2}) &&
-      context->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength});
+      context->setInputShape(kInputScanName, nvinfer1::Dims2{1, kScanLength}) &&
+      context->setInputShape(kInputOffsetSignName, nvinfer1::Dims2{1, 1});
     if (people_encoder_enabled) {
       input_shapes_set = input_shapes_set &&
         context->setInputShape(
@@ -363,6 +367,9 @@ int main(int argc, char ** argv)
     cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
       device_buffers.at(kInputScanName), h_scan.data(), h_scan.size(),
       engine->getTensorDataType(kInputScanName), stream);
+    cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
+      device_buffers.at(kInputOffsetSignName), h_offset_sign.data(), h_offset_sign.size(),
+      engine->getTensorDataType(kInputOffsetSignName), stream);
     if (people_encoder_enabled) {
       cabot_dnn_controller::tensorrt_utils::copyFloatHostToDevice(
         device_buffers.at(kInputPeopleName), h_people.data(), h_people.size(),
