@@ -533,6 +533,7 @@ return options/g' $configuration_directory_tmp/cartographer_2d_mapping.lua
           configuration_directory:=$configuration_directory_tmp \
           save_pose:=true \
           save_trajectory:=true \
+          trajectory_id:=${MAPPING_TRAJECTORY_ID:-0} \
           interpolate_samples_by_trajectory:=true \
           bag_filename:=$bag_filename"
     if [ $cabot_model != "" ]; then

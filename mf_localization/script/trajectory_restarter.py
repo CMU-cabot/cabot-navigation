@@ -39,27 +39,36 @@ from cartographer_ros_msgs.srv import StartTrajectory
 
 
 class TrajectoryRestarter:
-    def __init__(self, node, configuration_directory, configuration_basename):
+    def __init__(self, node, configuration_directory, configuration_basename,
+                 relative_to_trajectory_id=0):
         self.node = node
         self.logger = node.get_logger()
         self._count = 0
         self._configuration_directory = configuration_directory
         self._configuration_basename = configuration_basename
+        self._relative_to_trajectory_id = relative_to_trajectory_id
+        self._current_trajectory_id = None
 
     def finish_last_trajectory(self):
         # get trajectory states
         res0 = get_trajectory_states()
         self.logger.info(F"{res0}")
-        last_trajectory_id = res0.trajectory_states.trajectory_id[-1]
-        last_trajectory_state = res0.trajectory_states.trajectory_state[-1]
+        trajectory_states = dict(zip(res0.trajectory_states.trajectory_id,
+                                     res0.trajectory_states.trajectory_state))
+        active_trajectory_ids = [trajectory_id
+                                 for trajectory_id, trajectory_state in trajectory_states.items()
+                                 if trajectory_state == TrajectoryStates.ACTIVE]
+        trajectory_id_to_finish = self._current_trajectory_id
+        if trajectory_id_to_finish not in active_trajectory_ids:
+            trajectory_id_to_finish = active_trajectory_ids[-1] if active_trajectory_ids else None
 
-        if last_trajectory_state in [TrajectoryStates.ACTIVE]:
+        if trajectory_id_to_finish is not None:
             # finish trajectory only if the trajectory is active.
-            trajectory_id_to_finish = last_trajectory_id
             res1 = finish_trajectory(trajectory_id_to_finish)
             self.logger.info(F"{res1}")
             # wait for completing finish_trajectory
             time.sleep(1)
+            self._current_trajectory_id = None
 
     def restart_trajectory_with_pose(self, pose_with_covariance):
         initial_pose = pose_with_covariance.pose
@@ -70,7 +79,7 @@ class TrajectoryRestarter:
         configuration_directory = self._configuration_directory
         configuration_basename = self._configuration_basename
         use_initial_pose = True
-        relative_to_trajectory_id = 0
+        relative_to_trajectory_id = self._relative_to_trajectory_id
 
         res2 = start_trajectory(configuration_directory,
                                 configuration_basename,
@@ -81,6 +90,8 @@ class TrajectoryRestarter:
         self.logger.info(F"{res2}")
 
         status_code = res2.status.code
+        if status_code == 0:
+            self._current_trajectory_id = res2.trajectory_id
 
         return status_code
 
@@ -110,8 +121,12 @@ if __name__ == "__main__":
 
     configuration_directory = node.declare_parameter("configuration_directory", '').value
     configuration_basename = node.declare_parameter("configuration_basename", '').value
+    relative_to_trajectory_id = node.declare_parameter("relative_to_trajectory_id", 0).value
 
-    trajectory_restarter = TrajectoryRestarter(node, configuration_directory, configuration_basename)
+    trajectory_restarter = TrajectoryRestarter(node,
+                                               configuration_directory,
+                                               configuration_basename,
+                                               relative_to_trajectory_id)
 
     sub = node.create_subscription(PoseWithCovarianceStamped, "pose_fix", trajectory_restarter.pose_fix_callback, 10)
     sub_initialpose = node.create_subscription(PoseWithCovarianceStamped, "initialpose", trajectory_restarter.initialpose_callback, 10)

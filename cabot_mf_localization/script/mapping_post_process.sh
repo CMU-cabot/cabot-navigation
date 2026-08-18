@@ -30,6 +30,7 @@ PLAYBAG_RATE_PC2_CONVERT=${PLAYBAG_RATE_PC2_CONVERT:-1.0}
 MAPPING_USE_GNSS=${MAPPING_USE_GNSS:-false}
 : ${MAPPING_RESOLUTION:=}
 CONVERT_BAG=${CONVERT_BAG:-true}
+MAPPING_TRAJECTORY_ID=${MAPPING_TRAJECTORY_ID:-0}
 
 gazebo=${PROCESS_GAZEBO_MAPPING:-0}
 
@@ -58,6 +59,7 @@ echo "CABOT_MODEL=$CABOT_MODEL"
 echo "LIDAR_MODEL=$LIDAR_MODEL"
 echo "MAPPING_USE_GNSS=$MAPPING_USE_GNSS"
 echo "MAPPING_RESOLUTION=$MAPPING_RESOLUTION"
+echo "MAPPING_TRAJECTORY_ID=$MAPPING_TRAJECTORY_ID"
 echo "CONVERT_BAG=$CONVERT_BAG"
 echo "gazebo=$gazebo"
 echo "points_topic=$points2_topic"
@@ -172,6 +174,7 @@ if [[ ! -e $WORKDIR/${samples_file} ]] || [[ ! -e $WORKDIR/${pbstream_file} ]]; 
 	      configuration_directory:=$configuration_directory_tmp \
 	      save_pose:=true \
 	      save_trajectory:=true \
+	      trajectory_id:=${MAPPING_TRAJECTORY_ID} \
 	      interpolate_samples_by_trajectory:=true \
 	      bag_filename:=$WORKDIR/${bag_file2}"
 

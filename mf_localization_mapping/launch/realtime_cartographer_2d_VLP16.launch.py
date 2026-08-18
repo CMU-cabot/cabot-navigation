@@ -45,6 +45,7 @@ from launch.substitutions import PythonExpression
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
 from launch_ros.descriptions import ParameterFile
+from launch_ros.descriptions import ParameterValue
 from launch.utilities import normalize_to_list_of_substitutions
 
 
@@ -92,6 +93,7 @@ def generate_launch_description():
     fix_topic = LaunchConfiguration('fix_topic')
 
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
+    trajectory_id = LaunchConfiguration('trajectory_id')
 
     # launch configurations updated in the launch description
     bag_filename_fullpath = LaunchConfiguration('bag_filename_fullpath')
@@ -185,6 +187,7 @@ def generate_launch_description():
         DeclareLaunchArgument('fix_topic', default_value='ublox/fix'),
 
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
+        DeclareLaunchArgument('trajectory_id', default_value='0'),
 
         DeclareLaunchArgument('fix_status_threshold', default_value='2'),
         DeclareLaunchArgument('fix_overwrite_time', default_value='false'),
@@ -300,6 +303,7 @@ def generate_launch_description():
                         'save_empty_beacon_sample': save_empty_beacon_sample,
                         'output_trajectory': PythonExpression(['"', bag_filename_fullpath, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
                         'trajectory_recorder_timer_period': 10.0,
+                        'trajectory_id': ParameterValue(trajectory_id, value_type=int),
                         'interpolate_by_trajectory': interpolate_samples_by_trajectory,
                     }],
                     condition=IfCondition(save_samples)

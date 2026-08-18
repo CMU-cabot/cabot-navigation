@@ -160,6 +160,7 @@ def main():
     # use trajectory recorder extention
     output_trajectory = node.declare_parameter("output_trajectory", '').value
     trajectory_recorder_timer_period = node.declare_parameter("trajectory_recorder_timer_period", 10.0).value
+    trajectory_id = node.declare_parameter("trajectory_id", 0).value
     interpolate_by_trajectory = node.declare_parameter("interpolate_by_trajectory", False).value
     trajectory_recoder = None  # default
 
@@ -171,7 +172,12 @@ def main():
                           )
 
     if output_trajectory != '' or interpolate_by_trajectory:
-        trajectory_recoder = TrajectoryRecorder(node, output_trajectory, trajectory_recorder_timer_period)
+        trajectory_recoder = TrajectoryRecorder(
+            node,
+            output_trajectory,
+            trajectory_recorder_timer_period,
+            trajectory_id,
+        )
 
     subscribers = []
     for sub_topic in sub_topics:
