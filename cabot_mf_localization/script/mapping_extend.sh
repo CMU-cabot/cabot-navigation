@@ -12,6 +12,7 @@ set -Eeuo pipefail
 
 configuration_directory=${EXTEND_CONFIGURATION_DIRECTORY:-/home/developer/mapping_ws/src/mf_localization_mapping/configuration_files/cartographer}
 configuration_basename=${EXTEND_CONFIGURATION_BASENAME:-cartographer_2d_mapping.lua}
+configuration_file="$configuration_directory/$configuration_basename"
 output_directory=$(dirname "$EXTEND_OUTPUT_PREFIX")
 output_filestem=$(basename "$EXTEND_OUTPUT_PREFIX")
 
@@ -23,6 +24,12 @@ if [[ ! -f "$EXTEND_BAG_FILENAME/metadata.yaml" ]]; then
     echo "bag metadata not found: $EXTEND_BAG_FILENAME/metadata.yaml" >&2
     exit 1
 fi
+if [[ ! -f "$configuration_file" ]]; then
+    echo "Cartographer configuration not found: $configuration_file" >&2
+    echo "Set EXTEND_CONFIGURATION_DIRECTORY and/or EXTEND_CONFIGURATION_BASENAME to select an override." >&2
+    exit 1
+fi
+echo "using Cartographer configuration: $configuration_file"
 
 read -r initial_qz initial_qw < <(python3 - "$EXTEND_INITIAL_YAW" <<'PY'
 import math
