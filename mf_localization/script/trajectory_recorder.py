@@ -33,10 +33,11 @@ from cartographer_ros_msgs.srv import TrajectoryQuery
 
 
 class TrajectoryRecorder(Node):
-    def __init__(self, node, output, timer_period=10.0):
+    def __init__(self, node, output, timer_period=10.0, trajectory_id=0):
         self._node = node
         self._output = output
         self._timer_period = timer_period
+        self._trajectory_id = trajectory_id
 
         self._logger = self._node.get_logger()
 
@@ -72,7 +73,7 @@ class TrajectoryRecorder(Node):
             return success, message
 
         trajectory_query_req = TrajectoryQuery.Request()
-        trajectory_query_req.trajectory_id = 0  # first trajectory
+        trajectory_query_req.trajectory_id = self._trajectory_id
 
         self._future = self._client.call_async(trajectory_query_req)
 

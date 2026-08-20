@@ -3,6 +3,12 @@ project(cabot_mf_localization)
 
 find_package(ament_cmake REQUIRED)
 
+install(PROGRAMS
+  script/mapping_global_initializer.py
+  script/mapping_extend.sh
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_cmake_copyright REQUIRED)
   # find_package(ament_cmake_cpplint REQUIRED)

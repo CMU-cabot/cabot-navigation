@@ -76,6 +76,7 @@ class CartographerClient:
                  min_hist_count=1,
                  fixed_frame_pose_constraints_min_count=2,
                  callback_group=MutuallyExclusiveCallbackGroup(),
+                 relative_to_trajectory_id=0,
                  ):
         # callback group accessing the same ros node
         self.node_service_callback_group = callback_group
@@ -90,8 +91,10 @@ class CartographerClient:
         self.configuration_directory = configuration_directory
         self.configuration_basename = configuration_basename
 
-        # constant
-        self.relative_to_trajectory_id = 0
+        # The loaded map normally uses trajectory 0 as its reference, but an
+        # explicitly configured trajectory can be used for maps assembled from
+        # multiple mapping runs.
+        self.relative_to_trajectory_id = relative_to_trajectory_id
         self.absolute_initial_pose_trajectory_id = -1
 
         # parameters
@@ -121,7 +124,7 @@ class CartographerClient:
         relative_to_trajectory_id = self.relative_to_trajectory_id
 
         # Keep retrying until the reference trajectory becomes available.
-        # Once found, trajectory 0's initial pose is fixed and can be reused.
+        # Once found, its initial pose is fixed and can be reused.
         if self.trajectory_initial_pose is None:
             self.trajectory_initial_pose = self.get_trajectory_initial_pose(
                 timeout_sec=timeout_sec,
@@ -233,23 +236,34 @@ class CartographerClient:
             self.logger.error(F"Failed to call get_trajectory_states. error={type(e).__name__}({e})")
             raise e
         self.logger.info(F"{res0}")
-        last_trajectory_id = res0.trajectory_states.trajectory_id[-1]
-        last_trajectory_state = res0.trajectory_states.trajectory_state[-1]  # uint8 -> int
+        trajectory_states = dict(zip(res0.trajectory_states.trajectory_id,
+                                     res0.trajectory_states.trajectory_state))
+        active_trajectory_ids = [trajectory_id
+                                 for trajectory_id, trajectory_state in trajectory_states.items()
+                                 if trajectory_state == TrajectoryStates.ACTIVE]
 
-        # finish trajectory only if the trajectory is active.
-        if last_trajectory_state in [TrajectoryStates.ACTIVE]:
-            trajectory_id_to_finish = last_trajectory_id
-            req = FinishTrajectory.Request(trajectory_id=trajectory_id_to_finish)
-            try:
-                res1: FinishTrajectory.Response = call_service(self._finish_trajectory, req,
-                                                               timeout_sec=timeout_sec,
-                                                               max_retries=max_retries,
-                                                               logger=self.logger,
-                                                               )
-            except (TimeoutError, Exception) as e:
-                self.logger.error(F"Failed to call finish_trajectory. error={type(e).__name__}({e})")
-                raise e
-            self.logger.info(F"{res1}")
+        # Prefer the trajectory created by this client.  Falling back to an
+        # active trajectory keeps startup/recovery working when the client was
+        # created after Cartographer had already started one.
+        trajectory_id_to_finish = self.current_trajectory_id
+        if trajectory_id_to_finish not in active_trajectory_ids:
+            trajectory_id_to_finish = active_trajectory_ids[-1] if active_trajectory_ids else None
+
+        if trajectory_id_to_finish is None:
+            self.logger.info("no active trajectory to finish")
+            return
+
+        req = FinishTrajectory.Request(trajectory_id=trajectory_id_to_finish)
+        try:
+            res1: FinishTrajectory.Response = call_service(self._finish_trajectory, req,
+                                                           timeout_sec=timeout_sec,
+                                                           max_retries=max_retries,
+                                                           logger=self.logger,
+                                                           )
+        except (TimeoutError, Exception) as e:
+            self.logger.error(F"Failed to call finish_trajectory. error={type(e).__name__}({e})")
+            raise e
+        self.logger.info(F"{res1}")
 
     def read_metrics(self, timeout_sec):
         self.logger.info(F"wait for {self._read_metrics.srv_name} service")

@@ -71,6 +71,9 @@ def generate_launch_description():
     rate = LaunchConfiguration('rate')
     start = LaunchConfiguration('start')
     load_state_filename = LaunchConfiguration('load_state_filename')
+    load_frozen_state = LaunchConfiguration('load_frozen_state')
+    collect_metrics = LaunchConfiguration('collect_metrics')
+    trajectory_id = LaunchConfiguration('trajectory_id')
     delay = LaunchConfiguration('delay')
 
     scan = LaunchConfiguration('scan')
@@ -85,6 +88,10 @@ def generate_launch_description():
     play_limited_topics = LaunchConfiguration('play_limited_topics')
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
+    play_bag = LaunchConfiguration('play_bag')
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    launch_rviz = LaunchConfiguration('launch_rviz')
+    run_gnss_nodes = LaunchConfiguration('run_gnss_nodes')
 
     fix_status_threshold = LaunchConfiguration('fix_status_threshold')
     fix_overwrite_time = LaunchConfiguration('fix_overwrite_time')
@@ -133,7 +140,10 @@ def generate_launch_description():
         # needs to be normalized
         node.cmd.extend([normalize_to_list_of_substitutions(x) for x in cmd])
         return [node]
-    ros2_bag_play = ExecuteProcess(cmd=['ros2', 'bag', 'play'])
+    ros2_bag_play = ExecuteProcess(
+        cmd=['ros2', 'bag', 'play'],
+        condition=IfCondition(play_bag),
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument('bag_filename'),
@@ -150,6 +160,9 @@ def generate_launch_description():
         DeclareLaunchArgument('rate', default_value='1.0'),
         DeclareLaunchArgument('start', default_value='0'),
         DeclareLaunchArgument('load_state_filename', default_value=''),
+        DeclareLaunchArgument('load_frozen_state', default_value='true'),
+        DeclareLaunchArgument('collect_metrics', default_value='false'),
+        DeclareLaunchArgument('trajectory_id', default_value='0'),
         DeclareLaunchArgument('delay', default_value='-1'),
 
         DeclareLaunchArgument('scan', default_value='velodyne_scan'),
@@ -165,12 +178,16 @@ def generate_launch_description():
         DeclareLaunchArgument('play_limited_topics', default_value='false'),
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
         DeclareLaunchArgument('quit_when_rosbag_finish', default_value='false'),
+        DeclareLaunchArgument('play_bag', default_value='true'),
+        DeclareLaunchArgument('use_sim_time', default_value='true'),
+        DeclareLaunchArgument('launch_rviz', default_value='true'),
+        DeclareLaunchArgument('run_gnss_nodes', default_value='true'),
 
         DeclareLaunchArgument('fix_status_threshold', default_value='2'),
         DeclareLaunchArgument('fix_overwrite_time', default_value='false'),
         DeclareLaunchArgument('interpolate_samples_by_trajectory', default_value='false'),
 
-        SetParameter('use_sim_time', ParameterValue(True)),
+        SetParameter('use_sim_time', ParameterValue(use_sim_time)),
 
         IncludeLaunchDescription(
             AnyLaunchDescriptionSource(PathJoinSubstitution([pkg_dir, 'launch', 'cartographer_2d_VLP16.launch.py'])),
@@ -184,6 +201,9 @@ def generate_launch_description():
                 'configuration_basename': configuration_basename,
                 'configuration_directory': configuration_directory,
                 'load_state_filename': load_state_filename,
+                'load_frozen_state': load_frozen_state,
+                'collect_metrics': collect_metrics,
+                'use_sim_time': use_sim_time,
                 'save_state_filename': PythonExpression(['"', bag_filename, '.pbstream" if "', save_state, '"=="true" else ""']),
                 'start_trajectory_with_default_topics': PythonExpression(['"', load_state_filename, '"==""'])
             }.items()
@@ -193,7 +213,8 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', PathJoinSubstitution([pkg_dir, 'configuration_files', 'rviz', 'demo_2d.rviz'])]
+            arguments=['-d', PathJoinSubstitution([pkg_dir, 'configuration_files', 'rviz', 'demo_2d.rviz'])],
+            condition=IfCondition(launch_rviz)
         ),
 
         IncludeLaunchDescription(
@@ -239,7 +260,8 @@ def generate_launch_description():
             remappings=[
                 ('fix', 'ublox/fix'),
                 ('fix_filtered', 'ublox/fix_filtered')
-            ]
+            ],
+            condition=IfCondition(run_gnss_nodes)
         ),
 
         Node(
@@ -251,7 +273,8 @@ def generate_launch_description():
             ],
             remappings=[
                 ('navsat', 'ublox/navsat')
-            ]
+            ],
+            condition=IfCondition(run_gnss_nodes)
         ),
 
         OpaqueFunction(
@@ -272,6 +295,7 @@ def generate_launch_description():
                     'save_empty_beacon_sample': save_empty_beacon_sample,
                     'output_trajectory': PythonExpression(['"', bag_filename, '.trajectory.csv" if "', save_trajectory, '"=="true" else ""']),
                     'trajectory_recorder_timer_period': 10.0,
+                    'trajectory_id': ParameterValue(trajectory_id, value_type=int),
                     'interpolate_by_trajectory': interpolate_samples_by_trajectory,
                  }
             ],
@@ -300,6 +324,10 @@ def generate_launch_description():
                     EmitEvent(event=Shutdown(reason='ros2 bag play is completed'))
                 ]
             ),
-            condition=IfCondition(quit_when_rosbag_finish)
+            condition=IfCondition(
+                PythonExpression([
+                    "'", quit_when_rosbag_finish, "' == 'true' and '", play_bag, "' == 'true'"
+                ])
+            )
         ),
     ])

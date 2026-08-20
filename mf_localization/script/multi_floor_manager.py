@@ -3058,6 +3058,7 @@ if __name__ == "__main__":
         node_id = map_dict["node_id"]
         min_hist_count = map_dict.get("min_hist_count", 1)
         fixed_frame_pose_constraints_min_count = map_dict.get("fixed_frame_pose_constraints_min_count", 2)
+        relative_to_trajectory_id = int(map_dict.get("relative_to_trajectory_id", 0))
 
         if map_dict["skip"]:
             continue
@@ -3070,7 +3071,8 @@ if __name__ == "__main__":
                                                                    floor_manager.configuration_directory,
                                                                    floor_manager.configuration_basename,
                                                                    min_hist_count,
-                                                                   fixed_frame_pose_constraints_min_count
+                                                                   fixed_frame_pose_constraints_min_count,
+                                                                   relative_to_trajectory_id=relative_to_trajectory_id
                                                                    )
 
     multi_floor_manager.floor_list = list(floor_set)
