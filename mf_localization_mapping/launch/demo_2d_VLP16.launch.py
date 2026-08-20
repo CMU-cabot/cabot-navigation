@@ -71,6 +71,8 @@ def generate_launch_description():
     rate = LaunchConfiguration('rate')
     start = LaunchConfiguration('start')
     load_state_filename = LaunchConfiguration('load_state_filename')
+    load_frozen_state = LaunchConfiguration('load_frozen_state')
+    collect_metrics = LaunchConfiguration('collect_metrics')
     trajectory_id = LaunchConfiguration('trajectory_id')
     delay = LaunchConfiguration('delay')
 
@@ -86,6 +88,7 @@ def generate_launch_description():
     play_limited_topics = LaunchConfiguration('play_limited_topics')
     save_empty_beacon_sample = LaunchConfiguration('save_empty_beacon_sample')
     quit_when_rosbag_finish = LaunchConfiguration('quit_when_rosbag_finish')
+    play_bag = LaunchConfiguration('play_bag')
     use_sim_time = LaunchConfiguration('use_sim_time')
     launch_rviz = LaunchConfiguration('launch_rviz')
     run_gnss_nodes = LaunchConfiguration('run_gnss_nodes')
@@ -137,7 +140,10 @@ def generate_launch_description():
         # needs to be normalized
         node.cmd.extend([normalize_to_list_of_substitutions(x) for x in cmd])
         return [node]
-    ros2_bag_play = ExecuteProcess(cmd=['ros2', 'bag', 'play'])
+    ros2_bag_play = ExecuteProcess(
+        cmd=['ros2', 'bag', 'play'],
+        condition=IfCondition(play_bag),
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument('bag_filename'),
@@ -154,6 +160,8 @@ def generate_launch_description():
         DeclareLaunchArgument('rate', default_value='1.0'),
         DeclareLaunchArgument('start', default_value='0'),
         DeclareLaunchArgument('load_state_filename', default_value=''),
+        DeclareLaunchArgument('load_frozen_state', default_value='true'),
+        DeclareLaunchArgument('collect_metrics', default_value='false'),
         DeclareLaunchArgument('trajectory_id', default_value='0'),
         DeclareLaunchArgument('delay', default_value='-1'),
 
@@ -170,6 +178,7 @@ def generate_launch_description():
         DeclareLaunchArgument('play_limited_topics', default_value='false'),
         DeclareLaunchArgument('save_empty_beacon_sample', default_value='true'),
         DeclareLaunchArgument('quit_when_rosbag_finish', default_value='false'),
+        DeclareLaunchArgument('play_bag', default_value='true'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('launch_rviz', default_value='true'),
         DeclareLaunchArgument('run_gnss_nodes', default_value='true'),
@@ -192,6 +201,8 @@ def generate_launch_description():
                 'configuration_basename': configuration_basename,
                 'configuration_directory': configuration_directory,
                 'load_state_filename': load_state_filename,
+                'load_frozen_state': load_frozen_state,
+                'collect_metrics': collect_metrics,
                 'use_sim_time': use_sim_time,
                 'save_state_filename': PythonExpression(['"', bag_filename, '.pbstream" if "', save_state, '"=="true" else ""']),
                 'start_trajectory_with_default_topics': PythonExpression(['"', load_state_filename, '"==""'])
@@ -313,6 +324,10 @@ def generate_launch_description():
                     EmitEvent(event=Shutdown(reason='ros2 bag play is completed'))
                 ]
             ),
-            condition=IfCondition(quit_when_rosbag_finish)
+            condition=IfCondition(
+                PythonExpression([
+                    "'", quit_when_rosbag_finish, "' == 'true' and '", play_bag, "' == 'true'"
+                ])
+            )
         ),
     ])

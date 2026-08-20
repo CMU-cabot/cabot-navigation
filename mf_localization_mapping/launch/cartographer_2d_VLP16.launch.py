@@ -55,6 +55,8 @@ def generate_launch_description():
     configuration_basename = LaunchConfiguration('configuration_basename')
     save_state_filename = LaunchConfiguration('save_state_filename')
     load_state_filename = LaunchConfiguration('load_state_filename')
+    load_frozen_state = LaunchConfiguration('load_frozen_state')
+    collect_metrics = LaunchConfiguration('collect_metrics')
     start_trajectory_with_default_topics = LaunchConfiguration('start_trajectory_with_default_topics')
     grid_resolution = LaunchConfiguration('grid_resolution', default=0.1)
     grid_publish_period_sec = LaunchConfiguration('grid_publish_period_sec', default=5.0)
@@ -177,6 +179,8 @@ def generate_launch_description():
         DeclareLaunchArgument('configuration_basename', default_value='cartographer_2d_mapping.lua'),
         DeclareLaunchArgument('save_state_filename', default_value=''),
         DeclareLaunchArgument('load_state_filename', default_value=''),
+        DeclareLaunchArgument('load_frozen_state', default_value='true'),
+        DeclareLaunchArgument('collect_metrics', default_value='false'),
         DeclareLaunchArgument('start_trajectory_with_default_topics', default_value='true'),
         # config for occupancy grid node
         DeclareLaunchArgument('grid_resolution', default_value='0.1'),
@@ -242,6 +246,8 @@ def generate_launch_description():
                 arguments=[
                     "-configuration_directory", configuration_directory,
                     "-configuration_basename", configuration_basename,
+                    ["-load_frozen_state=", load_frozen_state],
+                    ["-collect_metrics=", collect_metrics],
                     ["-start_trajectory_with_default_topics=", start_trajectory_with_default_topics]
                 ],
                 remappings=[
