@@ -121,7 +121,7 @@ NOT_DETECT_TOUCH: "ハンドルのタッチを検出できません。"
 IN_FRONT: "正面"
 RIGHT_SIDE: "右側"
 LEFT_SIDE: "左側"
-APPROACEHD_TO_FACILITY: "{1}に{0}があります"
+APPROACEHD_TO_FACILITY: "{1}に{0}"
 
 ## Describe Surround
 REQUESTING_PLEASE_WAIT: "確認中です"
