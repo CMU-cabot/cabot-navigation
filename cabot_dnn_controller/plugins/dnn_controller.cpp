@@ -355,7 +355,11 @@ void DnnController::configure(
     RCLCPP_WARN(logger_, "trt_model is empty; skipping TensorRT engine load");
   }
 
-  scan_sub_ = node_->create_subscription<sensor_msgs::msg::LaserScan>(scan_topic_, rclcpp::SensorDataQoS(),
+  auto scan_qos = rclcpp::SensorDataQoS();
+  // A control cycle only needs the newest scan.  Keeping SensorDataQoS's default
+  // history depth lets the controller drain obsolete scans after a load spike.
+  scan_qos.keep_last(1);
+  scan_sub_ = node_->create_subscription<sensor_msgs::msg::LaserScan>(scan_topic_, scan_qos,
     std::bind(&DnnController::scanCallback, this, std::placeholders::_1));
   odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(odom_topic_, rclcpp::SensorDataQoS(),
     std::bind(&DnnController::odomCallback, this, std::placeholders::_1));
