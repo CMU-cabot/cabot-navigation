@@ -45,6 +45,9 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     touch_enabled = LaunchConfiguration('touch_enabled')
     max_speed = LaunchConfiguration('max_speed')
+    controller = EnvironmentVariable('CABOT_CONTROLLER', default_value='dwb')
+
+    use_people_speed = PythonExpression(["'", controller, "' != 'dnn'"])
 
     param_files = [
         ParameterFile(PathJoinSubstitution([
@@ -262,7 +265,7 @@ def generate_launch_description():
             namespace='/cabot',
             name=PythonExpression(['"speed_control_node_touch_', touch_enabled, '"']),
             output=output,
-            parameters=[*param_files, {'use_sim_time': use_sim_time}],
+            parameters=[*param_files, {'use_sim_time': use_sim_time, 'use_people_speed': use_people_speed}],
             respawn=True,
             respawn_delay=1.0,
         ),

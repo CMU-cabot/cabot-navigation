@@ -94,9 +94,11 @@ private:
     completeStop_ = declare_parameter("complete_stop", completeStop_);
     configurable_ = declare_parameter("configurable", configurable_);
     targetRate_ = declare_parameter("target_rate", targetRate_);
+    const bool usePeopleSpeed = declare_parameter("use_people_speed", true);
 
     for (uint64_t index = 0; index < speedInput_.size(); index++) {
       auto topic = speedInput_[index];
+      const bool enabled = usePeopleSpeed || topic != "/cabot/people_speed";
       std::function<void(const std_msgs::msg::Float32::SharedPtr)> callback =
         [&, index](const std_msgs::msg::Float32::SharedPtr input)
         {
@@ -104,9 +106,11 @@ private:
           speedLimit_[index] = input->data;
           callbackTime_[index] = get_clock()->now();
         };
-      auto qos = rclcpp::SystemDefaultsQoS().transient_local();
-      auto sub = create_subscription<std_msgs::msg::Float32>(topic, qos, callback);
-      speedSubs_.push_back(sub);
+      if (enabled) {
+        auto qos = rclcpp::SystemDefaultsQoS().transient_local();
+        auto sub = create_subscription<std_msgs::msg::Float32>(topic, qos, callback);
+        speedSubs_.push_back(sub);
+      }
       if (speedLimit_.size() <= index) {
         speedLimit_.push_back(0);
       }
@@ -120,8 +124,8 @@ private:
         filteredSpeed_.push_back(0);
       }
 
-      enabled_.push_back(true);  // enabled at initial moment
-      if (index < configurable_.size() && configurable_[index]) {
+      enabled_.push_back(enabled);
+      if (enabled && index < configurable_.size() && configurable_[index]) {
         auto logger = get_logger();
         std::function<void(const std_srvs::srv::SetBool::Request::SharedPtr, std_srvs::srv::SetBool::Response::SharedPtr)> srvsCallback =
           [&, index, logger](const std_srvs::srv::SetBool::Request::SharedPtr request, std_srvs::srv::SetBool::Response::SharedPtr response)
@@ -141,7 +145,11 @@ private:
       callback_handler_ =
         add_on_set_parameters_callback(std::bind(&SpeedControlNode::param_set_callback, this, std::placeholders::_1));
 
-      RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
+      if (enabled) {
+        RCLCPP_INFO(get_logger(), "Subscribe to %s (index=%ld)", topic.c_str(), index);
+      } else {
+        RCLCPP_INFO(get_logger(), "Disable %s (index=%ld)", topic.c_str(), index);
+      }
     }
     odomInput_ = declare_parameter("odom_input", odomInput_);
     odomSub_ = create_subscription<nav_msgs::msg::Odometry>(
