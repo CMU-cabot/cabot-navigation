@@ -5,8 +5,10 @@
 #include <cstdio>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <future>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
@@ -51,12 +53,15 @@ using cabot_dnn_controller::dnn_controller_constants::kWMax;
 using cabot_dnn_controller::dnn_controller_constants::kInputOdomName;
 using cabot_dnn_controller::dnn_controller_constants::kInputPlanName;
 using cabot_dnn_controller::dnn_controller_constants::kInputScanName;
+using cabot_dnn_controller::dnn_controller_constants::kInputOffsetSignName;
 using cabot_dnn_controller::dnn_controller_constants::kInputPeopleName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputCmdName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputVLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputWLogitsName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputPeopleAttentionName;
 using cabot_dnn_controller::dnn_controller_constants::kOutputRobotPeopleAttentionName;
+
+constexpr char kFootprintPublisherNodeName[] = "/footprint_publisher";
 
 void initTensorRTPluginsOnce(nvinfer1::ILogger & logger)
 {
@@ -355,6 +360,37 @@ void DnnController::configure(
     RCLCPP_WARN(logger_, "trt_model is empty; skipping TensorRT engine load");
   }
 
+  offset_sign_.store(0.0f);
+  if (trt_ready_) {
+    offset_sign_client_ =
+      std::make_shared<rclcpp::AsyncParametersClient>(node_, kFootprintPublisherNodeName);
+    offset_sign_event_handler_ =
+      std::make_shared<rclcpp::ParameterEventHandler>(node_);
+    offset_sign_callback_handle_ = offset_sign_event_handler_->add_parameter_callback(
+      kInputOffsetSignName,
+      [this](const rclcpp::Parameter & parameter) {
+        offset_sign_.store(static_cast<float>(parameter.as_double()));
+      },
+      kFootprintPublisherNodeName);
+    const auto request_offset_sign = [this]() {
+      if (!offset_sign_client_->service_is_ready()) {
+        return;
+      }
+      offset_sign_request_timer_->cancel();
+      offset_sign_client_->get_parameters(
+        {kInputOffsetSignName},
+        [this](std::shared_future<std::vector<rclcpp::Parameter>> future) {
+          const float value = static_cast<float>(future.get().front().as_double());
+          float expected = 0.0f;
+          // Do not overwrite a newer value received from a parameter event.
+          offset_sign_.compare_exchange_strong(expected, value);
+        });
+    };
+    offset_sign_request_timer_ = node_->create_wall_timer(
+      std::chrono::milliseconds(100), request_offset_sign);
+    request_offset_sign();
+  }
+
   auto scan_qos = rclcpp::SensorDataQoS();
   // A control cycle only needs the newest scan.  Keeping SensorDataQoS's default
   // history depth lets the controller drain obsolete scans after a load spike.
@@ -379,6 +415,12 @@ void DnnController::configure(
 
 void DnnController::cleanup()
 {
+  offset_sign_request_timer_.reset();
+  offset_sign_callback_handle_.reset();
+  offset_sign_event_handler_.reset();
+  offset_sign_client_.reset();
+  offset_sign_.store(0.0f);
+
   {
     std::lock_guard<std::mutex> plan_lock(plan_mutex_);
     global_plan_.poses.clear();

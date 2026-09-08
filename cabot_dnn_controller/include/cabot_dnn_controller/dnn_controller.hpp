@@ -2,6 +2,7 @@
 #define CABOT_DNN_CONTROLLER__DNN_CONTROLLER_HPP_
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -23,10 +24,13 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "people_msgs/msg/people.hpp"
+#include "rclcpp/parameter_client.hpp"
+#include "rclcpp/parameter_event_handler.hpp"
+#include "rclcpp/timer.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/header.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "tf2_ros/buffer.h"
 
 namespace cabot_dnn_controller
@@ -160,6 +164,11 @@ private:
   std::unordered_map<std::string, PeopleHistoryRecord> latest_people_;
   bool has_people_observation_{false};
   std::unordered_map<std::string, std::deque<PeopleHistoryRecord>> people_history_;
+  rclcpp::AsyncParametersClient::SharedPtr offset_sign_client_;
+  std::shared_ptr<rclcpp::ParameterEventHandler> offset_sign_event_handler_;
+  rclcpp::ParameterCallbackHandle::SharedPtr offset_sign_callback_handle_;
+  rclcpp::TimerBase::SharedPtr offset_sign_request_timer_;
+  std::atomic<float> offset_sign_{0.0f};
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr people_attention_pub_;
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr

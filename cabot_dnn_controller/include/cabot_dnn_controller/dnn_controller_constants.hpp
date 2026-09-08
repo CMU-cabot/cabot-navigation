@@ -29,6 +29,7 @@ static constexpr float kWMax = 1.0;
 static constexpr const char * kInputOdomName = "odom";
 static constexpr const char * kInputPlanName = "plan";
 static constexpr const char * kInputScanName = "scan";
+static constexpr const char * kInputOffsetSignName = "offset_sign";
 static constexpr const char * kInputPeopleName = "people";
 static constexpr const char * kOutputCmdName = "cmd_vel";
 static constexpr const char * kOutputVLogitsName = "v_logits";
