@@ -38,6 +38,10 @@ namespace cabot_dnn_controller
 namespace
 {
 
+constexpr double kVisualizationRangeMeters = 10.0;
+constexpr float kCabot3K4BodyLength = 0.36f;
+constexpr float kCabot3K4BodyWidth = 0.24f;
+
 using cabot_dnn_controller::dnn_controller_constants::ActionMode;
 
 using cabot_dnn_controller::dnn_controller_constants::kScanLength;
@@ -884,15 +888,15 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   if (debug_image_pub_ && debug_image_pub_->get_subscription_count() > 0) {
     constexpr int kImageSize = 400;
-    constexpr float kMetersPerPixel = 0.1f;
+    constexpr double kMetersPerPixel =
+      2.0 * kVisualizationRangeMeters / static_cast<double>(kImageSize);
     constexpr float kPeopleVelocityArrowSeconds = 1.0f;
     constexpr int kSubpixelShift = 4;
     constexpr int kSubpixelScale = 1 << kSubpixelShift;
     constexpr int kMaxSafePixelCoordinate = 1 << 20;
-    constexpr double kMaxImageCoordinateMeters =
-      static_cast<double>(kImageSize / 2 - 1) * kMetersPerPixel;
+    constexpr double kMaxImageCoordinateMeters = kVisualizationRangeMeters;
     const cv::Scalar people_velocity_color(255, 0, 0);
-    cv::Mat image(kImageSize, kImageSize, CV_8UC3, cv::Scalar(20, 20, 20));
+    cv::Mat image(kImageSize, kImageSize, CV_8UC3, cv::Scalar(255, 255, 255));
     const int cx = kImageSize / 2;
     const int cy = kImageSize / 2;
     const auto safePixelCoordinate = [&](double value) {
@@ -935,56 +939,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         return std::array<double, 2>{x + scale * dx, y + scale * dy};
     };
 
-    {
-      const float segment_offset = -0.3f;
-      const float line_len = 5.0f;
-      cv::line(image, toPixel(0.0f, -segment_offset), toPixel(line_len * h_odom[0], -segment_offset), cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-
-      const float odom_yaw_vel = h_odom[1];
-      const float arc_span = std::max(20.0f, std::min(140.0f, std::abs(odom_yaw_vel) * 60.0f));
-      const float start_deg = (odom_yaw_vel >= 0.0f) ? 0.0f : -arc_span;
-      const float end_deg = (odom_yaw_vel >= 0.0f) ? arc_span : 0.0f;
-      const float radius = 0.8f;
-      const int steps = 32;
-      std::vector<cv::Point> arc_points;
-      arc_points.reserve(steps + 1);
-      for (int i = 0; i <= steps; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(steps);
-        const float deg = start_deg + (end_deg - start_deg) * t;
-        const float rad = deg * static_cast<float>(M_PI) / 180.0f;
-        arc_points.push_back(toPixel(radius * std::cos(rad), radius * std::sin(rad)));
-      }
-      if (arc_points.size() >= 2) {
-        cv::polylines(image, arc_points, false, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-      }
-    }
-    {
-      const float segment_offset = 0.3f;
-      const float line_len = 5.0f;
-      cv::line(image, toPixel(0.0f, segment_offset), toPixel(line_len * v_pred, segment_offset), cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
-
-      const float arc_span = std::max(20.0f, std::min(140.0f, std::abs(w_pred) * 60.0f));
-      const float start_deg = (w_pred >= 0.0f) ? 0.0f : -arc_span;
-      const float end_deg = (w_pred >= 0.0f) ? arc_span : 0.0f;
-      const float radius = 1.2f;
-      const int steps = 32;
-      std::vector<cv::Point> arc_points;
-      arc_points.reserve(steps + 1);
-      for (int i = 0; i <= steps; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(steps);
-        const float deg = start_deg + (end_deg - start_deg) * t;
-        const float rad = deg * static_cast<float>(M_PI) / 180.0f;
-        arc_points.push_back(toPixel(radius * std::cos(rad), radius * std::sin(rad)));
-      }
-      if (arc_points.size() >= 2) {
-        cv::polylines(image, arc_points, false, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
-      }
-    }
-
     for (size_t i = 0; i + 1 < h_plan.size(); i += 2) {
       const cv::Point px = toPixel(h_plan[i], h_plan[i + 1]);
       if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
-        image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(0, 200, 255);
+        image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(0, 255, 0);
       }
     }
 
@@ -993,18 +951,16 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       const size_t history_count = static_cast<size_t>(people_history_length_);
       for (size_t i = 0; i < static_cast<size_t>(num_people_); ++i) {
         for (size_t h = 0; h < history_count; ++h) {
+          if (h + 1 != history_count) {
+            continue;
+          }
           const size_t offset =
             (i * history_count + h) * static_cast<size_t>(people_dim_);
           if (h_people[offset + static_cast<size_t>(presence_index_)] <= 0.0f) {
             continue;
           }
 
-          const float age_ratio = history_count > 1 ?
-            static_cast<float>(h) / static_cast<float>(history_count - 1) : 1.0f;
-          const int red = static_cast<int>(120.0f + 135.0f * age_ratio);
-          const int green = static_cast<int>(40.0f + 40.0f * age_ratio);
-          const int blue = static_cast<int>(40.0f + 40.0f * age_ratio);
-          const cv::Scalar color(blue, green, red);
+          const cv::Scalar color(0, 0, 255);
 
           const float x = h_people[offset + 0];
           const float y = h_people[offset + 1];
@@ -1013,8 +969,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
           }
           const cv::Point px = toPixel(x, y);
 
-          const int radius = (h + 1 == history_count) ? 4 : 2;
-          cv::circle(image, px, radius, color, -1, cv::LINE_AA);
+          cv::circle(image, px, 4, color, -1, cv::LINE_AA);
           if (input_velocity_) {
             const float velocity_x = h_people[offset + 2];
             const float velocity_y = h_people[offset + 3];
@@ -1058,7 +1013,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     for (const auto & point : base_scan_points) {
       const cv::Point px = toPixel(point[0], point[1]);
       if (px.x >= 0 && px.x < kImageSize && px.y >= 0 && px.y < kImageSize) {
-        image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(0, 255, 0);
+        image.at<cv::Vec3b>(px.y, px.x) = cv::Vec3b(128, 128, 128);
       }
     }
 
@@ -1096,11 +1051,11 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       }
 
       const auto thicknessForWeight = [](float weight) {
-          return std::max(1, static_cast<int>(std::lround(weight * 10.0f)));
+          return std::max(1, static_cast<int>(std::lround(weight * 5.0f)));
         };
       constexpr float kMinVisibleWeight = 0.01f;
-      const cv::Scalar people_attention_color(0, 180, 255);
-      const cv::Scalar robot_attention_color(255, 220, 0);
+      const cv::Scalar people_attention_color(0, 255, 255);
+      const cv::Scalar robot_attention_color(255, 255, 0);
 
       // Draw directed person-person attention as slightly offset parallel
       // arrows. Line width is the only encoding of the attention magnitude.
@@ -1147,13 +1102,12 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         }
       }
 
-      // Keep people and robot positions visible above the attention lines.
+      // Keep people positions visible above the attention lines.
       for (int person = 0; person < num_people_; ++person) {
         if (person_present[person]) {
-          cv::circle(image, person_pixels[person], 4, cv::Scalar(80, 80, 255), -1, cv::LINE_AA);
+          cv::circle(image, person_pixels[person], 4, cv::Scalar(0, 0, 255), -1, cv::LINE_AA);
         }
       }
-      cv::circle(image, robot_pixel, 5, cv::Scalar(255, 255, 255), -1, cv::LINE_AA);
     }
 
     for (const auto & [start, end] : people_velocity_arrows) {
@@ -1163,6 +1117,93 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       cv::arrowedLine(
         image, start, end, people_velocity_color, 1,
         cv::LINE_AA, kSubpixelShift, 0.2);
+    }
+
+    double footprint_radius = 0.0;
+    for (const auto & point : costmap_ros_->getUnpaddedRobotFootprint()) {
+      const double radius = std::hypot(point.x, point.y);
+      if (std::isfinite(radius)) {
+        footprint_radius = std::max(footprint_radius, radius);
+      }
+    }
+    if (footprint_radius > 0.0) {
+      cv::circle(
+        image, toPixel(0.0, 0.0),
+        static_cast<int>(std::lround(footprint_radius / kMetersPerPixel)),
+        cv::Scalar(255, 0, 255), 2, cv::LINE_AA);
+    }
+
+    try {
+      const rclcpp::Duration tf_timeout =
+        rclcpp::Duration::from_seconds(transform_tolerance_);
+      const auto tf_base_link_robot = tf_->lookupTransform(
+        base_link_frame_, "base_link", cmd.header.stamp, tf_timeout);
+      const float half_length = kCabot3K4BodyLength / 2.0f;
+      const float half_width = kCabot3K4BodyWidth / 2.0f;
+      const auto & robot = tf_base_link_robot.transform.translation;
+      cv::rectangle(
+        image,
+        toPixel(robot.x - half_length, robot.y + half_width),
+        toPixel(robot.x + half_length, robot.y - half_width),
+        cv::Scalar(255, 0, 0), 2, cv::LINE_AA);
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN_THROTTLE(
+        logger_, *clock_, 1000,
+        "Failed to lookup physical robot transform for debug image: %s", ex.what());
+    }
+
+    {
+      const float segment_offset = -0.3f;
+      const float line_len = 2.0f;
+      cv::line(image, toPixel(0.0f, segment_offset),
+        toPixel(line_len * h_odom[0], segment_offset),
+        cv::Scalar(40, 39, 214), 1, cv::LINE_AA);
+
+      const float odom_yaw_vel = h_odom[1];
+      const float arc_span =
+        std::max(20.0f, std::min(140.0f, std::abs(odom_yaw_vel) * 60.0f));
+      const float start_deg = (odom_yaw_vel >= 0.0f) ? 0.0f : -arc_span;
+      const float end_deg = (odom_yaw_vel >= 0.0f) ? arc_span : 0.0f;
+      const float radius = 0.8f;
+      const int steps = 32;
+      std::vector<cv::Point> arc_points;
+      arc_points.reserve(steps + 1);
+      for (int i = 0; i <= steps; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(steps);
+        const float deg = start_deg + (end_deg - start_deg) * t;
+        const float rad = deg * static_cast<float>(M_PI) / 180.0f;
+        arc_points.push_back(toPixel(radius * std::cos(rad), radius * std::sin(rad)));
+      }
+      if (arc_points.size() >= 2) {
+        cv::polylines(
+          image, arc_points, false, cv::Scalar(40, 39, 214), 1, cv::LINE_AA);
+      }
+    }
+    {
+      const float segment_offset = 0.3f;
+      const float line_len = 2.0f;
+      cv::line(image, toPixel(0.0f, segment_offset),
+        toPixel(line_len * v_pred, segment_offset),
+        cv::Scalar(189, 103, 148), 1, cv::LINE_AA);
+
+      const float arc_span =
+        std::max(20.0f, std::min(140.0f, std::abs(w_pred) * 60.0f));
+      const float start_deg = (w_pred >= 0.0f) ? 0.0f : -arc_span;
+      const float end_deg = (w_pred >= 0.0f) ? arc_span : 0.0f;
+      const float radius = 1.2f;
+      const int steps = 32;
+      std::vector<cv::Point> arc_points;
+      arc_points.reserve(steps + 1);
+      for (int i = 0; i <= steps; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(steps);
+        const float deg = start_deg + (end_deg - start_deg) * t;
+        const float rad = deg * static_cast<float>(M_PI) / 180.0f;
+        arc_points.push_back(toPixel(radius * std::cos(rad), radius * std::sin(rad)));
+      }
+      if (arc_points.size() >= 2) {
+        cv::polylines(
+          image, arc_points, false, cv::Scalar(189, 103, 148), 1, cv::LINE_AA);
+      }
     }
 
     cv_bridge::CvImage cv_img;
