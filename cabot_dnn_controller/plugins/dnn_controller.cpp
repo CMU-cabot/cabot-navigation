@@ -146,9 +146,9 @@ void DnnController::configure(
   const std::string prefix = name_ + ".";
   node_->declare_parameter<std::string>(prefix + "trt_model", "");
   node_->get_parameter(prefix + "trt_model", trt_model_);
-  node_->declare_parameter<double>(prefix + "max_linear_vel", 1.25);
+  node_->declare_parameter<double>(prefix + "max_linear_vel", 1.0);
   node_->get_parameter(prefix + "max_linear_vel", max_linear_vel_);
-  node_->declare_parameter<double>(prefix + "max_angular_vel", 1.6);
+  node_->declare_parameter<double>(prefix + "max_angular_vel", 1.0);
   node_->get_parameter(prefix + "max_angular_vel", max_angular_vel_);
   node_->declare_parameter<double>(prefix + "transform_tolerance", 0.1);
   node_->get_parameter(prefix + "transform_tolerance", transform_tolerance_);
