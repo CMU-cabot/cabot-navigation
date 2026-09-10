@@ -134,6 +134,8 @@ private:
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
+  rcl_interfaces::msg::SetParametersResult param_set_callback(
+    const std::vector<rclcpp::Parameter> & parameters);
   void updatePeopleHistoryLocked(std::int64_t stamp_ns);
   std::vector<float> buildPeopleInput(
     const geometry_msgs::msg::TransformStamped & tf_base_link_map,
@@ -177,6 +179,9 @@ private:
   std::string trt_model_;
   double max_linear_vel_;
   double max_angular_vel_;
+  std::atomic<bool> velocity_parameters_dirty_{true};
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+    param_change_callback_handle_;
   double transform_tolerance_;
   std::string base_link_frame_;
   std::string map_frame_;

@@ -78,7 +78,7 @@ controller_server:
       plugin: "cabot_dnn_controller::DnnController"
       # DnnController parameters
       trt_model: ""
-      max_linear_vel: 1.0
+      max_linear_vel: 0.5
       max_angular_vel: 1.0
       transform_tolerance: 0.5
       base_link_frame: "base_footprint"

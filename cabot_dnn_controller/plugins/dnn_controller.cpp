@@ -418,10 +418,17 @@ void DnnController::configure(
     robot_people_attention_pub_ = node_->create_publisher<cabot_dnn_controller::msg::AttentionWeights>(
       robot_people_attention_topic_, rclcpp::SystemDefaultsQoS());
   }
+  param_change_callback_handle_ = node_->add_on_set_parameters_callback(
+    std::bind(&DnnController::param_set_callback, this, std::placeholders::_1));
+  velocity_parameters_dirty_.store(true);
 }
 
 void DnnController::cleanup()
 {
+  if (param_change_callback_handle_) {
+    node_->remove_on_set_parameters_callback(param_change_callback_handle_.get());
+    param_change_callback_handle_.reset();
+  }
   offset_sign_request_timer_.reset();
   offset_sign_callback_handle_.reset();
   offset_sign_event_handler_.reset();
@@ -490,6 +497,34 @@ void DnnController::activate()
 void DnnController::deactivate()
 {
   // No publishers to deactivate in skeleton.
+}
+
+rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
+  const std::vector<rclcpp::Parameter> & parameters)
+{
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+  bool velocity_changed = false;
+  for (const auto & parameter : parameters) {
+    if (parameter.get_name() != name_ + ".max_linear_vel" &&
+      parameter.get_name() != name_ + ".max_angular_vel")
+    {
+      continue;
+    }
+    if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE ||
+      !std::isfinite(parameter.as_double()) || parameter.as_double() <= 0.0)
+    {
+      result.successful = false;
+      result.reason = "Velocity limits must be finite, positive doubles";
+      return result;
+    }
+    velocity_changed = true;
+  }
+  if (velocity_changed) {
+    // Another callback may still reject this update; read committed values later.
+    velocity_parameters_dirty_.store(true);
+  }
+  return result;
 }
 
 std::vector<std::array<float, 2>> DnnController::transformPoints2D(
@@ -679,6 +714,22 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       logger_, *clock_, 1000,
       "%s.%s has not been received, return 0 velocity command",
       kFootprintPublisherNodeName, kInputOffsetSignName);
+    return cmd;
+  }
+
+  if (velocity_parameters_dirty_.exchange(false)) {
+    // Clear before reading so a concurrent update is not lost.
+    const auto velocity_params = node_->get_parameters(
+      {name_ + ".max_linear_vel", name_ + ".max_angular_vel"});
+    max_linear_vel_ = velocity_params[0].as_double();
+    max_angular_vel_ = velocity_params[1].as_double();
+  }
+  if (!std::isfinite(max_linear_vel_) || max_linear_vel_ <= 0.0 ||
+    !std::isfinite(max_angular_vel_) || max_angular_vel_ <= 0.0)
+  {
+    RCLCPP_ERROR_THROTTLE(
+      logger_, *clock_, 1000,
+      "Velocity limits must be finite and positive, return 0 velocity command");
     return cmd;
   }
 

@@ -23,6 +23,7 @@ from typing import List
 import math
 import inspect
 import numpy
+import os
 import threading
 import time
 import traceback
@@ -649,6 +650,8 @@ class Goal(geoutil.TargetPlace):
 
 
 class Nav2Params:
+    use_dnn_controller = os.environ.get("CABOT_CONTROLLER", "dwb") == "dnn"
+
     @classmethod
     def get_parameters_for(cls, mode):
         if mode == geojson.NavigationMode.Standard:
@@ -666,6 +669,7 @@ class Nav2Params:
     FollowPath.max_vel_x: 2.75
     FollowPath.max_speed_xy: 2.75
     FollowPath.sim_time: 1.7
+    FollowPath.max_linear_vel: 1.0
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
     inflation_layer.inflation_radius: 0.75
@@ -697,6 +701,7 @@ class Nav2Params:
 /controller_server:
     FollowPath.max_vel_x: 0.5
     FollowPath.sim_time: 0.5
+    FollowPath.max_linear_vel: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
     inflation_layer.inflation_radius: 0.55
@@ -728,6 +733,7 @@ class Nav2Params:
 /controller_server:
     FollowPath.max_vel_x: 0.5
     FollowPath.sim_time: 0.5
+    FollowPath.max_linear_vel: 0.5
     cabot_goal_checker.xy_goal_tolerance: 0.1
 /global_costmap/global_costmap:
     inflation_layer.inflation_radius: 0.35
@@ -759,6 +765,7 @@ class Nav2Params:
 /controller_server:
     FollowPath.max_vel_x: 2.75
     FollowPath.sim_time: 0.37
+    FollowPath.max_linear_vel: 1.0
     cabot_goal_checker.xy_goal_tolerance: 0.5
 /global_costmap/global_costmap:
     inflation_layer.inflation_radius: 0.75
@@ -783,6 +790,13 @@ class Nav2Params:
             params = params.replace("/cabot/speed_control_node_touch_true", "/cabot/speed_control_node_touch_false")
 
         data = yaml.safe_load(params)
+        controller_params = data["/controller_server"]
+        if cls.use_dnn_controller:
+            unsupported = ("FollowPath.max_vel_x", "FollowPath.max_speed_xy", "FollowPath.sim_time")
+        else:
+            unsupported = ("FollowPath.max_linear_vel",)
+        for name in unsupported:
+            controller_params.pop(name, None)
         return data
 
     @classmethod
