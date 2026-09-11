@@ -184,6 +184,7 @@ void DnnController::configure(
       throw std::runtime_error("Model config file not found: " + config_path.string());
     }
     const YAML::Node config = YAML::LoadFile(config_path.string());
+    const int action_length = tensorrt_utils::readActionLength(config["action"]);
     odom_length_ = config["odom_encoder"]["odom_length"].as<int>();
     plan_length_ = config["plan_encoder"]["plan_length"].as<int>();
     people_encoder_enabled_ = false;
@@ -310,6 +311,12 @@ void DnnController::configure(
       }
     }
 
+    tensorrt_utils::validateActionOutputShapes(
+      trt_context_->getTensorShape(kOutputCmdName),
+      trt_context_->getTensorShape(kOutputVLogitsName),
+      trt_context_->getTensorShape(kOutputWLogitsName),
+      config["action"], action_mode_, action_length);
+
     auto allocTensor = [&](const char * name) -> void * {
       const nvinfer1::Dims dims = trt_context_->getTensorShape(name);
       const nvinfer1::DataType dt = trt_engine_->getTensorDataType(name);
@@ -361,7 +368,7 @@ void DnnController::configure(
     }
 
     trt_ready_ = true;
-    RCLCPP_INFO(logger_, "TensorRT engine is ready");
+    RCLCPP_INFO(logger_, "TensorRT engine is ready (action_length=%d)", action_length);
   } else {
     trt_ready_ = false;
     RCLCPP_WARN(logger_, "trt_model is empty; skipping TensorRT engine load");
@@ -889,6 +896,8 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         trt_engine_->getTensorDataType(kOutputRobotPeopleAttentionName), trt_stream_);
     }
 
+    // Every control tick predicts the complete sequence. Copy only timestep 0
+    // from the current inference; later predictions are never reused.
     if ((action_mode_ == ActionMode::kReg) || (action_mode_ == ActionMode::kMdnReg)) {
       std::vector<float> h_cmd(2, 0.0f);
       cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(

@@ -151,6 +151,8 @@ int main(int argc, char ** argv)
       return 1;
     }
     const YAML::Node config = YAML::LoadFile(config_path.string());
+    const int action_length =
+      cabot_dnn_controller::tensorrt_utils::readActionLength(config["action"]);
     int odom_length = config["odom_encoder"]["odom_length"].as<int>();
     int plan_length = config["plan_encoder"]["plan_length"].as<int>();
     bool people_encoder_enabled = false;
@@ -339,6 +341,12 @@ int main(int argc, char ** argv)
       }
     }
 
+    cabot_dnn_controller::tensorrt_utils::validateActionOutputShapes(
+      context->getTensorShape(kOutputCmdName),
+      context->getTensorShape(kOutputVLogitsName),
+      context->getTensorShape(kOutputWLogitsName),
+      config["action"], action_mode, action_length);
+
     cudaStream_t stream = nullptr;
     CUDA_CHECK(cudaStreamCreate(&stream));
 
@@ -399,6 +407,7 @@ int main(int argc, char ** argv)
 
     float v_pred = 0.0;
     float w_pred = 0.0;
+    // Match the controller: decode only timestep 0 of this inference.
     if ((action_mode == ActionMode::kReg) || (action_mode == ActionMode::kMdnReg)) {
       std::vector<float> h_cmd(2, 0.0f);
       cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
