@@ -15,6 +15,7 @@
 
 #include "cabot_dnn_controller/dnn_controller_constants.hpp"
 #include "cabot_dnn_controller/msg/attention_weights.hpp"
+#include "cabot_dnn_controller/msg/predicted_actions.hpp"
 #include "cabot_dnn_controller/tensorrt_utils.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
@@ -175,6 +176,7 @@ private:
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr people_attention_pub_;
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr
     robot_people_attention_pub_;
+  rclcpp::Publisher<cabot_dnn_controller::msg::PredictedActions>::SharedPtr predicted_actions_pub_;
 
   std::string trt_model_;
   double max_linear_vel_;

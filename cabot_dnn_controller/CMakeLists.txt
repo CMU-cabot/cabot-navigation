@@ -28,7 +28,8 @@ find_package(yaml-cpp REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AttentionWeights.msg"
-  DEPENDENCIES std_msgs
+  "msg/PredictedActions.msg"
+  DEPENDENCIES geometry_msgs std_msgs
 )
 
 add_library(dnn_controllers SHARED

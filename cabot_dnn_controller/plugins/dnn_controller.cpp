@@ -426,6 +426,8 @@ void DnnController::configure(
     robot_people_attention_pub_ = node_->create_publisher<cabot_dnn_controller::msg::AttentionWeights>(
       robot_people_attention_topic_, rclcpp::SystemDefaultsQoS());
   }
+  predicted_actions_pub_ = node_->create_publisher<cabot_dnn_controller::msg::PredictedActions>(
+    "/debug/predicted_actions", rclcpp::SystemDefaultsQoS());
   param_change_callback_handle_ = node_->add_on_set_parameters_callback(
     std::bind(&DnnController::param_set_callback, this, std::placeholders::_1));
   velocity_parameters_dirty_.store(true);
@@ -442,6 +444,7 @@ void DnnController::cleanup()
   offset_sign_event_handler_.reset();
   offset_sign_client_.reset();
   offset_sign_.store(0.0f);
+  predicted_actions_pub_.reset();
 
   {
     std::lock_guard<std::mutex> plan_lock(plan_mutex_);
@@ -855,7 +858,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   const bool visualize_prediction =
     debug_image_pub_ && debug_image_pub_->get_subscription_count() > 0;
-  const size_t prediction_length = visualize_prediction ? action_length_ : 1;
+  const bool publish_prediction =
+    predicted_actions_pub_ && predicted_actions_pub_->get_subscription_count() > 0;
+  const size_t prediction_length =
+    (visualize_prediction || publish_prediction) ? action_length_ : 1;
   std::vector<std::array<float, 2>> predicted_actions(prediction_length);
   std::vector<float> people_attention;
   std::vector<float> robot_people_attention;
@@ -899,7 +905,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         trt_engine_->getTensorDataType(kOutputRobotPeopleAttentionName), trt_stream_);
     }
 
-    // Copy the full sequence for visualization, but execute only timestep 0
+    // Copy the full sequence for visualization or recording, but execute only timestep 0
     // from the current inference; later predictions are never reused.
     if ((action_mode_ == ActionMode::kReg) || (action_mode_ == ActionMode::kMdnReg)) {
       std::vector<float> h_cmd(prediction_length * 2, 0.0f);
@@ -964,6 +970,18 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   cmd.twist.linear.x  = predicted_actions.front()[0] * max_linear_vel_;
   cmd.twist.angular.z = predicted_actions.front()[1] * max_angular_vel_;
+
+  if (publish_prediction) {
+    cabot_dnn_controller::msg::PredictedActions prediction_msg;
+    prediction_msg.header = cmd.header;
+    prediction_msg.action_timestep = action_timestep_;
+    prediction_msg.actions.resize(predicted_actions.size());
+    for (size_t step = 0; step < predicted_actions.size(); ++step) {
+      prediction_msg.actions[step].linear.x = predicted_actions[step][0] * max_linear_vel_;
+      prediction_msg.actions[step].angular.z = predicted_actions[step][1] * max_angular_vel_;
+    }
+    predicted_actions_pub_->publish(prediction_msg);
+  }
 
   if (people_encoder_enabled_) {
     std_msgs::msg::Header attention_header;
