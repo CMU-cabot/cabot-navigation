@@ -39,6 +39,8 @@ namespace
 {
 
 constexpr double kVisualizationRangeMeters = 10.0;
+// Predicted actions are spaced at 5 Hz, independent of input augmentation.
+constexpr double kActionStepSeconds = 1.0 / 5.0;
 constexpr float kCabot3K4BodyLength = 0.36f;
 constexpr float kCabot3K4BodyWidth = 0.24f;
 
@@ -184,7 +186,7 @@ void DnnController::configure(
       throw std::runtime_error("Model config file not found: " + config_path.string());
     }
     const YAML::Node config = YAML::LoadFile(config_path.string());
-    const int action_length = tensorrt_utils::readActionLength(config["action"]);
+    action_length_ = tensorrt_utils::readActionLength(config["action"]);
     odom_length_ = config["odom_encoder"]["odom_length"].as<int>();
     plan_length_ = config["plan_encoder"]["plan_length"].as<int>();
     people_encoder_enabled_ = false;
@@ -315,7 +317,7 @@ void DnnController::configure(
       trt_context_->getTensorShape(kOutputCmdName),
       trt_context_->getTensorShape(kOutputVLogitsName),
       trt_context_->getTensorShape(kOutputWLogitsName),
-      config["action"], action_mode_, action_length);
+      config["action"], action_mode_, action_length_);
 
     auto allocTensor = [&](const char * name) -> void * {
       const nvinfer1::Dims dims = trt_context_->getTensorShape(name);
@@ -368,7 +370,7 @@ void DnnController::configure(
     }
 
     trt_ready_ = true;
-    RCLCPP_INFO(logger_, "TensorRT engine is ready (action_length=%d)", action_length);
+    RCLCPP_INFO(logger_, "TensorRT engine is ready (action_length=%d)", action_length_);
   } else {
     trt_ready_ = false;
     RCLCPP_WARN(logger_, "trt_model is empty; skipping TensorRT engine load");
@@ -852,8 +854,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     h_people = buildPeopleInput(tf_base_link_map, cmd.header.stamp, people_history);
   }
 
-  float v_pred = 0.0;
-  float w_pred = 0.0;
+  const bool visualize_prediction =
+    debug_image_pub_ && debug_image_pub_->get_subscription_count() > 0;
+  const size_t prediction_length = visualize_prediction ? action_length_ : 1;
+  std::vector<std::array<float, 2>> predicted_actions(prediction_length);
   std::vector<float> people_attention;
   std::vector<float> robot_people_attention;
   {
@@ -896,20 +900,21 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         trt_engine_->getTensorDataType(kOutputRobotPeopleAttentionName), trt_stream_);
     }
 
-    // Every control tick predicts the complete sequence. Copy only timestep 0
+    // Copy the full sequence for visualization, but execute only timestep 0
     // from the current inference; later predictions are never reused.
     if ((action_mode_ == ActionMode::kReg) || (action_mode_ == ActionMode::kMdnReg)) {
-      std::vector<float> h_cmd(2, 0.0f);
+      std::vector<float> h_cmd(prediction_length * 2, 0.0f);
       cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
         h_cmd.data(), d_cmd_, h_cmd.size(),
         trt_engine_->getTensorDataType(kOutputCmdName), trt_stream_);
       CUDA_CHECK(cudaStreamSynchronize(trt_stream_));
 
-      v_pred = h_cmd[0];
-      w_pred = h_cmd[1];
+      for (size_t step = 0; step < prediction_length; ++step) {
+        predicted_actions[step] = {h_cmd[2 * step], h_cmd[2 * step + 1]};
+      }
     } else if (action_mode_ == ActionMode::kCls) {
-      std::vector<float> v_logits(v_num_bins_, 0.0f);
-      std::vector<float> w_logits(w_num_bins_, 0.0f);
+      std::vector<float> v_logits(prediction_length * v_num_bins_, 0.0f);
+      std::vector<float> w_logits(prediction_length * w_num_bins_, 0.0f);
 
       cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
         v_logits.data(), d_v_logits_, v_logits.size(),
@@ -919,14 +924,20 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         trt_engine_->getTensorDataType(kOutputWLogitsName), trt_stream_);
       CUDA_CHECK(cudaStreamSynchronize(trt_stream_));
 
-      std::vector<float> v_logits_first(v_logits.begin(), v_logits.begin() + v_num_bins_);
-      std::vector<float> w_logits_first(w_logits.begin(), w_logits.begin() + w_num_bins_);
-      v_pred = cabot_dnn_controller::classify_utils::valueFromArgmaxLogits(v_logits_first, kVMin, kVMax);
-      w_pred = cabot_dnn_controller::classify_utils::valueFromArgmaxLogits(w_logits_first, kWMin, kWMax);
+      for (size_t step = 0; step < prediction_length; ++step) {
+        const auto v_begin = v_logits.begin() + step * v_num_bins_;
+        const auto w_begin = w_logits.begin() + step * w_num_bins_;
+        const std::vector<float> v_step(v_begin, v_begin + v_num_bins_);
+        const std::vector<float> w_step(w_begin, w_begin + w_num_bins_);
+        predicted_actions[step] = {
+          cabot_dnn_controller::classify_utils::valueFromArgmaxLogits(v_step, kVMin, kVMax),
+          cabot_dnn_controller::classify_utils::valueFromArgmaxLogits(w_step, kWMin, kWMax)};
+      }
     } else {
-      std::vector<float> h_cmd(static_cast<size_t>(v_num_bins_) * static_cast<size_t>(w_num_bins_) * 2, 0.0f);
-      std::vector<float> v_logits(v_num_bins_, 0.0f);
-      std::vector<float> w_logits(w_num_bins_, 0.0f);
+      const size_t components = static_cast<size_t>(v_num_bins_) * w_num_bins_;
+      std::vector<float> h_cmd(prediction_length * components * 2, 0.0f);
+      std::vector<float> v_logits(prediction_length * v_num_bins_, 0.0f);
+      std::vector<float> w_logits(prediction_length * w_num_bins_, 0.0f);
 
       cabot_dnn_controller::tensorrt_utils::copyDeviceToHostFloat(
         h_cmd.data(), d_cmd_, h_cmd.size(),
@@ -939,20 +950,21 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         trt_engine_->getTensorDataType(kOutputWLogitsName), trt_stream_);
       CUDA_CHECK(cudaStreamSynchronize(trt_stream_));
 
-      std::vector<float> v_logits_first(v_logits.begin(), v_logits.begin() + v_num_bins_);
-      std::vector<float> w_logits_first(w_logits.begin(), w_logits.begin() + w_num_bins_);
-      auto v_it = std::max_element(v_logits_first.begin(), v_logits_first.end());
-      auto w_it = std::max_element(w_logits_first.begin(), w_logits_first.end());
-      const size_t v_idx = std::distance(v_logits_first.begin(), v_it);
-      const size_t w_idx = std::distance(w_logits_first.begin(), w_it);
-      const size_t cmd_idx = v_idx * static_cast<size_t>(w_num_bins_) + w_idx;
-      v_pred = h_cmd[2 * cmd_idx];
-      w_pred = h_cmd[2 * cmd_idx + 1];
+      for (size_t step = 0; step < prediction_length; ++step) {
+        const auto v_begin = v_logits.begin() + step * v_num_bins_;
+        const auto w_begin = w_logits.begin() + step * w_num_bins_;
+        const size_t v_idx = std::distance(
+          v_begin, std::max_element(v_begin, v_begin + v_num_bins_));
+        const size_t w_idx = std::distance(
+          w_begin, std::max_element(w_begin, w_begin + w_num_bins_));
+        const size_t cmd_idx = step * components + v_idx * w_num_bins_ + w_idx;
+        predicted_actions[step] = {h_cmd[2 * cmd_idx], h_cmd[2 * cmd_idx + 1]};
+      }
     }
   }
 
-  cmd.twist.linear.x  = v_pred * max_linear_vel_;
-  cmd.twist.angular.z = w_pred * max_angular_vel_;
+  cmd.twist.linear.x  = predicted_actions.front()[0] * max_linear_vel_;
+  cmd.twist.angular.z = predicted_actions.front()[1] * max_angular_vel_;
 
   if (people_encoder_enabled_) {
     std_msgs::msg::Header attention_header;
@@ -961,7 +973,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     publishAttention(people_attention, robot_people_attention, attention_header);
   }
 
-  if (debug_image_pub_ && debug_image_pub_->get_subscription_count() > 0) {
+  if (visualize_prediction) {
     constexpr int kImageSize = 400;
     constexpr double kMetersPerPixel =
       2.0 * kVisualizationRangeMeters / static_cast<double>(kImageSize);
@@ -1231,10 +1243,10 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       const float segment_offset = -0.3f;
       const float line_len = 2.0f;
       cv::line(image, toPixel(0.0f, segment_offset),
-        toPixel(line_len * h_odom[0], segment_offset),
+        toPixel(line_len * h_odom[h_odom.size() - 2], segment_offset),
         cv::Scalar(40, 39, 214), 1, cv::LINE_AA);
 
-      const float odom_yaw_vel = h_odom[1];
+      const float odom_yaw_vel = h_odom.back();
       const float arc_span =
         std::max(20.0f, std::min(140.0f, std::abs(odom_yaw_vel) * 60.0f));
       const float start_deg = (odom_yaw_vel >= 0.0f) ? 0.0f : -arc_span;
@@ -1255,30 +1267,84 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       }
     }
     {
-      const float segment_offset = 0.3f;
-      const float line_len = 2.0f;
-      cv::line(image, toPixel(0.0f, segment_offset),
-        toPixel(line_len * v_pred, segment_offset),
-        cv::Scalar(189, 103, 148), 1, cv::LINE_AA);
+      double x = 0.0;
+      double y = 0.0;
+      double yaw = 0.0;
+      std::vector<std::array<double, 2>> predicted_points{{footprint_radius, 0.0}};
+      std::array<double, 2> min_point = predicted_points.front();
+      std::array<double, 2> max_point = predicted_points.front();
+      for (const auto & action : predicted_actions) {
+        const double v = action[0] * max_linear_vel_;
+        const double half_turn = action[1] * max_angular_vel_ * kActionStepSeconds / 2.0;
+        if (!std::isfinite(v) || !std::isfinite(half_turn)) {
+          break;
+        }
+        // Integrate constant linear/angular velocity over this action step.
+        const double distance = v * kActionStepSeconds *
+          (half_turn == 0.0 ? 1.0 : std::sin(half_turn) / half_turn);
+        const double next_x = x + distance * std::cos(yaw + half_turn);
+        const double next_y = y + distance * std::sin(yaw + half_turn);
+        const double next_yaw = yaw + 2.0 * half_turn;
+        // Follow the front tip of the footprint as the robot translates and turns.
+        const std::array<double, 2> next_front{
+          next_x + footprint_radius * std::cos(next_yaw),
+          next_y + footprint_radius * std::sin(next_yaw)};
+        const cv::Point start = toSubpixel(predicted_points.back()[0], predicted_points.back()[1]);
+        const cv::Point end = toSubpixel(next_front[0], next_front[1]);
+        if (start != end) {
+          cv::arrowedLine(image, start, end, cv::Scalar(189, 103, 148), 1,
+            cv::LINE_AA, kSubpixelShift, 0.35);
+        }
+        x = next_x;
+        y = next_y;
+        yaw = next_yaw;
+        predicted_points.push_back(next_front);
+        for (size_t axis = 0; axis < 2; ++axis) {
+          min_point[axis] = std::min(min_point[axis], predicted_points.back()[axis]);
+          max_point[axis] = std::max(max_point[axis], predicted_points.back()[axis]);
+        }
+      }
 
-      const float arc_span =
-        std::max(20.0f, std::min(140.0f, std::abs(w_pred) * 60.0f));
-      const float start_deg = (w_pred >= 0.0f) ? 0.0f : -arc_span;
-      const float end_deg = (w_pred >= 0.0f) ? arc_span : 0.0f;
-      const float radius = 1.2f;
-      const int steps = 32;
-      std::vector<cv::Point> arc_points;
-      arc_points.reserve(steps + 1);
-      for (int i = 0; i <= steps; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(steps);
-        const float deg = start_deg + (end_deg - start_deg) * t;
-        const float rad = deg * static_cast<float>(M_PI) / 180.0f;
-        arc_points.push_back(toPixel(radius * std::cos(rad), radius * std::sin(rad)));
+      // Keep individual steps legible when the main view spans 20 meters.
+      constexpr int kInsetSize = 144;
+      constexpr int kInsetPlotSize = 112;
+      const double span = std::max({
+          0.5, 1.25 * (max_point[0] - min_point[0]),
+          1.25 * (max_point[1] - min_point[1])});
+      const double center_x = (min_point[0] + max_point[0]) / 2.0;
+      const double center_y = (min_point[1] + max_point[1]) / 2.0;
+      cv::Mat inset(kInsetSize, kInsetSize, CV_8UC3, cv::Scalar(255, 255, 255));
+      cv::rectangle(inset, cv::Point(0, 0), cv::Point(kInsetSize - 1, kInsetSize - 1),
+        cv::Scalar(160, 160, 160));
+      cv::rectangle(inset, cv::Point(16, 16), cv::Point(128, 128),
+        cv::Scalar(230, 230, 230));
+      const auto toInsetSubpixel = [&](const std::array<double, 2> & point) {
+          return cv::Point(
+            safePixelCoordinate((kInsetSize / 2.0 + (point[0] - center_x) / span *
+              kInsetPlotSize) * kSubpixelScale),
+            safePixelCoordinate((kInsetSize / 2.0 - (point[1] - center_y) / span *
+              kInsetPlotSize) * kSubpixelScale));
+        };
+      for (size_t step = 1; step < predicted_points.size(); ++step) {
+        const cv::Point start = toInsetSubpixel(predicted_points[step - 1]);
+        const cv::Point end = toInsetSubpixel(predicted_points[step]);
+        if (start != end) {
+          cv::arrowedLine(inset, start, end, cv::Scalar(189, 103, 148), 1,
+            cv::LINE_AA, kSubpixelShift, 0.35);
+        }
       }
-      if (arc_points.size() >= 2) {
-        cv::polylines(
-          image, arc_points, false, cv::Scalar(189, 103, 148), 1, cv::LINE_AA);
-      }
+      cv::circle(inset, toInsetSubpixel(predicted_points.front()), 2 * kSubpixelScale,
+        cv::Scalar(255, 0, 0), -1, cv::LINE_AA, kSubpixelShift);
+      char label[48];
+      std::snprintf(label, sizeof(label), "Prediction: %.1f s/step", kActionStepSeconds);
+      cv::putText(inset, label, cv::Point(8, 11), cv::FONT_HERSHEY_SIMPLEX,
+        0.3, cv::Scalar(60, 60, 60), 1, cv::LINE_AA);
+      std::snprintf(label, sizeof(label), "Width: %.2f m", span);
+      cv::putText(inset, label, cv::Point(16, 140), cv::FONT_HERSHEY_SIMPLEX,
+        0.3, cv::Scalar(60, 60, 60), 1, cv::LINE_AA);
+      inset.copyTo(image(cv::Rect(
+            kImageSize - kInsetSize - 8, kImageSize - kInsetSize - 8,
+            kInsetSize, kInsetSize)));
     }
 
     cv_bridge::CvImage cv_img;
