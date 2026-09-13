@@ -39,8 +39,6 @@ namespace
 {
 
 constexpr double kVisualizationRangeMeters = 10.0;
-// Predicted actions are spaced at 5 Hz, independent of input augmentation.
-constexpr double kActionStepSeconds = 1.0 / 5.0;
 constexpr float kCabot3K4BodyLength = 0.36f;
 constexpr float kCabot3K4BodyWidth = 0.24f;
 
@@ -187,6 +185,7 @@ void DnnController::configure(
     }
     const YAML::Node config = YAML::LoadFile(config_path.string());
     action_length_ = tensorrt_utils::readActionLength(config["action"]);
+    action_timestep_ = config["action"]["action_timestep"].as<double>();
     odom_length_ = config["odom_encoder"]["odom_length"].as<int>();
     plan_length_ = config["plan_encoder"]["plan_length"].as<int>();
     people_encoder_enabled_ = false;
@@ -1273,12 +1272,12 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       std::array<double, 2> front{footprint_radius, 0.0};
       for (const auto & action : predicted_actions) {
         const double v = action[0] * max_linear_vel_;
-        const double half_turn = action[1] * max_angular_vel_ * kActionStepSeconds / 2.0;
+        const double half_turn = action[1] * max_angular_vel_ * action_timestep_ / 2.0;
         if (!std::isfinite(v) || !std::isfinite(half_turn)) {
           break;
         }
         // Integrate constant linear/angular velocity over this action step.
-        const double distance = v * kActionStepSeconds *
+        const double distance = v * action_timestep_ *
           (half_turn == 0.0 ? 1.0 : std::sin(half_turn) / half_turn);
         const double next_x = x + distance * std::cos(yaw + half_turn);
         const double next_y = y + distance * std::sin(yaw + half_turn);
