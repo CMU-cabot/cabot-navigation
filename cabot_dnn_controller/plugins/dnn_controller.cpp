@@ -1270,9 +1270,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       double x = 0.0;
       double y = 0.0;
       double yaw = 0.0;
-      std::vector<std::array<double, 2>> predicted_points{{footprint_radius, 0.0}};
-      std::array<double, 2> min_point = predicted_points.front();
-      std::array<double, 2> max_point = predicted_points.front();
+      std::array<double, 2> front{footprint_radius, 0.0};
       for (const auto & action : predicted_actions) {
         const double v = action[0] * max_linear_vel_;
         const double half_turn = action[1] * max_angular_vel_ * kActionStepSeconds / 2.0;
@@ -1289,7 +1287,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         const std::array<double, 2> next_front{
           next_x + footprint_radius * std::cos(next_yaw),
           next_y + footprint_radius * std::sin(next_yaw)};
-        const cv::Point start = toSubpixel(predicted_points.back()[0], predicted_points.back()[1]);
+        const cv::Point start = toSubpixel(front[0], front[1]);
         const cv::Point end = toSubpixel(next_front[0], next_front[1]);
         if (start != end) {
           cv::arrowedLine(image, start, end, cv::Scalar(189, 103, 148), 1,
@@ -1298,53 +1296,8 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
         x = next_x;
         y = next_y;
         yaw = next_yaw;
-        predicted_points.push_back(next_front);
-        for (size_t axis = 0; axis < 2; ++axis) {
-          min_point[axis] = std::min(min_point[axis], predicted_points.back()[axis]);
-          max_point[axis] = std::max(max_point[axis], predicted_points.back()[axis]);
-        }
+        front = next_front;
       }
-
-      // Keep individual steps legible when the main view spans 20 meters.
-      constexpr int kInsetSize = 144;
-      constexpr int kInsetPlotSize = 112;
-      const double span = std::max({
-          0.5, 1.25 * (max_point[0] - min_point[0]),
-          1.25 * (max_point[1] - min_point[1])});
-      const double center_x = (min_point[0] + max_point[0]) / 2.0;
-      const double center_y = (min_point[1] + max_point[1]) / 2.0;
-      cv::Mat inset(kInsetSize, kInsetSize, CV_8UC3, cv::Scalar(255, 255, 255));
-      cv::rectangle(inset, cv::Point(0, 0), cv::Point(kInsetSize - 1, kInsetSize - 1),
-        cv::Scalar(160, 160, 160));
-      cv::rectangle(inset, cv::Point(16, 16), cv::Point(128, 128),
-        cv::Scalar(230, 230, 230));
-      const auto toInsetSubpixel = [&](const std::array<double, 2> & point) {
-          return cv::Point(
-            safePixelCoordinate((kInsetSize / 2.0 + (point[0] - center_x) / span *
-              kInsetPlotSize) * kSubpixelScale),
-            safePixelCoordinate((kInsetSize / 2.0 - (point[1] - center_y) / span *
-              kInsetPlotSize) * kSubpixelScale));
-        };
-      for (size_t step = 1; step < predicted_points.size(); ++step) {
-        const cv::Point start = toInsetSubpixel(predicted_points[step - 1]);
-        const cv::Point end = toInsetSubpixel(predicted_points[step]);
-        if (start != end) {
-          cv::arrowedLine(inset, start, end, cv::Scalar(189, 103, 148), 1,
-            cv::LINE_AA, kSubpixelShift, 0.35);
-        }
-      }
-      cv::circle(inset, toInsetSubpixel(predicted_points.front()), 2 * kSubpixelScale,
-        cv::Scalar(255, 0, 0), -1, cv::LINE_AA, kSubpixelShift);
-      char label[48];
-      std::snprintf(label, sizeof(label), "Prediction: %.1f s/step", kActionStepSeconds);
-      cv::putText(inset, label, cv::Point(8, 11), cv::FONT_HERSHEY_SIMPLEX,
-        0.3, cv::Scalar(60, 60, 60), 1, cv::LINE_AA);
-      std::snprintf(label, sizeof(label), "Width: %.2f m", span);
-      cv::putText(inset, label, cv::Point(16, 140), cv::FONT_HERSHEY_SIMPLEX,
-        0.3, cv::Scalar(60, 60, 60), 1, cv::LINE_AA);
-      inset.copyTo(image(cv::Rect(
-            kImageSize - kInsetSize - 8, kImageSize - kInsetSize - 8,
-            kInsetSize, kInsetSize)));
     }
 
     cv_bridge::CvImage cv_img;
