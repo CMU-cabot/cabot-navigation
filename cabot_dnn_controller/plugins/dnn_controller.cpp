@@ -1257,30 +1257,35 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     }
 
     {
-      const float segment_offset = -0.3f;
-      const float line_len = 2.0f;
-      cv::line(image, toPixel(0.0f, segment_offset),
-        toPixel(line_len * h_odom[h_odom.size() - 2], segment_offset),
-        cv::Scalar(40, 39, 214), 1, cv::LINE_AA);
-
-      const float odom_yaw_vel = h_odom.back();
-      const float arc_span =
-        std::max(20.0f, std::min(140.0f, std::abs(odom_yaw_vel) * 60.0f));
-      const float start_deg = (odom_yaw_vel >= 0.0f) ? 0.0f : -arc_span;
-      const float end_deg = (odom_yaw_vel >= 0.0f) ? arc_span : 0.0f;
-      const float radius = 0.8f;
-      const int steps = 32;
-      std::vector<cv::Point> arc_points;
-      arc_points.reserve(steps + 1);
-      for (int i = 0; i <= steps; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(steps);
-        const float deg = start_deg + (end_deg - start_deg) * t;
-        const float rad = deg * static_cast<float>(M_PI) / 180.0f;
-        arc_points.push_back(toPixel(radius * std::cos(rad), radius * std::sin(rad)));
-      }
-      if (arc_points.size() >= 2) {
-        cv::polylines(
-          image, arc_points, false, cv::Scalar(40, 39, 214), 1, cv::LINE_AA);
+      double x = 0.0;
+      double y = 0.0;
+      double yaw = 0.0;
+      std::array<double, 2> rear{-footprint_radius, 0.0};
+      for (size_t i = odom_history.size() - 1; i > 0; --i) {
+        const double timestep =
+          static_cast<double>(odom_history[i].stamp_ns - odom_history[i - 1].stamp_ns) * 1e-9;
+        if (timestep <= 0.0) {
+          continue;
+        }
+        const double half_turn = odom_history[i].wz * timestep / 2.0;
+        const double distance = odom_history[i].vx * timestep *
+          (half_turn == 0.0 ? 1.0 : std::sin(half_turn) / half_turn);
+        const double previous_x = x - distance * std::cos(yaw - half_turn);
+        const double previous_y = y - distance * std::sin(yaw - half_turn);
+        const double previous_yaw = yaw - 2.0 * half_turn;
+        const std::array<double, 2> previous_rear{
+          previous_x - footprint_radius * std::cos(previous_yaw),
+          previous_y - footprint_radius * std::sin(previous_yaw)};
+        const cv::Point start = toSubpixel(previous_rear[0], previous_rear[1]);
+        const cv::Point end = toSubpixel(rear[0], rear[1]);
+        if (start != end) {
+          cv::arrowedLine(image, start, end, cv::Scalar(255, 0, 0), 1,
+            cv::LINE_AA, kSubpixelShift, 0.35);
+        }
+        x = previous_x;
+        y = previous_y;
+        yaw = previous_yaw;
+        rear = previous_rear;
       }
     }
     {
@@ -1350,6 +1355,7 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   odom_history_.push_back({
     static_cast<float>(msg->twist.twist.linear.x),
     static_cast<float>(msg->twist.twist.angular.z),
+    rclcpp::Time(msg->header.stamp).nanoseconds(),
   });
   if (odom_history_.size() > static_cast<size_t>(odom_length_)) {
     // if history is longer than input odom length, discard old data

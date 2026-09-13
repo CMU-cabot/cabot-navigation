@@ -122,6 +122,7 @@ private:
   {
     float vx{0.0f};
     float wz{0.0f};
+    std::int64_t stamp_ns{0};
   };
 
   struct PeopleHistoryRecord
