@@ -22,7 +22,7 @@ namespace tensorrt_utils
 inline int readActionLength(const YAML::Node & action_config)
 {
   const int action_length = action_config["action_length"] ?
-    action_config["action_length"].as<int>() : 10;
+    action_config["action_length"].as<int>() : 5;
   if (action_length <= 0) {
     throw std::runtime_error("action.action_length must be a positive integer");
   }

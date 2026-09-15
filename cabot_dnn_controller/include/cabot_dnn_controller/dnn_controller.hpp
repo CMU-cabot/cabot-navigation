@@ -212,7 +212,7 @@ private:
   void* d_people_attention_{nullptr};
   void* d_robot_people_attention_{nullptr};
   dnn_controller_constants::ActionMode action_mode_;
-  int action_length_{1};
+  int action_length_{5};
   double action_timestep_;
   int odom_length_;
   int plan_length_;
