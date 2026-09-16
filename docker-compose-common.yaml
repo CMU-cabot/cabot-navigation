@@ -48,6 +48,7 @@ services:
       - CABOT_GAZEBO
       - CABOT_USE_SIM_TIME
       - CABOT_MODEL
+      - CABOT_CONTROLLER
       - CABOT_SIDE
       - CABOT_SITE
       - CABOT_LANG

@@ -20,6 +20,7 @@
 
 import os
 import os.path
+import re
 
 from launch.logging import launch_config
 from ament_index_python.packages import get_package_share_directory
@@ -38,6 +39,93 @@ from launch.substitutions import EnvironmentVariable
 
 from nav2_common.launch import RewrittenYaml
 from cabot_common.launch import AppendLogDirPrefix
+
+
+# map CABOT_CONTROLLER value -> nav2 controller plugin id used in the behavior tree
+CONTROLLER_ID_MAP = {
+    'sm': 'SocialMomentumFollowPath',
+    'rl': 'RLFollowPath',
+    'hybrid': 'HybridRLFollowPath',
+    'follow': 'FollowPath',
+}
+# controller ids that represent the swappable main-navigation controller
+# (FollowPathElevator etc. must never be rewritten)
+SWAPPABLE_CONTROLLER_IDS = set(CONTROLLER_ID_MAP.values()) | {'MPCFollowPath'}
+
+# map CABOT_CONTROLLER value -> nav2 planner plugin id used in the behavior tree.
+# the RL/MPC based controllers consume the path of the PathForward planner, while
+# the default FollowPath controller expects the path of the CaBot planner.
+PLANNER_ID_MAP = {
+    'sm': 'PathForward',
+    'rl': 'PathForward',
+    'hybrid': 'PathForward',
+    'follow': 'CaBot',
+}
+# planner ids that represent the swappable main-navigation planner
+SWAPPABLE_PLANNER_IDS = set(PLANNER_ID_MAP.values())
+
+
+def sampling_controller_max_speed():
+    """Speed ceiling (m/s) for the sampling based controllers (MPC / RL / SocialMomentum).
+    /cabot/speed_control_node clamps /cmd_vel to CABOT_INIT_SPEED, so a ceiling above that
+    only makes those controllers plan trajectories the robot never follows, and a ceiling
+    below it makes them slower than the default FollowPath controller. CABOT_MAX_SPEED is
+    the fallback when no initial speed is configured (same default as cabot_ui.launch.py).
+    FollowPath (DWB) is left alone, it keeps the stock cabot max_vel_x."""
+    for name in ['CABOT_INIT_SPEED', 'CABOT_MAX_SPEED']:
+        value = os.environ.get(name, '')
+        if value == '':
+            continue
+        try:
+            return str(float(value))
+        except ValueError:
+            print("bringup_launch: {}='{}' is not a number, ignored".format(name, value))
+    return '1.0'
+
+
+def rewrite_bt_id(line, attribute, new_id, swappable_ids):
+    """Return the line with attribute="..." replaced by new_id, or None if the line
+    has no such attribute, holds an id that must not be touched, or already matches."""
+    m = re.search(attribute + r'="([^"]*)"', line)
+    if not m or m.group(1) not in swappable_ids or m.group(1) == new_id:
+        return None
+    return line[:m.start(1)] + new_id + line[m.end(1):]
+
+
+def sync_navigation_bt_controller(controller_type):
+    """Rewrite the main FollowPath controller_id and the ComputePathToPose planner_id
+    in navigation.xml so they match the controller selected by CABOT_CONTROLLER
+    (nav2_params_*.yaml). Without this the behavior tree requests a controller that is
+    not loaded and FollowPath aborts, or feeds the controller a path from the planner
+    the other controller expects. Only active (uncommented) lines whose current id is a
+    swappable one are changed; the file is left untouched (and self-corrects) on the
+    next launch."""
+    controller_id = CONTROLLER_ID_MAP.get(controller_type, 'FollowPath')
+    planner_id = PLANNER_ID_MAP.get(controller_type, 'CaBot')
+    bt_file = os.path.join(
+        get_package_share_directory('cabot_bt'),
+        'behavior_trees', 'navigation.xml')
+    try:
+        with open(bt_file) as f:
+            lines = f.readlines()
+    except OSError:
+        return
+    changed = False
+    for i, line in enumerate(lines):
+        if '<!--' in line:
+            continue
+        if '<FollowPath' in line:
+            new_line = rewrite_bt_id(line, 'controller_id', controller_id, SWAPPABLE_CONTROLLER_IDS)
+        elif '<ComputePathToPose' in line:
+            new_line = rewrite_bt_id(line, 'planner_id', planner_id, SWAPPABLE_PLANNER_IDS)
+        else:
+            continue
+        if new_line is not None:
+            lines[i] = new_line
+            changed = True
+    if changed:
+        with open(bt_file, 'w') as f:
+            f.writelines(lines)
 
 
 def generate_launch_description():
@@ -80,7 +168,8 @@ def generate_launch_description():
         'robot_radius': footprint_radius,
         'inflation_radius': PythonExpression([footprint_radius, "+ 0.30"]),
         'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
-        'offset_normal': offset
+        'offset_normal': offset,
+        'max_linear_velocity': sampling_controller_max_speed()
     }
 
     configured_params = RewrittenYaml(
@@ -98,6 +187,19 @@ def generate_launch_description():
         'offset_sign': PythonExpression(["-1.0 if '", cabot_side, "'=='right' else +1.0"]),
         'offset_normal': offset
     }
+    
+    controller_type = os.environ.get('CABOT_CONTROLLER', 'follow')
+    
+    nav2_param_file = "nav2_params_follow.yaml"
+    if controller_type == 'rl':
+        nav2_param_file = "nav2_params_rl.yaml"
+    elif controller_type == 'hybrid':
+        nav2_param_file = "nav2_params_hybrid.yaml"
+    elif controller_type == 'sm':
+        nav2_param_file = "nav2_params_social_momentum.yaml"
+
+    # keep the behavior tree's controller_id / planner_id in sync with CABOT_CONTROLLER
+    sync_navigation_bt_controller(controller_type)
 
     configured_params2 = RewrittenYaml(
         source_file=params_file2,
@@ -124,7 +226,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'params_file',
-            default_value=os.path.join(pkg_dir, 'params', 'nav2_params.yaml'),
+            default_value=os.path.join(pkg_dir, 'params', nav2_param_file),
             description='Full path to the ROS2 parameters file to use for all launched nodes'),
 
         DeclareLaunchArgument(
