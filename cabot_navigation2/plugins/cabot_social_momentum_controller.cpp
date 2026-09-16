@@ -1,0 +1,950 @@
+#include "cabot_navigation2/cabot_social_momentum_controller.hpp"
+#include "rclcpp/parameter_events_filter.hpp"
+#include <vector>
+#include <cmath>
+#include <limits>
+#include <chrono>
+#include <unordered_map>
+
+using namespace std::chrono_literals;
+
+namespace cabot_navigation2
+{
+
+CaBotSocialMomentumController::CaBotSocialMomentumController() {
+}
+
+CaBotSocialMomentumController::~CaBotSocialMomentumController() {
+}
+
+void CaBotSocialMomentumController::configure(
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+    std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
+{
+  node_ = parent;
+  auto node = node_.lock();
+  costmap_ros_ = costmap_ros.get();  // Get pointer to the costmap
+  name_ = name;
+  tf_ = tf;
+
+  auto sensor_qos = rclcpp::SensorDataQoS().keep_last(1).best_effort();
+  
+  configure_count++;
+  RCLCPP_INFO(logger_, "Configure called - count: %d", configure_count);
+
+  // Load parameters
+  // declare_parameter_if_not_declared(
+  //   node, name_ + ".rl_topic", rclcpp::ParameterValue("/lidar/rl_action"));
+  // node->get_parameter(name_ + ".rl_topic", rl_topic_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".rl_people_topic", rclcpp::ParameterValue("/rl_people"));
+  node->get_parameter(name_ + ".rl_people_topic", rl_people_topic_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".rl_subgoal_topic", rclcpp::ParameterValue("/rl_subgoal"));
+  node->get_parameter(name_ + ".rl_subgoal_topic", rl_subgoal_topic_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".rl_info_topic", rclcpp::ParameterValue("/rl_robot_info"));
+  node->get_parameter(name_ + ".rl_info_topic", rl_info_topic_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".use_sm_rl", rclcpp::ParameterValue(false));
+  node->get_parameter(name_ + ".use_sm_rl", use_sm_rl_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".loc_goal_vis_topic", rclcpp::ParameterValue("/local_goal_vis"));
+  node->get_parameter(name_ + ".loc_goal_vis_topic", loc_goal_vis_topic_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".traj_vis_topic", rclcpp::ParameterValue("/control_output_vis"));
+  node->get_parameter(name_ + ".traj_vis_topic", traj_vis_topic_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".prediction_horizon", rclcpp::ParameterValue(1.0)); // seconds
+  node->get_parameter(name_ + ".prediction_horizon", prediction_horizon_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".sampling_rate", rclcpp::ParameterValue(0.1)); // seconds
+  node->get_parameter(name_ + ".sampling_rate", sampling_rate_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".max_linear_velocity", rclcpp::ParameterValue(1.0)); // m/s
+  node->get_parameter(name_ + ".max_linear_velocity", max_linear_velocity_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".linear_sample_size", rclcpp::ParameterValue(3.0)); 
+  node->get_parameter(name_ + ".linear_sample_size", linear_sample_size_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".max_angular_velocity", rclcpp::ParameterValue(0.785)); // rad/s
+  node->get_parameter(name_ + ".max_angular_velocity", max_angular_velocity_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".angular_sample_size", rclcpp::ParameterValue(10.0)); 
+  node->get_parameter(name_ + ".angular_sample_size", angular_sample_size_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".discount_factor", rclcpp::ParameterValue(0.9)); // Discount factor for future time steps
+  node->get_parameter(name_ + ".discount_factor", discount_factor_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".obstacle_costval", rclcpp::ParameterValue(250.0));
+  node->get_parameter(name_ + ".obstacle_costval", obstacle_costval_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".collision_radius", rclcpp::ParameterValue(0.5));
+  node->get_parameter(name_ + ".collision_radius", collision_radius_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".lookahead_distance", rclcpp::ParameterValue(0.5)); // meters
+  node->get_parameter(name_ + ".lookahead_distance", lookahead_distance_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".max_lookahead", rclcpp::ParameterValue(10.0)); // meters
+  node->get_parameter(name_ + ".max_lookahead", max_lookahead_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".focus_goal_dist", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".focus_goal_dist", focus_goal_dist_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".goal_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".goal_cost_wt", goal_cost_wt_);
+
+  declare_parameter_if_not_declared(
+    node, name_ + ".people_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".people_cost_wt", people_cost_wt_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".social_cost_wt", rclcpp::ParameterValue(1.0));
+  node->get_parameter(name_ + ".social_cost_wt", social_cost_wt_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".sm_interaction_angle_deg", rclcpp::ParameterValue(100.0));
+  node->get_parameter(name_ + ".sm_interaction_angle_deg", sm_interaction_angle_deg_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".sm_interaction_distance", rclcpp::ParameterValue(6.0));
+  node->get_parameter(name_ + ".sm_interaction_distance", sm_interaction_distance_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".sm_consistent_reward", rclcpp::ParameterValue(5.0));
+  node->get_parameter(name_ + ".sm_consistent_reward", sm_consistent_reward_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".sm_switching_penalty", rclcpp::ParameterValue(5.0));
+  node->get_parameter(name_ + ".sm_switching_penalty", sm_switching_penalty_);
+  declare_parameter_if_not_declared(
+    node, name_ + ".sm_min_distance_eps", rclcpp::ParameterValue(0.05));
+  node->get_parameter(name_ + ".sm_min_distance_eps", sm_min_distance_eps_);
+
+  last_visited_index_ = 0; // Initialize the last visited index to the start of the path
+
+  // rl_client = node->create_client<lidar_process_msgs::srv::RlAction>(rl_topic_);
+  rl_subgoal_sub_ = node->create_subscription<geometry_msgs::msg::Point>(
+      rl_subgoal_topic_, sensor_qos, std::bind(&CaBotSocialMomentumController::rlSubgoalCallback, this, std::placeholders::_1));
+
+  rl_people_sub_ = node->create_subscription<lidar_process_msgs::msg::PositionHistoryArray>(
+      rl_people_topic_, sensor_qos, std::bind(&CaBotSocialMomentumController::rlPeopleCallback, this, std::placeholders::_1));
+
+  rl_info_pub_ = node->create_publisher<lidar_process_msgs::msg::RobotMessage>(rl_info_topic_, 10);
+  rl_info_pub_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotSocialMomentumController::rlInfoCallback, this));
+
+  // Publish selected trajectory for visualization purposes
+  trajectory_visualization_pub_ = node->create_publisher<nav_msgs::msg::Path>(traj_vis_topic_, 10);
+
+  // Publish current local goal for visualization purposes
+  local_goal_visualization_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(loc_goal_vis_topic_, 10);
+  loc_goal_vis_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotSocialMomentumController::localGoalVisualizationCallback, this));
+
+  current_command = geometry_msgs::msg::Twist();
+  robot_info = lidar_process_msgs::msg::RobotMessage();
+  
+  rl_people_.clear();
+  RCLCPP_INFO(logger_, "CaBotSocialMomentumController configured");
+}
+
+void CaBotSocialMomentumController::localGoalVisualizationCallback()
+{
+  auto node = node_.lock();
+  auto vis_msg = visualization_msgs::msg::Marker();
+
+  double marker_size = 0.75;
+
+  vis_msg.header.stamp = node->now();
+  vis_msg.header.frame_id = "map";
+  vis_msg.ns = "cabot_navigation2";
+  vis_msg.id = 0;
+  vis_msg.type = 2;
+  vis_msg.action = 0;
+  vis_msg.pose = curr_local_goal_.pose;
+  vis_msg.scale.x = marker_size;
+  vis_msg.scale.y = marker_size;
+  vis_msg.scale.z = marker_size;
+  vis_msg.color.r = 1.0;
+  vis_msg.color.g = 0.0;
+  vis_msg.color.b = 0.0;
+  vis_msg.color.a = 1.0;
+
+  local_goal_visualization_pub_->publish(vis_msg);
+}
+
+void CaBotSocialMomentumController::rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people_msg)
+{
+  auto node = node_.lock();
+  (void)node;
+  const size_t horizon_people = rl_people_msg->positions_history.size();
+  std::vector<lidar_process_msgs::msg::PositionArray> next_people;
+  next_people.reserve(horizon_people);
+  int next_num_people = 0;
+  try {
+    for (size_t i = 0; i < horizon_people; ++i) {
+      const auto & hist = rl_people_msg->positions_history.at(i);  // at() for bounds check
+
+      const size_t pos_sz = hist.positions.size();
+      const size_t ids_sz = hist.ids.size();
+      const size_t count  = std::min(pos_sz, ids_sz);  // clamp by both vectors
+
+      lidar_process_msgs::msg::PositionArray people_array;
+      people_array.quantity = static_cast<uint32_t>(count);
+      next_num_people = static_cast<int>(count);
+
+      people_array.positions.reserve(count);
+      people_array.ids.reserve(count);
+
+      for (size_t j = 0; j < count; ++j) {
+        geometry_msgs::msg::Point pos;
+        pos.x = hist.positions.at(j).x;  // at() for bounds check
+        pos.y = hist.positions.at(j).y;
+        people_array.positions.push_back(pos);
+        people_array.ids.push_back(hist.ids.at(j));  // at() for bounds check
+      }
+      next_people.push_back(std::move(people_array));
+    }
+    {
+      std::lock_guard<std::mutex> lock(rl_people_mutex_);
+      horizon_people_ = static_cast<int>(horizon_people);
+      rl_people_ = std::move(next_people);
+      num_people_ = next_num_people;
+    }
+  } catch (const std::out_of_range &e) {
+    RCLCPP_ERROR(logger_, "rlPeopleCallback out_of_range: history=%zu horizon=%zu what=%s",
+      rl_people_msg->positions_history.size(), horizon_people, e.what());
+    std::lock_guard<std::mutex> lock(rl_people_mutex_);
+    horizon_people_ = 0;
+    rl_people_.clear();
+    num_people_ = 0;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger_, "rlPeopleCallback exception: %s", e.what());
+    std::lock_guard<std::mutex> lock(rl_people_mutex_);
+    horizon_people_ = 0;
+    rl_people_.clear();
+    num_people_ = 0;
+  }
+}
+
+std::vector<lidar_process_msgs::msg::PositionArray> CaBotSocialMomentumController::getPeopleSnapshot() const
+{
+  std::lock_guard<std::mutex> lock(rl_people_mutex_);
+  return rl_people_;
+}
+
+int CaBotSocialMomentumController::getNumPeople() const
+{
+  std::lock_guard<std::mutex> lock(rl_people_mutex_);
+  return num_people_;
+}
+
+void CaBotSocialMomentumController::rlSubgoalCallback(const geometry_msgs::msg::Point::SharedPtr rl_subgoal)
+{
+  // Copying the subgoal over
+  auto node = node_.lock();
+  rl_subgoal_.x = rl_subgoal->x;
+  rl_subgoal_.y = rl_subgoal->y;
+}
+
+void CaBotSocialMomentumController::rlInfoCallback()
+{
+  auto node = node_.lock();
+
+  // if (robot_info.robot_pos.x == 0) {
+  //   robot_info.robot_pos.x = 0.0;
+  //   robot_info.robot_pos.y = 0.0;
+  //   robot_info.robot_vel.x = 0.0;
+  //   robot_info.robot_vel.y = 0.0;
+  //   robot_info.robot_goal.x = 0.0;
+  //   robot_info.robot_goal.y = 0.0;
+  //   robot_info.robot_th = 0.0;
+  // }
+  RCLCPP_INFO(logger_, "Publishing RL Info: Pos(%.2f, %.2f), Vel(%.2f, %.2f), Goal(%.2f, %.2f), Th(%.2f)",
+    robot_info.robot_pos.x, robot_info.robot_pos.y,
+    robot_info.robot_vel.linear.x, robot_info.robot_vel.angular.z,
+    robot_info.robot_goal.x, robot_info.robot_goal.y,
+    robot_info.robot_th);
+  rl_info_pub_->publish(robot_info);
+}
+
+void CaBotSocialMomentumController::cleanup()
+{
+  RCLCPP_INFO(logger_, "Cleaning up RL controller");
+}
+
+void CaBotSocialMomentumController::activate()
+{
+  RCLCPP_INFO(logger_, "Activating RL controller");
+}
+
+void CaBotSocialMomentumController::deactivate()
+{
+  RCLCPP_INFO(logger_, "Deactivating RL controller");
+}
+
+void CaBotSocialMomentumController::setPlan(const nav_msgs::msg::Path & path)
+{
+  auto node = node_.lock();
+  // Check if path's positions are the same as the current global plan
+  bool same = true;
+  if (path.poses.size() == global_plan_.poses.size()) {
+    for (size_t i = 0; i < path.poses.size(); ++i) {
+      if (abs(path.poses[i].pose.position.x - global_plan_.poses[i].pose.position.x) > 0.0001 ||
+          abs(path.poses[i].pose.position.y - global_plan_.poses[i].pose.position.y) > 0.0001) {
+        same = false;
+        break;
+      }
+    }
+  } else {
+    same = false;
+  }
+  if (same) {
+    RCLCPP_INFO(logger_, "Received same global plan, ignoring.");
+    return;
+  } else {
+    global_plan_ = path;
+    last_visited_index_ = 0;
+    RCLCPP_INFO(logger_, "Received new global plan with %zu points.", global_plan_.poses.size());
+    for (size_t i = 0; i < global_plan_.poses.size(); ++i) {
+      auto pose = global_plan_.poses[i];
+      RCLCPP_INFO(logger_, "Path point %zu: (%.2f, %.2f)", i, pose.pose.position.x, pose.pose.position.y);
+    }
+    return;
+  }
+}
+
+void CaBotSocialMomentumController::setSpeedLimit(const double & speed_limit, const bool & percentage)
+{
+}
+
+geometry_msgs::msg::TwistStamped CaBotSocialMomentumController::computeVelocityCommands(
+  const geometry_msgs::msg::PoseStamped & pose,
+  const geometry_msgs::msg::Twist & velocity,
+  nav2_core::GoalChecker * goal_checker)
+{
+  // This wrapper fucntion calls the function that computes the velocity commands
+
+  RCLCPP_INFO(logger_, "Request Sent A");
+
+  auto node = node_.lock();
+
+  geometry_msgs::msg::TwistStamped velocity_cmd;
+  velocity_cmd.header.stamp = node->now();
+  velocity_cmd.header.frame_id = "base_link";
+
+  if (global_plan_.poses.size() == 0) {
+    return velocity_cmd;
+  }
+
+  // Call your RL function to compute the optimal control action
+  geometry_msgs::msg::PoseStamped  local_goal= getLookaheadPoint(pose, global_plan_);
+  curr_local_goal_ = local_goal;
+
+  //  // temporary code for goal handling! (DANGER!)
+  // double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+  // if (goal_dist < focus_goal_dist_) {
+  //   double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
+  //   double current_heading = tf2::getYaw(pose.pose.orientation);
+  //   velocity_cmd.twist.linear.x = 1.0;
+  //   velocity_cmd.twist.angular.z = std::min(1.0, desired_heading - current_heading);
+  //   return velocity_cmd;
+  // }
+
+  robot_info.robot_pos.x = pose.pose.position.x;
+  robot_info.robot_pos.y = pose.pose.position.y;
+  robot_info.robot_th = tf2::getYaw(pose.pose.orientation);
+  robot_info.robot_vel.linear.x = velocity.linear.x;
+  robot_info.robot_vel.angular.z = velocity.angular.z;
+  robot_info.robot_goal.x = local_goal.pose.position.x;
+  robot_info.robot_goal.y = local_goal.pose.position.y;
+
+  // Call your MPC function to compute the optimal control action
+  try {
+    geometry_msgs::msg::Twist control_cmd = computeMPCControl(pose, velocity);
+    velocity_cmd.twist = control_cmd;
+  } catch (const std::out_of_range & e) {
+    RCLCPP_ERROR(logger_, "computeVelocityCommands out_of_range: %s", e.what());
+    velocity_cmd.twist.linear.x = 0.0;
+    velocity_cmd.twist.angular.z = 0.0;
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(logger_, "computeVelocityCommands exception: %s", e.what());
+    velocity_cmd.twist.linear.x = 0.0;
+    velocity_cmd.twist.angular.z = 0.0;
+  }
+
+  return velocity_cmd;
+}
+
+geometry_msgs::msg::Twist CaBotSocialMomentumController::computeMPCControl(
+  const geometry_msgs::msg::PoseStamped & pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  // This function samples the MPC trajectories and computes the costs of the trajectories
+  // The cost with the lowest trajectory will be selected and the associated velocities returned.
+
+  geometry_msgs::msg::Twist best_control;
+  double min_cost = std::numeric_limits<double>::infinity();
+
+  nav_msgs::msg::Path best_trajectory;
+
+  // temporary code for goal handling! The robot heads straight to the goal.
+  double goal_dist = pointDist(pose.pose.position, curr_local_goal_.pose.position);
+  if (goal_dist < focus_goal_dist_) {
+    double desired_heading = std::atan2(curr_local_goal_.pose.position.y - pose.pose.position.y, 
+                                        curr_local_goal_.pose.position.x - pose.pose.position.x);
+    double current_heading = tf2::getYaw(pose.pose.orientation);
+    best_control.linear.x = max_linear_velocity_;
+    best_control.angular.z = std::max(-max_angular_velocity_, std::min(max_angular_velocity_, desired_heading - current_heading));
+    return best_control;
+  }
+
+  // Generate all the trajectories based on sampled velocities
+  std::vector<Trajectory> trajectories = generateTrajectoriesSimple(pose, velocity);
+
+  // Loop over the generated trajectories and calculate their costs
+  for (const auto & trajectory : trajectories)
+  {
+    double cost = calculateCost(pose, trajectory);
+
+    // Update the best control if this trajectory has a lower cost
+    if (cost < min_cost)
+    {
+      min_cost = cost;
+      best_control = trajectory.control;  // Assuming we store the control input corresponding to each trajectory
+      best_trajectory.header = pose.header;
+      best_trajectory.poses = trajectory.trajectory;
+    }
+  }
+  trajectory_visualization_pub_->publish(best_trajectory);
+
+  // smooth the control with prior control
+  if (min_cost >= std::numeric_limits<double>::infinity() - 1){
+    const bool use_rl_subgoal = use_sm_rl_ && (getNumPeople() > 0);
+    const geometry_msgs::msg::Point & target = use_rl_subgoal ? rl_subgoal_ : curr_local_goal_.pose.position;
+    const double desired_heading = std::atan2(
+      target.y - pose.pose.position.y,
+      target.x - pose.pose.position.x);
+    const double current_heading = tf2::getYaw(pose.pose.orientation);
+    double heading_error = desired_heading - current_heading;
+    while (heading_error > M_PI) heading_error -= 2.0 * M_PI;
+    while (heading_error < -M_PI) heading_error += 2.0 * M_PI;
+
+    // Recovery behavior: rotate in place toward the goal direction when all sampled
+    // trajectories are invalid, instead of stalling at zero forever.
+    const double current_step_cost = getCostFromCostmap(pose.pose);
+    if (current_step_cost >= obstacle_costval_) {
+      best_control.linear.x = -0.15;
+    } else {
+      best_control.linear.x = 0.0;
+    }
+    best_control.angular.z = std::max(
+      -max_angular_velocity_,
+      std::min(max_angular_velocity_, heading_error));
+    RCLCPP_WARN(
+      logger_,
+      "All trajectories invalid (min_cost=inf). Recovery cmd=(%.2f, %.2f), target=(%.2f, %.2f), heading_error=%.3f, step_cost=%.1f",
+      best_control.linear.x, best_control.angular.z, target.x, target.y, heading_error, current_step_cost);
+  }
+
+  return best_control;
+}
+
+std::vector<Trajectory> CaBotSocialMomentumController::generateTrajectoriesSimple(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  // This function samples trajectories that follow a fixed linear and angular velocities
+  std::vector<Trajectory> trajectories;
+
+  const double min_linear = 0.0;
+  const double linear_sample_count = std::max(1.0, linear_sample_size_);
+  const double linear_sample_resolution = max_linear_velocity_ / linear_sample_count;
+
+  // Sample a set of velocities and predict the corresponding trajectories
+  for (double linear_vel = min_linear; linear_vel <= max_linear_velocity_ + 1e-6; linear_vel += linear_sample_resolution)
+  {
+    double linear_portion = 0.0;
+    if (max_linear_velocity_ > 1e-6) {
+      linear_portion = std::abs(linear_vel) / max_linear_velocity_;
+    }
+    // double angular_vel_lim = (1 - linear_portion) * max_angular_velocity_;
+    double angular_vel_lim = max_angular_velocity_;
+    double angular_sample_resolution = angular_vel_lim * 2.0 / angular_sample_size_;
+    for (double angular_vel = -angular_vel_lim; angular_vel <= angular_vel_lim; angular_vel += angular_sample_resolution)
+    {
+      // Generate a single trajectory
+      std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+      geometry_msgs::msg::Twist control;
+      control.linear.x = linear_vel;
+      control.angular.z = angular_vel;
+
+      // Start with the current pose
+      geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+      double current_x = current_pose_copy.pose.position.x;
+      double current_y = current_pose_copy.pose.position.y;
+      double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
+
+      // Predict the trajectory over the prediction horizon
+      for (double t = sampling_rate_; t <= prediction_horizon_; t += sampling_rate_)
+      {
+        // Simulate robot dynamics
+        if (abs(angular_vel) < 0.0001)
+        {
+          current_x += linear_vel * sampling_rate_ * cos(current_theta);
+          current_y += linear_vel * sampling_rate_ * sin(current_theta);
+        } else{
+          current_x += linear_vel / angular_vel * (sin(current_theta + angular_vel * sampling_rate_) - sin(current_theta));
+          current_y += linear_vel / angular_vel * (-cos(current_theta + angular_vel * sampling_rate_) + cos(current_theta));
+        }
+        // current_x += linear_vel * sampling_rate_ * cos(current_theta);
+        // current_y += linear_vel * sampling_rate_ * sin(current_theta);
+        current_theta += angular_vel * sampling_rate_;
+
+        geometry_msgs::msg::PoseStamped predicted_pose;
+        predicted_pose.pose.position.x = current_x;
+        predicted_pose.pose.position.y = current_y;
+        tf2::Quaternion q;
+        q.setRPY(0, 0, current_theta);
+        predicted_pose.pose.orientation = tf2::toMsg(q);
+
+        trajectory.push_back(predicted_pose);
+      }
+
+      // Store this trajectory
+      trajectories.push_back(Trajectory(control, trajectory));
+    }
+  }
+
+  return trajectories;
+}
+
+std::vector<Trajectory> CaBotSocialMomentumController::generateTrajectoriesImproved(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  // This function samples trajectories that follow a fixed linear velocity
+  // But the angular velocity can change in the middle of the duration
+  std::vector<Trajectory> trajectories;
+
+  double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
+  double angular_vel_lim = max_angular_velocity_;
+  double angular_sample_resolution = angular_vel_lim / angular_sample_size_;
+
+  // Sample a set of linear velocities
+  for (double initial_linear_vel = 0.0; initial_linear_vel <= max_linear_velocity_; initial_linear_vel += linear_sample_resolution)
+  {
+    double secondary_max_linear_velocity;
+    if (abs(initial_linear_vel) < 0.001) {
+      secondary_max_linear_velocity = 0.001;
+    } else {
+      secondary_max_linear_velocity = max_linear_velocity_;
+    }
+    for (double secondary_linear_vel = 0.0; secondary_linear_vel <= secondary_max_linear_velocity; secondary_linear_vel += linear_sample_resolution)
+    {
+      // Sample initial and secondary angular velocities
+      for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
+      {
+        for (double secondary_angular_vel = -angular_vel_lim; secondary_angular_vel <= angular_vel_lim; secondary_angular_vel += angular_sample_resolution)
+        {
+          // Start with the current pose and initial control
+          geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+          double current_x = current_pose_copy.pose.position.x;
+          double current_y = current_pose_copy.pose.position.y;
+          double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
+
+          std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+          geometry_msgs::msg::Twist initial_control;
+          initial_control.linear.x = initial_linear_vel;
+          initial_control.angular.z = initial_angular_vel;
+
+          // Determine the time at which to switch to the secondary angular velocity
+          double switch_time = prediction_horizon_ / 2.0;
+
+          // Predict the trajectory over the prediction horizon
+          for (double t = sampling_rate_; t <= prediction_horizon_; t += sampling_rate_)
+          {
+            // Use initial angular velocity before switch time, secondary after
+            double angular_vel;
+            double linear_vel;
+            if (t < switch_time) {
+              angular_vel = initial_angular_vel;
+              linear_vel = initial_linear_vel;
+            } else {
+              angular_vel = secondary_angular_vel;
+              linear_vel = secondary_linear_vel;
+            }
+
+            // Simulate robot dynamics
+            if (abs(angular_vel) < 0.0001)
+            {
+              current_x += linear_vel * sampling_rate_ * cos(current_theta);
+              current_y += linear_vel * sampling_rate_ * sin(current_theta);
+            } else{
+              current_x += linear_vel / angular_vel * (sin(current_theta + angular_vel * sampling_rate_) - sin(current_theta));
+              current_y -= linear_vel / angular_vel * (cos(current_theta + angular_vel * sampling_rate_) - cos(current_theta));
+            }
+            current_theta += angular_vel * sampling_rate_;
+            
+
+            geometry_msgs::msg::PoseStamped predicted_pose;
+            predicted_pose.pose.position.x = current_x;
+            predicted_pose.pose.position.y = current_y;
+            tf2::Quaternion q;
+            q.setRPY(0, 0, current_theta);
+            predicted_pose.pose.orientation = tf2::toMsg(q);
+
+            trajectory.push_back(predicted_pose);
+          }
+
+          // Store this trajectory with its initial control
+          trajectories.push_back(Trajectory(initial_control, trajectory));
+        }
+      }
+    }
+  }
+
+  return trajectories;
+}
+
+geometry_msgs::msg::PoseStamped CaBotSocialMomentumController::getLookaheadPoint(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const nav_msgs::msg::Path & global_plan)
+{
+  // This function gets the immediate next point outside of threhsold as the goal point
+  // on the global plan
+
+  geometry_msgs::msg::PoseStamped lookahead_point;
+
+  double current_x = current_pose.pose.position.x;
+  double current_y = current_pose.pose.position.y;
+
+  bool found_point = false;
+
+  for (size_t i = last_visited_index_; i < global_plan.poses.size(); ++i)
+  {
+    double dx = global_plan.poses[i].pose.position.x - current_x;
+    double dy = global_plan.poses[i].pose.position.y - current_y;
+    double distance = std::sqrt(dx * dx + dy * dy);
+
+    if (distance >= lookahead_distance_)
+    {
+      lookahead_point = global_plan.poses[i];
+      last_visited_index_ = i;  // Update last visited index
+      found_point = true;
+      break;
+    }
+  }
+
+  // If no point is found beyond the lookahead distance, use the last point
+  if (!found_point)
+  {
+    lookahead_point = global_plan.poses.back();
+    last_visited_index_ = global_plan.poses.size() - 1;
+  }
+
+  // Clamp the lookahead point to be within max_lookahead_
+  if (pointDist(current_pose.pose.position, lookahead_point.pose.position) > max_lookahead_) {
+    double angle_to_goal = std::atan2(lookahead_point.pose.position.y - current_y, lookahead_point.pose.position.x - current_x);
+    lookahead_point.pose.position.x = current_x + max_lookahead_ * std::cos(angle_to_goal);
+    lookahead_point.pose.position.y = current_y + max_lookahead_ * std::sin(angle_to_goal);
+  }
+
+  return lookahead_point;
+}
+
+bool CaBotSocialMomentumController::hasReachedLookaheadPoint(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::PoseStamped & lookahead_point)
+{
+  // This function checks if the robot's pose is within threshold dist of a point
+
+  double dx = current_pose.pose.position.x - lookahead_point.pose.position.x;
+  double dy = current_pose.pose.position.y - lookahead_point.pose.position.y;
+  double distance = std::sqrt(dx * dx + dy * dy);
+
+  return distance <= lookahead_distance_;
+}
+
+double CaBotSocialMomentumController::calculateCost(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const Trajectory trajectory)
+{
+  // Define a cost function to evaluate how good the trajectory is
+  // This includes distances to the local goal, costmap information, and people trajectory cost
+
+  double cost = 0.0;
+
+  try {
+    std::vector<geometry_msgs::msg::PoseStamped> sampled_trajectory = trajectory.trajectory;
+    auto people_snapshot = getPeopleSnapshot();
+    const bool use_rl_subgoal = use_sm_rl_ && (getNumPeople() > 0);
+
+    // Add costmap-related cost
+    double step_cost = 0.0;
+    double people_cost = 0.0;
+    double goal_cost = 0.0;
+
+    double goal_dist;
+    double min_goal_dist = std::numeric_limits<double>::infinity();
+
+    // Add people trajectory-related cost
+    people_cost = calculatePeopleCost(sampled_trajectory, people_snapshot);
+    cost += people_cost_wt_ * people_cost;
+    cost += social_cost_wt_ * calculateSocialMomentumCost(sampled_trajectory, people_snapshot);
+
+    for (const auto & pose : sampled_trajectory)
+    {
+      step_cost = getCostFromCostmap(pose.pose);
+      if (step_cost >= obstacle_costval_)
+      {
+        return std::numeric_limits<double>::infinity();
+      }
+
+      if (use_rl_subgoal) {
+        goal_dist = pointDist(pose.pose.position, rl_subgoal_);
+      } else {
+        goal_dist = pointDist(pose.pose.position, curr_local_goal_.pose.position);
+      }
+      if (goal_dist < min_goal_dist) {
+        min_goal_dist = goal_dist;
+      }
+    }
+    goal_cost = min_goal_dist;
+    cost += goal_cost_wt_ * goal_cost;
+  } catch (const std::out_of_range & e) {
+    RCLCPP_ERROR(logger_, "calculateCost out_of_range: %s", e.what());
+    return std::numeric_limits<double>::infinity();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(logger_, "calculateCost exception: %s", e.what());
+    return std::numeric_limits<double>::infinity();
+  }
+  return cost;
+}
+
+double CaBotSocialMomentumController::getCostFromCostmap(const geometry_msgs::msg::Pose & pose)
+{
+  // This function returns the cost information from the costmap
+
+  unsigned int mx, my;
+  double wx = pose.position.x;
+  double wy = pose.position.y;
+
+  // Convert world coordinates to map coordinates
+  if (costmap_ros_->getCostmap()->worldToMap(wx, wy, mx, my))
+  {
+    // Get cost at map coordinates
+    return static_cast<double>(costmap_ros_->getCostmap()->getCost(mx, my));
+  }
+  else
+  {
+    // Return high cost if the position is out of bounds or in an unknown area
+    return 255.0;  // Maximum cost in costmap is typically 255 for obstacles
+  }
+}
+
+double CaBotSocialMomentumController::calculatePeopleCost(
+  const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory,
+  const std::vector<lidar_process_msgs::msg::PositionArray> & people_snapshot)
+{
+  double discount = 1.0;
+  double people_cost = 0.0;
+  const size_t num_time_steps = sampled_trajectory.size();
+
+  double min_dist;
+  for (size_t t = 0; t < num_time_steps; ++t)
+  {
+    try {
+      if (t < people_snapshot.size())
+      {
+        discount = std::pow(discount_factor_, static_cast<double>(t));
+        const auto & current_people = people_snapshot.at(t);  // at() for bounds check
+
+        min_dist = std::numeric_limits<double>::infinity();
+        for (size_t i = 0; i < current_people.positions.size(); ++i)
+        {
+          const auto & robot_pose = sampled_trajectory.at(t).pose;          // at() for bounds check
+          const auto & person     = current_people.positions.at(i);          // at() for bounds check
+          double dx = robot_pose.position.x - person.x;
+          double dy = robot_pose.position.y - person.y;
+          double dist = std::sqrt(dx * dx + dy * dy);
+          if (dist < 0.0001) dist = 0.0001;
+          if (dist < min_dist) min_dist = dist;
+        }
+        people_cost += discount * std::exp(collision_radius_ - min_dist);
+      }
+    } catch (const std::out_of_range &e) {
+      RCLCPP_ERROR(logger_, "calculatePeopleCost out_of_range: t=%zu traj=%zu people=%zu what=%s",
+        t, num_time_steps, people_snapshot.size(), e.what());
+      // Fail-safe: stop accumulating and return what we have
+      break;
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(logger_, "calculatePeopleCost exception at t=%zu: %s", t, e.what());
+      break;
+    }
+  }
+
+  return people_cost;
+}
+
+bool CaBotSocialMomentumController::isInteractingAgent(
+  const geometry_msgs::msg::PoseStamped & robot_pose,
+  const geometry_msgs::msg::Point & person_pos) const
+{
+  const double dx = person_pos.x - robot_pose.pose.position.x;
+  const double dy = person_pos.y - robot_pose.pose.position.y;
+  const double distance = std::hypot(dx, dy);
+  if (distance >= sm_interaction_distance_) {
+    return false;
+  }
+  const double robot_th = tf2::getYaw(robot_pose.pose.orientation);
+  const double direction = std::atan2(dy, dx);
+  constexpr double RAD2DEG = 57.29577951308232;
+  double rel = (direction - robot_th) * RAD2DEG;
+  while (rel > 180.0) rel -= 360.0;
+  while (rel < -180.0) rel += 360.0;
+  return std::abs(rel) <= sm_interaction_angle_deg_;
+}
+
+double CaBotSocialMomentumController::cross2D(double ax, double ay, double bx, double by) const
+{
+  return ax * by - ay * bx;
+}
+
+double CaBotSocialMomentumController::calculateSocialMomentumCost(
+  const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory,
+  const std::vector<lidar_process_msgs::msg::PositionArray> & people_snapshot)
+{
+  if (people_snapshot.size() < 2 || sampled_trajectory.size() < 2) {
+    return 0.0;
+  }
+
+  const size_t T = std::min(sampled_trajectory.size(), people_snapshot.size());
+  if (T < 2) {
+    return 0.0;
+  }
+
+  std::vector<std::unordered_map<int32_t, geometry_msgs::msg::Point>> people_by_t(T);
+  for (size_t t = 0; t < T; ++t) {
+    const auto & people_t = people_snapshot.at(t);
+    const size_t count = std::min(people_t.positions.size(), people_t.ids.size());
+    auto & map_t = people_by_t.at(t);
+    map_t.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      map_t[people_t.ids.at(i).data] = people_t.positions.at(i);
+    }
+  }
+  geometry_msgs::msg::PoseStamped robot_pose0;
+  robot_pose0.pose.position.x = robot_info.robot_pos.x;
+  robot_pose0.pose.position.y = robot_info.robot_pos.y;
+  tf2::Quaternion q0;
+  q0.setRPY(0.0, 0.0, robot_info.robot_th);
+  robot_pose0.pose.orientation = tf2::toMsg(q0);
+  std::unordered_map<int32_t, double> interaction_weights;
+  std::vector<int32_t> interacting_ids;
+  interacting_ids.reserve(people_by_t.at(0).size());
+
+  for (const auto & kv : people_by_t.at(0)) {
+    const int32_t pid = kv.first;
+    const auto & ped_pos = kv.second;
+    if (!isInteractingAgent(robot_pose0, ped_pos)) {
+      continue;
+    }
+    const double dx = ped_pos.x - robot_pose0.pose.position.x;
+    const double dy = ped_pos.y - robot_pose0.pose.position.y;
+    const double dist = std::hypot(dx, dy);
+    interaction_weights[pid] = 1.0 / std::max(dist, 0.01);
+    interacting_ids.push_back(pid);
+  }
+
+  if (interacting_ids.empty()) {
+    return 0.0;
+  }
+
+  const double rv = robot_info.robot_vel.linear.x;
+  const double rth = robot_info.robot_th;
+  const double rvx = rv * std::cos(rth);
+  const double rvy = rv * std::sin(rth);
+
+  double cost_social = 0.0;
+  for (const int32_t pid : interacting_ids) {
+    std::vector<double> l_values;
+    l_values.reserve(T);
+
+    double pvx = 0.0;
+    double pvy = 0.0;
+    for (size_t t = 0; t + 1 < T; ++t) {
+      const auto it0 = people_by_t.at(t).find(pid);
+      const auto it1 = people_by_t.at(t + 1).find(pid);
+      if (it0 != people_by_t.at(t).end() && it1 != people_by_t.at(t + 1).end()) {
+        pvx = (it1->second.x - it0->second.x) / sampling_rate_;
+        pvy = (it1->second.y - it0->second.y) / sampling_rate_;
+        break;
+      }
+    }
+
+    for (size_t t = 0; t < T; ++t) {
+      const auto it = people_by_t.at(t).find(pid);
+      if (it == people_by_t.at(t).end()) {
+        continue;
+      }
+      const auto & robot_pose_t = sampled_trajectory.at(t);
+      const auto & ped_pos = it->second;
+
+      const double cx = 0.5 * (robot_pose_t.pose.position.x + ped_pos.x);
+      const double cy = 0.5 * (robot_pose_t.pose.position.y + ped_pos.y);
+      const double rax = robot_pose_t.pose.position.x - cx;
+      const double ray = robot_pose_t.pose.position.y - cy;
+      const double rbx = ped_pos.x - cx;
+      const double rby = ped_pos.y - cy;
+      const double l = cross2D(rax, ray, rvx, rvy) + cross2D(rbx, rby, pvx, pvy);
+      l_values.push_back(l);
+    }
+
+    if (l_values.size() < 2) {
+      continue;
+    }
+
+    double ped_cost = 0.0;
+    for (size_t k = 0; k + 1 < l_values.size(); ++k) {
+      const double l0 = l_values.at(k);
+      const double l1 = l_values.at(k + 1);
+      if (l0 * l1 > 0.0) {
+        ped_cost -= sm_consistent_reward_ * std::abs(l0);
+      } else {
+        ped_cost += sm_switching_penalty_;
+      }
+    }
+    cost_social += interaction_weights.at(pid) * ped_cost;
+  }
+
+  return cost_social;
+}
+
+double CaBotSocialMomentumController::pointDist(
+    const geometry_msgs::msg::Point & p1,
+    const geometry_msgs::msg::Point & p2)
+{
+  double dx = p1.x - p2.x;
+  double dy = p1.y - p2.y;
+  return std::sqrt(dx * dx + dy * dy);
+}
+
+}  // namespace cabot_navigation2
+
+// Export the plugin
+#include "pluginlib/class_list_macros.hpp"
+PLUGINLIB_EXPORT_CLASS(cabot_navigation2::CaBotSocialMomentumController, nav2_core::Controller)

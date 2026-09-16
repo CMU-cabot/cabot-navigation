@@ -263,6 +263,7 @@ add_library(cabot_controllers SHARED
   plugins/cabot_sampling_MPC_controller.cpp
   plugins/cabot_rl_controller.cpp
   plugins/cabot_hybrid_rl_controller.cpp
+  plugins/cabot_social_momentum_controller.cpp
   plugins/util.cpp
 )
 ament_target_dependencies(cabot_controllers
