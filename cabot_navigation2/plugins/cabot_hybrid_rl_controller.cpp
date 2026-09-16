@@ -134,6 +134,9 @@ void CaBotHybridRLController::configure(
 
   current_command = geometry_msgs::msg::Twist();
   robot_info = lidar_process_msgs::msg::RobotMessage();
+  
+  rl_people_.clear();
+  RCLCPP_INFO(logger_, "CaBotHybridRLController configured");
 }
 
 void CaBotHybridRLController::localGoalVisualizationCallback()
@@ -161,28 +164,48 @@ void CaBotHybridRLController::localGoalVisualizationCallback()
   local_goal_visualization_pub_->publish(vis_msg);
 }
 
-void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people)
+void CaBotHybridRLController::rlPeopleCallback(const lidar_process_msgs::msg::PositionHistoryArray::SharedPtr rl_people_msg)
 {
-  // Pedestrian sequences: First time, then people
   auto node = node_.lock();
   rl_people_.clear();
-  horizon_people_ = rl_people->horizon;
+  horizon_people_ = rl_people_msg->positions_history.size();
+  rl_people_tmp_ = rl_people_msg->positions_history;
   if (horizon_people_ == 0) {
     num_people_ = 0;
     return;
   }
-  for (size_t i = 0; i < horizon_people_; ++i) {
-    lidar_process_msgs::msg::PositionArray people_array;
-    people_array.quantity = rl_people->positions_history[i].quantity;
-    num_people_ = people_array.quantity;
-    for (size_t j = 0; j < people_array.quantity; ++j) {
-      geometry_msgs::msg::Point pos;
-      pos.x = rl_people->positions_history[i].positions[j].x;
-      pos.y = rl_people->positions_history[i].positions[j].y;
-      people_array.positions.push_back(pos);
-      people_array.ids.push_back(rl_people->positions_history[i].ids[j]);
+  try {
+    for (size_t i = 0; i < horizon_people_; ++i) {
+      const auto & hist = rl_people_tmp_.at(i);  // at() for bounds check
+
+      const size_t pos_sz = hist.positions.size();
+      const size_t ids_sz = hist.ids.size();
+      const size_t count  = std::min(pos_sz, ids_sz);  // clamp by both vectors
+
+      lidar_process_msgs::msg::PositionArray people_array;
+      people_array.quantity = static_cast<uint32_t>(count);
+      num_people_ = static_cast<uint32_t>(count);
+
+      people_array.positions.reserve(count);
+      people_array.ids.reserve(count);
+
+      for (size_t j = 0; j < count; ++j) {
+        geometry_msgs::msg::Point pos;
+        pos.x = hist.positions.at(j).x;  // at() for bounds check
+        pos.y = hist.positions.at(j).y;
+        people_array.positions.push_back(pos);
+        people_array.ids.push_back(hist.ids.at(j));  // at() for bounds check
+      }
+      rl_people_.push_back(std::move(people_array));
     }
-    rl_people_.push_back(people_array);
+  } catch (const std::out_of_range &e) {
+    RCLCPP_ERROR(logger_, "rlPeopleCallback out_of_range: history=%zu horizon=%zu what=%s",
+      rl_people_tmp_.size(), horizon_people_, e.what());
+    // Leave rl_people_ as-is (cleared) to fail-safe
+    num_people_ = 0;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger_, "rlPeopleCallback exception: %s", e.what());
+    num_people_ = 0;
   }
 }
 
@@ -233,9 +256,32 @@ void CaBotHybridRLController::deactivate()
 void CaBotHybridRLController::setPlan(const nav_msgs::msg::Path & path)
 {
   auto node = node_.lock();
-  // Transform global path into the robot's frame
-  global_plan = path;
-  last_visited_index_ = 0;
+  // Check if path's positions are the same as the current global plan
+  bool same = true;
+  if (path.poses.size() == global_plan_.poses.size()) {
+    for (size_t i = 0; i < path.poses.size(); ++i) {
+      if (abs(path.poses[i].pose.position.x - global_plan_.poses[i].pose.position.x) > 0.0001 ||
+          abs(path.poses[i].pose.position.y - global_plan_.poses[i].pose.position.y) > 0.0001) {
+        same = false;
+        break;
+      }
+    }
+  } else {
+    same = false;
+  }
+  if (same) {
+    RCLCPP_INFO(logger_, "Received same global plan, ignoring.");
+    return;
+  } else {
+    global_plan_ = path;
+    last_visited_index_ = 0;
+    RCLCPP_INFO(logger_, "Received new global plan with %zu points.", global_plan_.poses.size());
+    for (size_t i = 0; i < global_plan_.poses.size(); ++i) {
+      auto pose = global_plan_.poses[i];
+      RCLCPP_INFO(logger_, "Path point %zu: (%.2f, %.2f)", i, pose.pose.position.x, pose.pose.position.y);
+    }
+    return;
+  }
 }
 
 void CaBotHybridRLController::setSpeedLimit(const double & speed_limit, const bool & percentage)
@@ -249,7 +295,7 @@ geometry_msgs::msg::TwistStamped CaBotHybridRLController::computeVelocityCommand
 {
   // This wrapper fucntion calls the function that computes the velocity commands
 
-  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Request Sent A");
+  RCLCPP_INFO(logger_, "Request Sent A");
 
   auto node = node_.lock();
 
@@ -257,23 +303,23 @@ geometry_msgs::msg::TwistStamped CaBotHybridRLController::computeVelocityCommand
   velocity_cmd.header.stamp = node->now();
   velocity_cmd.header.frame_id = "base_link";
 
-  if (global_plan.poses.size() == 0) {
+  if (global_plan_.poses.size() == 0) {
     return velocity_cmd;
   }
 
   // Call your RL function to compute the optimal control action
-  geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
+  geometry_msgs::msg::PoseStamped  local_goal= getLookaheadPoint(pose, global_plan_);
   curr_local_goal_ = local_goal;
 
-   // temporary code for goal handling! (DANGER!)
-  double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
-  if (goal_dist < focus_goal_dist_) {
-    double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
-    double current_heading = tf2::getYaw(pose.pose.orientation);
-    velocity_cmd.twist.linear.x = 1.0;
-    velocity_cmd.twist.angular.z = std::min(1.0, desired_heading - current_heading);
-    return velocity_cmd;
-  }
+  //  // temporary code for goal handling! (DANGER!)
+  // double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
+  // if (goal_dist < focus_goal_dist_) {
+  //   double desired_heading = std::atan2(local_goal.pose.position.y - pose.pose.position.y, local_goal.pose.position.x - pose.pose.position.x);
+  //   double current_heading = tf2::getYaw(pose.pose.orientation);
+  //   velocity_cmd.twist.linear.x = 1.0;
+  //   velocity_cmd.twist.angular.z = std::min(1.0, desired_heading - current_heading);
+  //   return velocity_cmd;
+  // }
 
   robot_info.robot_pos.x = pose.pose.position.x;
   robot_info.robot_pos.y = pose.pose.position.y;
@@ -302,14 +348,14 @@ geometry_msgs::msg::Twist CaBotHybridRLController::computeMPCControl(
 
   nav_msgs::msg::Path best_trajectory;
 
-  // temporary code for goal handling! (DANGER!)
+  // temporary code for goal handling! The robot heads straight to the goal.
   double goal_dist = pointDist(pose.pose.position, curr_local_goal_.pose.position);
   if (goal_dist < focus_goal_dist_) {
     double desired_heading = std::atan2(curr_local_goal_.pose.position.y - pose.pose.position.y, 
                                         curr_local_goal_.pose.position.x - pose.pose.position.x);
     double current_heading = tf2::getYaw(pose.pose.orientation);
-    best_control.linear.x = 1.0;
-    best_control.angular.z = std::max(-1.0, std::min(1.0, desired_heading - current_heading));
+    best_control.linear.x = max_linear_velocity_;
+    best_control.angular.z = std::max(-max_angular_velocity_, std::min(max_angular_velocity_, desired_heading - current_heading));
     return best_control;
   }
 
@@ -372,7 +418,7 @@ std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesSimple(
       double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
 
       // Predict the trajectory over the prediction horizon
-      for (double t = 0; t <= prediction_horizon_; t += sampling_rate_)
+      for (double t = sampling_rate_; t <= prediction_horizon_; t += sampling_rate_)
       {
         // Simulate robot dynamics
         if (abs(angular_vel) < 0.0001)
@@ -405,6 +451,94 @@ std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesSimple(
   return trajectories;
 }
 
+std::vector<Trajectory> CaBotHybridRLController::generateTrajectoriesImproved(
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  const geometry_msgs::msg::Twist & velocity)
+{
+  // This function samples trajectories that follow a fixed linear velocity
+  // But the angular velocity can change in the middle of the duration
+  std::vector<Trajectory> trajectories;
+
+  double linear_sample_resolution = max_linear_velocity_ / linear_sample_size_;
+  double angular_vel_lim = max_angular_velocity_;
+  double angular_sample_resolution = angular_vel_lim / angular_sample_size_;
+
+  // Sample a set of linear velocities
+  for (double initial_linear_vel = 0.0; initial_linear_vel <= max_linear_velocity_; initial_linear_vel += linear_sample_resolution)
+  {
+    double secondary_max_linear_velocity;
+    if (abs(initial_linear_vel) < 0.001) {
+      secondary_max_linear_velocity = 0.001;
+    } else {
+      secondary_max_linear_velocity = max_linear_velocity_;
+    }
+    for (double secondary_linear_vel = 0.0; secondary_linear_vel <= secondary_max_linear_velocity; secondary_linear_vel += linear_sample_resolution)
+    {
+      // Sample initial and secondary angular velocities
+      for (double initial_angular_vel = -angular_vel_lim; initial_angular_vel <= angular_vel_lim; initial_angular_vel += angular_sample_resolution)
+      {
+        for (double secondary_angular_vel = -angular_vel_lim; secondary_angular_vel <= angular_vel_lim; secondary_angular_vel += angular_sample_resolution)
+        {
+          // Start with the current pose and initial control
+          geometry_msgs::msg::PoseStamped current_pose_copy = current_pose;
+          double current_x = current_pose_copy.pose.position.x;
+          double current_y = current_pose_copy.pose.position.y;
+          double current_theta = tf2::getYaw(current_pose_copy.pose.orientation);
+
+          std::vector<geometry_msgs::msg::PoseStamped> trajectory;
+          geometry_msgs::msg::Twist initial_control;
+          initial_control.linear.x = initial_linear_vel;
+          initial_control.angular.z = initial_angular_vel;
+
+          // Determine the time at which to switch to the secondary angular velocity
+          double switch_time = prediction_horizon_ / 2.0;
+
+          // Predict the trajectory over the prediction horizon
+          for (double t = sampling_rate_; t <= prediction_horizon_; t += sampling_rate_)
+          {
+            // Use initial angular velocity before switch time, secondary after
+            double angular_vel;
+            double linear_vel;
+            if (t < switch_time) {
+              angular_vel = initial_angular_vel;
+              linear_vel = initial_linear_vel;
+            } else {
+              angular_vel = secondary_angular_vel;
+              linear_vel = secondary_linear_vel;
+            }
+
+            // Simulate robot dynamics
+            if (abs(angular_vel) < 0.0001)
+            {
+              current_x += linear_vel * sampling_rate_ * cos(current_theta);
+              current_y += linear_vel * sampling_rate_ * sin(current_theta);
+            } else{
+              current_x += linear_vel / angular_vel * (sin(current_theta + angular_vel * sampling_rate_) - sin(current_theta));
+              current_y -= linear_vel / angular_vel * (cos(current_theta + angular_vel * sampling_rate_) - cos(current_theta));
+            }
+            current_theta += angular_vel * sampling_rate_;
+            
+
+            geometry_msgs::msg::PoseStamped predicted_pose;
+            predicted_pose.pose.position.x = current_x;
+            predicted_pose.pose.position.y = current_y;
+            tf2::Quaternion q;
+            q.setRPY(0, 0, current_theta);
+            predicted_pose.pose.orientation = tf2::toMsg(q);
+
+            trajectory.push_back(predicted_pose);
+          }
+
+          // Store this trajectory with its initial control
+          trajectories.push_back(Trajectory(initial_control, trajectory));
+        }
+      }
+    }
+  }
+
+  return trajectories;
+}
+
 geometry_msgs::msg::PoseStamped CaBotHybridRLController::getLookaheadPoint(
   const geometry_msgs::msg::PoseStamped & current_pose,
   const nav_msgs::msg::Path & global_plan)
@@ -413,10 +547,11 @@ geometry_msgs::msg::PoseStamped CaBotHybridRLController::getLookaheadPoint(
   // on the global plan
 
   geometry_msgs::msg::PoseStamped lookahead_point;
-  lookahead_point = global_plan.poses.back();
 
   double current_x = current_pose.pose.position.x;
   double current_y = current_pose.pose.position.y;
+
+  bool found_point = false;
 
   for (size_t i = last_visited_index_; i < global_plan.poses.size(); ++i)
   {
@@ -428,10 +563,19 @@ geometry_msgs::msg::PoseStamped CaBotHybridRLController::getLookaheadPoint(
     {
       lookahead_point = global_plan.poses[i];
       last_visited_index_ = i;  // Update last visited index
+      found_point = true;
       break;
     }
   }
 
+  // If no point is found beyond the lookahead distance, use the last point
+  if (!found_point)
+  {
+    lookahead_point = global_plan.poses.back();
+    last_visited_index_ = global_plan.poses.size() - 1;
+  }
+
+  // Clamp the lookahead point to be within max_lookahead_
   if (pointDist(current_pose.pose.position, lookahead_point.pose.position) > max_lookahead_) {
     double angle_to_goal = std::atan2(lookahead_point.pose.position.y - current_y, lookahead_point.pose.position.x - current_x);
     lookahead_point.pose.position.x = current_x + max_lookahead_ * std::cos(angle_to_goal);
@@ -530,36 +674,40 @@ double CaBotHybridRLController::getCostFromCostmap(const geometry_msgs::msg::Pos
 double CaBotHybridRLController::calculatePeopleCost(
   const std::vector<geometry_msgs::msg::PoseStamped> & sampled_trajectory)
 {
-  // This function estimates the cost of a trajectory against the predicted people trajectories
   double discount = 1.0;
   double people_cost = 0.0;
-  size_t num_time_steps = sampled_trajectory.size();
+  const size_t num_time_steps = sampled_trajectory.size();
 
-  // Iterate over each time step in the sampled trajectory
   double min_dist;
   for (size_t t = 0; t < num_time_steps; ++t)
   {
-    if (t < horizon_people_)
-    {
-      discount = std::pow(discount_factor_, t);  // Apply discount factor for future time steps
-      lidar_process_msgs::msg::PositionArray current_people = rl_people_[t];
-
-      // Compare the robot trajectory at time t with people trajectories at the same time
-      min_dist = std::numeric_limits<double>::infinity();
-      for (size_t i = 0; i < current_people.quantity; ++i)
+    try {
+      if (t < rl_people_.size())
       {
-        double dx = sampled_trajectory[t].pose.position.x - current_people.positions[i].x;
-        double dy = sampled_trajectory[t].pose.position.y - current_people.positions[i].y;
-        double dist = std::sqrt(dx * dx + dy * dy);
-        if (dist < 0.0001) {
-          dist = 0.0001;
+        discount = std::pow(discount_factor_, static_cast<double>(t));
+        const auto & current_people = rl_people_.at(t);  // at() for bounds check
+
+        min_dist = std::numeric_limits<double>::infinity();
+        for (size_t i = 0; i < current_people.positions.size(); ++i)
+        {
+          const auto & robot_pose = sampled_trajectory.at(t).pose;          // at() for bounds check
+          const auto & person     = current_people.positions.at(i);          // at() for bounds check
+          double dx = robot_pose.position.x - person.x;
+          double dy = robot_pose.position.y - person.y;
+          double dist = std::sqrt(dx * dx + dy * dy);
+          if (dist < 0.0001) dist = 0.0001;
+          if (dist < min_dist) min_dist = dist;
         }
-        if (dist < min_dist) {
-          min_dist = dist;
-        }
-        // Accumulate cost based on distance (e.g., inverse distance)
-        people_cost += discount * std::exp(collision_radius_ - dist);
+        people_cost += discount * std::exp(collision_radius_ - min_dist);
       }
+    } catch (const std::out_of_range &e) {
+      RCLCPP_ERROR(logger_, "calculatePeopleCost out_of_range: t=%zu traj=%zu people=%zu what=%s",
+        t, num_time_steps, rl_people_.size(), e.what());
+      // Fail-safe: stop accumulating and return what we have
+      break;
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(logger_, "calculatePeopleCost exception at t=%zu: %s", t, e.what());
+      break;
     }
   }
 

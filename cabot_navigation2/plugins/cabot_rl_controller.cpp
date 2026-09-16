@@ -250,10 +250,11 @@ geometry_msgs::msg::PoseStamped CaBotRLController::getLookaheadPoint(
   // on the global plan
 
   geometry_msgs::msg::PoseStamped lookahead_point;
-  lookahead_point = global_plan.poses.back();
 
   double current_x = current_pose.pose.position.x;
   double current_y = current_pose.pose.position.y;
+
+  bool found_point = false;
 
   for (size_t i = last_visited_index_; i < global_plan.poses.size(); ++i)
   {
@@ -265,10 +266,19 @@ geometry_msgs::msg::PoseStamped CaBotRLController::getLookaheadPoint(
     {
       lookahead_point = global_plan.poses[i];
       last_visited_index_ = i;  // Update last visited index
+      found_point = true;
       break;
     }
   }
 
+  // If no point is found beyond the lookahead distance, use the last point
+  if (!found_point)
+  {
+    lookahead_point = global_plan.poses.back();
+    last_visited_index_ = global_plan.poses.size() - 1;
+  }
+
+  // Clamp the lookahead point to be within max_lookahead_
   if (pointDist(current_pose.pose.position, lookahead_point.pose.position) > max_lookahead_) {
     double angle_to_goal = std::atan2(lookahead_point.pose.position.y - current_y, lookahead_point.pose.position.x - current_x);
     lookahead_point.pose.position.x = current_x + max_lookahead_ * std::cos(angle_to_goal);

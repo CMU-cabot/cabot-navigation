@@ -161,6 +161,9 @@ GroupObstacleLayer::updateBounds(
 void
 GroupObstacleLayer::onFootprintChanged()
 {
+  if (!enabled_) {
+    return;
+  }
   need_recalculation_ = true;
 
   RCLCPP_DEBUG(rclcpp::get_logger(
