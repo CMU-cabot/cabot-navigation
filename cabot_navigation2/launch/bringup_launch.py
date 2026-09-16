@@ -41,28 +41,47 @@ from nav2_common.launch import RewrittenYaml
 from cabot_common.launch import AppendLogDirPrefix
 
 
-# map CABOT_CONTROLLER value -> nav2 controller plugin id used in the behavior tree
-CONTROLLER_ID_MAP = {
-    'sm': 'SocialMomentumFollowPath',
-    'rl': 'RLFollowPath',
-    'hybrid': 'HybridRLFollowPath',
-    'follow': 'FollowPath',
+# CABOT_CONTROLLER -> (nav2 params file, controller plugin id, planner plugin id)
+#
+# The controller and planner ids are the ones the behavior tree (cabot_bt's
+# navigation.xml) asks for. The RL / MPC based controllers consume the path of the
+# PathForward planner; the stock FollowPath controller expects the CaBot planner.
+#
+# Each params file differs only in its controller_plugins list, so only the selected
+# controller is instantiated.
+#
+# 'rl' and 'crowdattn' share nav2_params_rl.yaml on purpose: they differ only in which
+# policy lidar_process' rl_server runs, and both publish /rl_robot_cmd for
+# CaBotRLController. 'mpc' needs no rl_server at all, CaBotSamplingMPCController
+# subscribes to nothing from lidar_process.
+CONTROLLERS = {
+    'follow':    ('nav2_params_follow.yaml',          'FollowPath',               'CaBot'),
+    'mpc':       ('nav2_params_mpc.yaml',             'MPCFollowPath',            'PathForward'),
+    'rl':        ('nav2_params_rl.yaml',              'RLFollowPath',             'PathForward'),
+    'crowdattn': ('nav2_params_rl.yaml',              'RLFollowPath',             'PathForward'),
+    'hybrid':    ('nav2_params_hybrid.yaml',          'HybridRLFollowPath',       'PathForward'),
+    'sm':        ('nav2_params_social_momentum.yaml', 'SocialMomentumFollowPath', 'PathForward'),
 }
-# controller ids that represent the swappable main-navigation controller
-# (FollowPathElevator etc. must never be rewritten)
-SWAPPABLE_CONTROLLER_IDS = set(CONTROLLER_ID_MAP.values()) | {'MPCFollowPath'}
+DEFAULT_CONTROLLER = 'follow'
 
-# map CABOT_CONTROLLER value -> nav2 planner plugin id used in the behavior tree.
-# the RL/MPC based controllers consume the path of the PathForward planner, while
-# the default FollowPath controller expects the path of the CaBot planner.
-PLANNER_ID_MAP = {
-    'sm': 'PathForward',
-    'rl': 'PathForward',
-    'hybrid': 'PathForward',
-    'follow': 'CaBot',
-}
-# planner ids that represent the swappable main-navigation planner
-SWAPPABLE_PLANNER_IDS = set(PLANNER_ID_MAP.values())
+# ids that represent the swappable main-navigation controller / planner.
+# FollowPathElevator and the other special purpose ids must never be rewritten.
+SWAPPABLE_CONTROLLER_IDS = set(c for _, c, _ in CONTROLLERS.values())
+SWAPPABLE_PLANNER_IDS = set(p for _, _, p in CONTROLLERS.values())
+
+
+def selected_controller():
+    """Return the CABOT_CONTROLLER value, or DEFAULT_CONTROLLER if unset or unknown.
+
+    An unknown value is reported rather than silently ignored: falling back to
+    FollowPath looks like the robot working, just not with the controller that was
+    asked for, which is easy to miss on a running robot."""
+    name = os.environ.get('CABOT_CONTROLLER', '') or DEFAULT_CONTROLLER
+    if name not in CONTROLLERS:
+        print("bringup_launch: unknown CABOT_CONTROLLER '{}', using '{}' (known values: {})".format(
+            name, DEFAULT_CONTROLLER, ', '.join(sorted(CONTROLLERS))))
+        return DEFAULT_CONTROLLER
+    return name
 
 
 def sampling_controller_max_speed():
@@ -100,8 +119,7 @@ def sync_navigation_bt_controller(controller_type):
     the other controller expects. Only active (uncommented) lines whose current id is a
     swappable one are changed; the file is left untouched (and self-corrects) on the
     next launch."""
-    controller_id = CONTROLLER_ID_MAP.get(controller_type, 'FollowPath')
-    planner_id = PLANNER_ID_MAP.get(controller_type, 'CaBot')
+    _, controller_id, planner_id = CONTROLLERS[controller_type]
     bt_file = os.path.join(
         get_package_share_directory('cabot_bt'),
         'behavior_trees', 'navigation.xml')
@@ -188,15 +206,8 @@ def generate_launch_description():
         'offset_normal': offset
     }
     
-    controller_type = os.environ.get('CABOT_CONTROLLER', 'follow')
-    
-    nav2_param_file = "nav2_params_follow.yaml"
-    if controller_type == 'rl':
-        nav2_param_file = "nav2_params_rl.yaml"
-    elif controller_type == 'hybrid':
-        nav2_param_file = "nav2_params_hybrid.yaml"
-    elif controller_type == 'sm':
-        nav2_param_file = "nav2_params_social_momentum.yaml"
+    controller_type = selected_controller()
+    nav2_param_file = CONTROLLERS[controller_type][0]
 
     # keep the behavior tree's controller_id / planner_id in sync with CABOT_CONTROLLER
     sync_navigation_bt_controller(controller_type)
