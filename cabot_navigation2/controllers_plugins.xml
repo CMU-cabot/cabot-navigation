@@ -46,5 +46,9 @@
 	   base_class_type="nav2_core::Controller">
       <description>Social Momentum Local Planner</description>
     </class>
+    <class type="cabot_navigation2::CaBotBlindController"
+	   base_class_type="nav2_core::Controller">
+      <description>Pure pursuit local planner that uses no perception input</description>
+    </class>
   </library>
 </class_libraries>

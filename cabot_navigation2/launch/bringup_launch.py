@@ -52,10 +52,17 @@ from cabot_common.launch import AppendLogDirPrefix
 #
 # 'rl' and 'crowdattn' share nav2_params_rl.yaml on purpose: they differ only in which
 # policy lidar_process' rl_server runs, and both publish /rl_robot_cmd for
-# CaBotRLController. 'mpc' needs no rl_server at all, CaBotSamplingMPCController
-# subscribes to nothing from lidar_process.
+# CaBotRLController. 'mpc' and 'blind' need no rl_server at all: neither
+# CaBotSamplingMPCController nor CaBotBlindController subscribes to anything from
+# lidar_process.
+#
+# 'blind' is the no-perception baseline: it follows the CaBot planner's path at a
+# constant speed and reads no costmap and no /people. That is not unsafe here,
+# because stopping for obstacles happens downstream of every controller, in
+# lidar_speed_control_node -> speed_control_node.
 CONTROLLERS = {
     'follow':    ('nav2_params_follow.yaml',          'FollowPath',               'CaBot'),
+    'blind':     ('nav2_params_blind.yaml',           'BlindFollowPath',          'CaBot'),
     'mpc':       ('nav2_params_mpc.yaml',             'MPCFollowPath',            'PathForward'),
     'rl':        ('nav2_params_rl.yaml',              'RLFollowPath',             'PathForward'),
     'crowdattn': ('nav2_params_rl.yaml',              'RLFollowPath',             'PathForward'),
