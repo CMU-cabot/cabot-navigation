@@ -56,13 +56,21 @@ from cabot_common.launch import AppendLogDirPrefix
 # CaBotSamplingMPCController nor CaBotBlindController subscribes to anything from
 # lidar_process.
 #
-# 'blind' is the no-perception baseline: it follows the CaBot planner's path at a
-# constant speed and reads no costmap and no /people. That is not unsafe here,
+# 'blind' is the no-perception baseline: it drives the NavCog route as it is, at a
+# constant speed, and reads no costmap and no /people. That is not unsafe here,
 # because stopping for obstacles happens downstream of every controller, in
 # lidar_speed_control_node -> speed_control_node.
+#
+# Its planner has to be PathForward, not CaBot. The controller never looks at
+# obstacles, but the CaBot planner does: it bends the path around stationary
+# people and obstacles within path_width, and the behavior tree's AvoidPeople
+# branch re-runs it every 5 s. With CaBot the robot therefore still steered
+# around a person in its way -- the avoidance just came from the path instead of
+# the controller. PathForward hands the route over unmodified, so the robot
+# heads down it without noticing anyone and only the distance sensor stops it.
 CONTROLLERS = {
     'follow':    ('nav2_params_follow.yaml',          'FollowPath',               'CaBot'),
-    'blind':     ('nav2_params_blind.yaml',           'BlindFollowPath',          'CaBot'),
+    'blind':     ('nav2_params_blind.yaml',           'BlindFollowPath',          'PathForward'),
     'mpc':       ('nav2_params_mpc.yaml',             'MPCFollowPath',            'PathForward'),
     'rl':        ('nav2_params_rl.yaml',              'RLFollowPath',             'PathForward'),
     'crowdattn': ('nav2_params_rl.yaml',              'RLFollowPath',             'PathForward'),
