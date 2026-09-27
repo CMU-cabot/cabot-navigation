@@ -60,6 +60,12 @@ set(_pytest_tests
   # Add other test files here
 )
 
+ament_add_pytest_test(test_navigation_loop test_navigation_loop.py
+  ENV ROS_DOMAIN_ID=93
+  APPEND_ENV PYTHONPATH=${CMAKE_SOURCE_DIR}
+  TIMEOUT 30
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 foreach(_test_path ${_pytest_tests})
   get_filename_component(_test_name ${_test_path} NAME_WE)
   ament_add_pytest_test(${_test_name} ${_test_path}

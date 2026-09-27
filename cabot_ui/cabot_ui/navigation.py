@@ -399,6 +399,7 @@ class Navigation(ControlBase, navgoal.GoalInterface):
 
         self._clients: dict[str, ActionClient] = {}
 
+        self._action_node = act_node
         self._main_callback_group = MutuallyExclusiveCallbackGroup()
 
         for ns in Navigation.NS:
@@ -858,7 +859,10 @@ class Navigation(ControlBase, navgoal.GoalInterface):
         self._logger.info(F"navigation.{util.callee_name()} called")
         if self.lock.acquire():
             if self._loop_handle is None:
-                self._loop_handle = self._node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
+                # Keep this timer and the action callbacks on the same executor.
+                # Sharing a mutually exclusive group across executors can strand
+                # the timer when the other executor releases the callback group.
+                self._loop_handle = self._action_node.create_timer(0.1, self._check_loop, callback_group=self._main_callback_group)
             self.lock.release()
 
     def _stop_loop(self):
