@@ -17,6 +17,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rcl REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
 find_package(nav2_msgs REQUIRED)
@@ -54,6 +55,8 @@ set(dependencies
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(yaml_cpp_vendor REQUIRED)
+  ament_add_gtest(cabot_bt_test_select_controller test/test_select_controller.cpp)
+  ament_target_dependencies(cabot_bt_test_select_controller ${dependencies} std_srvs)
   ament_add_gtest(${PROJECT_NAME}_test_check_path
     plugins/condition/check_path.cpp
     test/test_check_path.cpp
@@ -171,6 +174,10 @@ add_library(cabot_current_pose_bt_node SHARED
   plugins/action/current_pose.cpp
 )
 list(APPEND plugin_libs cabot_current_pose_bt_node)
+
+add_library(cabot_select_controller_bt_node SHARED plugins/action/select_controller.cpp)
+ament_target_dependencies(cabot_select_controller_bt_node std_srvs)
+list(APPEND plugin_libs cabot_select_controller_bt_node)
 
 foreach(bt_plugin ${plugin_libs})
   ament_target_dependencies(${bt_plugin} ${dependencies})

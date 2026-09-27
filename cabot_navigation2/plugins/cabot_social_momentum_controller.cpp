@@ -145,14 +145,12 @@ void CaBotSocialMomentumController::configure(
       rl_people_topic_, sensor_qos, std::bind(&CaBotSocialMomentumController::rlPeopleCallback, this, std::placeholders::_1));
 
   rl_info_pub_ = node->create_publisher<lidar_process_msgs::msg::RobotMessage>(rl_info_topic_, 10);
-  rl_info_pub_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotSocialMomentumController::rlInfoCallback, this));
 
   // Publish selected trajectory for visualization purposes
   trajectory_visualization_pub_ = node->create_publisher<nav_msgs::msg::Path>(traj_vis_topic_, 10);
 
   // Publish current local goal for visualization purposes
   local_goal_visualization_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(loc_goal_vis_topic_, 10);
-  loc_goal_vis_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotSocialMomentumController::localGoalVisualizationCallback, this));
 
   current_command = geometry_msgs::msg::Twist();
   robot_info = lidar_process_msgs::msg::RobotMessage();
@@ -170,7 +168,7 @@ void CaBotSocialMomentumController::localGoalVisualizationCallback()
 
   vis_msg.header.stamp = node->now();
   vis_msg.header.frame_id = "map";
-  vis_msg.ns = "cabot_navigation2";
+  vis_msg.ns = name_ + "/local_goal";
   vis_msg.id = 0;
   vis_msg.type = 2;
   vis_msg.action = 0;
@@ -258,6 +256,7 @@ void CaBotSocialMomentumController::rlSubgoalCallback(const geometry_msgs::msg::
   auto node = node_.lock();
   rl_subgoal_.x = rl_subgoal->x;
   rl_subgoal_.y = rl_subgoal->y;
+  rl_ready_ = true;
 }
 
 void CaBotSocialMomentumController::rlInfoCallback()
@@ -353,6 +352,7 @@ geometry_msgs::msg::TwistStamped CaBotSocialMomentumController::computeVelocityC
   // Call your RL function to compute the optimal control action
   geometry_msgs::msg::PoseStamped  local_goal= getLookaheadPoint(pose, global_plan_);
   curr_local_goal_ = local_goal;
+  localGoalVisualizationCallback();
 
   //  // temporary code for goal handling! (DANGER!)
   // double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
@@ -371,6 +371,11 @@ geometry_msgs::msg::TwistStamped CaBotSocialMomentumController::computeVelocityC
   robot_info.robot_vel.angular.z = velocity.angular.z;
   robot_info.robot_goal.x = local_goal.pose.position.x;
   robot_info.robot_goal.y = local_goal.pose.position.y;
+  // Only the controller computing this command may supply the shared RL input.
+  rlInfoCallback();
+  if (!rl_ready_) {
+    return velocity_cmd;
+  }
 
   // Call your MPC function to compute the optimal control action
   try {

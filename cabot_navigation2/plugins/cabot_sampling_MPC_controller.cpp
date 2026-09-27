@@ -151,7 +151,6 @@ void CaBotSamplingMPCController::configure(
 
   // Publish current local goal for visualization purposes
   local_goal_visualization_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(loc_goal_vis_topic_, 10);
-  loc_goal_vis_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotSamplingMPCController::localGoalVisualizationCallback, this));
 
   RCLCPP_INFO(logger_, "MPC controller configured with prediction horizon: %.2f, sampling rate: %.2f",
     prediction_horizon_, sampling_rate_);
@@ -206,7 +205,7 @@ void CaBotSamplingMPCController::localGoalVisualizationCallback()
 
   vis_msg.header.stamp = node->now();
   vis_msg.header.frame_id = "map";
-  vis_msg.ns = "cabot_navigation2";
+  vis_msg.ns = name_ + "/local_goal";
   vis_msg.id = 0;
   vis_msg.type = 2;
   vis_msg.action = 0;
@@ -301,6 +300,7 @@ geometry_msgs::msg::Twist CaBotSamplingMPCController::computeMPCControl(
   // Get the local goal
   geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
   curr_local_goal_ = local_goal;
+  localGoalVisualizationCallback();
   RCLCPP_INFO(logger_, "Local goal is: x %.2f, y %.2f",
     local_goal.pose.position.x, local_goal.pose.position.y);
 

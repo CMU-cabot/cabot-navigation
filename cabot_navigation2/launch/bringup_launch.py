@@ -21,6 +21,8 @@
 import os
 import os.path
 import re
+import tempfile
+import yaml
 
 from launch.logging import launch_config
 from ament_index_python.packages import get_package_share_directory
@@ -135,30 +137,62 @@ def sync_navigation_bt_controller(controller_type):
     swappable one are changed; the file is left untouched (and self-corrects) on the
     next launch."""
     _, controller_id, planner_id = CONTROLLERS[controller_type]
+    online = os.environ.get('CABOT_CONTROLLER_SWITCHING', '0') == '1'
+    if online:
+        controller_id, planner_id = '{selected_controller}', '{selected_planner}'
     bt_file = os.path.join(
         get_package_share_directory('cabot_bt'),
         'behavior_trees', 'navigation.xml')
     try:
         with open(bt_file) as f:
-            lines = f.readlines()
+            lines = [line for line in f.readlines() if '<SelectController ' not in line]
     except OSError:
         return
-    changed = False
+    changed = True
     for i, line in enumerate(lines):
         if '<!--' in line:
             continue
         if '<FollowPath' in line:
-            new_line = rewrite_bt_id(line, 'controller_id', controller_id, SWAPPABLE_CONTROLLER_IDS)
+            new_line = rewrite_bt_id(line, 'controller_id', controller_id, SWAPPABLE_CONTROLLER_IDS | {'{selected_controller}'})
         elif '<ComputePathToPose' in line:
-            new_line = rewrite_bt_id(line, 'planner_id', planner_id, SWAPPABLE_PLANNER_IDS)
+            new_line = rewrite_bt_id(line, 'planner_id', planner_id, SWAPPABLE_PLANNER_IDS | {'{selected_planner}'})
         else:
             continue
         if new_line is not None:
             lines[i] = new_line
             changed = True
+    if online:
+        for i, line in enumerate(lines):
+            if '<Sequence>' in line:
+                lines.insert(i + 1, '      <SelectController service_name="/cabot/get_controller" '
+                             'server_timeout="60000" controller="{selected_controller}" '
+                             'planner="{selected_planner}" />\n')
+                break
     if changed:
         with open(bt_file, 'w') as f:
             f.writelines(lines)
+
+
+
+def online_controller_params(pkg_dir):
+    """Merge the canonical plugin blocks, preserving each controller's settings."""
+    with open(os.path.join(pkg_dir, 'params', 'nav2_params_follow.yaml')) as stream:
+        params = yaml.safe_load(stream)
+    controllers = params['controller_server']['ros__parameters']
+    names = list(controllers['controller_plugins'])
+    for filename, controller_id, _ in CONTROLLERS.values():
+        with open(os.path.join(pkg_dir, 'params', filename)) as stream:
+            source = yaml.safe_load(stream)['controller_server']['ros__parameters']
+        controllers[controller_id] = source[controller_id]
+        if controller_id not in names:
+            names.append(controller_id)
+    controllers['controller_plugins'] = names
+    params['bt_navigator']['ros__parameters']['plugin_lib_names'].append(
+        'cabot_select_controller_bt_node')
+    with tempfile.NamedTemporaryFile(mode='w', prefix='controllers-', suffix='.yaml',
+                                     dir=launch_config.log_dir, delete=False) as stream:
+        yaml.safe_dump(params, stream)
+        return stream.name
 
 
 def generate_launch_description():
@@ -223,6 +257,8 @@ def generate_launch_description():
     
     controller_type = selected_controller()
     nav2_param_file = CONTROLLERS[controller_type][0]
+    if os.environ.get('CABOT_CONTROLLER_SWITCHING', '0') == '1':
+        nav2_param_file = online_controller_params(pkg_dir)
 
     # keep the behavior tree's controller_id / planner_id in sync with CABOT_CONTROLLER
     sync_navigation_bt_controller(controller_type)

@@ -135,9 +135,22 @@ def generate_launch_description():
         LogInfo(msg='non gazebo env'),
         Node(
             condition=IfCondition(show_rviz_),
+            package='cabot_ui',
+            executable='controller_visualizer.py',
+            name='controller_visualizer',
+            parameters=[{
+                'use_sim_time': use_sim_time_,
+                'initial_controller': EnvironmentVariable('CABOT_CONTROLLER', default_value='follow'),
+            }],
+            output=output,
+        ),
+        Node(
+            condition=IfCondition(show_rviz_),
             package='rviz2',
             executable='rviz2',
             name='rviz2',
+            respawn=True,
+            respawn_delay=2.0,
             arguments=['-d', rviz_config_file],
             parameters=[{'use_sim_time': use_sim_time_}],
             output=output,

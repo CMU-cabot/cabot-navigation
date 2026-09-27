@@ -32,6 +32,7 @@
   <depend>cabot_msgs</depend>
   <depend>mf_localization_msgs</depend>
   <depend>rviz_common</depend>
+  <depend>rcl_interfaces</depend>
   <depend>std_msgs</depend>
   
   <export>

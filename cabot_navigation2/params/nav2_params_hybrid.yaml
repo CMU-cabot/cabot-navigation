@@ -416,6 +416,12 @@ controller_server:
       angular_sample_size: 16.0
       goal_cost_wt: 2.0
       people_cost_wt: 1.0
+      heading_cost_wt: 0.3
+      angular_cost_wt: 0.05
+      avoidance_max_angle: 0.7
+      avoidance_angular_velocity: 0.25
+      avoidance_probe_distance: 1.5
+      avoidance_min_clearance: 0.65
 
 controller_server_rclcpp_node:
   ros__parameters:

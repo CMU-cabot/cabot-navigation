@@ -1,4 +1,6 @@
 Panels:
+  - Class: mf_localization_rviz/CaBot Controller
+    Name: CaBot Controller
   - Class: rviz_common/Displays
     Help Height: 78
     Name: Displays
@@ -36,6 +38,33 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Controller output (thick)
+      Namespaces:
+        crowdattn: true
+        follow: true
+        hybrid: true
+        mpc: true
+        sm: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /cabot/controller_visualization
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Controller goals
+      Namespaces: {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /cabot/controller_goals
+      Value: true
     - Alpha: 0.5
       Cell Size: 1
       Class: rviz_default_plugins/Grid
@@ -311,13 +340,13 @@ Visualization Manager:
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.029999999329447746
-          Name: NavCog Path
+          Line Style: Billboards
+          Line Width: 0.08
+          Name: Route (green)
           Offset:
             X: 0
             Y: 0
-            Z: 0
+            Z: 0.04
           Pose Color: 255; 85; 255
           Pose Style: None
           Radius: 0.029999999329447746
@@ -334,18 +363,18 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz_default_plugins/Path
-          Color: 85; 0; 255
+          Color: 255; 220; 0
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.029999999329447746
-          Name: Plan
+          Line Style: Billboards
+          Line Width: 0.12
+          Name: Global plan (yellow)
           Offset:
             X: 0
             Y: 0
-            Z: 0
+            Z: 0.08
           Pose Color: 255; 85; 255
           Pose Style: None
           Radius: 0.029999999329447746
@@ -367,13 +396,13 @@ Visualization Manager:
           Buffer Length: 1
           Class: rviz_default_plugins/Path
           Color: 25; 255; 0
-          Enabled: true
+          Enabled: false
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.029999999329447746
-          Name: Path
+          Line Style: Billboards
+          Line Width: 0.07999999821186066
+          Name: Follow path (raw)
           Offset:
             X: 0
             Y: 0
@@ -390,7 +419,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /local_plan
-          Value: true
+          Value: false
         - Alpha: 0.8999999761581421
           Class: rviz_default_plugins/Map
           Color Scheme: costmap
@@ -628,13 +657,13 @@ Visualization Manager:
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
-      Line Style: Lines
-      Line Width: 0.029999999329447746
+      Line Style: Billboards
+      Line Width: 0.08
       Name: MapService Path
       Offset:
         X: 0
         Y: 0
-        Z: 0
+        Z: 0.04
       Pose Color: 255; 85; 255
       Pose Style: None
       Radius: 0.029999999329447746

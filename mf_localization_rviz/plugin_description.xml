@@ -28,4 +28,9 @@
       A panel widget for multi floor localization
     </description>
   </class>
+  <class name="mf_localization_rviz/CaBot Controller"
+         type="mf_localization_rviz::ControllerPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Select the CaBot controller between navigation goals.</description>
+  </class>
 </library>

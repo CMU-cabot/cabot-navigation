@@ -66,12 +66,10 @@ void CaBotRLController::configure(
       rl_cmd_topic_, 10, std::bind(&CaBotRLController::rlCommandCallback, this, std::placeholders::_1));
 
   rl_info_pub_ = node->create_publisher<lidar_process_msgs::msg::RobotMessage>(rl_info_topic_, 10);
-  rl_info_pub_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotRLController::rlInfoCallback, this));
 
 
   // Publish current local goal for visualization purposes
   local_goal_visualization_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(loc_goal_vis_topic_, 10);
-  loc_goal_vis_timer_ = node->create_wall_timer(100ms, std::bind(&CaBotRLController::localGoalVisualizationCallback, this));
 
   current_command = geometry_msgs::msg::Twist();
   robot_info = lidar_process_msgs::msg::RobotMessage();
@@ -86,7 +84,7 @@ void CaBotRLController::localGoalVisualizationCallback()
 
   vis_msg.header.stamp = node->now();
   vis_msg.header.frame_id = "map";
-  vis_msg.ns = "cabot_navigation2";
+  vis_msg.ns = name_ + "/local_goal";
   vis_msg.id = 0;
   vis_msg.type = 2;
   vis_msg.action = 0;
@@ -151,6 +149,7 @@ void CaBotRLController::setPlan(const nav_msgs::msg::Path & path)
   auto node = node_.lock();
   // Transform global path into the robot's frame
   global_plan = path;
+  current_command = geometry_msgs::msg::Twist();
   last_visited_index_ = 0;
 }
 
@@ -180,6 +179,7 @@ geometry_msgs::msg::TwistStamped CaBotRLController::computeVelocityCommands(
   // Call your RL function to compute the optimal control action
   geometry_msgs::msg::PoseStamped local_goal = getLookaheadPoint(pose, global_plan);
   curr_local_goal_ = local_goal;
+  localGoalVisualizationCallback();
 
    // temporary code for goal handling! (DANGER!)
   double goal_dist = pointDist(pose.pose.position, local_goal.pose.position);
@@ -198,6 +198,8 @@ geometry_msgs::msg::TwistStamped CaBotRLController::computeVelocityCommands(
   robot_info.robot_vel.angular.z = velocity.angular.z;
   robot_info.robot_goal.x = local_goal.pose.position.x;
   robot_info.robot_goal.y = local_goal.pose.position.y;
+  // Only the controller computing this command may supply the shared RL input.
+  rlInfoCallback();
 
   // auto request = std::make_shared<lidar_process_msgs::srv::RlAction::Request>();
   // request->robot_pos.x = pose.pose.position.x;

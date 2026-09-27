@@ -16,6 +16,7 @@ cabot core navigation logic using Nav2, which works with cabot_ui_manager (ROS1)
 
 ## params
 
+- [Hybrid runtime tuning and summons speed limits](test/HYBRID_TUNING.md)
 - nav2_params.yaml  : parameter for navigation2
 - nav2_params2.yaml : parameter for navigation2 without global map (only local map), used for elevator exit
 

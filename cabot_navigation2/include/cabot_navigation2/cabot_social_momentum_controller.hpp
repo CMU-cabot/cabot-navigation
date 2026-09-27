@@ -1,3 +1,4 @@
+#include <atomic>
 #ifndef CABOT_NAVIGATION2__CABOT_SOCIAL_MOMENTUM_CONTROLLER_HPP_
 #define CABOT_NAVIGATION2__CABOT_SOCIAL_MOMENTUM_CONTROLLER_HPP_
 
@@ -118,6 +119,7 @@ private:
 
   // rclcpp::Client<lidar_process_msgs::srv::RlAction>::SharedPtr rl_client;
   geometry_msgs::msg::Twist current_command;
+  std::atomic<bool> rl_ready_{false};
   geometry_msgs::msg::Point rl_subgoal_;
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr rl_subgoal_sub_;
   void rlSubgoalCallback(const geometry_msgs::msg::Point::SharedPtr rl_subgoal);

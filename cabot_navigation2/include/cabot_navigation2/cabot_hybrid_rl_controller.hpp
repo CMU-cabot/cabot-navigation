@@ -1,7 +1,9 @@
 #ifndef CABOT_NAVIGATION2__CABOT_HYBRID_RL_CONTROLLER_HPP_
 #define CABOT_NAVIGATION2__CABOT_HYBRID_RL_CONTROLLER_HPP_
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include "nav2_core/controller.hpp"
 #include "nav2_util/node_utils.hpp"
 
@@ -67,6 +69,14 @@ public:
   // void reset() {}
 
 private:
+  friend class HybridControllerTestPeer;
+  std::mutex state_mutex_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
+  std::vector<std::pair<std::string, double *>> parameterBindings();
+  std::vector<rclcpp::Parameter> readParameters();
+  void applyParameters(const std::vector<rclcpp::Parameter> & parameters);
+  rcl_interfaces::msg::SetParametersResult validateParameters(
+    const std::vector<rclcpp::Parameter> & parameters);
   int configure_count = 0;
   rclcpp::Logger logger_ = rclcpp::get_logger("CaBotHybridRLController");
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
@@ -89,6 +99,13 @@ private:
 
   double goal_cost_wt_;
   double people_cost_wt_;
+  double heading_cost_wt_;
+  double angular_cost_wt_;
+  double avoidance_max_angle_;
+  double avoidance_angular_velocity_;
+  double avoidance_probe_distance_;
+  double avoidance_min_clearance_;
+  int avoidance_side_ = 0;
 
   nav_msgs::msg::Path global_plan_;
 
@@ -110,12 +127,13 @@ private:
 
   // rclcpp::Client<lidar_process_msgs::srv::RlAction>::SharedPtr rl_client;
   geometry_msgs::msg::Twist current_command;
+  std::atomic<bool> rl_ready_{false};
   geometry_msgs::msg::Point rl_subgoal_;
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr rl_subgoal_sub_;
   void rlSubgoalCallback(const geometry_msgs::msg::Point::SharedPtr rl_subgoal);
 
-  int horizon_people_;
-  int num_people_;
+  int horizon_people_ = 0;
+  int num_people_ = 0;
   std::vector<lidar_process_msgs::msg::PositionArray> rl_people_;
   std::vector<lidar_process_msgs::msg::PositionArray> rl_people_tmp_;
   rclcpp::Subscription<lidar_process_msgs::msg::PositionHistoryArray>::SharedPtr rl_people_sub_;  // group prediction subscriber
@@ -128,6 +146,10 @@ private:
   geometry_msgs::msg::Twist computeMPCControl(
     const geometry_msgs::msg::PoseStamped & pose,
     const geometry_msgs::msg::Twist & velocity);
+
+  bool chooseAvoidanceTurn(
+    const geometry_msgs::msg::PoseStamped & pose,
+    geometry_msgs::msg::Twist & control, nav_msgs::msg::Path & trajectory);
   
   std::vector<Trajectory> generateTrajectoriesSimple(
     const geometry_msgs::msg::PoseStamped & current_pose,

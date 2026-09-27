@@ -268,6 +268,7 @@ add_library(cabot_controllers SHARED
   plugins/util.cpp
 )
 ament_target_dependencies(cabot_controllers
+  angles
   dwb_core
   nav2_core
   nav2_rotation_shim_controller
@@ -337,6 +338,11 @@ if(BUILD_TESTING)
   target_link_libraries(${PROJECT_NAME}_test_util cabot_goals)
   ament_add_gtest(${PROJECT_NAME}_test_cabot_planner_util test/test_cabot_planner_util.cpp)
   target_link_libraries(${PROJECT_NAME}_test_cabot_planner_util cabot_planners)
+
+  ament_add_gtest(test_hybrid_controller test/test_hybrid_controller.cpp
+    ENV ROS_DOMAIN_ID=93 "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
+  target_link_libraries(test_hybrid_controller cabot_controllers)
+  ament_target_dependencies(test_hybrid_controller nav2_costmap_2d nav2_util nav2_core lidar_process_msgs)
 
   find_package(ament_cmake_copyright REQUIRED)
   find_package(ament_cmake_cpplint REQUIRED)

@@ -32,6 +32,7 @@ find_package(cabot_msgs REQUIRED)
 find_package(gazebo_msgs REQUIRED)
 find_package(mf_localization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(pluginlib REQUIRED)
 
 if(BUILD_TESTING)
@@ -61,15 +62,18 @@ set(dependencies
   gazebo_msgs
   mf_localization_msgs
   std_msgs
+  rcl_interfaces
 )
 
 qt5_wrap_cpp(rviz_default_plugins_moc_files
   include/mf_localization_rviz/mf_localization_panel.hpp
+  include/mf_localization_rviz/controller_panel.hpp
 )
 
 add_library(${PROJECT_NAME} SHARED
   ${rviz_default_plugins_moc_files}
   src/mf_localization_panel.cpp
+  src/controller_panel.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC

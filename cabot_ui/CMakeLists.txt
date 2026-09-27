@@ -99,6 +99,7 @@ install(TARGETS
 )
 
 install(PROGRAMS
+  scripts/controller_visualizer.py
   scripts/repeat_destinations.py
   scripts/navcog_map.py
   scripts/cabot_keyboard.py
