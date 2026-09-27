@@ -55,6 +55,7 @@ set(_pytest_tests
   test_i18n.py
   test_navgoal.py
   test_status.py
+  test_summons_speed.py
   test_turn_detector.py
   # Add other test files here
 )

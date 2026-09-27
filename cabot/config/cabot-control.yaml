@@ -102,7 +102,7 @@ cabot:
 
   touch_speed_control_node:
     ros__parameters:
-      touch_speed_max_inactive: 0.5
+      touch_speed_max_speed_inactive: 1.0
       max_speed: 2.75
 
   speed_control_node_touch_true:

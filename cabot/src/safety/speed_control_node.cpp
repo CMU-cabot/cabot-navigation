@@ -116,7 +116,7 @@ private:
       if (completeStop_.size() <= index) {
         completeStop_.push_back(false);
       }
-      while (filteredSpeed_.size() < index) {
+      while (filteredSpeed_.size() <= index) {
         filteredSpeed_.push_back(0);
       }
 

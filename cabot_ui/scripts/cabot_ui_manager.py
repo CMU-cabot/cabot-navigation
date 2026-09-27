@@ -647,15 +647,27 @@ class CabotUIManager(NavigationInterface, object):
                 response: std_srvs.srv.SetBool.Response = self._touchModeProxy.call(request)
                 if not response.success:
                     self._logger.info("Could not set touch mode to False")
+                    self.destination = None
+                    return
             else:
                 self._logger.error("Could not find set touch mode service")
+                self.destination = None
+                return
 
+            # Summons reverses the touch condition, but still honors the user's
+            # selected speed ceiling in the downstream speed limiter.
+            request = std_srvs.srv.SetBool.Request()
+            request.data = True
             if self._userSpeedEnabledProxy.wait_for_service(timeout_sec=1):
                 response = self._userSpeedEnabledProxy.call(request)
                 if not response.success:
-                    self._logger.info("Could not set user speed enabled to False")
+                    self._logger.info("Could not set user speed enabled to True")
+                    self.destination = None
+                    return
             else:
                 self._logger.error("Could not find set user speed enabled service")
+                self.destination = None
+                return
 
             # change state
             # change to waiting_action by using actionlib

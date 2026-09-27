@@ -40,6 +40,7 @@ private:
   void set_touch_speed_active_mode(
     const std_srvs::srv::SetBool::Request::SharedPtr req,
     std_srvs::srv::SetBool::Response::SharedPtr res);
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
 
   bool touch_speed_active_mode_;
   double touch_speed_max_speed_;

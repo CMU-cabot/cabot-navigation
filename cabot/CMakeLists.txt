@@ -134,6 +134,11 @@ rclcpp_components_register_node(
 )
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_summons_limits test/test_summons_limits.py
+    ENV ROS_DOMAIN_ID=93 CABOT_TEST_BIN_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}"
+    TIMEOUT 90)
   find_package(ament_cmake_copyright REQUIRED)
   find_package(ament_cmake_cpplint REQUIRED)
   find_package(ament_cmake_flake8 REQUIRED)

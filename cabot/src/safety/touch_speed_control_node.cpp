@@ -26,6 +26,8 @@
 #include <utility>
 #include <vector>
 #include <functional>
+#include <cmath>
+#include <stdexcept>
 
 #include "cabot/touch_speed_control_node.hpp"
 
@@ -37,7 +39,7 @@ TouchSpeedControlNode::TouchSpeedControlNode(const rclcpp::NodeOptions & options
 : rclcpp::Node("touch_speed_control_node", rclcpp::NodeOptions(options).use_intra_process_comms(false)),
   touch_speed_active_mode_(true),
   touch_speed_max_speed_(2.0),
-  touch_speed_max_speed_inactive_(0.5)
+  touch_speed_max_speed_inactive_(1.0)
 {
   // use_intra_process_comms is currently not supported
   // publishers, diagnostic tasks, and related services
@@ -54,6 +56,31 @@ TouchSpeedControlNode::TouchSpeedControlNode(const rclcpp::NodeOptions & options
   touch_speed_max_speed_ = this->declare_parameter("touch_speed_max_speed", touch_speed_max_speed_);
   touch_speed_max_speed_inactive_ =
     this->declare_parameter("touch_speed_max_speed_inactive", touch_speed_max_speed_inactive_);
+  if (!std::isfinite(touch_speed_max_speed_) || touch_speed_max_speed_ < 0.0 ||
+    !std::isfinite(touch_speed_max_speed_inactive_) || touch_speed_max_speed_inactive_ < 0.0)
+  {
+    throw std::invalid_argument("Touch speed limits must be finite and nonnegative");
+  }
+  parameter_callback_ = add_on_set_parameters_callback(
+    [](const std::vector<rclcpp::Parameter> & parameters) {
+      rcl_interfaces::msg::SetParametersResult result;
+      result.successful = true;
+      for (const auto & parameter : parameters) {
+        if (parameter.get_name() != "touch_speed_max_speed" &&
+          parameter.get_name() != "touch_speed_max_speed_inactive")
+        {
+          continue;
+        }
+        if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE ||
+          !std::isfinite(parameter.as_double()) || parameter.as_double() < 0.0)
+        {
+          result.successful = false;
+          result.reason = "Touch speed limits must be finite, nonnegative doubles";
+          break;
+        }
+      }
+      return result;
+    });
   rclcpp::QoS transient_local_qos(1);
   transient_local_qos.transient_local();
   touch_speed_switched_pub_ = this->create_publisher<std_msgs::msg::Float32>(
@@ -82,9 +109,9 @@ void TouchSpeedControlNode::touch_callback(std_msgs::msg::Int16::SharedPtr msg)
   std::unique_ptr<std_msgs::msg::Float32> touch_speed_msg =
     std::make_unique<std_msgs::msg::Float32>();
   if (touch_speed_active_mode_) {
-    touch_speed_msg->data = msg->data ? touch_speed_max_speed_ : 0.0;
+    touch_speed_msg->data = msg->data ? get_parameter("touch_speed_max_speed").as_double() : 0.0;
   } else {
-    touch_speed_msg->data = msg->data ? 0.0 : touch_speed_max_speed_inactive_;
+    touch_speed_msg->data = msg->data ? 0.0 : get_parameter("touch_speed_max_speed_inactive").as_double();
   }
   touch_speed_switched_pub_->publish(std::move(touch_speed_msg));
 }
