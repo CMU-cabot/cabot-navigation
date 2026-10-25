@@ -31,6 +31,8 @@ controller_server:
       trt_model: ""
       max_linear_vel: 1.0
       max_angular_vel: 1.0
+      max_linear_acceleration: 1.0 # m/s^2, at base_footprint before wheel offset
+      max_angular_acceleration: 2.0 # rad/s^2, independent of wheel-side limits
       transform_tolerance: 0.5
       base_link_frame: "base_footprint"
       map_frame: "map"
@@ -80,6 +82,8 @@ controller_server:
       trt_model: ""
       max_linear_vel: 0.5
       max_angular_vel: 1.0
+      max_linear_acceleration: 1.0 # m/s^2, at base_footprint before wheel offset
+      max_angular_acceleration: 2.0 # rad/s^2, independent of wheel-side limits
       transform_tolerance: 0.5
       base_link_frame: "base_footprint"
       map_frame: "map"

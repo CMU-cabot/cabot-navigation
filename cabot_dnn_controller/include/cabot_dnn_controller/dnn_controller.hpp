@@ -13,6 +13,8 @@
 
 #include <NvInfer.h>
 
+#include "action_msgs/msg/goal_status_array.hpp"
+#include "cabot_dnn_controller/command_acceleration_limiter.hpp"
 #include "cabot_dnn_controller/dnn_controller_constants.hpp"
 #include "cabot_dnn_controller/msg/attention_weights.hpp"
 #include "cabot_dnn_controller/tensorrt_utils.hpp"
@@ -131,9 +133,18 @@ private:
     float presence{0.0f};
   };
 
+  struct CommandCycleGuard
+  {
+    DnnController & controller;
+    bool completed{false};
+    ~CommandCycleGuard();
+  };
+
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void peopleCallback(const people_msgs::msg::People::SharedPtr msg);
+  void followPathStatusCallback(const action_msgs::msg::GoalStatusArray::SharedPtr msg);
+  void resetCommandLimiter(const char * reason);
   rcl_interfaces::msg::SetParametersResult param_set_callback(
     const std::vector<rclcpp::Parameter> & parameters);
   void updatePeopleHistoryLocked(std::int64_t stamp_ns);
@@ -175,6 +186,15 @@ private:
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr people_attention_pub_;
   rclcpp::Publisher<cabot_dnn_controller::msg::AttentionWeights>::SharedPtr
     robot_people_attention_pub_;
+  rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr follow_path_status_sub_;
+  CommandAccelerationLimiter command_acceleration_limiter_;
+  std::mutex command_mutex_;
+  bool dagger_policy_{false};
+  double max_linear_acceleration_{1.0};
+  double max_angular_acceleration_{2.0};
+  std::array<uint8_t, 16> follow_path_goal_id_{};
+  bool has_follow_path_goal_{false};
+  bool follow_path_running_{false};
 
   std::string trt_model_;
   double max_linear_vel_;

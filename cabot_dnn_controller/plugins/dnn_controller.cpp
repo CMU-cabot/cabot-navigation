@@ -9,8 +9,11 @@
 #include <cmath>
 #include <cstdint>
 #include <future>
+#include <iomanip>
 #include <limits>
+#include <locale>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -66,6 +69,34 @@ using cabot_dnn_controller::dnn_controller_constants::kOutputPeopleAttentionName
 using cabot_dnn_controller::dnn_controller_constants::kOutputRobotPeopleAttentionName;
 
 constexpr char kFootprintPublisherNodeName[] = "/footprint_publisher";
+
+std::string commandAccelerationDiagnostic(
+  const std_msgs::msg::Header & header, const std::string & controller,
+  const std::array<double, 2> & normalized, const std::array<double, 2> & physical,
+  const CommandAccelerationLimiter::Result & limited,
+  const std::array<double, 2> & acceleration, const char * reset_reason)
+{
+  std::ostringstream json;
+  json.imbue(std::locale::classic());
+  json << std::setprecision(17) << std::boolalpha
+       << "{\"header\":{\"stamp\":{\"sec\":" << header.stamp.sec
+       << ",\"nanosec\":" << header.stamp.nanosec
+       << "},\"frame_id\":" << std::quoted(header.frame_id) << "}"
+       << ",\"controller\":" << std::quoted(controller)
+       << ",\"normalized_linear\":" << normalized[0]
+       << ",\"normalized_angular\":" << normalized[1]
+       << ",\"physical_linear\":" << physical[0]
+       << ",\"physical_angular\":" << physical[1]
+       << ",\"limited_linear\":" << limited.linear
+       << ",\"limited_angular\":" << limited.angular
+       << ",\"dt\":" << limited.dt
+       << ",\"max_linear_acceleration\":" << acceleration[0]
+       << ",\"max_angular_acceleration\":" << acceleration[1]
+       << ",\"limited\":" << limited.limited
+       << ",\"reset\":" << limited.reset
+       << ",\"reset_reason\":" << std::quoted(reset_reason) << "}";
+  return json.str();
+}
 
 void initTensorRTPluginsOnce(nvinfer1::ILogger & logger)
 {
@@ -143,6 +174,14 @@ void DnnController::configure(
   tf_ = tf;
   costmap_ros_ = costmap_ros;
 
+  const std::string policy_suffix = ".policy";
+  std::string parent_plugin;
+  dagger_policy_ = name_.size() > policy_suffix.size() &&
+    name_.compare(name_.size() - policy_suffix.size(), policy_suffix.size(), policy_suffix) == 0 &&
+    node_->get_parameter(
+    name_.substr(0, name_.size() - policy_suffix.size()) + ".plugin", parent_plugin) &&
+    parent_plugin == "cabot_dnn_controller::DaggerController";
+
   const std::string prefix = name_ + ".";
   node_->declare_parameter<std::string>(prefix + "trt_model", "");
   node_->get_parameter(prefix + "trt_model", trt_model_);
@@ -150,6 +189,15 @@ void DnnController::configure(
   node_->get_parameter(prefix + "max_linear_vel", max_linear_vel_);
   node_->declare_parameter<double>(prefix + "max_angular_vel", 1.0);
   node_->get_parameter(prefix + "max_angular_vel", max_angular_vel_);
+  node_->declare_parameter<double>(prefix + "max_linear_acceleration", 1.0);
+  node_->get_parameter(prefix + "max_linear_acceleration", max_linear_acceleration_);
+  node_->declare_parameter<double>(prefix + "max_angular_acceleration", 2.0);
+  node_->get_parameter(prefix + "max_angular_acceleration", max_angular_acceleration_);
+  if (!std::isfinite(max_linear_acceleration_) || max_linear_acceleration_ <= 0.0 ||
+    !std::isfinite(max_angular_acceleration_) || max_angular_acceleration_ <= 0.0)
+  {
+    throw std::runtime_error("Command acceleration limits must be finite and positive");
+  }
   node_->declare_parameter<double>(prefix + "transform_tolerance", 0.1);
   node_->get_parameter(prefix + "transform_tolerance", transform_tolerance_);
   node_->declare_parameter<std::string>(prefix + "base_link_frame", "");
@@ -412,6 +460,9 @@ void DnnController::configure(
       std::bind(&DnnController::peopleCallback, this, std::placeholders::_1));
   }
   debug_image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>(debug_image_topic_, rclcpp::SystemDefaultsQoS());
+  follow_path_status_sub_ = node_->create_subscription<action_msgs::msg::GoalStatusArray>(
+    "follow_path/_action/status", rclcpp::QoS(1).reliable().transient_local(),
+    std::bind(&DnnController::followPathStatusCallback, this, std::placeholders::_1));
   if (people_encoder_enabled_) {
     people_attention_pub_ = node_->create_publisher<cabot_dnn_controller::msg::AttentionWeights>(
       people_attention_topic_, rclcpp::SystemDefaultsQoS());
@@ -425,6 +476,13 @@ void DnnController::configure(
 
 void DnnController::cleanup()
 {
+  resetCommandLimiter("cleanup");
+  follow_path_status_sub_.reset();
+  {
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    has_follow_path_goal_ = false;
+    follow_path_running_ = false;
+  }
   if (param_change_callback_handle_) {
     node_->remove_on_set_parameters_callback(param_change_callback_handle_.get());
     param_change_callback_handle_.reset();
@@ -491,12 +549,18 @@ void DnnController::cleanup()
 
 void DnnController::activate()
 {
-  // No publishers to activate in skeleton.
+  resetCommandLimiter("activate");
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  has_follow_path_goal_ = false;
+  follow_path_running_ = false;
 }
 
 void DnnController::deactivate()
 {
-  // No publishers to deactivate in skeleton.
+  resetCommandLimiter("deactivate");
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  has_follow_path_goal_ = false;
+  follow_path_running_ = false;
 }
 
 rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
@@ -507,7 +571,9 @@ rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
   bool velocity_changed = false;
   for (const auto & parameter : parameters) {
     if (parameter.get_name() != name_ + ".max_linear_vel" &&
-      parameter.get_name() != name_ + ".max_angular_vel")
+      parameter.get_name() != name_ + ".max_angular_vel" &&
+      parameter.get_name() != name_ + ".max_linear_acceleration" &&
+      parameter.get_name() != name_ + ".max_angular_acceleration")
     {
       continue;
     }
@@ -515,7 +581,7 @@ rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
       !std::isfinite(parameter.as_double()) || parameter.as_double() <= 0.0)
     {
       result.successful = false;
-      result.reason = "Velocity limits must be finite, positive doubles";
+      result.reason = "Velocity and acceleration limits must be finite, positive doubles";
       return result;
     }
     velocity_changed = true;
@@ -525,6 +591,80 @@ rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
     velocity_parameters_dirty_.store(true);
   }
   return result;
+}
+
+DnnController::CommandCycleGuard::~CommandCycleGuard()
+{
+  if (!completed) {
+    try {
+      controller.resetCommandLimiter("inference_failure");
+    } catch (const std::exception & ex) {
+      RCLCPP_ERROR(controller.logger_, "Failed to record command reset: %s", ex.what());
+    }
+  }
+}
+
+void DnnController::resetCommandLimiter(const char * reason)
+{
+  std::array<double, 2> acceleration;
+  {
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    command_acceleration_limiter_.reset();
+    acceleration = {max_linear_acceleration_, max_angular_acceleration_};
+  }
+  if (clock_) {
+    std_msgs::msg::Header header;
+    header.stamp = clock_->now();
+    header.frame_id = base_link_frame_;
+    const auto diagnostic = commandAccelerationDiagnostic(
+      header, name_, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0, 0.0, false, true},
+      acceleration, reason);
+    RCLCPP_INFO(logger_, "[command_acceleration] %s", diagnostic.c_str());
+  }
+}
+
+void DnnController::followPathStatusCallback(
+  const action_msgs::msg::GoalStatusArray::SharedPtr msg)
+{
+  using GoalStatus = action_msgs::msg::GoalStatus;
+  const GoalStatus * successor = nullptr;
+  bool reset = false;
+  {
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    bool interrupted = false;
+    for (const auto & status : msg->status_list) {
+      if (has_follow_path_goal_ && status.goal_info.goal_id.uuid == follow_path_goal_id_) {
+        interrupted = status.status == GoalStatus::STATUS_CANCELING ||
+          status.status == GoalStatus::STATUS_CANCELED ||
+          status.status == GoalStatus::STATUS_SUCCEEDED;
+      }
+      if (status.status == GoalStatus::STATUS_ACCEPTED ||
+        status.status == GoalStatus::STATUS_EXECUTING)
+      {
+        // An accepted successor can be present while Nav2 aborts the old handle
+        // during a normal path update. Prefer the executing handle when available.
+        if (!successor ||
+          (status.status == GoalStatus::STATUS_EXECUTING &&
+          successor->status != GoalStatus::STATUS_EXECUTING) ||
+          (status.status == successor->status &&
+          rclcpp::Time(status.goal_info.stamp) > rclcpp::Time(successor->goal_info.stamp)))
+        {
+          successor = &status;
+        }
+      }
+    }
+    reset = follow_path_running_ && (interrupted || !successor);
+    if (successor) {
+      follow_path_goal_id_ = successor->goal_info.goal_id.uuid;
+      has_follow_path_goal_ = true;
+      follow_path_running_ = true;
+    } else if (reset) {
+      follow_path_running_ = false;
+    }
+  }
+  if (reset) {
+    resetCommandLimiter("follow_path_interrupted");
+  }
 }
 
 std::vector<std::array<float, 2>> DnnController::transformPoints2D(
@@ -703,6 +843,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   cmd.header.frame_id = base_link_frame_;
   cmd.twist.linear.x = 0.0;
   cmd.twist.angular.z = 0.0;
+  CommandCycleGuard command_cycle{*this};
 
   if (!trt_ready_) {
     RCLCPP_INFO(logger_, "TensorRT is not ready, return 0 velocity command");
@@ -720,9 +861,13 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   if (velocity_parameters_dirty_.exchange(false)) {
     // Clear before reading so a concurrent update is not lost.
     const auto velocity_params = node_->get_parameters(
-      {name_ + ".max_linear_vel", name_ + ".max_angular_vel"});
+      {name_ + ".max_linear_vel", name_ + ".max_angular_vel",
+        name_ + ".max_linear_acceleration", name_ + ".max_angular_acceleration"});
     max_linear_vel_ = velocity_params[0].as_double();
     max_angular_vel_ = velocity_params[1].as_double();
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    max_linear_acceleration_ = velocity_params[2].as_double();
+    max_angular_acceleration_ = velocity_params[3].as_double();
   }
   if (!std::isfinite(max_linear_vel_) || max_linear_vel_ <= 0.0 ||
     !std::isfinite(max_angular_vel_) || max_angular_vel_ <= 0.0)
@@ -731,6 +876,13 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       logger_, *clock_, 1000,
       "Velocity limits must be finite and positive, return 0 velocity command");
     return cmd;
+  }
+  {
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    if (has_follow_path_goal_ && !follow_path_running_) {
+      RCLCPP_INFO(logger_, "FollowPath is inactive, return 0 velocity command");
+      return cmd;
+    }
   }
 
   std::vector<PlanarVelocity> odom_history;
@@ -942,8 +1094,29 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     }
   }
 
-  cmd.twist.linear.x  = v_pred * max_linear_vel_;
-  cmd.twist.angular.z = w_pred * max_angular_vel_;
+  const double physical_linear = v_pred * max_linear_vel_;
+  const double physical_angular = w_pred * max_angular_vel_;
+  if (!std::isfinite(physical_linear) || !std::isfinite(physical_angular)) {
+    RCLCPP_ERROR(logger_, "Non-finite model output, return 0 velocity command");
+    return cmd;
+  }
+  std::string diagnostic;
+  {
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    // DAgger's teacher/mixed-command collection keeps its original policy output.
+    const auto limited = dagger_policy_ ?
+      CommandAccelerationLimiter::Result{physical_linear, physical_angular, 0.0, false, false} :
+      command_acceleration_limiter_.limit(
+      physical_linear, physical_angular, rclcpp::Time(cmd.header.stamp).nanoseconds(),
+      max_linear_acceleration_, max_angular_acceleration_);
+    cmd.twist.linear.x = limited.linear;
+    cmd.twist.angular.z = limited.angular;
+    diagnostic = commandAccelerationDiagnostic(
+      cmd.header, name_, {v_pred, w_pred}, {physical_linear, physical_angular}, limited,
+      {max_linear_acceleration_, max_angular_acceleration_},
+      limited.reset ? "initial_or_clock_reset" : "");
+  }
+  RCLCPP_INFO(logger_, "[command_acceleration] %s", diagnostic.c_str());
 
   if (people_encoder_enabled_) {
     std_msgs::msg::Header attention_header;
@@ -1280,6 +1453,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     debug_image_pub_->publish(*cv_img.toImageMsg());
   }
 
+  command_cycle.completed = true;
   return cmd;
 }
 

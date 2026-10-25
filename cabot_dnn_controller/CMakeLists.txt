@@ -6,6 +6,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
@@ -42,6 +43,7 @@ target_include_directories(dnn_controllers PUBLIC
 )
 
 ament_target_dependencies(dnn_controllers
+  action_msgs
   geometry_msgs
   nav2_core
   nav2_costmap_2d
