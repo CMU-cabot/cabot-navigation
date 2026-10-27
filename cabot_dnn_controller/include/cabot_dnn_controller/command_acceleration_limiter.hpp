@@ -35,7 +35,7 @@ public:
 
   Result limit(
     double linear, double angular, std::int64_t stamp_ns,
-    double max_linear_acceleration = 1.0, double max_angular_acceleration = 3.2)
+    double max_linear_acceleration = 1.0, double max_angular_acceleration = 1.0)
   {
     if (!std::isfinite(max_linear_acceleration) || max_linear_acceleration <= 0.0 ||
       !std::isfinite(max_angular_acceleration) || max_angular_acceleration <= 0.0)

@@ -191,7 +191,7 @@ private:
   std::mutex command_mutex_;
   bool dagger_policy_{false};
   double max_linear_acceleration_{1.0};
-  double max_angular_acceleration_{3.2};
+  double max_angular_acceleration_{1.0};
   std::array<uint8_t, 16> follow_path_goal_id_{};
   bool has_follow_path_goal_{false};
   bool follow_path_running_{false};
