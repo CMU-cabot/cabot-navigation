@@ -191,7 +191,7 @@ void DnnController::configure(
   node_->get_parameter(prefix + "max_angular_vel", max_angular_vel_);
   node_->declare_parameter<double>(prefix + "max_linear_acceleration", 1.0);
   node_->get_parameter(prefix + "max_linear_acceleration", max_linear_acceleration_);
-  node_->declare_parameter<double>(prefix + "max_angular_acceleration", 1.0);
+  node_->declare_parameter<double>(prefix + "max_angular_acceleration", 2.0);
   node_->get_parameter(prefix + "max_angular_acceleration", max_angular_acceleration_);
   if (!std::isfinite(max_linear_acceleration_) || max_linear_acceleration_ <= 0.0 ||
     !std::isfinite(max_angular_acceleration_) || max_angular_acceleration_ <= 0.0)
