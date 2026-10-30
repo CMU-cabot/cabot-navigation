@@ -74,7 +74,8 @@ std::string commandAccelerationDiagnostic(
   const std_msgs::msg::Header & header, const std::string & controller,
   const std::array<double, 2> & normalized, const std::array<double, 2> & physical,
   const CommandAccelerationLimiter::Result & limited,
-  const std::array<double, 2> & acceleration, const char * reset_reason)
+  const std::array<double, 2> & acceleration, double smoothing_time_constant,
+  const char * reset_reason)
 {
   std::ostringstream json;
   json.imbue(std::locale::classic());
@@ -92,6 +93,7 @@ std::string commandAccelerationDiagnostic(
        << ",\"dt\":" << limited.dt
        << ",\"max_linear_acceleration\":" << acceleration[0]
        << ",\"max_angular_acceleration\":" << acceleration[1]
+       << ",\"command_smoothing_time_constant\":" << smoothing_time_constant
        << ",\"limited\":" << limited.limited
        << ",\"reset\":" << limited.reset
        << ",\"reset_reason\":" << std::quoted(reset_reason) << "}";
@@ -193,10 +195,15 @@ void DnnController::configure(
   node_->get_parameter(prefix + "max_linear_acceleration", max_linear_acceleration_);
   node_->declare_parameter<double>(prefix + "max_angular_acceleration", 2.0);
   node_->get_parameter(prefix + "max_angular_acceleration", max_angular_acceleration_);
+  node_->declare_parameter<double>(prefix + "command_smoothing_time_constant", 0.2);
+  node_->get_parameter(prefix + "command_smoothing_time_constant", command_smoothing_time_constant_);
   if (!std::isfinite(max_linear_acceleration_) || max_linear_acceleration_ <= 0.0 ||
     !std::isfinite(max_angular_acceleration_) || max_angular_acceleration_ <= 0.0)
   {
     throw std::runtime_error("Command acceleration limits must be finite and positive");
+  }
+  if (!std::isfinite(command_smoothing_time_constant_) || command_smoothing_time_constant_ <= 0.0) {
+    throw std::runtime_error("Command smoothing time constant must be finite and positive");
   }
   node_->declare_parameter<double>(prefix + "transform_tolerance", 0.1);
   node_->get_parameter(prefix + "transform_tolerance", transform_tolerance_);
@@ -573,7 +580,8 @@ rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
     if (parameter.get_name() != name_ + ".max_linear_vel" &&
       parameter.get_name() != name_ + ".max_angular_vel" &&
       parameter.get_name() != name_ + ".max_linear_acceleration" &&
-      parameter.get_name() != name_ + ".max_angular_acceleration")
+      parameter.get_name() != name_ + ".max_angular_acceleration" &&
+      parameter.get_name() != name_ + ".command_smoothing_time_constant")
     {
       continue;
     }
@@ -581,7 +589,7 @@ rcl_interfaces::msg::SetParametersResult DnnController::param_set_callback(
       !std::isfinite(parameter.as_double()) || parameter.as_double() <= 0.0)
     {
       result.successful = false;
-      result.reason = "Velocity and acceleration limits must be finite, positive doubles";
+      result.reason = "Velocity/acceleration limits and smoothing time constant must be finite, positive doubles";
       return result;
     }
     velocity_changed = true;
@@ -607,10 +615,12 @@ DnnController::CommandCycleGuard::~CommandCycleGuard()
 void DnnController::resetCommandLimiter(const char * reason)
 {
   std::array<double, 2> acceleration;
+  double smoothing_time_constant;
   {
     std::lock_guard<std::mutex> command_lock(command_mutex_);
     command_acceleration_limiter_.reset();
     acceleration = {max_linear_acceleration_, max_angular_acceleration_};
+    smoothing_time_constant = command_smoothing_time_constant_;
   }
   if (clock_) {
     std_msgs::msg::Header header;
@@ -618,7 +628,7 @@ void DnnController::resetCommandLimiter(const char * reason)
     header.frame_id = base_link_frame_;
     const auto diagnostic = commandAccelerationDiagnostic(
       header, name_, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0, 0.0, false, true},
-      acceleration, reason);
+      acceleration, smoothing_time_constant, reason);
     RCLCPP_INFO(logger_, "[command_acceleration] %s", diagnostic.c_str());
   }
 }
@@ -862,12 +872,14 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
     // Clear before reading so a concurrent update is not lost.
     const auto velocity_params = node_->get_parameters(
       {name_ + ".max_linear_vel", name_ + ".max_angular_vel",
-        name_ + ".max_linear_acceleration", name_ + ".max_angular_acceleration"});
+        name_ + ".max_linear_acceleration", name_ + ".max_angular_acceleration",
+        name_ + ".command_smoothing_time_constant"});
     max_linear_vel_ = velocity_params[0].as_double();
     max_angular_vel_ = velocity_params[1].as_double();
     std::lock_guard<std::mutex> command_lock(command_mutex_);
     max_linear_acceleration_ = velocity_params[2].as_double();
     max_angular_acceleration_ = velocity_params[3].as_double();
+    command_smoothing_time_constant_ = velocity_params[4].as_double();
   }
   if (!std::isfinite(max_linear_vel_) || max_linear_vel_ <= 0.0 ||
     !std::isfinite(max_angular_vel_) || max_angular_vel_ <= 0.0)
@@ -1108,12 +1120,12 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       CommandAccelerationLimiter::Result{physical_linear, physical_angular, 0.0, false, false} :
       command_acceleration_limiter_.limit(
       physical_linear, physical_angular, rclcpp::Time(cmd.header.stamp).nanoseconds(),
-      max_linear_acceleration_, max_angular_acceleration_);
+      max_linear_acceleration_, max_angular_acceleration_, command_smoothing_time_constant_);
     cmd.twist.linear.x = limited.linear;
     cmd.twist.angular.z = limited.angular;
     diagnostic = commandAccelerationDiagnostic(
       cmd.header, name_, {v_pred, w_pred}, {physical_linear, physical_angular}, limited,
-      {max_linear_acceleration_, max_angular_acceleration_},
+      {max_linear_acceleration_, max_angular_acceleration_}, command_smoothing_time_constant_,
       limited.reset ? "initial_or_clock_reset" : "");
   }
   RCLCPP_INFO(logger_, "[command_acceleration] %s", diagnostic.c_str());

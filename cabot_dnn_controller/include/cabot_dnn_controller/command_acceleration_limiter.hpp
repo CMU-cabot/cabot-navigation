@@ -8,9 +8,11 @@
 namespace cabot_dnn_controller
 {
 
-// Limit base_footprint commands [m/s, rad/s] after maximum-velocity scaling and
+// Smooth and limit base_footprint commands [m/s, rad/s] after maximum-velocity scaling and
 // before odom_adapter's wheel-center compensation. Bounds are [m/s^2, rad/s^2].
 // Use the previous limited command and actual ROS timestamp difference [ns].
+// Apply one low-pass coefficient to both axes before acceleration limiting.
+// Reuse the final output history so smoothing cannot advance beyond executed commands.
 // Share one normalized acceleration budget between translation and rotation.
 // Require |dv| / max_linear_acceleration + |dw| / max_angular_acceleration <= dt.
 // Scaling both changes together reduces simultaneous wheel acceleration demands
@@ -38,12 +40,16 @@ public:
 
   Result limit(
     double linear, double angular, std::int64_t stamp_ns,
-    double max_linear_acceleration = 1.0, double max_angular_acceleration = 2.0)
+    double max_linear_acceleration = 1.0, double max_angular_acceleration = 2.0,
+    double command_smoothing_time_constant = 0.2)
   {
     if (!std::isfinite(max_linear_acceleration) || max_linear_acceleration <= 0.0 ||
       !std::isfinite(max_angular_acceleration) || max_angular_acceleration <= 0.0)
     {
       throw std::invalid_argument("Acceleration limits must be finite and positive");
+    }
+    if (!std::isfinite(command_smoothing_time_constant) || command_smoothing_time_constant <= 0.0) {
+      throw std::invalid_argument("Command smoothing time constant must be finite and positive");
     }
     if (!std::isfinite(linear) || !std::isfinite(angular)) {
       reset();
@@ -59,6 +65,10 @@ public:
     }
 
     const double dt = static_cast<double>(stamp_ns - previous_stamp_ns_) * 1e-9;
+    // -expm1(-dt / tau) is 1 - exp(-dt / tau), including small ROS time steps.
+    const double coefficient = -std::expm1(-dt / command_smoothing_time_constant);
+    linear = previous_linear_ + coefficient * (linear - previous_linear_);
+    angular = previous_angular_ + coefficient * (angular - previous_angular_);
     const double linear_delta = linear - previous_linear_;
     const double angular_delta = angular - previous_angular_;
     const double required_dt =
