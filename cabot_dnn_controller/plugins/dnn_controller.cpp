@@ -34,6 +34,7 @@
 #include "cabot_dnn_controller/dnn_controller_constants.hpp"
 #include "cabot_dnn_controller/tensorrt_utils.hpp"
 #include "pluginlib/class_list_macros.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace cabot_dnn_controller
 {
@@ -501,6 +502,7 @@ void DnnController::cleanup()
   {
     std::lock_guard<std::mutex> odom_lock(odom_mutex_);
     odom_history_.clear();
+    last_odom_header_ = std_msgs::msg::Header{};
   }
   scan_sub_.reset();
   {
@@ -886,9 +888,11 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
   }
 
   std::vector<PlanarVelocity> odom_history;
+  std_msgs::msg::Header odom_header;
   {
     std::lock_guard<std::mutex> odom_lock(odom_mutex_);
     odom_history = odom_history_;
+    odom_header = last_odom_header_;
   }
 
   sensor_msgs::msg::LaserScan::SharedPtr scan_msg;
@@ -943,12 +947,42 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
 
   geometry_msgs::msg::TransformStamped tf_base_link_map;
   geometry_msgs::msg::TransformStamped tf_base_link_scan;
+  geometry_msgs::msg::TransformStamped tf_base_link_odom;
+  const rclcpp::Time latest_tf_time(0, 0, clock_->get_clock_type());
   try {
     const rclcpp::Duration tf_timeout = rclcpp::Duration::from_seconds(transform_tolerance_);
-    tf_base_link_map = tf_->lookupTransform(base_link_frame_, map_frame_, cmd.header.stamp, tf_timeout);
-    tf_base_link_scan = tf_->lookupTransform(base_link_frame_, scan_frame_, cmd.header.stamp, tf_timeout);
+    tf_base_link_odom = tf_->lookupTransform(
+      base_link_frame_, odom_header.frame_id, latest_tf_time, tf_timeout);
+    const auto tf_odom_map = tf_->lookupTransform(
+      odom_header.frame_id, map_frame_, latest_tf_time, tf_timeout);
+    tf2::Transform base_link_odom;
+    tf2::Transform odom_map;
+    tf2::fromMsg(tf_base_link_odom.transform, base_link_odom);
+    tf2::fromMsg(tf_odom_map.transform, odom_map);
+    tf_base_link_map.header.frame_id = base_link_frame_;
+    tf_base_link_map.child_frame_id = map_frame_;
+    // The latest map correction and body pose have separate source times.
+    // Leave the composite stamp unset because the source times differ.
+    tf_base_link_map.transform = tf2::toMsg(base_link_odom * odom_map);
+    tf_base_link_scan = tf_->lookupTransform(
+      base_link_frame_, scan_frame_, latest_tf_time, tf_timeout);
   } catch (const tf2::TransformException & ex) {
     RCLCPP_ERROR(logger_, "Failed to lookup transform: %s", ex.what());
+    return cmd;
+  }
+  const auto tf_now = clock_->now();
+  const double odom_age =
+    (tf_now - rclcpp::Time(odom_header.stamp, tf_now.get_clock_type())).seconds();
+  const rclcpp::Time body_stamp(tf_base_link_odom.header.stamp, tf_now.get_clock_type());
+  const double body_age = (tf_now - body_stamp).seconds();
+  // Latest lookups must not hide a stopped odometry source. Stamp zero denotes a static TF.
+  if (odom_age > transform_tolerance_ ||
+    (body_stamp.nanoseconds() != 0 && body_age > transform_tolerance_))
+  {
+    RCLCPP_WARN_THROTTLE(
+      logger_, *clock_, 1000,
+      "Odometry or body transform is stale, return 0 velocity command (odom=%.3f s, TF=%.3f s)",
+      odom_age, body_age);
     return cmd;
   }
 
@@ -1376,7 +1410,7 @@ geometry_msgs::msg::TwistStamped DnnController::computeVelocityCommands(
       const rclcpp::Duration tf_timeout =
         rclcpp::Duration::from_seconds(transform_tolerance_);
       const auto tf_base_link_robot = tf_->lookupTransform(
-        base_link_frame_, "base_link", cmd.header.stamp, tf_timeout);
+        base_link_frame_, "base_link", latest_tf_time, tf_timeout);
       const float half_length = kCabot3K4BodyLength / 2.0f;
       const float half_width = kCabot3K4BodyWidth / 2.0f;
       const auto & robot = tf_base_link_robot.transform.translation;
@@ -1476,6 +1510,7 @@ void DnnController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   }
 
   std::lock_guard<std::mutex> odom_lock(odom_mutex_);
+  last_odom_header_ = msg->header;
   odom_history_.push_back({
     static_cast<float>(msg->twist.twist.linear.x),
     static_cast<float>(msg->twist.twist.angular.z),

@@ -171,6 +171,7 @@ private:
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   std::vector<PlanarVelocity> odom_history_;
+  std_msgs::msg::Header last_odom_header_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   sensor_msgs::msg::LaserScan::SharedPtr last_scan_;
   rclcpp::Subscription<people_msgs::msg::People>::SharedPtr people_sub_;
