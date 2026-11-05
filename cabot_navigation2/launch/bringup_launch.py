@@ -95,6 +95,7 @@ def generate_launch_description():
         source_file=os.path.join(pkg_dir, 'params', 'nav2_params_dnn_controller.yaml'),
         root_key=namespace,
         param_rewrites={
+            'use_sim_time': use_sim_time,
             'trt_model': trt_model,
         },
         convert_types=True)
@@ -119,6 +120,7 @@ def generate_launch_description():
         source_file=os.path.join(pkg_dir, 'params', 'nav2_params2_dnn_controller.yaml'),
         root_key="local",
         param_rewrites={
+            'use_sim_time': use_sim_time,
             'trt_model': trt_model,
         },
         convert_types=True)
